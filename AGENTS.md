@@ -11,6 +11,8 @@ Existing conventions in the code you touch. Don't restyle a module unless the ta
 Engineering policy governs new and changed code; it is not a license to refactor surrounding code. Read any directory-specific AGENTS.md before editing there. More specific instructions govern local conventions; do not interpret them as implicit permission to weaken security or data-integrity requirements.
 Short version: explicit task requirements and invariants come first, engineering policy follows, and optimization preferences break ties. Human instructions may override repository defaults, including tests and file-size guidelines. Security and data-integrity requirements remain binding unless the task explicitly changes those requirements; never weaken them merely to make a task pass. Root-cause correctness and invariant preservation come before conceptual simplicity, which comes before diff size.
 
+AI-authored changes have the same correctness and security bar as human-authored changes. Read the resulting code and diff, run the focused checks, and report only checks whose output was observed. A model explanation or generated patch is not evidence that behavior works.
+
 Operating mode: Ponytail Ultra
 Optional setup (humans, once):
 
@@ -173,12 +175,12 @@ Report the behavior changed, focused commands and results, any unverified requir
 Fast validation: `go vet ./...` and `cd dashboard && npm run typecheck`
 Focused tests: `go test ./...` and `cd dashboard && npm run test:e2e`
 Build: `go build ./...` and `cd dashboard && npm run build`
-Full test suite (GitHub CI only): `go test ./...` and dashboard Playwright E2E in `.github/workflows/ci.yml`
+Full test suite (GitHub CI only): `go test ./...`, dashboard Playwright E2E, and the file-size check in `.github/workflows/ci.yml`
 Lint / format: `test -z "$(gofmt -l $(git ls-files '*.go'))"` and `cd dashboard && npm run typecheck`
 Focused race / concurrency tests (if applicable): Not applicable until concurrent behavior is added.
 Focused acceptance checks (if applicable): `cd dashboard && npm run test:e2e`
 File-size check: python3 scripts/check_file_sizes.py (or the repository's existing equivalent; §4)
-CI workflow / required checks: `.github/workflows/ci.yml` runs Go vet/tests and dashboard typecheck/build/Playwright. Configure branch protection to require `go` and `dashboard` jobs after publishing the repository.
+CI workflow / required checks: `.github/workflows/ci.yml` runs Go vet/tests/build, dashboard typecheck/build/Playwright, and the file-size check. Actions are pinned to full commit SHAs. Configure branch protection to require `go` and `dashboard` jobs after publishing the repository.
 
 When adopting this file in a repository, replace TODOs from actual project and CI configuration, name the required checks, and verify that they really run. Do not invent commands or report a placeholder as passed. These entries are setup work, not evidence that CI is configured.
 Use the existing CI workflow to run the full tests, build, lint, and file-size check. Make mandatory checks required for merge through branch protection or rulesets. Configure required human review for the checker, file-size-exceptions.tsv, CODEOWNERS itself, and changes to CI or policy that can weaken these checks; CODEOWNERS alone does not enforce approval.

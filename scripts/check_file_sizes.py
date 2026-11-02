@@ -20,18 +20,19 @@ def git_paths() -> list[Path]:
     return [ROOT / path.decode() for path in result.stdout.split(b"\0") if path]
 
 
-def exceptions() -> set[str]:
+def exceptions(paths: list[Path]) -> set[str]:
     file = ROOT / "file-size-exceptions.tsv"
     if not file.exists():
         return set()
     entries: set[str] = set()
+    source_paths = {str(path.relative_to(ROOT)) for path in paths}
     for number, line in enumerate(file.read_text().splitlines(), 1):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         fields = line.split("\t")
         if len(fields) != 2 or not fields[0] or not fields[1].strip() or fields[0] in entries:
             raise ValueError(f"{file.name}:{number}: expected unique path<TAB>reason")
-        if fields[0] not in {str(path.relative_to(ROOT)) for path in git_paths()}:
+        if fields[0] not in source_paths:
             raise ValueError(f"{file.name}:{number}: stale or untracked path {fields[0]}")
         entries.add(fields[0])
     return entries
@@ -39,9 +40,10 @@ def exceptions() -> set[str]:
 
 def main() -> int:
     failed = False
-    allowed = exceptions()
+    paths = git_paths()
+    allowed = exceptions(paths)
     seen: set[str] = set()
-    for path in sorted(git_paths()):
+    for path in sorted(paths):
         if path.suffix not in SOURCE_SUFFIXES or EXCLUDED_PARTS.intersection(path.parts) or not path.is_file():
             continue
         lines = len(path.read_bytes().splitlines())
