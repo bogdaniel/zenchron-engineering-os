@@ -25,12 +25,25 @@ export ZENCHRON_LLM_API_KEY="<worker-local key>"
 ```
 
 The first runtime can read repository data and, when `code.write` is enabled in a profile, write files on a per-run
-isolated branch. Successful reviewable changes are committed locally; when a GitHub origin and control-plane token are
-configured, the worker can push only that run branch and the control plane can create or reuse its pull request. Test
-execution remains unavailable. Public GitHub repositories can be read without credentials. Private issue and pull-request reads need
-the corresponding repository read permissions. To submit pull-request comments or request changes, set
-`ZENCHRON_GITHUB_TOKEN` on the control plane with the repository's `Pull requests: write` permission; GitHub records
-those reviews under the token owner. The dashboard never receives the token.
+isolated branch. Successful reviewable changes are committed locally; when a GitHub origin and control-plane GitHub
+authentication are configured, the worker can push only that run branch and the control plane can create or reuse its
+pull request. Test execution remains unavailable. Public GitHub repositories can be read without credentials. For
+authenticated access, prefer a GitHub App installed only on the repositories Zenchron should control. Set
+`ZENCHRON_GITHUB_APP_ID`, `ZENCHRON_GITHUB_INSTALLATION_ID`, and `ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH` on the control
+plane; installation tokens are minted and cached there. Keep the PEM key outside the repository with owner-only file
+permissions. Required permissions are Issues: read/write and Pull requests: read/write; Actions: read is needed for
+GitHub Actions history in Reports. `ZENCHRON_GITHUB_TOKEN` remains available as a personal-token fallback and takes
+precedence if both are set. Neither the worker nor dashboard receives GitHub API credentials.
+
+Example for a local app installation:
+
+```sh
+export ZENCHRON_GITHUB_APP_ID="<app ID>"
+export ZENCHRON_GITHUB_INSTALLATION_ID="<installation ID>"
+export ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH="$HOME/.config/zenchron/github-app.pem"
+chmod 600 "$ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH"
+./dev.sh
+```
 
 On first run, install dashboard dependencies with `cd dashboard && npm ci`. The overview polls the Go service and
 displays worker heartbeats and locally discovered Git checkouts. Set `ZENCHRON_PROJECTS_ROOT` before starting the worker

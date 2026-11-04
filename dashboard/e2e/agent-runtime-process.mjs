@@ -84,6 +84,8 @@ try {
   execFileSync('go', ['build', '-o', workerBinary, './cmd/zenchron-worker'], { cwd: repository, stdio: 'inherit' });
 
   const baseEnv = { ...process.env };
+  for (const name of ['ZENCHRON_GITHUB_TOKEN', 'ZENCHRON_GITHUB_APP_ID', 'ZENCHRON_GITHUB_INSTALLATION_ID',
+    'ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH']) delete baseEnv[name];
   const model = start('model', 'node', ['dashboard/e2e/mock-llm.mjs'], {
     ...baseEnv, MOCK_LLM_PORT: String(modelPort),
   });

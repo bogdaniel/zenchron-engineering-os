@@ -51,13 +51,16 @@ api_pid=$!
 wait_for "${control_plane_url}/healthz" "$api_pid" "Control plane"
 
 (
-  unset ZENCHRON_GITHUB_TOKEN
+  unset ZENCHRON_GITHUB_TOKEN ZENCHRON_GITHUB_APP_ID ZENCHRON_GITHUB_INSTALLATION_ID
+  unset ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH
   exec go run ./cmd/zenchron-worker
 ) &
 worker_pid=$!
 wait_for "${control_plane_url}/api/v1/workers/healthz" "$worker_pid" "Local worker"
 
-(cd dashboard && unset ZENCHRON_GITHUB_TOKEN ZENCHRON_LLM_BASE_URL ZENCHRON_LLM_API_KEY && exec sh ./dev.sh) &
+(cd dashboard && unset ZENCHRON_GITHUB_TOKEN ZENCHRON_GITHUB_APP_ID ZENCHRON_GITHUB_INSTALLATION_ID
+  unset ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH ZENCHRON_LLM_BASE_URL ZENCHRON_LLM_API_KEY
+  exec sh ./dev.sh) &
 dashboard_pid=$!
 wait_for "http://127.0.0.1:${ZENCHRON_DASHBOARD_PORT}" "$dashboard_pid" "Dashboard"
 

@@ -33,15 +33,16 @@ flowchart LR
 
 - API and worker status reuse the overview's live TanStack Query results; the page does not create a second data source.
 - A sanitized `github.com/owner/repository` locator enables issue and PR sync in Reviews. PR review submission requires
-  `ZENCHRON_GITHUB_TOKEN` with Pull requests write permission; GitHub records the token owner because dashboard user
-  identity and authorization are not implemented.
+  control-plane GitHub authentication with Pull requests write permission; GitHub records the app or token actor because
+  dashboard user identity and authorization are not implemented.
 - The worker reports only whether its model endpoint is configured; the endpoint and credentials stay on that worker.
 - Settings report the current loopback-only API and versioned JSON state boundary. They do not expose write controls for
   settings the service cannot persist or enforce.
 - The Integrations overview uses the mockup's configuration rail and settings-panel layout, but keeps panels read-only
   where no backing API exists.
-- `ZENCHRON_GITHUB_TOKEN` is configured in the control-plane environment, never in the dashboard. Public repository
-  reads work without it; private reads and PR review submissions require repository permissions.
+- GitHub App credentials or the `ZENCHRON_GITHUB_TOKEN` fallback are configured in the control-plane environment,
+  never in the worker or dashboard. Public repository reads work without credentials; private reads and PR review
+  submissions require repository permissions.
 
 ## Verification
 
