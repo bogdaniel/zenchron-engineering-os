@@ -28,6 +28,9 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
   await expect(page.locator('.reports-empty-chart').first()).toHaveAccessibleName('Connect a source to view this chart');
   await expect(page.locator('.reports-empty-chart').first()).toContainText('Connect a source to view this chart');
+  const acceptanceTitle = page.locator('.acceptance-panel .reports-panel-heading h3');
+  expect(await acceptanceTitle.evaluate((title) => title.scrollWidth <= title.clientWidth),
+    'acceptance title stays on one line').toBe(true);
   const sectionBounds = await page.evaluate(() => Object.fromEntries(
     ['.reports-scope-bar', '.reports-metrics', '.reports-content-grid'].map((selector) => {
       const { y, height } = document.querySelector(selector)!.getBoundingClientRect();
@@ -76,7 +79,12 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   expect(coverage.width).toBeGreaterThan(downloads.width);
   expect(coverage.height).toBeGreaterThan(product.y + product.height - coverage.y - 1);
   const acceptanceChart = page.locator('.acceptance-panel .reports-empty-chart');
-  expect(await acceptanceChart.evaluate((chart) => chart.scrollHeight <= chart.clientHeight), 'acceptance empty state fits its chart').toBe(true);
+  const acceptanceLayout = await acceptanceChart.evaluate((chart) => {
+    const panel = chart.closest('.acceptance-panel')!;
+    return { bottom: chart.getBoundingClientRect().bottom, panelBottom: panel.getBoundingClientRect().bottom,
+      paddingBottom: parseFloat(getComputedStyle(panel).paddingBottom) };
+  });
+  expect(acceptanceLayout.bottom).toBeLessThanOrEqual(acceptanceLayout.panelBottom - acceptanceLayout.paddingBottom);
   await expect(page.locator('.reports-summary')).toContainText('Key takeaway');
   await expect(page.locator('.reports-summary')).toContainText('Worker availability');
   await page.getByRole('combobox', { name: 'Insights view' }).click();
@@ -194,6 +202,13 @@ test('Reports derives GitHub delivery metrics from complete pull-request history
   }
   await expect(page.locator('.reports-ci-chart')).toBeVisible();
   await expect(page.locator('.reports-ci-chart .recharts-rectangle')).toHaveCount(2);
+  const acceptanceChart = page.locator('.acceptance-panel .reports-acceptance-chart');
+  const chartBounds = await acceptanceChart.evaluate((chart) => {
+    const panel = chart.closest('.acceptance-panel')!;
+    return { chart: chart.getBoundingClientRect().bottom, panel: panel.getBoundingClientRect().bottom,
+      padding: parseFloat(getComputedStyle(panel).paddingBottom) };
+  });
+  expect(chartBounds.chart).toBeLessThanOrEqual(chartBounds.panel - chartBounds.padding);
   await expect(page.locator('.reports-ci-chart .recharts-cartesian-axis-tick-value').first())
     .toHaveCSS('fill', 'rgb(150, 145, 168)');
   const trend = page.locator('.reports-pull-request-chart');

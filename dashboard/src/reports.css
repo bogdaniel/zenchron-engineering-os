@@ -107,6 +107,8 @@
 .reports-panel-heading > div { display: flex; min-width: 0; align-items: flex-start; gap: 7px; }
 .reports-panel-heading > div > svg { flex: 0 0 auto; margin-top: 1px; color: #bd8aff; }
 .reports-panel-heading p { line-height: 1.2; }
+.acceptance-panel .reports-panel-heading > div { gap: 4px; }
+.acceptance-panel .reports-panel-heading h3 { letter-spacing: -.5px; white-space: nowrap; }
 .reports-insight-filter.mantine-Select-root { width: 144px; flex: 0 0 auto; }
 .reports-insight-filter .mantine-Select-input { min-height: 24px; height: 24px; border-color: #38324c; background: #1b1928; font-size: var(--metric-detail-size); }
 .product-summary-table-wrap { overflow-x: auto; }
@@ -268,7 +270,8 @@
 }
 .reports-empty-chart > span svg { color: #bd8aff; }
 .delivery-velocity-panel .reports-empty-chart, .ci-distribution-panel .reports-empty-chart { min-height: 86px; }
-.reports-acceptance-chart { min-height: 68px; margin-top: 2px; }
+.acceptance-panel .reports-empty-chart { height: 68px; min-height: 68px; }
+.reports-acceptance-chart { height: 76px; margin-top: 2px; }
 .coverage-online {
   border: 1px solid #285343;
   color: #63dba8;

@@ -380,7 +380,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
           <ChartLegend items={[{ tone: 'teal', label: 'Acceptance rate' },
             { tone: 'violet', label: 'Autonomous completion · unavailable' }]} />
           {pullRequests.complete && pullRequests.acceptanceRate !== undefined ? <LineChart
-            className="reports-acceptance-chart" h={108} textColor="#9691a8" data={pullRequests.trend}
+            className="reports-acceptance-chart" h={76} textColor="#9691a8" data={pullRequests.trend}
             dataKey="date" series={[{ name: 'acceptance', label: 'Acceptance rate', color: 'teal.5' }]}
             yAxisProps={{ domain: [0, 100], tick: { fill: '#9691a8', fontSize: 8 }, width: 28 }}
             xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 'preserveStartEnd' }}
