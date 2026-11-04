@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
 test('Reports panel rows match the desktop mockup proportions', async ({ page }) => {
+  await page.route('**/api/v1/products', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
   await expect(page.locator('.reports-panel-heading > div > svg')).toHaveCount(10);
