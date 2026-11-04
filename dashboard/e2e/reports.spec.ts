@@ -167,10 +167,14 @@ test('Reports derives GitHub delivery metrics from complete pull-request history
   await expect(page.locator('.reports-metric').filter({ hasText: 'CI duration' }).locator('strong')).toHaveText('10');
   await expect(page.locator('.reports-ci-chart')).toBeVisible();
   await expect(page.locator('.reports-ci-chart .recharts-rectangle')).toHaveCount(2);
+  await expect(page.locator('.reports-ci-chart .recharts-cartesian-axis-tick-value').first())
+    .toHaveCSS('fill', 'rgb(150, 145, 168)');
   const trend = page.locator('.reports-pull-request-chart');
   await expect(trend).toBeVisible();
   await expect(trend).toContainText('Merged PRs');
   await expect(trend.locator('.recharts-line')).toHaveCount(2);
+  await expect(trend.locator('.recharts-cartesian-axis-tick-value').first())
+    .toHaveCSS('fill', 'rgb(150, 145, 168)');
   await expect(page.locator('.reports-insight').filter({ hasText: 'Delivery sources' }))
     .toContainText('1 checkout has no remote');
 });

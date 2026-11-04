@@ -70,6 +70,7 @@ flowchart LR
   and only reports metrics when provider history is complete. Histories are capped at 1,000 runs per repository; larger
   histories are marked incomplete. The average is shown in the KPI and runs are grouped into minute ranges in the
   distribution chart. Complete history with no qualifying events shows an explicit empty state instead of a blank chart.
+- Provider chart labels use the dashboard's light text palette so axes remain readable against the dark chart surface.
 - Review latency, model spend, and autonomous completion remain unavailable until their corresponding provider and run
   records exist. Each metric group retains its mockup panel position and names the source needed to populate it. Empty
   chart panels retain a grid plot area and explain the missing connection instead of implying that the source was

@@ -258,6 +258,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
           {pullRequests.complete && pullRequests.mergedCount > 0 ? <CompositeChart
             className="reports-pull-request-chart"
             h={124}
+            textColor="#9691a8"
             data={pullRequests.trend}
             dataKey="date"
             series={[
@@ -267,9 +268,9 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
             withRightYAxis
             withLegend
             legendProps={{ verticalAlign: 'top', height: 22, iconSize: 7, wrapperStyle: { fontSize: 9 } }}
-            xAxisProps={{ tick: { fontSize: 9 }, interval: 'preserveStartEnd' }}
-            yAxisProps={{ tick: { fontSize: 9 }, width: 28 }}
-            rightYAxisProps={{ tick: { fontSize: 9 }, width: 30 }}
+            xAxisProps={{ tick: { fill: '#9691a8', fontSize: 9 }, interval: 'preserveStartEnd' }}
+            yAxisProps={{ tick: { fill: '#9691a8', fontSize: 9 }, width: 28 }}
+            rightYAxisProps={{ tick: { fill: '#9691a8', fontSize: 9 }, width: 30 }}
             gridAxis="xy"
             strokeWidth={2}
             withDots={false}
@@ -290,12 +291,13 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
           {workflowRunMetrics.complete && workflowRunMetrics.runCount > 0 ? <BarChart
             className="reports-ci-chart"
             h={124}
+            textColor="#9691a8"
             data={workflowRunMetrics.distribution}
             dataKey="duration"
             series={[{ name: 'runs', label: 'Completed runs', color: 'teal.5' }]}
             withYAxis={false}
             withLegend={false}
-            xAxisProps={{ tick: { fontSize: 8 }, interval: 0 }}
+            xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 0 }}
             gridAxis="y"
             withTooltip
             aria-label={`CI duration distribution from ${workflowRunMetrics.runCount} completed GitHub Actions runs`}
