@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BarChart, CompositeChart, DonutChart } from '@mantine/charts';
+import { BarChart, CompositeChart, DonutChart, Sparkline } from '@mantine/charts';
 import { Badge, Button, Progress, Select, Table } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { IconActivity, IconChartBar, IconCircleCheck, IconClockHour4, IconCurrencyDollar, IconDownload, IconFilter, IconFolders, IconRobot, IconRoute, IconSparkles } from '@tabler/icons-react';
@@ -241,13 +241,18 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
       </div>
 
       <div className="reports-metrics" aria-label="Workspace metrics">
-        <Metric tone="velocity" label="Delivery velocity" value={pullRequests.deliveryVelocity} detail="PRs / week" icon={<IconChartBar size={17} />} />
-        <Metric tone="cycle-time" label="Cycle time" value={pullRequests.cycleTime} detail="Hours" icon={<IconClockHour4 size={17} />} />
+        <Metric tone="velocity" label="Delivery velocity" value={pullRequests.deliveryVelocity} detail="PRs / week"
+          icon={<IconChartBar size={17} />} trend={metricSparkline('Delivery velocity', pullRequests.trend.map((item) => item.merged), 'violet.5')} />
+        <Metric tone="cycle-time" label="Cycle time" value={pullRequests.cycleTime} detail="Hours"
+          icon={<IconClockHour4 size={17} />} trend={metricSparkline('Cycle time', pullRequests.trend.map((item) => item.cycle), 'teal.4')} />
         <Metric tone="ci-duration" label="CI duration" value={workflowRunMetrics.averageMinutes ?? 'Unavailable'}
-          detail="Avg. minutes" icon={<IconActivity size={17} />} />
+          detail="Avg. minutes" icon={<IconActivity size={17} />}
+          trend={metricSparkline('CI duration', workflowRunMetrics.trend, 'teal.5')} />
         <Metric tone="review-latency" label="Review latency" value="Unavailable" detail="Hours" icon={<IconClockHour4 size={17} />} />
         <Metric tone="agent-spend" label="Agent spend" value="Unavailable" detail="USD" icon={<IconCurrencyDollar size={17} />} />
-        <Metric tone="acceptance-rate" label="Acceptance rate" value={pullRequests.acceptanceRate === undefined ? undefined : `${pullRequests.acceptanceRate}%`} detail="Closed pull requests" icon={<IconCircleCheck size={17} />} />
+        <Metric tone="acceptance-rate" label="Acceptance rate" value={pullRequests.acceptanceRate === undefined ? undefined : `${pullRequests.acceptanceRate}%`} detail="Closed pull requests"
+          icon={<IconCircleCheck size={17} />}
+          trend={metricSparkline('Acceptance rate', pullRequests.trend.map((item) => item.acceptance), 'teal.5')} />
         <Metric tone="autonomous-completion" label="Autonomous completion" value="Unavailable" detail="Completed agent runs" icon={<IconRobot size={17} />} />
       </div>
 
@@ -421,15 +426,22 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
   );
 }
 
-function Metric({ tone, label, value, detail, icon }: {
+function Metric({ tone, label, value, detail, icon, trend }: {
   tone: string;
   label: string;
   value: number | string | undefined;
   detail?: string;
   icon: ReactNode;
+  trend?: ReactNode;
 }) {
   return <MetricCard className={`reports-metric ${tone}`} label={label} value={value ?? 'Unavailable'}
-    detail={detail ?? (value === undefined ? 'No source data' : 'Current workspace snapshot')} icon={icon} />;
+    detail={detail ?? (value === undefined ? 'No source data' : 'Current workspace snapshot')} icon={icon} trend={trend} />;
+}
+
+function metricSparkline(label: string, data: (number | null)[], color: string) {
+  if (!data.some((value) => value !== null)) return undefined;
+  return <Sparkline className="metric-sparkline" role="img" aria-label={`${label} trend`} data={data} color={color}
+    w={54} h={24} withGradient={false} strokeWidth={2} />;
 }
 
 function UnavailableMetricsPanel({ className, title, icon, detail }: {

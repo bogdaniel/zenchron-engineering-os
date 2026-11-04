@@ -43,15 +43,16 @@ export function useReportWorkflowRunMetrics(projects: Project[] | undefined, ran
   });
   const complete = githubProjects.length > 0 && history.isSuccess && history.data.complete;
   const now = Date.now();
-  const durations = (history.data?.items ?? []).flatMap((run) => {
+  const samples = (history.data?.items ?? []).flatMap((run) => {
     if (run.status !== 'completed' || !run.run_started_at) return [];
     const created = Date.parse(run.created_at);
     const start = Date.parse(run.run_started_at);
     const end = Date.parse(run.updated_at);
     if (!Number.isFinite(created) || created > now || !Number.isFinite(start) || !Number.isFinite(end) ||
       start > end || end > now || (range !== 'all' && created < now - rangeDurations[range])) return [];
-    return [(end - start) / 60_000];
+    return [{ created, duration: (end - start) / 60_000 }];
   });
+  const durations = samples.map((sample) => sample.duration);
   const averageMinutes = complete && durations.length
     ? Math.round(durations.reduce((sum, duration) => sum + duration, 0) / durations.length * 10) / 10
     : undefined;
@@ -60,5 +61,16 @@ export function useReportWorkflowRunMetrics(projects: Project[] | undefined, ran
     runs: durations.filter((duration) => duration >= (index ? durationBuckets[index - 1].max : 0) &&
       duration < bucket.max).length,
   }));
-  return { ...history, githubProjectCount: githubProjects.length, complete, averageMinutes, distribution, runCount: durations.length };
+  const bucketCount = range === '30d' ? 5 : range === '90d' ? 7 : 12;
+  const earliest = samples.length ? Math.min(...samples.map((sample) => sample.created)) : now - 365 * 24 * 60 * 60 * 1000;
+  const span = range === 'all' ? Math.max(7 * 24 * 60 * 60 * 1000, now - earliest) : rangeDurations[range];
+  const trendStart = now - span;
+  const trendBuckets = Array.from({ length: bucketCount }, () => ({ total: 0, count: 0 }));
+  for (const sample of samples) {
+    const index = Math.min(bucketCount - 1, Math.floor((sample.created - trendStart) / span * bucketCount));
+    trendBuckets[index].total += sample.duration;
+    trendBuckets[index].count++;
+  }
+  const trend = trendBuckets.map(({ total, count }) => count ? Math.round(total / count * 10) / 10 : null);
+  return { ...history, githubProjectCount: githubProjects.length, complete, averageMinutes, distribution, runCount: durations.length, trend };
 }

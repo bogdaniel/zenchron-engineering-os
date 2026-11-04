@@ -80,6 +80,9 @@
   justify-content: space-between;
   gap: 6px;
 }
+.reports-metric .metric-value-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; }
+.reports-metric .metric-value-row > strong { margin-top: 0; }
+.reports-metric .metric-sparkline { flex: 0 0 54px; }
 .reports-metric svg { flex: 0 0 auto; color: #bd8aff; }
 .reports-content-grid {
   display: grid;

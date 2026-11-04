@@ -165,6 +165,9 @@ test('Reports derives GitHub delivery metrics from complete pull-request history
   await expect(page.locator('.reports-metric').filter({ hasText: 'Cycle time' }).locator('strong')).toHaveText('42');
   await expect(page.locator('.reports-metric').filter({ hasText: 'Acceptance rate' }).locator('strong')).toHaveText('67%');
   await expect(page.locator('.reports-metric').filter({ hasText: 'CI duration' }).locator('strong')).toHaveText('10');
+  for (const label of ['Delivery velocity', 'Cycle time', 'CI duration', 'Acceptance rate']) {
+    await expect(page.getByRole('img', { name: `${label} trend` })).toBeVisible();
+  }
   await expect(page.locator('.reports-ci-chart')).toBeVisible();
   await expect(page.locator('.reports-ci-chart .recharts-rectangle')).toHaveCount(2);
   await expect(page.locator('.reports-ci-chart .recharts-cartesian-axis-tick-value').first())

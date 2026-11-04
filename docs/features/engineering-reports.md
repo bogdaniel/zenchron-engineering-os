@@ -71,6 +71,8 @@ flowchart LR
   histories are marked incomplete. The average is shown in the KPI and runs are grouped into minute ranges in the
   distribution chart. Complete history with no qualifying events shows an explicit empty state instead of a blank chart.
 - Provider chart labels use the dashboard's light text palette so axes remain readable against the dark chart surface.
+- KPI sparklines summarize the selected-window PR merge, PR cycle-time, PR acceptance, and completed Actions duration
+  buckets. They are shown only when the underlying metric has events; unavailable measures do not get invented trends.
 - Review latency, model spend, and autonomous completion remain unavailable until their corresponding provider and run
   records exist. Each metric group retains its mockup panel position and names the source needed to populate it. Empty
   chart panels retain a grid plot area and explain the missing connection instead of implying that the source was

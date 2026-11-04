@@ -33,23 +33,35 @@ function pullRequestTrend(items: z.infer<typeof pullRequestHistorySchema>['items
   const buckets = Array.from({ length: bucketCount }, (_, index) => ({
     date: new Date(start + index * span / bucketCount).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
     merged: 0,
+    closed: 0,
+    accepted: 0,
     cycleHours: 0,
     cycles: 0,
   }));
+  const bucketIndex = (timestamp: number) => Math.min(bucketCount - 1, Math.floor((timestamp - start) / span * bucketCount));
   for (const item of items) {
+    if (item.closed_at) {
+      const closedAt = Date.parse(item.closed_at);
+      if (Number.isFinite(closedAt) && closedAt >= start && closedAt <= now) {
+        const index = bucketIndex(closedAt);
+        buckets[index].closed++;
+        if (item.merged_at && Date.parse(item.merged_at) <= now) buckets[index].accepted++;
+      }
+    }
     if (!item.merged_at) continue;
     const mergedAt = Date.parse(item.merged_at);
     const createdAt = Date.parse(item.created_at);
     if (!Number.isFinite(mergedAt) || mergedAt < start || mergedAt > now) continue;
-    const index = Math.min(bucketCount - 1, Math.floor((mergedAt - start) / span * bucketCount));
+    const index = bucketIndex(mergedAt);
     buckets[index].merged++;
     if (Number.isFinite(createdAt) && createdAt <= mergedAt) {
       buckets[index].cycleHours += (mergedAt - createdAt) / 3_600_000;
       buckets[index].cycles++;
     }
   }
-  return buckets.map(({ cycleHours, cycles, ...bucket }) => ({
+  return buckets.map(({ cycleHours, cycles, closed, accepted, ...bucket }) => ({
     ...bucket, cycle: cycles ? Math.round(cycleHours / cycles * 10) / 10 : null,
+    acceptance: closed ? Math.round(accepted / closed * 100) : null,
   }));
 }
 
