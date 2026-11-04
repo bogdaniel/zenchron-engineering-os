@@ -127,8 +127,9 @@ hosted control and merge authorization still require durable audit, user identit
   made directly on GitHub are not imported. Checks, approval, and merge actions remain unavailable.
 - Settings and Integrations routes show live API, worker, and checkout status while clearly marking external providers,
   identity, authorization, and audit history unavailable.
-- Reports summarizes current objective, workflow, agent-profile, worker, and checkout records; delivery trends stay
-  unavailable until PR, CI, and agent-run events are recorded.
+- Reports summarizes current objective, workflow, agent-profile, worker, and checkout records. Completed GitHub Actions
+  history now supplies CI-duration data for the registered checkout; PR-based delivery metrics and agent outcomes remain
+  empty or unavailable until their corresponding events exist. Model spend and review latency still need provider data.
 - Product Workspace persists products and links them to live worker-reported repositories. Objectives can link to a
   product by ID; workflow and agent definitions remain reusable workspace-wide, while files, decisions, stakeholders,
   and release streams remain unavailable.
