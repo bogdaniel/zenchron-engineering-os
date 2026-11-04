@@ -1,18 +1,343 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MantineProvider, Title, Text } from '@mantine/core';
+import { Badge, MantineProvider, TextInput } from '@mantine/core';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { z } from 'zod';
+import {
+  IconActivity,
+  IconBell,
+  IconChartBar,
+  IconChevronDown,
+  IconCircleCheck,
+  IconCode,
+  IconCurrencyDollar,
+  IconFolders,
+  IconGitBranch,
+  IconGitPullRequest,
+  IconHistory,
+  IconLayoutDashboard,
+  IconLayersIntersect,
+  IconPlugConnected,
+  IconRobot,
+  IconRoute,
+  IconSearch,
+  IconShieldCheck,
+  IconSettings,
+  IconTarget,
+} from '@tabler/icons-react';
 import '@mantine/core/styles.css';
+import '@mantine/charts/styles.css';
+import { objectivesSchema, ObjectivesPage } from './objectives';
+import { projectsSchema, ProjectsPage } from './projects';
+import { WorkflowOverview, WorkflowsPage } from './workflows';
+import { ReviewsPage } from './reviews';
+import { AgentsPage, loadAgentRuns } from './agents';
+import { SystemPage } from './system';
+import { ReportsPage } from './reports';
+import { WorkspacePage } from './workspace';
+import { PageHeading } from './PageHeading';
+import { MetricCard } from './MetricCard';
+import { PanelCard } from './PanelCard';
+import { PanelHeading } from './PanelHeading';
 import './style.css';
+import './overview.css';
+import './monaco.css';
 
+const navigation = [
+  { label: 'Overview', href: '#overview', icon: IconLayoutDashboard },
+  { label: 'Objectives', href: '#objectives', icon: IconTarget },
+  { label: 'Workflows', href: '#workflows', icon: IconRoute },
+  { label: 'Agents', href: '#agents', icon: IconRobot },
+  { label: 'Projects', href: '#projects', icon: IconFolders },
+  { label: 'Product Workspace', href: '#workspace', icon: IconLayersIntersect },
+  { label: 'Reviews', href: '#reviews', icon: IconGitPullRequest },
+  { label: 'Integrations', href: '#integrations', icon: IconPlugConnected },
+  { label: 'Reports', href: '#reports', icon: IconChartBar },
+  { label: 'Settings', href: '#settings', icon: IconSettings },
+];
+const pageIDs = [
+  'overview', 'objectives', 'workflows', 'agents', 'projects', 'workspace', 'reviews', 'integrations', 'reports',
+  'settings',
+];
+function pageFromHash() {
+  const page = window.location.hash.slice(1);
+  return pageIDs.includes(page) ? page : 'overview';
+}
+
+const queryClient = new QueryClient();
+const healthResponse = z.object({ status: z.literal('ok') });
+const workersResponse = z.array(
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    status: z.enum(['online', 'offline']),
+    last_seen: z.string(),
+    agent_runtime_enabled: z.boolean().optional(),
+  }),
+);
 function App() {
+  const [activePage, setActivePage] = useState(pageFromHash);
+  useEffect(() => {
+    const syncPage = () => setActivePage(pageFromHash());
+    window.addEventListener('popstate', syncPage);
+    window.addEventListener('hashchange', syncPage);
+    return () => {
+      window.removeEventListener('popstate', syncPage);
+      window.removeEventListener('hashchange', syncPage);
+    };
+  }, []);
+  const navigatePage = (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (!pageIDs.includes(href.slice(1))) return;
+    event.preventDefault();
+    window.history.pushState({}, '', href);
+    setActivePage(href.slice(1));
+  };
+  const health = useQuery({
+    queryKey: ['control-plane-health'],
+    queryFn: async () => {
+      const response = await fetch('/healthz');
+      if (!response.ok) throw new Error(`Health check failed: ${response.status}`);
+      return healthResponse.parse(await response.json());
+    },
+    refetchInterval: 5_000,
+  });
+  const workers = useQuery({
+    queryKey: ['local-workers'],
+    queryFn: async () => {
+      const response = await fetch('/api/v1/workers');
+      if (!response.ok) throw new Error(`Worker list failed: ${response.status}`);
+      return workersResponse.parse(await response.json());
+    },
+    refetchInterval: 5_000,
+  });
+  const onlineWorkers = workers.data?.filter((worker) => worker.status === 'online') ?? [];
+  const projects = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const response = await fetch('/api/v1/projects');
+      if (!response.ok) throw new Error(`Project list failed: ${response.status}`);
+      return projectsSchema.parse(await response.json());
+    },
+    refetchInterval: 5_000,
+  });
+  const agentRuns = useQuery({ queryKey: ['agent-runs'], queryFn: loadAgentRuns, refetchInterval: 3_000 });
+  const reviewableRuns = agentRuns.data?.filter((run) => run.diff_available) ?? [];
+  const objectives = useQuery({
+    queryKey: ['objectives'],
+    queryFn: async () => {
+      const response = await fetch('/api/v1/objectives');
+      if (!response.ok) throw new Error(`Objective list failed: ${response.status}`);
+      return objectivesSchema.parse(await response.json());
+    },
+  });
+  const openObjectives = objectives.data?.filter((objective) => objective.status !== 'completed') ?? [];
   return (
-    <MantineProvider>
-      <main>
-        <Title order={1}>Zenchron</Title>
-        <Text c="dimmed">Engineering workspace</Text>
-      </main>
+    <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
+      <div className={`app-shell ${activePage}-shell`} id="overview">
+        <aside className="sidebar">
+          <a className="brand" href="#overview" aria-label="Zenchron Engineering home">
+            <span className="brand-mark" aria-hidden="true" />
+            <span>Zenchron<small>Engineering</small></span>
+          </a>
+          <nav aria-label="Main navigation">
+            {navigation.map(({ label, href, icon: Icon }) => (
+              <a className={`nav-link${href === `#${activePage}` ? ' active' : ''}`} href={href} key={label} onClick={(event) => navigatePage(event, href)}>
+                <Icon size={18} stroke={1.8} />
+                <span className="nav-label" data-mobile-label={href === '#overview' ? 'Home' : href === '#settings' ? 'Profile' : undefined}>
+                  {label}
+                </span>
+              </a>
+            ))}
+          </nav>
+          <div className="sidebar-bottom">
+            <div className="connection-indicator"><span /> Local preview</div>
+            <p>One place to coordinate projects, agents, and delivery.</p>
+          </div>
+        </aside>
+
+        <main className="main-content">
+          <header className="topbar">
+            {activePage === 'reports' ? <div className="greeting reports-greeting">
+                <IconChartBar size={22} aria-hidden="true" />
+                <PageHeading className="reports-heading-copy" titleClassName="reports-heading-title" titleLevel={1}
+                  title="Reports" titleAdornment={<span>Engineering Operations Analytics</span>}
+                  description="Executive analytics for delivery, quality, productivity, and agent operations across products and workspaces." />
+              </div> : <PageHeading className="greeting" titleLevel={1}
+                title={<>Good morning <span aria-hidden="true">👋</span></>}
+                description="Your engineering control center for objectives, agents, code, and delivery." />}
+            <TextInput
+              className="search-box"
+              leftSection={<IconSearch size={17} />}
+              placeholder="Search projects, runs, reviews…"
+              disabled
+              rightSection={<kbd>⌘ K</kbd>}
+              aria-label="Search"
+            />
+            <div className="top-actions">
+              <button className="icon-button" aria-label="Notifications" disabled><IconBell size={19} /></button>
+              <button className="workspace-button" disabled>
+                <span className="workspace-glyph">Z</span> Workspace <IconChevronDown size={15} />
+              </button>
+              <div className="user-chip">
+                <span className="avatar">Z</span>
+                <span>Local workspace<small>Administrator</small></span>
+              </div>
+            </div>
+          </header>
+
+          {activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} /> : activePage === 'workflows' ? <WorkflowsPage /> : activePage === 'projects' ? (
+            <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} />
+          ) : activePage === 'workspace' ? (
+            <WorkspacePage
+              projects={projects.data}
+              objectives={objectives.data}
+              projectsLoading={projects.isLoading}
+              projectsError={projects.isError}
+              objectivesLoading={objectives.isLoading}
+              objectivesError={objectives.isError}
+            />
+          ) : activePage === 'objectives' ? <ObjectivesPage /> : ['integrations', 'settings'].includes(activePage) ? (
+            <SystemPage
+              section={activePage === 'settings' ? 'settings' : 'integrations'}
+              apiOnline={health.isSuccess}
+              workerCount={workers.data?.length ?? 0}
+              onlineWorkerCount={onlineWorkers.length}
+              modelRuntimeWorkerCount={onlineWorkers.filter((worker) => worker.agent_runtime_enabled).length}
+              modelRuntimeUnknownWorkerCount={onlineWorkers.filter((worker) => worker.agent_runtime_enabled === undefined).length}
+              projectCount={projects.data?.length ?? 0}
+              gitHubProjectCount={projects.data?.filter((project) => project.git_remote.startsWith('github.com/')).length ?? 0}
+            />
+          ) : activePage === 'reports' ? (
+            <ReportsPage
+              apiOnline={health.isSuccess}
+              objectives={objectives.data}
+              projects={projects.data}
+              workers={workers.data}
+            />
+          ) : <>
+          <section className="metric-grid" aria-label="Workspace status">
+            <MetricCard className="metric-card purple" label="Active objectives" value={openObjectives.length}
+              detail="Open objectives" icon={<IconTarget size={19} />} />
+            <MetricCard className="metric-card blue" label="Running agents"
+              value={agentRuns.isLoading ? '…' : agentRuns.isError ? 'Unavailable' : agentRuns.data?.filter((run) => run.status === 'running').length ?? 0}
+              detail={`${onlineWorkers.length} local workers online`} icon={<IconRobot size={19} />} />
+            <MetricCard className="metric-card purple pr-queue-metric" label="PR queue"
+              value="Unavailable" valueClassName="metric-unavailable"
+              detail="Open GitHub items are in Reviews" icon={<IconGitPullRequest size={19} />} />
+            <MetricCard className="metric-card green" label="CI health"
+              value="Unavailable" valueClassName="metric-unavailable"
+              detail="CI integration not connected" icon={<IconActivity size={19} />} />
+            <MetricCard className="metric-card cyan" label="Budget usage"
+              value="Unavailable" valueClassName="metric-unavailable"
+              detail="Budgets are not configured" icon={<IconCurrencyDollar size={19} />} />
+          </section>
+
+          <div className="content-grid">
+            <WorkflowOverview />
+
+            <PanelCard className="panel activity-panel" id="activity" withBorder>
+              <PanelHeading className="panel-heading" icon={<span className="section-icon blue-icon"><IconHistory size={18} /></span>}
+                title="Recent activity"
+                actions={<a className="text-link" href="#activity">All activity <span>⌄</span></a>} />
+              <div className="activity-list">
+                <div><IconCircleCheck className={health.isError ? 'activity-violet' : 'activity-green'} size={17} /><span>Control plane {health.isSuccess ? 'is responding' : health.isError ? 'is unavailable' : 'is connecting'}<small>Go health check · live</small></span><time>{health.isSuccess ? 'Now' : 'Live'}</time></div>
+                {onlineWorkers.slice(0, 2).map((worker) => (
+                  <div key={worker.id}><IconRobot className="activity-blue" size={17} /><span>Worker “{worker.name}” is online<small>Local worker heartbeat</small></span><time>Live</time></div>
+                ))}
+                {projects.data?.slice(0, 2).map((project) => (
+                  <div key={project.id}><IconFolders className="activity-violet" size={17} /><span>Project “{project.name}” discovered<small>On {project.worker_name}</small></span><time>Live</time></div>
+                ))}
+              </div>
+            </PanelCard>
+
+            <PanelCard className="panel objective-panel" id="objectives" withBorder>
+              <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconTarget size={18} /></span>}
+                title="Objective status" description="Engineering goals"
+                actions={<a className="text-link" href="#objectives" onClick={(event) => navigatePage(event, '#objectives')}>View all →</a>} />
+              {openObjectives.length ? (
+                <div className="overview-objectives">
+                  {openObjectives.slice(0, 3).map((objective) => (
+                    <div key={objective.id}><span>{objective.title}<small>{objective.progress}% complete</small></span><Badge className={`objective-status ${objective.status}`} variant="light">{objective.status.replace('_', ' ')}</Badge></div>
+                  ))}
+                </div>
+              ) : (
+                <div className="compact-empty"><IconTarget size={20} /><span>{objectives.isError ? 'Objectives unavailable' : 'No objectives created'}</span><small>Create an objective to track delivery.</small></div>
+              )}
+            </PanelCard>
+
+            <PanelCard className="panel plan-panel" id="approvals" withBorder>
+              <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconHistory size={18} /></span>}
+                title="Plan approvals" description="Human review before agent execution"
+                actions={<Badge className="muted-tag" variant="light">Unavailable</Badge>} />
+              <div className="compact-empty"><IconHistory size={20} />
+                <span>No pending approvals</span>
+                <small>Approval gates are not connected yet.</small>
+              </div>
+            </PanelCard>
+
+            <PanelCard className="panel agents-panel" id="agents" withBorder>
+              <PanelHeading className="panel-heading" icon={<span className="section-icon blue-icon"><IconRobot size={18} /></span>}
+                title="Agent runs" description="Run history · live"
+                actions={<a className="text-link" href="#agents" onClick={(event) => navigatePage(event, '#agents')}>View →</a>} />
+              {agentRuns.data?.length ? <div className="overview-run-list">
+                {agentRuns.data.slice(0, 3).map((run) => <div key={run.id}>
+                  <span className={`overview-run-dot ${run.status}`} />
+                  <span>{run.agent_name} · {run.project_name}<small>{run.output || run.error || run.prompt}</small></span>
+                  <Badge className={`agents-run-badge ${run.status}`} variant="light">{run.status}</Badge>
+                </div>)}
+              </div> : <div className="compact-empty"><IconRobot size={20} />
+                <span>{agentRuns.isError ? 'Run history unavailable' : 'No agent runs yet'}</span>
+                <small>{agentRuns.isError ? 'Check the control-plane connection.' : `Connected workers: ${onlineWorkers.length}`}</small>
+              </div>}
+            </PanelCard>
+
+            <PanelCard className="panel evidence-panel" id="evidence" withBorder>
+              <PanelHeading className="panel-heading" icon={<span className="section-icon green-icon"><IconShieldCheck size={18} /></span>}
+                title="Evidence health" description="Artifacts, test results, reviews" />
+              <div className="evidence-health-list">
+                <div><IconGitBranch size={16} /><span>Trusted-main<small>Branch protection status</small></span><Badge className="muted-tag" variant="light">Unavailable</Badge></div>
+                <div><IconShieldCheck size={16} /><span>Evidence<small>Artifacts · test results · traces</small></span><Badge className="muted-tag" variant="light">No runs</Badge></div>
+              </div>
+            </PanelCard>
+
+            <PanelCard className="panel review-panel" id="reviews" withBorder>
+              <PanelHeading className="panel-heading" icon={<span className="section-icon violet-icon"><IconGitPullRequest size={18} /></span>}
+                title="Code review" description="Local branch diffs and feedback"
+                actions={<a className="text-link" href="#reviews" onClick={(event) => navigatePage(event, '#reviews')}>Reviews →</a>} />
+              {reviewableRuns.length ? <div className="overview-review-list">
+                {reviewableRuns.slice(0, 3).map((run) => <div key={run.id}>
+                  <IconGitBranch size={17} />
+                  <span>{run.project_name} · {run.branch}<small>{run.agent_name} · {run.review_comments.length} comments</small></span>
+                  <Badge className={`agents-run-badge ${run.status}`} variant="light">{run.status}</Badge>
+                </div>)}
+              </div> : <div className="wide-empty">
+                <IconGitPullRequest size={22} />
+                <b>{agentRuns.isError ? 'Review runs unavailable' : 'No local branch diffs yet'}</b>
+                <span>{agentRuns.isError ? 'Check the control-plane connection.' : 'Complete an agent run to review its diff, leave comments, or request changes.'}</span>
+              </div>}
+            </PanelCard>
+
+            <PanelCard className="panel timeline-panel" id="timeline" withBorder>
+              <PanelHeading className="panel-heading" icon={<span className="section-icon blue-icon"><IconHistory size={18} /></span>}
+                title="Delivery timeline" description="Work will be tracked as it progresses" />
+              <div className="timeline-empty"><span /><p>Create an objective to start a delivery timeline.</p></div>
+            </PanelCard>
+
+            <PanelCard className="panel analytics-panel" id="reports" withBorder>
+              <PanelHeading className="panel-heading" icon={<span className="section-icon teal-icon"><IconChartBar size={18} /></span>}
+                title="Analytics" description="Delivery velocity" />
+              <div className="chart-empty"><IconChartBar size={23} /><span>No delivery data yet</span><small>Metrics appear after the first completed run.</small></div>
+            </PanelCard>
+          </div>
+
+          <footer className="page-footer"><span>ZENCHRON ENGINEERING</span><span>Control plane preview</span></footer>
+          </>}
+        </main>
+      </div>
     </MantineProvider>
   );
 }
 
-createRoot(document.getElementById('root')!).render(<App />);
+createRoot(document.getElementById('root')!).render(
+  <QueryClientProvider client={queryClient}><App /></QueryClientProvider>,
+);

@@ -1,0 +1,80 @@
+# Workflow Builder
+
+The Workflows page follows the supplied node-editor mockup with an editable React Flow canvas, ELK auto-layout,
+component properties, graph validation, and control-plane save. The seeded PR review workflow is the first editable
+graph.
+
+## Feature diagram
+
+```mermaid
+flowchart LR
+    User[Engineering user] -->|Edit graph| Canvas[React Flow canvas]
+    User -->|Create or select workflow| Dashboard[Workflow dashboard]
+    Dashboard -->|Desktop layout| Inspector[Workflow and node inspector]
+    Dashboard -->|Execution state and graph counts| Preview[Run preview]
+    Dashboard -->|Phone summary| Mobile[Six key stages derived from saved graph]
+    Mobile -->|No run history| Tasks[Configured stages marked Not run]
+    Mobile -->|No approval event| Approvals[Approval step marked Not requested]
+    Dashboard -->|Desktop editing| Canvas
+    Mobile -->|Read current definition| API
+    Dashboard -->|Pointer and keyboard resizing| Split[Resizable canvas / preview divider]
+    Palette[Component palette] -->|Drag handle| DnD[@dnd-kit/core]
+    DnD -->|Drop centered at cursor| Canvas
+    Palette -->|Click to add| Canvas
+    Search[Palette search] -->|Filter node names and descriptions| Palette
+    Canvas -->|Auto layout| ELK[ELK layered layout]
+    Canvas -->|Validate and save| Dashboard
+    Dashboard -->|GET /api/v1/workflows| API[Go control plane]
+    Dashboard -->|POST /api/v1/workflows| API
+    Dashboard -->|PUT /api/v1/workflows/{id}| API
+    Dashboard -->|Read current graph counts only| Preview
+    API --> Validate[Validate node types and edge references]
+    Validate --> Store[(Versioned JSON snapshot)]
+    Store -->|Workflow JSON + version| Dashboard
+```
+
+## Behavior
+
+- The control plane returns a starter PR review and release graph with parallel Code Reviewer, Test Generator, and
+  Coverage Analyzer branches, then accepts edits through
+  `PUT /api/v1/workflows/{id}`. The builder can create workflows with `POST /api/v1/workflows` and switch between
+  persisted definitions.
+- Node type, node count, edge count, IDs, labels, positions, status, and edge references are validated before saving.
+- Node icons and accent colors follow the stable component type, so changing a node label does not change its visual role.
+- The canvas supports dragging nodes, connecting ports, editing labels and descriptions, adding components, deleting
+  components, and ELK auto-layout. Compact layer spacing and node sizing keep the complete graph legible in the canvas;
+  React Flow controls sit at the canvas top-right and a compact mini-map stays at bottom-right.
+- Palette components show their type icon and purpose, and can be clicked or dragged onto the canvas; dragged nodes
+  are centered under the cursor using React Flow viewport coordinates.
+- Palette search filters the existing component labels and descriptions, leaving the current groups and node types intact.
+- On desktop the component palette spans the canvas and run-preview rows, while the inspector spans the header through the
+  preview. On phones, the compact heading, save action, read-only graph overview, and current run availability match the
+  supplied mobile hierarchy. Six key stages group configured node types to fit the phone width; component and connection
+  totals still report the full saved graph. Configured stages and approval requirements appear with honest empty run
+  states when no execution exists. The editor stays desktop-only, and the UI does not simulate execution state.
+- The builder content stays within the supplied desktop frame width while the shared app shell provides the same rail and
+  typography as other routes. `PanelHeading` supplies component and node headings; the selected node opens in the
+  inspector first, with workflow-level fields available in a collapsed native disclosure below it.
+- The installed `react-resizable-panels` separator adjusts the canvas and run-preview heights. Its default split keeps
+  the canvas aligned with the supplied desktop mock; the keyboard-focusable separator can also be resized with arrow keys.
+- The palette groups all node types accepted by the control plane. Builder is the only active workflow section;
+  Runs, Versions, Schedules, Permissions, and Settings stay disabled until those views exist.
+- Opening a saved workflow selects its Agent Router so the inspector starts with real graph data. Workflows without
+  an Agent Router leave the inspector unselected.
+- Run and Publish remain disabled because there is no workflow execution runner or publish service yet.
+- Run Preview shows the saved graph's actual node and edge counts and states explicitly that no execution is available;
+  it does not show simulated statuses, duration, or cost.
+- Validate checks that the graph contains a trigger and that edges refer to existing nodes. Saving increments the
+  workflow version.
+- Workflow definitions survive API restarts through an atomic versioned JSON snapshot. The current control plane does
+  not execute workflows; the UI states this explicitly.
+
+## Verification
+
+```sh
+go test ./cmd/zenchron -run 'TestWorkflow|TestPersistentMuxRestoresObjectivesAndWorkflows' -count=1
+cd dashboard && npm run test:e2e -- e2e/workflows.spec.ts -g 'workflow graph can be edited'
+```
+
+The focused browser check verifies workflow creation, selection, graph switching, editing, saving, palette search and drag
+placement, canvas/preview resizing, and mobile toolbar fit.

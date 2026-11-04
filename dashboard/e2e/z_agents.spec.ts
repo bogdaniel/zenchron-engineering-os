@@ -1,0 +1,314 @@
+import { expect, test } from '@playwright/test';
+
+test('Agents populated desktop layout matches the reference panel geometry', async ({ page }) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  const profileID = 'ab'.repeat(16);
+  const projectID = 'ef'.repeat(16);
+  const workerID = 'cd'.repeat(16);
+  await page.route('**/api/v1/agents', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([{
+      id: profileID, name: 'Code Reviewer', description: 'Review code for quality and safety.',
+      provider: 'anthropic', model: 'claude-3.7-sonnet', status: 'active',
+      system_prompt: 'Review code changes.', goal_prompt: 'Return actionable findings.',
+      tools: ['code.search', 'code.write', 'git.diff', 'git.read'], version: 3, updated_at: new Date().toISOString(),
+    }]),
+  }));
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([{
+      id: '01'.repeat(16), agent_id: profileID, agent_name: 'Code Reviewer', project_id: projectID,
+      project_name: 'Nova Platform', worker_id: workerID, worker_name: 'Mac', branch: 'zenchron/agent-run/0101',
+      prompt: 'Review auth changes', status: 'succeeded', attempts: 1,
+      created_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+      updated_at: new Date(Date.now() - 5 * 60_000).toISOString(), diff_available: true,
+    }]),
+  }));
+  await page.goto('/#agents');
+  await expect(page.getByRole('heading', { name: 'Code Reviewer' })).toBeVisible();
+  const profileRow = page.locator('.agent-row').filter({ hasText: 'Code Reviewer' });
+  await expect(profileRow).toContainText('Last run 5m ago');
+  await expect(profileRow).toContainText('1 completed · 100% success');
+  await expect(profileRow).toContainText('code.search');
+  await expect(profileRow).toContainText('+1');
+  const performance = page.locator('.agents-profile-metrics');
+  await expect(performance).toContainText('Runs');
+  await expect(performance).toContainText('Avg latency');
+  await expect(performance).toContainText('Unavailable');
+  const trend = page.locator('.agents-trend-panel');
+  await expect(trend).toContainText('1 succeeded · 0 failed · 0 other');
+  await expect(trend.locator('.agents-trend-chart')).toHaveAttribute('aria-label', /1 successful/);
+  await expect(page.locator('.agents-prompt-preview').nth(0)).toContainText('Review code changes.');
+  await expect(page.locator('.agents-prompt-preview').nth(1)).toContainText('Return actionable findings.');
+  const permissionRows = page.locator('.agents-permission-row');
+  await expect(permissionRows).toHaveCount(5);
+  await expect(permissionRows.filter({ hasText: 'Code search' })).toContainText('Allowed');
+  await expect(permissionRows.filter({ hasText: 'Write files' })).toContainText('Allowed');
+  await expect(permissionRows.filter({ hasText: 'Documentation search' })).toContainText('Not granted');
+  await expect(page.locator('.agents-safeguard-list')).toContainText('Isolated Git worktree');
+  await expect(page.locator('.agents-safeguard-list')).toContainText('Test execution');
+  await expect(page.getByRole('button', { name: 'Edit profile' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save profile' })).toHaveCount(0);
+  await expect(page.locator('.agents-profile-summary')).toContainText('claude-3.7-sonnet');
+  const list = await page.locator('.agents-list-panel').boundingBox();
+  const detail = await page.locator('.agents-detail-panel').boundingBox();
+  const runs = await page.locator('.agents-runs-panel').boundingBox();
+  const sidebar = await page.locator('.sidebar').boundingBox();
+  const metrics = await page.locator('.agents-metrics').boundingBox();
+  const noteCount = await page.locator('.agents-runtime-note').count();
+  expect(list && detail && runs && sidebar && metrics).toBeTruthy();
+  expect(sidebar!.width).toBe(247);
+  expect(metrics!.x).toBe(265);
+  expect(Math.abs(metrics!.y - 136.5)).toBeLessThanOrEqual(1);
+  expect(Math.abs(metrics!.height - 65)).toBeLessThanOrEqual(1);
+  expect(Math.abs(list!.y - 213.5)).toBeLessThanOrEqual(1);
+  expect(Math.abs(list!.width - 425.5)).toBeLessThanOrEqual(1);
+  expect(noteCount).toBe(0);
+  expect(list!.height).toBeGreaterThan(detail!.height);
+  expect(runs!.x).toBeCloseTo(detail!.x, 0);
+  expect(runs!.y).toBeGreaterThan(detail!.y);
+  expect(runs!.y + runs!.height).toBeLessThanOrEqual((list!.y + list!.height) + 1);
+  await expect(page.locator('.agents-panel-heading h3').first()).toHaveCSS('font-size', '14px');
+});
+
+test('Agents layout fits tablet and phone widths without panel overlap', async ({ page }) => {
+  for (const [width, height, expectedColumns] of [[1024, 768, 2], [390, 844, 1]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/#agents');
+    await expect(page.locator('.agents-page')).toBeVisible();
+    const layout = await page.evaluate(() => {
+      const grid = document.querySelector('.agents-content-grid')!;
+      const panels = ['.agents-list-panel', '.agents-detail-panel', '.agents-runs-panel']
+        .map((selector) => document.querySelector(selector)!.getBoundingClientRect())
+        .map(({ x, y, width, height }) => ({ x, y, width, height }));
+      const overlaps = panels.some((first, index) => panels.slice(index + 1).some((second) =>
+        first.x < second.x + second.width && second.x < first.x + first.width
+        && first.y < second.y + second.height && second.y < first.y + first.height));
+      return {
+        viewport: window.innerWidth,
+        document: document.documentElement.scrollWidth,
+        columns: getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length,
+        panels,
+        overlaps,
+      };
+    });
+    expect(layout.document).toBe(layout.viewport);
+    expect(layout.columns).toBe(expectedColumns);
+    expect(layout.panels.every(({ width, height }) => width > 0 && height > 0)).toBe(true);
+    expect(layout.overlaps).toBe(false);
+  }
+});
+
+test('Agents empty state uses the primary create action', async ({ page }) => {
+  await page.route('**/api/v1/agents', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.goto('/#agents');
+  const unavailableMetrics = page.locator('.agents-metric strong.metric-unavailable');
+  await expect(unavailableMetrics).toHaveCount(2);
+  await expect(unavailableMetrics.first()).toHaveCSS('font-size', '14px');
+  const create = page.getByRole('button', { name: 'Create first agent' });
+  await expect(page.locator('.agents-trend-empty')).toContainText('No runs recorded for this profile');
+  await expect(create).toHaveCSS('background-image', /linear-gradient/);
+  await create.click();
+  await expect(page.getByRole('dialog', { name: 'Create agent profile' })).toBeVisible();
+});
+
+test('Agents queue dialog explains when a worker has no model runtime', async ({ page }) => {
+  await page.route('**/api/v1/workers', async (route) => {
+    const response = await route.fetch();
+    const workers = await response.json() as { agent_runtime_enabled?: boolean }[];
+    await route.fulfill({ response, body: JSON.stringify(workers.map((worker) => ({
+      ...worker, agent_runtime_enabled: false,
+    }))) });
+  });
+  await page.goto('/#agents');
+  const created = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/agents', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Runtime status check', provider: 'custom', model: 'review-v1', tools: [] }),
+    });
+    return response.ok;
+  });
+  expect(created).toBe(true);
+  await page.reload();
+  await page.getByRole('button', { name: 'Queue run' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
+  await expect(dialog.locator('.agents-queue-note')).toContainText('has no OpenAI-compatible endpoint configured');
+  await expect(dialog.getByLabel('Project')).toHaveValue(/^zenchron-engineering-os · .+ · runtime not configured$/);
+});
+
+test('agent profiles can be saved and disabled from the dashboard', async ({ page }) => {
+  const name = `QA Reviewer ${Date.now()}`;
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Agents' }).click();
+  await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
+  await page.getByRole('button', { name: 'Create Agent' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Profile name').fill(name);
+  await dialog.getByLabel('Description').fill('Review a bounded change set.');
+  await dialog.getByLabel('Provider identifier').fill('custom');
+  await dialog.getByLabel('Model identifier').fill('review-v1');
+  await dialog.getByLabel('System prompt').fill('Review safely and report evidence.');
+  await dialog.getByLabel('Goal prompt').fill('Find defects in the change.');
+  await dialog.getByLabel('Read repository files').check();
+  await dialog.getByLabel('Write files in isolated branch').check();
+  await dialog.getByRole('button', { name: 'Create profile' }).click();
+  await expect(page.getByRole('heading', { name })).toBeVisible();
+  await expect(page.locator('.agents-detail-heading h3')).toHaveCSS('font-size', '18px');
+  await expect(page.locator('.agents-detail-heading h3')).toHaveCSS('font-weight', '650');
+  const profileSearch = page.getByRole('textbox', { name: 'Search agents' });
+  await profileSearch.fill(name);
+  await expect(page.locator('.agent-row').filter({ hasText: name }).getByText('custom · review-v1')).toBeVisible();
+  await profileSearch.fill('no matching profile');
+  await expect(page.getByText('No profiles match this search.')).toBeVisible();
+  await profileSearch.fill('');
+  await page.getByRole('button', { name: 'Queue run' }).click();
+  const runDialog = page.getByRole('dialog', { name: 'Queue agent run' });
+  await expect(runDialog.locator('.agents-queue-note')).toContainText('reports an OpenAI-compatible endpoint configured');
+  await runDialog.getByLabel('Project').click();
+  await page.getByRole('option', { name: 'zenchron-engineering-os' }).click();
+  await expect(runDialog.getByLabel('Project')).toHaveValue(/^zenchron-engineering-os · .+ · runtime configured$/);
+  await runDialog.getByLabel('Task prompt').fill('Review the current changes.');
+  await runDialog.getByRole('button', { name: 'Queue run', exact: true }).click();
+  await expect(runDialog).toBeHidden();
+  const detail = page.locator('.agents-detail-panel');
+  await detail.getByRole('tab', { name: 'Run History' }).click();
+  const queuedRun = detail.locator('.agents-run-row').filter({ hasText: 'Review the current changes.' });
+  await expect(queuedRun).toContainText('succeeded', { timeout: 15_000 });
+  await expect(queuedRun).toContainText(/Branch: zenchron\/agent-run\/[a-f0-9]{32}/);
+  await detail.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByRole('button', { name: 'Save profile' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edit profile' }).click();
+  await detail.getByLabel('Model', { exact: true }).fill('review-v2');
+  await detail.getByRole('tab', { name: 'Prompts' }).click();
+  const systemPrompt = detail.locator('.agent-prompt-editor').first();
+  await expect(systemPrompt.locator('.monaco-editor')).toBeVisible();
+  await systemPrompt.locator('.monaco-editor').click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.insertText('Review safely and cite changed files.');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByRole('button', { name: 'Edit profile' })).toBeVisible();
+  await expect(page.locator('.agent-row').filter({ hasText: name }).getByText('custom · review-v2')).toBeVisible();
+  await page.getByRole('button', { name: 'Disable profile' }).click();
+  await expect(page.getByText('disabled', { exact: true }).first()).toBeVisible();
+});
+
+test('Agents dashboard completes a run and resumes requested review changes on the same branch', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Agents' }).click();
+  const profile = await page.evaluate(async () => {
+    const profileResponse = await fetch('/api/v1/agents', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'E2E Reviewer', provider: 'custom', model: 'review-v1', tools: ['code.write'] }),
+    });
+    if (!profileResponse.ok) throw new Error(`E2E profile setup failed: ${await profileResponse.text()}`);
+    return profileResponse.json();
+  });
+  await page.reload();
+  await page.locator('.agent-row').filter({ hasText: 'E2E Reviewer' }).click();
+  await page.getByRole('button', { name: 'Queue run' }).click();
+  const queueDialog = page.getByRole('dialog', { name: 'Queue agent run' });
+  await expect(queueDialog.locator('.agents-queue-note')).toContainText('reports an OpenAI-compatible endpoint configured');
+  await queueDialog.getByLabel('Task prompt').fill('Summarize the project structure.');
+  await queueDialog.getByRole('button', { name: 'Queue run', exact: true }).click();
+  const row = page.locator('.agents-runs-panel .agents-run-row')
+    .filter({ hasText: 'Summarize the project structure.' });
+  await expect(row.locator('.agents-run-badge')).toHaveText('succeeded', { timeout: 15_000 });
+  const run = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/agent-runs');
+    const runs = await response.json();
+    return runs.find((item: { prompt: string }) => item.prompt === 'Summarize the project structure.');
+  });
+  expect(run.agent_id).toBe(profile.id);
+  await expect.poll(() => page.evaluate(async (runID) => {
+    const response = await fetch('/api/v1/agent-runs');
+    const runs = await response.json();
+    return runs.find((item: { id: string }) => item.id === runID)?.status;
+  }, run.id), { timeout: 15_000 }).toBe('succeeded');
+  const evidence = await page.evaluate(async (runID) => {
+    const [runsResponse, diffResponse] = await Promise.all([
+      fetch('/api/v1/agent-runs'), fetch(`/api/v1/agent-runs/${runID}/diff`),
+    ]);
+    const runs = await runsResponse.json();
+    return { run: runs.find((item: { id: string }) => item.id === runID),
+      diffStatus: diffResponse.status, diff: await diffResponse.json() };
+  }, run.id);
+  expect(evidence.run.diff_available).toBe(true);
+  expect(evidence.run.commit_sha).toMatch(/^[a-f0-9]{40}$/);
+  expect(evidence.diffStatus).toBe(200);
+  expect(evidence.diff.diff).toContain('agent-output.md');
+  expect(evidence.diff.diff).toContain('Created by the E2E model.');
+  await expect(row).toContainText('succeeded');
+  await expect(row).toContainText('zenchron-engineering-os');
+  await expect(row).toContainText(`commit ${evidence.run.commit_sha.slice(0, 7)}`);
+  await page.getByRole('link', { name: 'Reviews' }).click();
+  await page.getByRole('button', { name: 'Local branches' }).click();
+  await expect(page.locator('.reviews-diff-meta')).toContainText(`Local commit ${evidence.run.commit_sha.slice(0, 7)}`);
+  await page.getByLabel('Review comment').fill('Add a regression note for the requested change.');
+  await page.getByRole('button', { name: 'Request changes' }).click();
+  await expect.poll(() => page.evaluate(async (runID) => {
+    const response = await fetch('/api/v1/agent-runs');
+    const runs = await response.json();
+    const item = runs.find((entry: { id: string }) => entry.id === runID);
+    return { status: item?.status, attempts: item?.attempts };
+  }, run.id), { timeout: 15_000 }).toEqual({ status: 'succeeded', attempts: 2 });
+  const followUp = await page.evaluate(async (runID) => {
+    const [runsResponse, diffResponse] = await Promise.all([
+      fetch('/api/v1/agent-runs'), fetch(`/api/v1/agent-runs/${runID}/diff`),
+    ]);
+    const runs = await runsResponse.json();
+    const item = runs.find((entry: { id: string }) => entry.id === runID);
+    return { run: item, diff: await diffResponse.json() };
+  }, run.id);
+  expect(followUp.run.branch).toBe(evidence.run.branch);
+  expect(followUp.run.commit_sha).not.toBe(evidence.run.commit_sha);
+  expect(followUp.run.review_comments).toContainEqual(expect.objectContaining({
+    body: 'Add a regression note for the requested change.', request_changes: true,
+  }));
+  expect(followUp.diff.diff).toContain('Created by the E2E model.');
+  expect(followUp.diff.diff).toContain('Review feedback addressed by the E2E worker.');
+  await page.getByRole('link', { name: 'Overview' }).click();
+  await expect(page.locator('.metric-card.blue')).toContainText('Running agents');
+  await expect(page.locator('.metric-card.blue')).toContainText('0');
+  await expect(page.locator('.agents-panel')).toContainText('E2E Reviewer');
+});
+
+test('Reviews can cancel an active worker run and retain its partial branch diff', async ({ page }) => {
+  await page.goto('/#agents');
+  const run = await page.evaluate(async () => {
+    const profileResponse = await fetch('/api/v1/agents', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Cancellation E2E', provider: 'custom', model: 'review-v1', tools: ['code.write'] }),
+    });
+    const profile = await profileResponse.json();
+    const projects = await fetch('/api/v1/projects').then((response) => response.json());
+    const project = projects.find((item: { worker_status: string }) => item.worker_status === 'online');
+    if (!profileResponse.ok || !project) throw new Error('Cancellation E2E setup failed');
+    const response = await fetch('/api/v1/agent-runs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_id: profile.id, project_id: project.id,
+        prompt: 'Hold for cancellation after writing partial output.',
+      }),
+    });
+    return { status: response.status, run: await response.json() };
+  });
+  expect(run.status).toBe(202);
+  await expect.poll(async () => {
+    const response = await page.request.get('http://127.0.0.1:8082/test-state');
+    return (await response.json()).waitingForCancellation;
+  }, { timeout: 15_000 }).toBe(true);
+
+  await page.goto('/#reviews');
+  await page.getByRole('button', { name: 'Local branches' }).click();
+  const row = page.locator('.ag-row').filter({ hasText: run.run.branch });
+  await expect(row).toBeVisible();
+  await row.click();
+  await page.getByRole('button', { name: 'Cancel run' }).click();
+  await expect(page.locator('.reviews-detail-heading')).toContainText('cancelled', { timeout: 15_000 });
+  await expect(page.locator('.reviews-code-editor[aria-label="Local branch diff"]')).toBeVisible();
+  await expect(page.locator('.reviews-code-editor .view-lines')).toContainText('Partial output before cancellation.');
+  await expect(page.locator('.reviews-change-empty')).toContainText('partial-output.md');
+  await page.getByRole('textbox', { name: 'Review comment' }).fill('Resume from the captured partial output.');
+  await page.getByRole('button', { name: 'Add comment' }).click();
+  await expect(page.getByLabel('Review comments')).toContainText('Resume from the captured partial output.');
+});

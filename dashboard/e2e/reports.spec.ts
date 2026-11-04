@@ -1,0 +1,305 @@
+import { expect, test } from '@playwright/test';
+
+test('Reports panel rows match the desktop mockup proportions', async ({ page }) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/#reports');
+  await expect(page.locator('.reports-panel-heading > div > svg')).toHaveCount(10);
+  await expect(page.locator('.reports-metric')).toHaveText([
+    /Delivery velocity/, /Cycle time/, /CI duration/, /Review latency/, /Agent spend/, /Acceptance rate/,
+    /Autonomous completion/,
+  ]);
+  await expect(page.getByRole('heading', { name: 'Work outcomes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Insights & narrative' })).toBeVisible();
+  await expect(page.locator('.reports-empty-chart')).toHaveCount(5);
+  await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
+  await expect(page.locator('.reports-empty-chart').first()).toContainText('Connect a source to view this chart');
+  const sectionBounds = await page.evaluate(() => Object.fromEntries(
+    ['.reports-scope-bar', '.reports-metrics', '.reports-content-grid'].map((selector) => {
+      const { y, height } = document.querySelector(selector)!.getBoundingClientRect();
+      return [selector, { y, height }];
+    }),
+  ));
+  expect(sectionBounds['.reports-scope-bar'].y).toBeCloseTo(94, 0);
+  expect(sectionBounds['.reports-scope-bar'].height).toBeCloseTo(57, 0);
+  expect(sectionBounds['.reports-metrics'].y).toBeCloseTo(163, 0);
+  expect(sectionBounds['.reports-metrics'].height).toBe(88);
+  expect(sectionBounds['.reports-content-grid'].y).toBeCloseTo(265, 0);
+  const rows = await page.locator('.reports-content-grid > *').evaluateAll((panels) => panels.map((panel) => {
+    const { x, y, width, height } = panel.getBoundingClientRect();
+    return { classes: Array.from(panel.classList), x, y, width, height };
+  }));
+  expect(rows).toHaveLength(10);
+  const panel = (name: string) => rows.find((row) => row.classes.includes(name))!;
+  const delivery = panel('delivery-velocity-panel');
+  const ci = panel('ci-distribution-panel');
+  const outcomes = panel('run-outcomes-panel');
+  const review = panel('review-latency-panel');
+  const spend = panel('agent-spend-panel');
+  const acceptance = panel('acceptance-panel');
+  const coverage = panel('reports-summary');
+  const product = panel('product-summary-panel');
+  const inventory = panel('inventory-panel');
+  const downloads = panel('downloadable-reports-panel');
+  expect(delivery.x).toBe(265);
+  expect(Math.abs(delivery.height - 175)).toBeLessThanOrEqual(2);
+  expect(Math.abs(outcomes.height - 175)).toBeLessThanOrEqual(2);
+  expect(Math.abs(product.height - 188)).toBeLessThanOrEqual(2);
+  expect(delivery.y).toBe(ci.y);
+  expect(ci.y).toBe(outcomes.y);
+  expect(Math.abs(review.height - 168)).toBeLessThanOrEqual(1);
+  expect(review.y).toBe(spend.y);
+  expect(review.y).toBe(acceptance.y);
+  expect(acceptance.y).toBe(coverage.y);
+  expect(Math.abs(product.y - (review.y + review.height + 11))).toBeLessThanOrEqual(1);
+  expect(product.y).toBe(inventory.y);
+  expect(inventory.y).toBe(downloads.y);
+  expect(delivery.width).toBeGreaterThan(ci.width);
+  expect(ci.width).toBeGreaterThan(outcomes.width);
+  expect(coverage.height).toBeGreaterThan(product.y + product.height - coverage.y - 1);
+  await expect(page.locator('.reports-summary')).toContainText('Key takeaway');
+  await expect(page.locator('.reports-summary')).toContainText('Worker availability');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobile = await page.locator('.reports-content-grid > *').evaluateAll((panels) => panels.map((panel) => {
+    const { x, y, width, height } = panel.getBoundingClientRect();
+    return { x, y, width, height };
+  }));
+  expect(mobile).toHaveLength(10);
+  expect(Math.max(...mobile.map(({ x, width }) => x + width))).toBeLessThanOrEqual(390);
+  expect(mobile.every((panel, index) => index === 0 || panel.y > mobile[index - 1].y)).toBe(true);
+});
+
+test('30-day run metrics exclude future and invalid timestamps', async ({ page }) => {
+  const now = Date.now();
+  const run = (id: string, created_at: string) => ({
+    id, agent_id: 'a'.repeat(32), agent_name: 'Reviewer', project_id: 'b'.repeat(32), project_name: 'Platform',
+    worker_id: 'c'.repeat(32), worker_name: 'Mac', branch: `agent/${id}`, prompt: 'Review changes.',
+    status: 'succeeded', attempts: 1, created_at, updated_at: created_at,
+  });
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([
+      run('recent', new Date(now - 24 * 60 * 60 * 1000).toISOString()),
+      run('future', new Date(now + 24 * 60 * 60 * 1000).toISOString()),
+      run('invalid', 'not-a-date'),
+    ]),
+  }));
+
+  await page.goto('/#reports');
+  await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText('1');
+  await page.goto('/#agents');
+  await expect(page.locator('.agents-metric').filter({ hasText: 'Total runs (30d)' }).locator('strong')).toHaveText('1');
+});
+
+test('run outcome distribution includes cancelled runs without counting them as successes', async ({ page }) => {
+  const createdAt = new Date().toISOString();
+  const run = (id: string, status: 'succeeded' | 'cancelled') => ({
+    id, agent_id: 'a'.repeat(32), agent_name: 'Reviewer', project_id: 'b'.repeat(32), project_name: 'Platform',
+    worker_id: 'c'.repeat(32), worker_name: 'Mac', branch: `agent/${id}`, prompt: 'Review changes.',
+    status, attempts: 1, created_at: createdAt, updated_at: createdAt,
+  });
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([run('1'.repeat(32), 'succeeded'), run('2'.repeat(32), 'cancelled')]),
+  }));
+
+  await page.goto('/#reports');
+  await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText('2');
+  const cancelled = page.locator('.run-outcome-legend > div').filter({ hasText: 'Cancelled' });
+  await expect(cancelled).toContainText('1');
+  await expect(page.locator('.run-outcomes-panel .coverage-online')).toHaveText('100% success');
+});
+
+test('workspace inventory does not imply a complete snapshot when agent runs fail to load', async ({ page }) => {
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({ status: 503, body: 'Unavailable' }));
+  await page.goto('/#reports');
+  await expect(page.locator('.inventory-footnote')).toHaveText('One or more sources are still loading or unavailable.');
+});
+
+test('Reports derives GitHub delivery metrics from complete pull-request history', async ({ page }) => {
+  const now = Date.now();
+  const stamp = (hoursAgo: number) => new Date(now - hoursAgo * 60 * 60 * 1000).toISOString();
+  const stampMinutes = (minutesAgo: number) => new Date(now - minutesAgo * 60 * 1000).toISOString();
+  const projectID = 'a'.repeat(32);
+  await page.route('**/api/v1/projects', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([
+      {
+        id: projectID, name: 'Platform', branch: 'main', git_remote: 'github.com/acme/platform',
+        worker_id: 'b'.repeat(32), worker_name: 'Mac', worker_status: 'online', last_seen: stamp(0),
+      },
+      {
+        id: 'e'.repeat(32), name: 'Local Only', branch: 'main', git_remote: '',
+        worker_id: 'b'.repeat(32), worker_name: 'Mac', worker_status: 'online', last_seen: stamp(0),
+      },
+    ]),
+  }));
+  await page.route('**/api/v1/projects/*/pull-request-history*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      complete: true,
+      items: [
+        { state: 'closed', created_at: stamp(72), updated_at: stamp(24), closed_at: stamp(24), merged_at: stamp(24) },
+        { state: 'closed', created_at: stamp(48), updated_at: stamp(12), closed_at: stamp(12), merged_at: stamp(12) },
+        { state: 'closed', created_at: stamp(36), updated_at: stamp(6), closed_at: stamp(6), merged_at: null },
+      ],
+    }),
+  }));
+  await page.route('**/api/v1/projects/*/workflow-run-history*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ complete: true, items: [
+      { created_at: stampMinutes(80), status: 'completed', run_started_at: stampMinutes(80), updated_at: stampMinutes(72) },
+      { created_at: stampMinutes(60), status: 'completed', run_started_at: stampMinutes(60), updated_at: stampMinutes(48) },
+      { created_at: stampMinutes(1), status: 'in_progress', run_started_at: stampMinutes(1), updated_at: stampMinutes(0) },
+      { created_at: stamp(31 * 24), status: 'completed', run_started_at: stamp(31 * 24), updated_at: stampMinutes(0) },
+    ] }),
+  }));
+  await page.goto('/#reports');
+  await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' }).locator('strong')).toHaveText('0.5');
+  await expect(page.locator('.reports-metric').filter({ hasText: 'Cycle time' }).locator('strong')).toHaveText('42');
+  await expect(page.locator('.reports-metric').filter({ hasText: 'Acceptance rate' }).locator('strong')).toHaveText('67%');
+  await expect(page.locator('.reports-metric').filter({ hasText: 'CI duration' }).locator('strong')).toHaveText('10');
+  await expect(page.locator('.reports-ci-chart')).toBeVisible();
+  await expect(page.locator('.reports-ci-chart .recharts-rectangle')).toHaveCount(2);
+  const trend = page.locator('.reports-pull-request-chart');
+  await expect(trend).toBeVisible();
+  await expect(trend).toContainText('Merged PRs');
+  await expect(trend.locator('.recharts-line')).toHaveCount(2);
+  await expect(page.locator('.reports-insight').filter({ hasText: 'Delivery sources' }))
+    .toContainText('1 checkout has no remote');
+});
+
+test('Reports suppresses GitHub delivery metrics when PR history is truncated', async ({ page }) => {
+  const projectID = 'c'.repeat(32);
+  await page.route('**/api/v1/projects', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([{
+      id: projectID, name: 'Platform', branch: 'main', git_remote: 'github.com/acme/platform',
+      worker_id: 'd'.repeat(32), worker_name: 'Mac', worker_status: 'online', last_seen: new Date().toISOString(),
+    }]),
+  }));
+  await page.route('**/api/v1/projects/*/pull-request-history*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ complete: false, items: [] }),
+  }));
+  await page.route('**/api/v1/projects/*/workflow-run-history*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ complete: false, items: [
+      { created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), status: 'completed', run_started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        updated_at: new Date().toISOString() },
+    ] }),
+  }));
+  await page.goto('/#reports');
+  await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' }).locator('strong')).toHaveText('Unavailable');
+  await expect(page.locator('.reports-metric').filter({ hasText: 'Cycle time' }).locator('strong')).toHaveText('Unavailable');
+  await expect(page.locator('.reports-metric').filter({ hasText: 'CI duration' }).locator('strong')).toHaveText('Unavailable');
+  await expect(page.locator('.ci-distribution-panel .reports-empty-chart'))
+    .toContainText('Waiting for complete GitHub Actions history.');
+  await expect(page.locator('.delivery-velocity-panel .reports-empty-chart'))
+    .toContainText('Waiting for complete GitHub pull-request history.');
+  await expect(page.locator('.reports-insight').filter({ hasText: 'Delivery sources' }))
+    .toContainText('2,000 pull-request report limit');
+});
+
+test('report scope filters live snapshots by product and resets them', async ({ page }) => {
+  const now = Date.now();
+  const stamp = (daysAgo: number) => new Date(now - daysAgo * 24 * 60 * 60 * 1000).toISOString();
+  const productID = 'a'.repeat(32);
+  const firstProjectID = 'b'.repeat(32);
+  const secondProjectID = 'c'.repeat(32);
+  const workerID = 'd'.repeat(32);
+  const objective = (id: string, product_id: string, owner: string, created_at: string) => ({
+    id, title: `Objective ${id[0]}`, description: '', owner, product: 'Nova Platform', product_id,
+    status: 'in_progress', progress: 40, due_date: '', created_at, updated_at: created_at,
+  });
+  const project = (id: string, name: string) => ({
+    id, name, branch: 'main', git_remote: '', worker_id: workerID, worker_name: 'Mac',
+    worker_status: 'online', last_seen: new Date(now).toISOString(),
+  });
+  const run = (id: string, project_id: string) => ({
+    id, agent_id: 'e'.repeat(32), agent_name: 'Reviewer', project_id, project_name: 'Nova Platform',
+    worker_id: workerID, worker_name: 'Mac', branch: `agent/${id}`, prompt: 'Review changes.',
+    status: 'succeeded', attempts: 1, created_at: stamp(2), updated_at: stamp(2),
+  });
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  await page.route('**/api/v1/objectives', (route) => route.fulfill(json([
+    objective('f'.repeat(32), productID, 'Platform', stamp(2)),
+    objective('1'.repeat(32), '2'.repeat(32), 'Data', stamp(2)),
+  ])));
+  await page.route('**/api/v1/projects', (route) => route.fulfill(json([
+    project(firstProjectID, 'nova-api'), project(secondProjectID, 'data-pipeline'),
+  ])));
+  await page.route('**/api/v1/workers', (route) => route.fulfill(json([{
+    id: workerID, name: 'Mac', status: 'online', last_seen: new Date(now).toISOString(), agent_runtime_enabled: false,
+  }])));
+  await page.route('**/api/v1/products', (route) => route.fulfill(json([{
+    id: productID, name: 'Nova Platform', description: '', repository_ids: [firstProjectID],
+    created_at: stamp(20), updated_at: stamp(2),
+  }])));
+  await page.route('**/api/v1/agents', (route) => route.fulfill(json([])));
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([
+    run('3'.repeat(32), firstProjectID), run('4'.repeat(32), secondProjectID),
+  ])));
+  await page.addInitScript(() => {
+    const originalClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      if (this.download.endsWith('.csv')) {
+        (window as Window & { downloadedCSV?: Promise<string> }).downloadedCSV = fetch(this.href)
+          .then((response) => response.text());
+      }
+      originalClick.call(this);
+    };
+  });
+
+  await page.goto('/#reports');
+  await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Workflow filter unavailable because runs are not linked to workflows')).toBeDisabled();
+  await expect(page.locator('.run-outcomes-panel .shared-panel-heading p')).toHaveText('Recorded status · last 30 days');
+  await page.getByRole('combobox', { name: 'Time range' }).click();
+  await page.getByRole('option', { name: 'Last 90 days' }).click();
+  await page.getByRole('button', { name: 'Apply filters' }).click();
+  await expect(page.locator('.run-outcomes-panel .shared-panel-heading p')).toHaveText('Recorded status · last 90 days');
+  const objectiveInventoryCount = page.locator('.inventory-bar-row').filter({ hasText: 'Objectives' }).locator('b');
+  const checkoutInventoryCount = page.locator('.inventory-bar-row').filter({ hasText: 'Local checkouts' }).locator('b');
+  await expect(objectiveInventoryCount).toHaveText('2');
+  await page.getByRole('combobox', { name: 'Objective owner' }).click();
+  await page.getByRole('option', { name: 'Platform', exact: true }).click();
+  await page.getByRole('button', { name: 'Apply filters' }).click();
+  await expect(objectiveInventoryCount).toHaveText('1');
+  await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText('2');
+  await page.getByRole('button', { name: 'Reset' }).click();
+  await expect(objectiveInventoryCount).toHaveText('2');
+  await page.getByRole('combobox', { name: 'Product' }).click();
+  await page.getByRole('option', { name: 'Nova Platform' }).click();
+  await expect(objectiveInventoryCount).toHaveText('2');
+  await page.getByRole('button', { name: 'Apply filters' }).click();
+  await expect(objectiveInventoryCount).toHaveText('1');
+  await expect(checkoutInventoryCount).toHaveText('1');
+  await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText('1');
+  await expect(page.locator('.reports-insight').filter({ hasText: 'Delivery sources' }))
+    .toContainText('No Git remotes are configured for these checkouts.');
+  const productRow = page.locator('.product-summary-table tbody tr').filter({ hasText: 'Nova Platform' });
+  await expect(productRow.locator('td')).toHaveText(['Nova Platform', '1', '1', '1']);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download CSV' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^zenchron-report-\d{4}-\d{2}-\d{2}\.csv$/);
+  const csv = await page.evaluate(async () =>
+    await (window as Window & { downloadedCSV?: Promise<string> }).downloadedCSV,
+  );
+  expect(csv).toContain('"Product","Nova Platform","","1","1","1"');
+  for (const metric of ['Delivery velocity', 'Cycle time', 'CI duration', 'Review latency', 'Agent spend', 'Acceptance rate', 'Autonomous completion']) {
+    expect(csv).toContain(`"Snapshot","${metric}","Unavailable"`);
+  }
+  await page.getByRole('button', { name: 'Reset' }).click();
+  await expect(objectiveInventoryCount).toHaveText('2');
+  await expect(checkoutInventoryCount).toHaveText('2');
+});

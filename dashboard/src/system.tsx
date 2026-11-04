@@ -1,0 +1,296 @@
+import { Badge, Button, Card } from '@mantine/core';
+import { PageHeading } from './PageHeading';
+import { PanelHeading } from './PanelHeading';
+import { PanelCard } from './PanelCard';
+import {
+  IconActivity,
+  IconBell,
+  IconBuilding,
+  IconChecklist,
+  IconGitBranch,
+  IconCloud,
+  IconCurrencyDollar,
+  IconDatabase,
+  IconHistory,
+  IconKey,
+  IconRobot,
+  IconSettings,
+  IconShieldCheck,
+  IconUsers,
+} from '@tabler/icons-react';
+import './system.css';
+
+type SystemSection = 'integrations' | 'settings';
+
+interface SystemPageProps {
+  section: SystemSection;
+  apiOnline: boolean;
+  workerCount: number;
+  onlineWorkerCount: number;
+  modelRuntimeWorkerCount: number;
+  modelRuntimeUnknownWorkerCount: number;
+  projectCount: number;
+  gitHubProjectCount: number;
+}
+
+export function SystemPage({
+  section, apiOnline, workerCount, onlineWorkerCount, modelRuntimeWorkerCount, modelRuntimeUnknownWorkerCount,
+  projectCount, gitHubProjectCount,
+}: SystemPageProps) {
+  const modelEndpointDetail = modelRuntimeWorkerCount
+    ? `OpenAI-compatible endpoint configured on ${modelRuntimeWorkerCount} online worker${modelRuntimeWorkerCount === 1 ? '' : 's'}.` +
+      (modelRuntimeUnknownWorkerCount
+        ? ` Status is unreported by ${modelRuntimeUnknownWorkerCount} other online worker${modelRuntimeUnknownWorkerCount === 1 ? '' : 's'}.`
+        : '')
+    : modelRuntimeUnknownWorkerCount
+      ? `${modelRuntimeUnknownWorkerCount} online worker${modelRuntimeUnknownWorkerCount === 1 ? ' has' : 's have'} not reported endpoint status; restart ${modelRuntimeUnknownWorkerCount === 1 ? 'it' : 'them'} to refresh.`
+      : onlineWorkerCount ? 'Configure an OpenAI-compatible endpoint on a worker to execute queued runs.'
+        : 'No online worker is available to execute queued runs.';
+  const modelEndpointStatus = modelRuntimeWorkerCount ? 'Configured'
+    : modelRuntimeUnknownWorkerCount ? 'Update worker'
+      : onlineWorkerCount ? 'Not configured' : 'Unavailable';
+  const services = [
+    {
+      title: 'Control plane API',
+      category: 'Runtime',
+      detail: 'Local HTTP service for workspace state and worker commands.',
+      status: apiOnline ? 'Online' : 'Offline',
+      icon: <IconActivity size={19} />,
+      healthy: apiOnline,
+    },
+    {
+      title: 'Local workers',
+      category: 'Execution',
+      detail: `${onlineWorkerCount} of ${workerCount} workers reporting a recent heartbeat.`,
+      status: onlineWorkerCount ? 'Connected' : 'Unavailable',
+      icon: <IconRobot size={19} />,
+      healthy: onlineWorkerCount > 0,
+    },
+    {
+      title: 'Git provider',
+      category: 'Source control',
+      detail: gitHubProjectCount
+        ? `${gitHubProjectCount} GitHub ${gitHubProjectCount === 1 ? 'repository' : 'repositories'} detected. PR comments and request-changes use the control-plane token.`
+        : `${projectCount} local checkout${projectCount === 1 ? '' : 's'} visible; connect a github.com origin to sync issues and pull requests.`,
+      status: gitHubProjectCount ? 'Read-only sync' : 'No GitHub repo',
+      icon: <IconGitBranch size={19} />,
+      healthy: gitHubProjectCount > 0,
+    },
+    {
+      title: 'Model endpoint',
+      category: 'AI models',
+      detail: modelEndpointDetail,
+      status: modelEndpointStatus,
+      icon: <IconCloud size={19} />,
+      healthy: modelRuntimeWorkerCount > 0,
+    },
+    {
+      title: 'Evidence storage',
+      category: 'Storage',
+      detail: 'Run artifacts will appear after evidence capture is implemented.',
+      status: 'Not configured',
+      icon: <IconDatabase size={19} />,
+      healthy: false,
+    },
+  ];
+  const integrationCategories = ['Source control', 'Runtime', 'AI models', 'Execution', 'Storage'];
+
+  return (
+    <section className="system-page">
+      <div className="system-heading">
+        <div className="system-page-title">
+          <IconSettings size={25} aria-hidden="true" />
+          <PageHeading title="Settings & Integrations" description="Review connected runtime services and the current control-plane boundary." />
+        </div>
+        <div className="system-page-actions">
+          <Button className="system-quiet-button" variant="default" disabled><IconHistory size={14} /> Audit log</Button>
+          <Button className="system-quiet-button" variant="default" disabled><IconDatabase size={14} /> Import / Export</Button>
+          <Badge className="system-health" variant="light">
+            <i />{apiOnline ? 'API online' : 'API offline'}
+          </Badge>
+        </div>
+      </div>
+
+      <nav className="system-tabs" aria-label="Settings and integrations">
+        <a className={section === 'integrations' ? 'active' : ''} href="#integrations">
+          <IconSettings size={16} /> Integrations
+        </a>
+        <a className={section === 'settings' ? 'active' : ''} href="#settings">
+          <IconShieldCheck size={16} /> Settings
+        </a>
+        <button type="button" disabled aria-label="Activity and audit history unavailable">
+          <IconHistory size={16} /> Activity &amp; audit
+        </button>
+      </nav>
+
+      {section === 'integrations' ? (
+        <div className="system-workspace">
+          <nav className="system-config-nav" aria-label="Configuration categories">
+            <b>Configuration</b>
+            <small>INTEGRATIONS</small>
+            <a className="active" href="#integrations">Connected integrations</a>
+            <span>Model providers<small>Worker status</small></span>
+            <span>Runners &amp; infrastructure<small>Worker status</small></span>
+            <span>Storage &amp; evidence<small>Unavailable</small></span>
+            <small>SETTINGS</small>
+            <span><IconBuilding size={14} />Organization profile<small>Unavailable</small></span>
+            <span><IconChecklist size={14} />Policies<small>Unavailable</small></span>
+            <span><IconUsers size={14} />Permissions<small>Unavailable</small></span>
+            <span><IconCurrencyDollar size={14} />Budgets<small>Unavailable</small></span>
+            <span><IconKey size={14} />Secrets<small>Worker managed</small></span>
+            <span><IconSettings size={14} />Controller configuration<small>Read only</small></span>
+            <span><IconBell size={14} />Notification rules<small>Unavailable</small></span>
+          </nav>
+
+          <div className="system-workspace-main">
+            <div className="system-integration-header">
+              <PanelHeading className="system-section-heading" title="Integrations overview"
+                description="Live runtime connections and provider availability." />
+              <div className="system-integration-filters" aria-label="Integration categories">
+                <span className="active">All <b>{services.length}</b></span>
+                {integrationCategories.map((category) => (
+                  <span key={category}>{category}<b>{services.filter((service) => service.category === category).length}</b></span>
+                ))}
+              </div>
+            </div>
+            <div className="system-service-grid">
+              {services.map((service) => (
+                <PanelCard className="system-service-card" key={service.title} withBorder>
+                  <span className="system-service-icon">{service.icon}</span>
+                  <div className="system-service-copy">
+                    <small>{service.category}</small>
+                    <h4>{service.title}</h4>
+                  <p title={service.detail}>{service.detail}</p>
+                  </div>
+                  <Badge
+                    className={service.healthy ? 'system-status healthy' : 'system-status unavailable'}
+                    variant="light"
+                  >
+                    {service.status}
+                  </Badge>
+                </PanelCard>
+              ))}
+              <PanelCard className="system-add-integration" withBorder>
+                <span>＋</span>
+                <div><b>Add integration</b><small>Provider setup is not available in this local preview.</small></div>
+              </PanelCard>
+            </div>
+
+            <div className="system-operations-grid">
+              <PanelCard className="system-operation-card" withBorder>
+                <PanelHeading title="Organization profile" icon={<IconBuilding size={16} />} />
+                <p>Organization identity and defaults are not configured in this local preview.</p>
+                <Badge className="system-status unavailable" variant="light">Unavailable</Badge>
+              </PanelCard>
+              <PanelCard className="system-operation-card" withBorder>
+                <PanelHeading title="Policies" icon={<IconChecklist size={16} />} />
+                <p>Merge rules, approval gates, and repository policy are not enforced.</p>
+                <Badge className="system-status unavailable" variant="light">Not configured</Badge>
+              </PanelCard>
+              <PanelCard className="system-operation-card" withBorder>
+                <PanelHeading title="Permissions" icon={<IconUsers size={16} />} />
+                <p>User accounts, roles, and dashboard authorization are unavailable.</p>
+                <Badge className="system-status unavailable" variant="light">Unavailable</Badge>
+              </PanelCard>
+              <PanelCard className="system-operation-card" withBorder>
+                <PanelHeading title="Budgets" icon={<IconCurrencyDollar size={16} />} />
+                <p>Model spend, worker compute, and storage usage are not measured.</p>
+                <Badge className="system-status unavailable" variant="light">Not tracked</Badge>
+              </PanelCard>
+              <PanelCard className="system-operation-card" withBorder>
+                <PanelHeading title="Secrets" icon={<IconKey size={16} />} />
+                <p>Model credentials stay on workers; the GitHub token stays on the control plane.</p>
+                <Badge className="system-status healthy" variant="light">Boundary enforced</Badge>
+              </PanelCard>
+              <PanelCard className="system-operation-card" withBorder>
+                <PanelHeading title="Controller configuration" icon={<IconSettings size={16} />} />
+                <div className="system-setting-values">
+                  <span>API exposure<b>Loopback only</b></span>
+                  <span>Online workers<b>{onlineWorkerCount} of {workerCount}</b></span>
+                  <span>Local checkouts<b>{projectCount}</b></span>
+                </div>
+              </PanelCard>
+              <PanelCard className="system-operation-card" withBorder>
+                <PanelHeading title="Notification rules" icon={<IconBell size={16} />} />
+                <p>Run alerts and review notifications are not configured.</p>
+                <Badge className="system-status unavailable" variant="light">Unavailable</Badge>
+              </PanelCard>
+              <PanelCard className="system-operation-card system-audit-card" withBorder>
+                <PanelHeading title="Recent audit log" icon={<IconHistory size={16} />} />
+                <p>Actor-bound audit history is unavailable until user identity and audit storage are implemented.</p>
+                <Badge className="system-status unavailable" variant="light">Unavailable</Badge>
+              </PanelCard>
+            </div>
+            <p className="system-notice" id="integration-notice">
+              GitHub reviews are submitted as the control-plane token owner. Merge actions and provider setup are not available here.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="system-settings-grid">
+          <PanelCard className="system-setting-card" withBorder>
+            <PanelHeading
+              className="system-setting-heading"
+              eyebrow="Controller configuration"
+              title="Local control plane"
+              icon={<span className="system-setting-icon"><IconActivity size={19} /></span>} />
+            <dl>
+              <div><dt>API exposure</dt><dd>Loopback only</dd></div>
+              <div><dt>State storage</dt><dd>Versioned JSON snapshots</dd></div>
+            </dl>
+            <p>Remote access stays disabled until authentication is implemented.</p>
+          </PanelCard>
+          <PanelCard className="system-setting-card" withBorder>
+            <PanelHeading className="system-setting-heading" eyebrow="Workers & projects" title="Live inventory"
+              icon={<span className="system-setting-icon"><IconRobot size={19} /></span>} />
+            <dl>
+              <div><dt>Online workers</dt><dd>{onlineWorkerCount} of {workerCount}</dd></div>
+              <div><dt>Local checkouts</dt><dd>{projectCount}</dd></div>
+            </dl>
+            <p>Checkout names are visible; local filesystem paths stay on each worker.</p>
+          </PanelCard>
+          <PanelCard className="system-setting-card" withBorder>
+            <PanelHeading className="system-setting-heading" eyebrow="Access & policy" title="Not configured"
+              icon={<span className="system-setting-icon"><IconShieldCheck size={19} /></span>} />
+            <dl>
+              <div><dt>User accounts</dt><dd>Unavailable</dd></div>
+              <div><dt>Roles and permissions</dt><dd>Unavailable</dd></div>
+            </dl>
+            <p>The preview has no identity or authorization layer.</p>
+          </PanelCard>
+          <PanelCard className="system-setting-card" withBorder>
+            <PanelHeading className="system-setting-heading" eyebrow="Secrets" title="No provider secrets"
+              icon={<span className="system-setting-icon"><IconKey size={19} /></span>} />
+            <dl>
+              <div><dt>Model credentials</dt><dd>None stored</dd></div>
+              <div><dt>Secret rotation</dt><dd>Unavailable</dd></div>
+            </dl>
+            <p>Secret management is not implemented in this preview.</p>
+          </PanelCard>
+          <PanelCard className="system-setting-card" withBorder>
+            <PanelHeading className="system-setting-heading" eyebrow="Budgets & execution" title="Not applicable"
+              icon={<span className="system-setting-icon"><IconCloud size={19} /></span>} />
+            <dl>
+              <div><dt>Model endpoints</dt><dd>{modelRuntimeWorkerCount} configured
+                {modelRuntimeUnknownWorkerCount ? ` · ${modelRuntimeUnknownWorkerCount} unknown` : ''}</dd></div>
+              <div><dt>Run budgets</dt><dd>Not enforced</dd></div>
+            </dl>
+            <p>
+              Configured workers can run read-only tasks or write on isolated branches; test execution and cost limits
+              are not enabled.
+            </p>
+          </PanelCard>
+          <PanelCard className="system-setting-card" withBorder>
+            <PanelHeading className="system-setting-heading" eyebrow="Audit & evidence" title="Not available"
+              icon={<span className="system-setting-icon"><IconDatabase size={19} /></span>} />
+            <dl>
+              <div><dt>Actor history</dt><dd>Unavailable</dd></div>
+              <div><dt>Run artifacts</dt><dd>Unavailable</dd></div>
+            </dl>
+            <p>Audit events require identity; artifacts require agent runs.</p>
+          </PanelCard>
+        </div>
+      )}
+    </section>
+  );
+}

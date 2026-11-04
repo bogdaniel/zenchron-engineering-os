@@ -3,13 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "http-server dist -a 127.0.0.1 -p 4173 -c-1",
-    "build": "mkdir -p dist && cp index.html dist/index.html && esbuild src/main.tsx --bundle --minify --sourcemap --outdir=dist --loader:.css=css",
+    "dev": "sh ./dev.sh",
+    "build": "mkdir -p dist && cp index.html dist/index.html && esbuild src/main.tsx --bundle --splitting --format=esm --minify --sourcemap --outdir=dist --loader:.css=css",
     "typecheck": "tsc --noEmit",
+    "test:e2e:agent-runtime": "node e2e/agent-runtime-process.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
+    "@mantine/charts": "^9.7.4",
     "@mantine/core": "^9.7.4",
     "@mantine/form": "^9.7.4",
     "@mantine/hooks": "^9.7.4",
@@ -18,6 +20,7 @@
     "@xyflow/react": "^12.12.0",
     "ag-grid-react": "^35.0.0",
     "elkjs": "^0.11.0",
+    "monaco-editor": "0.57.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-resizable-panels": "^4.0.13",
@@ -30,5 +33,8 @@
     "esbuild": "^0.28.2",
     "http-server": "^14.1.1",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "dompurify": "3.4.17"
   }
 }
