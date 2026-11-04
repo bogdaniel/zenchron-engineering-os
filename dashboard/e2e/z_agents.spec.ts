@@ -101,6 +101,9 @@ test('Agents empty state uses the primary create action', async ({ page }) => {
   await page.route('**/api/v1/agents', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',
   }));
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
   await page.goto('/#agents');
   const unavailableMetrics = page.locator('.agents-metric strong.metric-unavailable');
   await expect(unavailableMetrics).toHaveCount(2);
