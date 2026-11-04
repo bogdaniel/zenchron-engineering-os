@@ -222,7 +222,12 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
       download: () => downloadCSV('detailed-metrics', [['Metric', 'Value', 'Source'], ...metricRows]),
     },
     {
-      name: 'Agent spend & utilization', detail: 'Unavailable until model usage data is connected', format: 'N/A',
+      name: 'Agent spend & utilization', detail: 'Usage values unavailable until provider records connect', format: 'CSV',
+      download: () => downloadCSV('agent-spend-utilization', [
+        ['Agent', 'Project', 'Branch', 'Status', 'Spend (USD)', 'Usage', 'Source'],
+        ...(scopedRuns ?? []).map((run) => [run.agent_name, run.project_name, run.branch, run.status,
+          'Unavailable', 'Unavailable', 'Provider usage records are not connected']),
+      ]),
     },
     {
       name: 'Product & workspace report', detail: 'Product, repository, and inventory counts', format: 'CSV',

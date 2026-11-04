@@ -23,7 +23,7 @@ export function DownloadableReports({ reports }: { reports: DownloadableReport[]
             </Badge>
             <div className="downloadable-report-copy"><b>{report.name}</b><span>{report.detail}</span></div>
             <Button className="downloadable-report-button" variant="subtle" disabled={!report.download}
-              aria-label={report.download ? `Download ${report.name} CSV` : `${report.name} unavailable`}
+              aria-label={report.download ? `Download ${report.name} ${report.format}` : `${report.name} unavailable`}
               onClick={report.download}>
               <IconDownload size={14} />
             </Button>

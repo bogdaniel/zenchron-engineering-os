@@ -11,7 +11,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.getByRole('heading', { name: 'Work outcomes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Insights & narrative' })).toBeVisible();
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
-  await expect(page.getByRole('button', { name: 'Agent spend & utilization unavailable' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Download Agent spend & utilization CSV' })).toBeEnabled();
   await expect(page.locator('.reports-empty-chart')).toHaveCount(5);
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
   await expect(page.locator('.reports-empty-chart').first()).toHaveAccessibleName('Connect a source to view this chart');
@@ -339,6 +339,11 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   const detailed = await downloadCsv('Detailed metrics');
   expect(detailed.filename).toMatch(/^zenchron-detailed-metrics-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(detailed.csv).toContain('"Delivery velocity","Unavailable","No Git remotes are configured for these checkouts."');
+  const spend = await downloadCsv('Agent spend & utilization');
+  expect(spend.filename).toMatch(/^zenchron-agent-spend-utilization-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(spend.csv).toContain('"Spend (USD)","Usage","Source"');
+  expect(spend.csv).toContain('"Reviewer","Nova Platform"');
+  expect(spend.csv).toContain('"Provider usage records are not connected"');
   const workspace = await downloadCsv('Product & workspace report');
   expect(workspace.filename).toMatch(/^zenchron-product-workspace-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(workspace.csv).toContain('"Product","Nova Platform","1","1","1"');
