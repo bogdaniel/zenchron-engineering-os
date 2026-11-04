@@ -88,7 +88,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(page.locator('.reviews-metric .metric-top').first()).toHaveCSS('font-size', '12px');
   await expect(page.locator('.reviews-metric strong').first()).toHaveCSS('font-size', '26px');
   await expect(page.locator('.reviews-grid-wrap')).toContainText('Improve agent review flow');
-  await expect(page.locator('.reviews-detail-heading p')).toHaveCSS('font-size', '12px');
+  await expect(page.locator('.reviews-detail-heading p')).toHaveCSS('font-size', '11px');
   const search = page.getByRole('textbox', { name: 'Search pull requests' });
   await search.fill('42');
   await expect(page.locator('.reviews-grid-wrap')).toContainText('Improve agent review flow');

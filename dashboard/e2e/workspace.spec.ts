@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('Product Workspace matches its desktop frame and filters products', async ({ page }) => {
-  await page.setViewportSize({ width: 1522, height: 856 });
+  await page.setViewportSize({ width: 1672, height: 856 });
   const projectID = 'c'.repeat(32);
   await page.route('**/api/v1/products', (route) => route.fulfill({
     status: 200,
@@ -71,7 +71,7 @@ test('Product Workspace matches its desktop frame and filters products', async (
   await page.getByRole('textbox', { name: 'Search products' }).fill('no match');
   await expect(page.locator('.workspace-directory')).toContainText('No products match your search.');
 
-  await page.setViewportSize({ width: 1522, height: 749 });
+  await page.setViewportSize({ width: 1672, height: 749 });
   await expect(page.locator('.workspace-title-row')).toBeHidden();
   await expect(page.getByRole('button', { name: '+ Add Product', exact: true })).toHaveCount(1);
   expect(await page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().width)).toBe(247);

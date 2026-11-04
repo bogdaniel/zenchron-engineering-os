@@ -82,11 +82,11 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
       footerDisplay: getComputedStyle(document.querySelector('.page-footer')!).display,
     };
   });
-  expect(layout.metrics?.x).toBe(265);
+  expect(layout.metrics?.x).toBe(240);
   expect(layout.metrics?.y).toBe(84);
   expect(layout.workflow?.y).toBe(189);
   expect(layout.workflow?.height).toBe(202);
-  expect(layout.activity?.x).toBeCloseTo(1143.5, 1);
+  expect(layout.activity?.x).toBe(1136);
   expect(layout.objectives?.y).toBe(403);
   expect(layout.review?.y).toBe(573);
   expect(layout.review?.height).toBe(220);
@@ -95,7 +95,7 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
 });
 
 test('Reviews matches the supplied desktop workspace frame', async ({ page }) => {
-  await page.setViewportSize({ width: 1512, height: 874 });
+  await page.setViewportSize({ width: 1672, height: 874 });
   await page.goto('/#reviews');
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();

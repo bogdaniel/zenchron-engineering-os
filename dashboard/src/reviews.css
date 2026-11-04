@@ -56,7 +56,7 @@
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
-  margin-bottom: 15px;
+  margin-bottom: 17.5px;
 }
 .reviews-queue,
 .reviews-detail,
