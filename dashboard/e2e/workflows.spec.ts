@@ -5,6 +5,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await page.goto('/');
   await page.getByRole('link', { name: 'Workflows' }).click();
   await expect(page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ })).toBeVisible();
+  await expect(page.locator('.workflow-mobile-details')).toBeHidden();
   const mockTitleBox = await page.locator('.workflow-page-heading .page-heading h2').boundingBox();
   const mockToolbarBox = await page.locator('.workflow-toolbar').boundingBox();
   expect(mockTitleBox?.height).toBeLessThan(30);
@@ -164,6 +165,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(page.locator('.workflow-mobile-overview .workflow-overview-canvas')).toBeVisible();
   await expect(page.locator('.workflow-mobile-overview .panel-heading')).toBeHidden();
   await expect(page.locator('.workflow-mobile-overview .workflow-overview-status')).toBeHidden();
+  await expect(page.locator('.workflow-mobile-details')).toBeVisible();
   const mobileNodes = page.locator('.workflow-mobile-overview .workflow-node');
   await expect(mobileNodes).toHaveCount(6);
   expect(await mobileNodes.locator('b').allTextContents()).toEqual(['Trigger', 'Plan', 'Build', 'Test', 'Review', 'Merge']);
