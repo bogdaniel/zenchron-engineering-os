@@ -403,7 +403,7 @@ test('Reports summarizes live objectives and run records without inventing deliv
   await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText(String(runCounts.total));
   await expect(page.locator('.run-outcome-legend')).toContainText('Succeeded');
   await expect(page.locator('.run-outcome-legend')).toContainText(String(runCounts.succeeded));
-  await expect(page.getByRole('heading', { name: 'Workspace inventory' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Delivery velocity & cycle time' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'CI duration distribution' })).toBeVisible();
   await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' })).toContainText('Unavailable');
