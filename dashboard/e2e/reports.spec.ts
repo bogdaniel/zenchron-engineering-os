@@ -12,6 +12,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.getByRole('heading', { name: 'Insights & narrative' })).toBeVisible();
   await expect(page.locator('.reports-empty-chart')).toHaveCount(5);
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
+  await expect(page.locator('.reports-empty-chart').first()).toHaveAccessibleName('Connect a source to view this chart');
   await expect(page.locator('.reports-empty-chart').first()).toContainText('Connect a source to view this chart');
   const sectionBounds = await page.evaluate(() => Object.fromEntries(
     ['.reports-scope-bar', '.reports-metrics', '.reports-content-grid'].map((selector) => {

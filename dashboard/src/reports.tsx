@@ -443,7 +443,7 @@ function UnavailableMetricsPanel({ className, title, icon, detail }: {
 
 function UnavailableChart({ detail }: { detail: string }) {
   return (
-    <div className="reports-empty-chart" role="status" aria-label="Report event source is not connected">
+    <div className="reports-empty-chart" role="status" aria-label={detail}>
       <div className="reports-empty-chart-grid" aria-hidden="true" />
       <span><IconChartBar size={15} />{detail}</span>
     </div>
