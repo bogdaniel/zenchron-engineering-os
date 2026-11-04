@@ -41,6 +41,7 @@ flowchart LR
   persisted definitions.
 - Node type, node count, edge count, IDs, labels, positions, status, and edge references are validated before saving.
 - Node icons and accent colors follow the stable component type, so changing a node label does not change its visual role.
+  Palette descriptions wrap to three lines, and canvas descriptions wrap to two lines instead of being cut off horizontally.
 - The canvas supports dragging nodes, connecting ports, editing labels and descriptions, adding components, deleting
   components, and ELK auto-layout. Compact layer spacing and node sizing keep the complete graph legible in the canvas;
   React Flow controls sit at the canvas top-right and a compact mini-map stays at bottom-right.

@@ -31,20 +31,22 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   const canvasPanel = await page.locator('.workflow-canvas-wrap').boundingBox();
   const preview = await page.locator('.workflow-run-preview').boundingBox();
   const properties = await page.locator('.workflow-properties').boundingBox();
-  expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(205);
-  expect(palette?.x).toBe(223);
+  expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(190);
+  expect(palette?.x).toBe(208);
   expect(palette?.y).toBeGreaterThanOrEqual(201);
   expect(palette?.y).toBeLessThanOrEqual(203);
   expect(palette?.width).toBe(220);
   expect(palette?.height).toBeGreaterThanOrEqual(650);
-  expect(canvasPanel?.x).toBe(453);
+  expect(canvasPanel?.x).toBe(438);
   expect(canvasPanel?.width).toBe(792);
   expect(canvasPanel?.height).toBe(413);
-  expect(properties?.x).toBe(1255);
+  expect(properties?.x).toBe(1240);
   expect(properties?.y).toBe(90);
   expect(properties?.height).toBeGreaterThanOrEqual(760);
   expect(await page.locator('.workflow-properties').evaluate((panel) => panel.getBoundingClientRect().width)).toBe(288);
-  expect(preview?.x).toBe(453);
+  expect(preview?.x).toBe(438);
+  expect(await page.locator('.workflow-canvas .workflow-node small').evaluateAll((descriptions) =>
+    descriptions.every((description) => description.scrollWidth <= description.clientWidth))).toBe(true);
   expect(preview?.y).toBeGreaterThanOrEqual(621);
   expect(preview?.y).toBeLessThanOrEqual(623);
   expect(preview?.height).toBeGreaterThanOrEqual(240);
