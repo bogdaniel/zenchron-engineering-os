@@ -175,6 +175,30 @@ test('Reports derives GitHub delivery metrics from complete pull-request history
     .toContainText('1 checkout has no remote');
 });
 
+test('Reports explains complete provider histories with no chart events', async ({ page }) => {
+  const projectID = 'a'.repeat(32);
+  await page.route('**/api/v1/projects', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify([{
+      id: projectID, name: 'Platform', branch: 'main', git_remote: 'github.com/acme/platform',
+      worker_id: 'b'.repeat(32), worker_name: 'Mac', worker_status: 'online', last_seen: new Date().toISOString(),
+    }]),
+  }));
+  await page.route('**/api/v1/projects/*/pull-request-history*', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ complete: true, items: [] }),
+  }));
+  await page.route('**/api/v1/projects/*/workflow-run-history*', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ complete: true, items: [] }),
+  }));
+  await page.goto('/#reports');
+  await expect(page.locator('.delivery-velocity-panel .reports-empty-chart'))
+    .toContainText('No merged pull requests in this period.');
+  await expect(page.locator('.ci-distribution-panel .reports-empty-chart'))
+    .toContainText('No completed GitHub Actions runs in this period.');
+  await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' }).locator('strong')).toHaveText('0');
+  await expect(page.locator('.reports-metric').filter({ hasText: 'CI duration' }).locator('strong')).toHaveText('Unavailable');
+});
+
 test('Reports suppresses GitHub delivery metrics when PR history is truncated', async ({ page }) => {
   const projectID = 'c'.repeat(32);
   await page.route('**/api/v1/projects', (route) => route.fulfill({

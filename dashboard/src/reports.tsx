@@ -255,7 +255,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
         <PanelCard className="reports-panel delivery-velocity-panel" withBorder>
           <PanelHeading className="reports-panel-heading" icon={<IconChartBar size={15} />}
             title="Delivery velocity &amp; cycle time" />
-          {pullRequests.complete ? <CompositeChart
+          {pullRequests.complete && pullRequests.mergedCount > 0 ? <CompositeChart
             className="reports-pull-request-chart"
             h={124}
             data={pullRequests.trend}
@@ -275,7 +275,9 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
             withDots={false}
             withTooltip
             aria-label="Merged pull requests and average cycle time trend"
-          /> : <UnavailableChart detail={pullRequests.isError
+          /> : pullRequests.complete
+            ? <UnavailableChart detail="No merged pull requests in this period." />
+            : <UnavailableChart detail={pullRequests.isError
             ? 'GitHub pull-request history is unavailable.'
             : pullRequests.githubProjectCount ? 'Waiting for complete GitHub pull-request history.'
               : 'Connect a source to view this chart'} />}
@@ -285,7 +287,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
         </PanelCard>
         <PanelCard className="reports-panel ci-distribution-panel" withBorder>
           <PanelHeading className="reports-panel-heading" icon={<IconActivity size={15} />} title="CI duration distribution" />
-          {workflowRunMetrics.complete ? <BarChart
+          {workflowRunMetrics.complete && workflowRunMetrics.runCount > 0 ? <BarChart
             className="reports-ci-chart"
             h={124}
             data={workflowRunMetrics.distribution}
@@ -297,7 +299,9 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
             gridAxis="y"
             withTooltip
             aria-label={`CI duration distribution from ${workflowRunMetrics.runCount} completed GitHub Actions runs`}
-          /> : <UnavailableChart detail={workflowRunMetrics.isError
+          /> : workflowRunMetrics.complete
+            ? <UnavailableChart detail="No completed GitHub Actions runs in this period." />
+            : <UnavailableChart detail={workflowRunMetrics.isError
             ? 'GitHub Actions run history is unavailable.'
             : workflowRunMetrics.githubProjectCount ? 'Waiting for complete GitHub Actions history.'
               : 'Connect a source to view this chart'} />}
