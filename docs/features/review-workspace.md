@@ -22,6 +22,9 @@ flowchart LR
     Runs[Agent run history API] --> Queue
     GitHub[GitHub REST API] -->|Open issues and pull requests| ProviderQueue[Provider queue]
     Browser --> ProviderQueue
+    Browser -->|Select code, conversations, evidence, or checklist| Detail
+    GitHub -->|Provider Markdown/HTML body| Render[Marked then DOMPurify; remote images removed]
+    Render --> Detail
     Browser -->|GET selected PR diff| API
     API -->|Bounded diff request| GitHub
     GitHub -->|application/vnd.github.diff| Detail
@@ -45,6 +48,8 @@ flowchart LR
     GitHub -. inbound reviews, checks, and merge unavailable .-> Governance
 ```
 
+Provider descriptions render as sanitized Markdown/HTML; external images are stripped. The Code changes, Conversations, Evidence, and Checklist controls switch the detail panel. The Conversations view submits issue/PR feedback and shows local run comments; existing provider conversation, check, and artifact data show explicit unavailable states until synced.
+
 At desktop widths the local branch queue, diff detail, and summary panes resize independently with drag handles or arrow
 keys; the panel group fills the remaining viewport below the review toolbar so its bottom actions stay visible. At narrower
 widths they stack vertically and retain the same keyboard-accessible separators. Each run stores up
@@ -55,7 +60,7 @@ loaded local diff; truncated diffs show lower-bound counts. Risk, evidence, CI, 
 
 ## Verification
 
-`cd dashboard && npm run test:e2e -- e2e/github-reviews.spec.ts` checks provider items, PR diff rendering, and review submission.
+`cd dashboard && npm run test:e2e -- e2e/github-reviews.spec.ts` checks safe provider Markdown rendering, detail section controls, PR diff rendering, and review submission.
 `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Reviews page'` checks empty provider state and local branch diffs, comments, request-changes, disabled merge actions, and resizing.
 `go test ./cmd/zenchron -run 'TestGitHub|TestAgentRunQueuePersistsAndFencesClaims'` checks review
 validation/submission, persistence, runtime gating, same-run requeue, feedback prompts, and diff retrieval. The focused worker test

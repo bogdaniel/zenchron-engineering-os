@@ -6,6 +6,8 @@ import { useMediaQuery } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { z } from 'zod';
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { Project } from './projects';
 import {
@@ -25,6 +27,13 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 
 function CodeDiff({ value, label }: { value: string; label: string }) {
   return <MonacoEditor className="reviews-code-editor" label={label} mode="diff" value={value} readOnly />;
+}
+
+function GitHubMarkdown({ value, className }: { value: string; className: string }) {
+  const html = useMemo(() => DOMPurify.sanitize(marked.parse(value, { async: false, gfm: true }), {
+    FORBID_TAGS: ['img'],
+  }), [value]);
+  return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 const columns: ColDef<AgentRun>[] = [
@@ -58,6 +67,11 @@ const metrics = [
 ] as const;
 const tabs = ['Pull requests', 'Issues', 'Local branches', 'Code Review', 'Evidence', 'Merge Governance', 'Policies', 'Trusted-main'];
 const stages = ['Code review', 'Evidence', 'Policy gates', 'CI', 'Merge'];
+const detailTabs = [
+  ['code-changes', 'Code changes', IconFileText], ['conversations', 'Conversations', IconMessageCircle],
+  ['evidence', 'Evidence', IconShieldCheck], ['checklist', 'Checklist', IconChecks],
+] as const;
+type DetailTab = typeof detailTabs[number][0];
 
 const diffSchema = z.object({ run_id: z.string(), diff: z.string(), truncated: z.boolean() });
 const pullRequestDiffSchema = z.object({ diff: z.string().max(1 << 20) });
@@ -100,6 +114,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
   const stacked = useMediaQuery('(max-width: 1150px)');
   const queryClient = useQueryClient();
   const [section, setSection] = useState<'pull-requests' | 'issues' | 'local-branches'>('pull-requests');
+  const [detailTab, setDetailTab] = useState<DetailTab>('code-changes');
   const [projectID, setProjectID] = useState<string | null>(null);
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [selectedProviderNumber, setSelectedProviderNumber] = useState<number | null>(null);
@@ -153,6 +168,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
     },
     onSuccess: async () => {
       setComment('');
+      setDetailTab('conversations');
       await queryClient.invalidateQueries({ queryKey: ['agent-runs'] });
     },
   });
@@ -369,13 +385,66 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
               </div>
             ))}
           </div>
-          <div className="reviews-detail-tabs" aria-label="Pull request detail sections">
-            <span className="active"><IconFileText size={14} /> Code changes</span>
-            <span><IconMessageCircle size={14} /> Conversations</span>
-            <span><IconShieldCheck size={14} /> Evidence</span>
-            <span><IconChecks size={14} /> Checklist</span>
+          <div className="reviews-detail-tabs" role="group" aria-label="Review detail sections">
+            {detailTabs.map(([value, label, Icon]) => <button key={value} type="button"
+              aria-pressed={detailTab === value} onClick={() => setDetailTab(value)}>
+              <Icon size={14} /> {label}
+            </button>)}
           </div>
-          <div className="reviews-change-empty">
+          {detailTab !== 'code-changes' ? <div className="reviews-change-empty reviews-detail-tab-panel">
+            {detailTab === 'conversations' ? <div className="reviews-conversation-panel">
+              {section === 'local-branches' && selected?.review_comments.length ? (
+                <div className="reviews-comments" aria-label="Review comments">
+                  {selected.review_comments.map((item, index) => <div className="reviews-comment" key={`${item.created_at}-${index}`}>
+                    <b>{item.request_changes ? 'Changes requested' : 'Comment'}</b><span>{item.body}</span>
+                  </div>)}
+                </div>
+              ) : <p className="reviews-provider-readonly">{section === 'local-branches'
+                ? 'No review comments are attached to this run yet.'
+                : 'Existing GitHub conversation history is not synchronized yet.'}</p>}
+              {selectedIssue && <div className="reviews-github-composer">
+                <Textarea aria-label="GitHub issue comment" placeholder="Add a comment to this issue…"
+                  value={issueCommentBody} onChange={(event) => setIssueCommentBody(event.currentTarget.value)}
+                  maxLength={1000} minRows={2} maxRows={3} disabled={issueComment.isPending} />
+                <small>GitHub records the comment under the configured control-plane token owner.</small>
+                {issueComment.isError && <span className="reviews-action-error" role="alert">{issueComment.error.message}</span>}
+                {issueCommentStatus && <span className="reviews-action-success" role="status">{issueCommentStatus}</span>}
+                <div>
+                  <Button disabled={!issueCommentBody.trim() || issueComment.isPending}
+                    onClick={() => selectedProject && issueComment.mutate({ projectID: selectedProject.id,
+                      number: selectedIssue.number, body: issueCommentBody.trim() })}>Add comment</Button>
+                  <Button variant="default" disabled={issueState.isPending}
+                    onClick={() => selectedProject && issueState.mutate({ projectID: selectedProject.id,
+                      number: selectedIssue.number, state: selectedIssue.state === 'open' ? 'closed' : 'open' })}>
+                    {selectedIssue.state === 'open' ? 'Close issue' : 'Reopen issue'}</Button>
+                </div>
+                {issueState.isError && <span className="reviews-action-error" role="alert">{issueState.error.message}</span>}
+                {issueStateStatus && <span className="reviews-action-success" role="status">{issueStateStatus}</span>}
+              </div>}
+              {selectedPullRequest && <div className="reviews-github-composer">
+                <Textarea aria-label="GitHub pull request review" placeholder="Leave a review comment or describe the changes needed…"
+                  value={providerReviewBody} onChange={(event) => setProviderReviewBody(event.currentTarget.value)}
+                  maxLength={1000} minRows={2} maxRows={3} disabled={providerReview.isPending} />
+                <small>GitHub records the review under the configured control-plane token owner.</small>
+                {providerReview.isError && <span className="reviews-action-error" role="alert">{providerReview.error.message}</span>}
+                {providerReviewStatus && <span className="reviews-action-success" role="status">{providerReviewStatus}</span>}
+                <div>
+                  <Button variant="default" disabled={!providerReviewBody.trim() || providerReview.isPending}
+                    onClick={() => selectedProject && providerReview.mutate({ projectID: selectedProject.id,
+                      number: selectedPullRequest.number, event: 'COMMENT', body: providerReviewBody.trim() })}>Comment</Button>
+                  <Button color="violet" disabled={!providerReviewBody.trim() || providerReview.isPending}
+                    onClick={() => selectedProject && providerReview.mutate({ projectID: selectedProject.id,
+                      number: selectedPullRequest.number, event: 'REQUEST_CHANGES', body: providerReviewBody.trim() })}>
+                    Request changes</Button>
+                </div>
+              </div>}
+            </div> : <div role="status">
+              {detailTab === 'evidence' ? <IconShieldCheck size={24} /> : <IconChecks size={24} />}
+              <b>{detailTab === 'evidence' ? 'Evidence unavailable' : 'Required checks unavailable'}</b>
+              <span>{detailTab === 'evidence' ? 'CI checks and evidence artifacts are not synchronized for this item yet.'
+                : 'The control plane does not currently load GitHub checks or policy results.'}</span>
+            </div>}
+          </div> : <div className="reviews-change-empty">
             {section !== 'local-branches' && selectedProviderItem ? (
               <div className="reviews-provider-detail">
                 {section === 'pull-requests' && selectedPullRequest && <div className="reviews-diff-meta">
@@ -386,78 +455,13 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
                   <span>{selectedIssue.labels.map((label) => label.name).join(' · ') || 'No labels'}</span>
                   <a href={selectedIssue.html_url} target="_blank" rel="noreferrer">Open issue on GitHub ↗</a>
                 </div>}
-                <pre className="reviews-pr-description">{selectedProviderItem.body || 'No description provided.'}</pre>
-                {selectedIssue && <div className="reviews-github-composer">
-                  <Textarea
-                    aria-label="GitHub issue comment"
-                    placeholder="Add a comment to this issue…"
-                    value={issueCommentBody}
-                    onChange={(event) => setIssueCommentBody(event.currentTarget.value)}
-                    maxLength={1000}
-                    minRows={2}
-                    maxRows={3}
-                    disabled={issueComment.isPending}
-                  />
-                  <small>GitHub records the comment under the configured control-plane token owner.</small>
-                  {issueComment.isError && <span className="reviews-action-error" role="alert">{issueComment.error.message}</span>}
-                  {issueCommentStatus && <span className="reviews-action-success" role="status">{issueCommentStatus}</span>}
-                  <div>
-                    <Button
-                      disabled={!issueCommentBody.trim() || issueComment.isPending}
-                      onClick={() => selectedProject && selectedIssue && issueComment.mutate({
-                        projectID: selectedProject.id, number: selectedIssue.number, body: issueCommentBody.trim(),
-                      })}
-                    >Add comment</Button>
-                    <Button
-                      variant="default"
-                      disabled={issueState.isPending}
-                      onClick={() => selectedProject && selectedIssue && issueState.mutate({
-                        projectID: selectedProject.id, number: selectedIssue.number,
-                        state: selectedIssue.state === 'open' ? 'closed' : 'open',
-                      })}
-                    >{selectedIssue.state === 'open' ? 'Close issue' : 'Reopen issue'}</Button>
-                  </div>
-                  {issueState.isError && <span className="reviews-action-error" role="alert">{issueState.error.message}</span>}
-                  {issueStateStatus && <span className="reviews-action-success" role="status">{issueStateStatus}</span>}
-                </div>}
+                <GitHubMarkdown className="reviews-pr-description reviews-markdown"
+                  value={selectedProviderItem.body || 'No description provided.'} />
                 {selectedPullRequest && <div className="reviews-pr-diff">
                   <div className="reviews-diff-meta"><span>Pull request diff</span><span>{selectedPullRequest.head.ref}</span></div>
                   {pullRequestDiff.isLoading ? <span>Loading pull request diff…</span>
                     : pullRequestDiff.isError ? <span className="reviews-action-error" role="alert">{pullRequestDiff.error.message}</span>
                       : <CodeDiff label="Pull request diff" value={pullRequestDiff.data?.diff || 'This pull request has no text diff.'} />}
-                </div>}
-                {selectedPullRequest && <div className="reviews-github-composer">
-                  <Textarea
-                    aria-label="GitHub pull request review"
-                    placeholder="Leave a review comment or describe the changes needed…"
-                    value={providerReviewBody}
-                    onChange={(event) => setProviderReviewBody(event.currentTarget.value)}
-                    maxLength={1000}
-                    minRows={2}
-                    maxRows={3}
-                    disabled={providerReview.isPending}
-                  />
-                  <small>GitHub records the review under the configured control-plane token owner.</small>
-                  {providerReview.isError && <span className="reviews-action-error" role="alert">{providerReview.error.message}</span>}
-                  {providerReviewStatus && <span className="reviews-action-success" role="status">{providerReviewStatus}</span>}
-                  <div>
-                    <Button
-                      variant="default"
-                      disabled={!providerReviewBody.trim() || providerReview.isPending}
-                      onClick={() => selectedProject && selectedPullRequest && providerReview.mutate({
-                        projectID: selectedProject.id, number: selectedPullRequest.number,
-                        event: 'COMMENT', body: providerReviewBody.trim(),
-                      })}
-                    >Comment</Button>
-                    <Button
-                      color="violet"
-                      disabled={!providerReviewBody.trim() || providerReview.isPending}
-                      onClick={() => selectedProject && selectedPullRequest && providerReview.mutate({
-                        projectID: selectedProject.id, number: selectedPullRequest.number,
-                        event: 'REQUEST_CHANGES', body: providerReviewBody.trim(),
-                      })}
-                    >Request changes</Button>
-                  </div>
                 </div>}
               </div>
             ) : section === 'local-branches' && selected && diff.data ? (
@@ -498,17 +502,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
                       : 'Select an item from the project queue.'}</span>
               </>
             )}
-          </div>
-          {section === 'local-branches' && selected?.review_comments.length ? (
-            <div className="reviews-comments" aria-label="Review comments">
-              {selected.review_comments.map((item, index) => (
-                <div className="reviews-comment" key={`${item.created_at}-${index}`}>
-                  <b>{item.request_changes ? 'Changes requested' : 'Comment'}</b>
-                  <span>{item.body}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
+          </div>}
           {section === 'local-branches' ? <div className="reviews-comment-composer">
             <Textarea
               aria-label="Review comment"
@@ -557,11 +551,9 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
           <PanelCard className="reviews-summary" withBorder>
           <PanelHeading className="reviews-panel-heading" title="Review Summary" description="Local branch context"
             actions={<IconShieldCheck size={17} />} />
-          <p className="reviews-summary-copy">
-            {section === 'local-branches'
-              ? selected?.output ?? selected?.error ?? 'Select a local branch to review its agent run.'
-              : selectedProviderItem?.body ?? 'Select a GitHub item to review its description.'}
-          </p>
+          <GitHubMarkdown className="reviews-summary-copy reviews-markdown" value={section === 'local-branches'
+            ? selected?.output ?? selected?.error ?? 'Select a local branch to review its agent run.'
+            : selectedProviderItem?.body ?? 'Select a GitHub item to review its description.'} />
           <div className="reviews-summary-stats">
             <div><span>Files changed</span><b>{section === 'local-branches' && diffStats ? `${diffStats.files}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
             <div><span>Lines added</span><b>{section === 'local-branches' && diffStats ? `+${diffStats.added}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
