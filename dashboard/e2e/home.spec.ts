@@ -341,7 +341,7 @@ test('Reviews page shows an isolated local branch diff without treating it as a 
   await expect(page.getByRole('button', { name: 'Merge to protected branch' })).toBeDisabled();
 });
 
-test('Reports page summarizes live API records and leaves delivery metrics unavailable', async ({ page }) => {
+test('Reports summarizes live objectives and run records without inventing delivery data', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
   const objective = await page.evaluate(async () => {
@@ -352,10 +352,11 @@ test('Reports page summarizes live API records and leaves delivery metrics unava
     return response.status;
   });
   expect(objective).toBe(201);
-  const objectiveCount = await page.evaluate(async () => {
+  const objectiveCounts = await page.evaluate(async () => {
     const response = await fetch('/api/v1/objectives');
     if (!response.ok) throw new Error(`Objective list failed: ${response.status}`);
-    return (await response.json()).length;
+    const objectives = await response.json();
+    return { total: objectives.length, completed: objectives.filter((item: { status: string }) => item.status === 'completed').length };
   });
   const run = await page.evaluate(async () => {
     const agentResponse = await fetch('/api/v1/agents', {
@@ -378,45 +379,29 @@ test('Reports page summarizes live API records and leaves delivery metrics unava
     const runs = await response.json();
     return runs.find((item: { id: string }) => item.id === runID)?.status;
   }, run.id), { timeout: 15_000 }).toBe('succeeded');
+  const runCounts = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/agent-runs');
+    if (!response.ok) throw new Error(`Agent run list failed: ${response.status}`);
+    const runs = await response.json();
+    return { total: runs.length, succeeded: runs.filter((item: { status: string }) => item.status === 'succeeded').length };
+  });
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Objective status' })).toBeVisible();
-  await expect(page.locator('.objective-chart-layout [role="application"]')).toBeVisible();
-  await expect(page.locator('.objective-chart-layout .objective-chart-label')).toHaveText(String(objectiveCount));
-  await expect(page.locator('.objective-legend')).toContainText('In progress');
-  await expect(page.getByRole('heading', { name: 'Agent run outcomes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Insights & narrative' })).toBeVisible();
+  await expect(page.locator('.reports-insights')).toContainText(
+    `${objectiveCounts.completed} of ${objectiveCounts.total} completed in this scope.`,
+  );
+  await expect(page.locator('.reports-insights')).toContainText(`${runCounts.total} recorded runs in this period.`);
+  await expect(page.getByRole('heading', { name: 'Work outcomes' })).toBeVisible();
   await expect(page.locator('.run-chart-layout [role="application"]')).toBeVisible();
-  await expect(page.locator('.run-chart-layout .objective-chart-label')).toHaveText('1');
+  await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText(String(runCounts.total));
   await expect(page.locator('.run-outcome-legend')).toContainText('Succeeded');
-  await expect(page.locator('.run-outcome-legend')).toContainText('1');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Agent runs (30d)' })).toContainText('1');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Run success rate' })).toContainText('100%');
+  await expect(page.locator('.run-outcome-legend')).toContainText(String(runCounts.succeeded));
   await expect(page.getByRole('heading', { name: 'Workspace inventory' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Delivery velocity & cycle time' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'CI duration distribution' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Review latency & agent spend' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Acceptance & autonomous completion' })).toBeVisible();
   await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' })).toContainText('Unavailable');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' }).locator('strong'))
-    .toHaveCSS('font-size', '14px');
-  await expect(page.getByRole('heading', { name: 'Reporting coverage' })).toBeVisible();
-  const layout = await page.evaluate(() => {
-    const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
-    return { sidebar: bounds('.sidebar'), metrics: bounds('.reports-metrics'), content: bounds('.reports-content-grid'),
-      objectiveChart: bounds('.objective-distribution'), runChart: bounds('.run-outcomes-panel'),
-      inventory: bounds('.inventory-panel'),
-      delivery: bounds('.delivery-velocity-panel'), coverage: bounds('.reports-summary'),
-      productWorkspaceLabelHeight: document.querySelector('.nav-link[href="#workspace"] .nav-label')?.getBoundingClientRect().height };
-  });
-  expect(layout.sidebar?.width).toBe(247);
-  expect(layout.metrics?.x).toBe(265);
-  expect(layout.content?.y).toBeLessThan(290);
-  expect(layout.content?.bottom).toBeLessThanOrEqual(941);
-  expect(layout.objectiveChart?.width).toBeGreaterThan(layout.runChart?.width ?? 0);
-  expect(layout.coverage?.x).toBeGreaterThan(layout.runChart?.x ?? 0);
-  expect(layout.coverage?.y).toBeCloseTo(layout.objectiveChart?.y ?? -100, 0);
-  expect(layout.inventory?.y).toBeGreaterThan(layout.delivery?.y ?? -100);
-  expect(layout.productWorkspaceLabelHeight).toBeLessThan(24);
+  await expect(page.getByRole('button', { name: 'Download Executive summary CSV' })).toBeVisible();
 });
 
 test('Product Workspace groups live repositories into persisted products', async ({ page }) => {
