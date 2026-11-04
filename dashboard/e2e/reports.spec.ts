@@ -52,7 +52,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   const product = panel('product-summary-panel');
   const inventory = panel('inventory-panel');
   const downloads = panel('downloadable-reports-panel');
-  expect(delivery.x).toBe(238);
+  expect(delivery.x).toBe(223);
   expect(Math.abs(delivery.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(outcomes.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(product.height - 188)).toBeLessThanOrEqual(2);

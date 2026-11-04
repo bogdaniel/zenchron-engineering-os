@@ -15,17 +15,17 @@ export default defineConfig({
     {
       command: 'sh ./dashboard/e2e/control-plane.sh',
       cwd: '..',
-      url: 'http://127.0.0.1:8081/healthz',
-      env: { ZENCHRON_LISTEN_ADDR: '127.0.0.1:8081' },
+      url: 'http://127.0.0.1:8083/healthz',
+      env: { ZENCHRON_LISTEN_ADDR: '127.0.0.1:8083' },
       reuseExistingServer: false,
       timeout: 120_000,
     },
     {
       command: 'go run ./cmd/zenchron-worker',
       cwd: '..',
-      url: 'http://127.0.0.1:8081/api/v1/workers/healthz',
+      url: 'http://127.0.0.1:8083/api/v1/workers/healthz',
       env: {
-        ZENCHRON_CONTROL_PLANE_URL: 'http://127.0.0.1:8081',
+        ZENCHRON_CONTROL_PLANE_URL: 'http://127.0.0.1:8083',
         ZENCHRON_WORKER_NAME: 'playwright-worker',
         ZENCHRON_PROJECTS_ROOT: '.playwright-state/projects',
         ZENCHRON_WORKTREES_ROOT: '.playwright-state/worktrees',
@@ -36,7 +36,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: 'npm run build && ZENCHRON_DASHBOARD_PORT=4174 ZENCHRON_API_PROXY=http://127.0.0.1:8081 npm run dev',
+      command: 'npm run build && ZENCHRON_DASHBOARD_PORT=4174 ZENCHRON_API_PROXY=http://127.0.0.1:8083 npm run dev',
       url: 'http://127.0.0.1:4174',
       reuseExistingServer: false,
       timeout: 120_000,

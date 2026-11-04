@@ -87,5 +87,5 @@ cd dashboard && npm run test:e2e -- e2e/home.spec.ts \
   --grep 'dashboard displays|mobile overview|overview lists only agent runs|Projects page shows|worker prepares|Reviews page|workflow graph can be edited|Objectives dashboard fits|objectives can be created|agent profiles'
 ```
 
-The focused browser check starts an isolated control plane, worker, and dashboard on ports 8081/4174 with temporary
+The focused browser check starts an isolated control plane, worker, and dashboard on ports 8083/4174 with temporary
 state, so E2E mutations do not affect the live preview on 8080/4173.
