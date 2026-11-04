@@ -33,6 +33,10 @@ wait_for() {
   pid=$2
   label=$3
   attempt=0
+  if curl -fsS "$url" >/dev/null 2>&1; then
+    echo "${label} is already responding at ${url}" >&2
+    exit 1
+  fi
   until curl -fsS "$url" >/dev/null 2>&1; do
     if ! kill -0 "$pid" 2>/dev/null || [ "$attempt" -ge 60 ]; then
       echo "${label} did not become ready at ${url}" >&2
@@ -41,6 +45,10 @@ wait_for() {
     attempt=$((attempt + 1))
     sleep 0.5
   done
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "${label} stopped while becoming ready at ${url}" >&2
+    exit 1
+  fi
 }
 
 (
