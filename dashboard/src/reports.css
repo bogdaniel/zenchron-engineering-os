@@ -120,7 +120,7 @@
 .downloadable-report {
   display: grid;
   min-width: 0;
-  min-height: 29px;
+  min-height: 30px;
   grid-template-columns: 42px minmax(0, 1fr) 26px;
   align-items: center;
   gap: 6px;
@@ -144,15 +144,16 @@
 .downloadable-report-copy b {
   overflow: hidden;
   color: #e4deed;
-  font-size: 10px;
+  font-size: var(--metric-label-size);
   font-weight: 600;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .downloadable-report-copy span {
   overflow: hidden;
-  color: #89849a;
-  font-size: 9px;
+  color: #a9a5b9;
+  font-size: var(--panel-description-size);
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
