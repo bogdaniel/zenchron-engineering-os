@@ -5,8 +5,14 @@ test('dashboard displays the connected control plane and local worker', async ({
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Workflow orchestration' })).toBeVisible();
-  await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(9);
-  await expect(page.locator('.workflow-overview-canvas .react-flow__edge')).toHaveCount(10);
+  await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
+  await expect(page.locator('.workflow-overview-canvas .react-flow__edge')).toHaveCount(6);
+  const workflowSummary = page.locator('.workflow-overview-canvas');
+  await expect(workflowSummary).toHaveAttribute('aria-label', /6 stages summarize 9 components/);
+  await expect(workflowSummary).toContainText('Run agents');
+  await expect(workflowSummary).toContainText('Run test suite');
+  await expect(workflowSummary).toContainText('AI + human review');
+  await expect(workflowSummary).toContainText('Gated release');
   await expect(page.locator('.workflow-overview-status')).toContainText('Execution unavailable');
   await expect(page.locator('.activity-list')).toContainText('Control plane is responding');
   await expect(page.getByText('Running agents', { exact: true })).toBeVisible();

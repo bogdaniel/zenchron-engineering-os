@@ -12,11 +12,11 @@ flowchart LR
     User -->|Create or select workflow| Dashboard[Workflow dashboard]
     Dashboard -->|Desktop layout| Inspector[Workflow and node inspector]
     Dashboard -->|Execution state and graph counts| Preview[Run preview]
-    Dashboard -->|Phone summary| Mobile[Six key stages derived from saved graph]
-    Mobile -->|No run history| Tasks[Configured stages marked Not run]
-    Mobile -->|No approval event| Approvals[Approval step marked Not requested]
+    Dashboard -->|Overview and phone summary| Summary[Six key stages derived from saved graph]
+    Summary -->|No run history| Tasks[Configured stages marked Not run]
+    Summary -->|No approval event| Approvals[Approval step marked Not requested]
     Dashboard -->|Desktop editing| Canvas
-    Mobile -->|Read current definition| API
+    Summary -->|Read current definition| API
     Dashboard -->|Pointer and keyboard resizing| Split[Resizable canvas / preview divider]
     Palette[Component palette] -->|Drag handle| DnD[@dnd-kit/core]
     DnD -->|Drop centered at cursor| Canvas
@@ -48,10 +48,12 @@ flowchart LR
   are centered under the cursor using React Flow viewport coordinates.
 - Palette search filters the existing component labels and descriptions, leaving the current groups and node types intact.
 - On desktop the component palette spans the canvas and run-preview rows, while the inspector spans the header through the
-  preview. On phones, the compact heading, save action, read-only graph overview, and current run availability match the
-  supplied mobile hierarchy. Six key stages group configured node types to fit the phone width; component and connection
-  totals still report the full saved graph. Configured stages and approval requirements appear with honest empty run
-  states when no execution exists. The editor stays desktop-only, and the UI does not simulate execution state.
+  preview. The Overview and phone summaries group configured node types into six readable workflow stages with concise
+  action captions; component and connection totals still report the full saved graph. On phones, the compact heading,
+  save action, read-only graph
+  overview, and current run availability match the supplied mobile hierarchy. Configured stages and approval
+  requirements appear with honest empty run states when no execution exists. The editor stays desktop-only, and the UI
+  does not simulate execution state.
 - The builder content stays within the supplied desktop frame width while the shared app shell provides the same rail and
   typography as other routes. `PanelHeading` supplies component and node headings; the selected node opens in the
   inspector first, with workflow-level fields available in a collapsed native disclosure below it.

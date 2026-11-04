@@ -5,7 +5,7 @@
   background: #0a0b13;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --sidebar-width: 220px;
+  --sidebar-width: 205px;
   --page-title-size: 22px;
   --page-title-size-mobile: 20px;
   --page-title-weight: 650;
@@ -308,7 +308,6 @@ button:disabled, input:disabled {
   white-space: nowrap;
 }
 @media (max-width:1150px) {
-  .app-shell { --sidebar-width: 205px; }
   .sidebar {
     width:var(--sidebar-width);
   }
