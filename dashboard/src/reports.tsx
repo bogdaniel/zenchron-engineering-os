@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { BarChart, CompositeChart, DonutChart, Sparkline } from '@mantine/charts';
 import { Badge, Button, Progress, Select, Table } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { IconActivity, IconChartBar, IconCircleCheck, IconClockHour4, IconCurrencyDollar, IconDownload, IconFilter, IconFolders, IconRobot, IconRoute, IconSparkles } from '@tabler/icons-react';
+import { IconActivity, IconChartBar, IconCircleCheck, IconClockHour4, IconCurrencyDollar, IconFilter, IconFolders, IconRobot, IconRoute, IconSparkles } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { agentsSchema, loadAgentRuns } from './agents';
 import type { Objective } from './objectives';
@@ -14,6 +14,7 @@ import { PanelHeading } from './PanelHeading';
 import { workflowsSchema } from './workflows';
 import { useReportPullRequestMetrics } from './reportPullRequests';
 import { useReportWorkflowRunMetrics } from './reportWorkflowRuns';
+import { DownloadableReports } from './DownloadableReports';
 import './reports.css';
 
 interface ReportWorker {
@@ -184,38 +185,61 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
     { value: 'all', label: 'All objective owners' },
     ...objectiveOwners.map((owner) => ({ value: owner, label: owner })),
   ];
-  const downloadCSV = () => {
-    const rows = [
-      ['Section', 'Name', 'Value', 'Local checkouts', 'Objectives', 'Agent runs'],
-      ['Snapshot', 'Time range', timeRanges.find((range) => range.value === appliedScope.timeRange)?.label ?? 'All time'],
-      ['Snapshot', 'Objectives', objectiveCount ?? 'Unavailable'],
-      ['Snapshot', 'Completed objectives', completed ?? 'Unavailable'],
-      ['Snapshot', 'Active workflows', activeWorkflows ?? 'Unavailable'],
-      ['Snapshot', 'Agent runs', scopedRuns?.length ?? 'Unavailable'],
-      ['Snapshot', 'Run success rate', runSuccessRate ?? 'Unavailable'],
-      ['Snapshot', 'Local checkouts', scopedProjects?.length ?? 'Unavailable'],
-      ['Snapshot', 'Delivery velocity', pullRequests.deliveryVelocity ?? 'Unavailable'],
-      ['Snapshot', 'Cycle time', pullRequests.cycleTime ?? 'Unavailable'],
-      ['Snapshot', 'CI duration', workflowRunMetrics.averageMinutes ?? 'Unavailable'],
-      ['Snapshot', 'Review latency', 'Unavailable'],
-      ['Snapshot', 'Agent spend', 'Unavailable'],
-      ['Snapshot', 'Acceptance rate', pullRequests.acceptanceRate === undefined ? 'Unavailable' : `${pullRequests.acceptanceRate}%`],
-      ['Snapshot', 'Autonomous completion', 'Unavailable'],
-      ...productSummaries.map((product) => [
-        'Product', product.name, '', product.repositories ?? 'Unavailable', product.objectives ?? 'Unavailable',
-        product.runs ?? 'Unavailable',
-      ]),
-    ];
+  const downloadCSV = (name: string, rows: (string | number | undefined)[][]) => {
     const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `zenchron-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `zenchron-${name}-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.append(link);
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
+  const metricRows = [
+    ['Delivery velocity', pullRequests.deliveryVelocity ?? 'Unavailable', pullRequests.complete ? 'Complete history' : deliverySourceDetail],
+    ['Cycle time', pullRequests.cycleTime ?? 'Unavailable', pullRequests.complete ? 'Complete history' : deliverySourceDetail],
+    ['CI duration', workflowRunMetrics.averageMinutes ?? 'Unavailable', workflowRunMetrics.complete ? 'Complete history' : 'Actions history unavailable'],
+    ['Review latency', 'Unavailable', 'Review event data is not connected'],
+    ['Agent spend', 'Unavailable', 'Model usage data is not connected'],
+    ['Acceptance rate', pullRequests.acceptanceRate === undefined ? 'Unavailable' : `${pullRequests.acceptanceRate}%`, pullRequests.complete ? 'Complete history' : deliverySourceDetail],
+    ['Autonomous completion', 'Unavailable', 'Completion evidence is not connected'],
+  ];
+  const downloadableReports = [
+    {
+      name: 'Executive summary', detail: 'Objectives, delivery, and run outcomes', format: 'CSV',
+      download: () => downloadCSV('executive-summary', [
+        ['Metric', 'Value'],
+        ['Time range', timeRanges.find((range) => range.value === appliedScope.timeRange)?.label ?? 'All time'],
+        ['Objectives', objectiveCount ?? 'Unavailable'], ['Completed objectives', completed ?? 'Unavailable'],
+        ['Active workflows', activeWorkflows ?? 'Unavailable'], ['Agent runs', scopedRuns?.length ?? 'Unavailable'],
+        ['Run success rate', runSuccessRate ?? 'Unavailable'], ['Local checkouts', scopedProjects?.length ?? 'Unavailable'],
+        ['Delivery sources', deliverySourceDetail],
+      ]),
+    },
+    {
+      name: 'Detailed metrics', detail: 'Metric values and source completeness', format: 'CSV',
+      download: () => downloadCSV('detailed-metrics', [['Metric', 'Value', 'Source'], ...metricRows]),
+    },
+    {
+      name: 'Agent spend & utilization', detail: 'Unavailable until model usage data is connected', format: 'N/A',
+    },
+    {
+      name: 'Product & workspace report', detail: 'Product, repository, and inventory counts', format: 'CSV',
+      download: () => downloadCSV('product-workspace', [
+        ['Record', 'Name', 'Repositories', 'Objectives', 'Agent runs', 'Worker', 'Status'],
+        ...productSummaries.map((product) => [
+          'Product', product.name, product.repositories, product.objectives, product.runs, '', '',
+        ]),
+        ...scopedProjects?.map((project) => [
+          'Repository', project.name, 1, '',
+          scopedRuns?.filter((run) => run.project_id === project.id).length,
+          project.worker_name, project.worker_status,
+        ]) ?? [],
+        ...inventory.map((item) => ['Inventory', item.label, '', '', item.count, '', 'Current snapshot']),
+      ]),
+    },
+  ];
 
   return (
     <section className="reports-page">
@@ -242,17 +266,21 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
 
       <div className="reports-metrics" aria-label="Workspace metrics">
         <Metric tone="velocity" label="Delivery velocity" value={pullRequests.deliveryVelocity} detail="PRs / week"
-          icon={<IconChartBar size={17} />} trend={metricSparkline('Delivery velocity', pullRequests.trend.map((item) => item.merged), 'violet.5')} />
+          icon={<IconChartBar size={17} />} trend={pullRequests.complete
+            ? metricSparkline('Delivery velocity', pullRequests.trend.map((item) => item.merged), 'violet.5') : undefined} />
         <Metric tone="cycle-time" label="Cycle time" value={pullRequests.cycleTime} detail="Hours"
-          icon={<IconClockHour4 size={17} />} trend={metricSparkline('Cycle time', pullRequests.trend.map((item) => item.cycle), 'teal.4')} />
+          icon={<IconClockHour4 size={17} />} trend={pullRequests.complete
+            ? metricSparkline('Cycle time', pullRequests.trend.map((item) => item.cycle), 'teal.4') : undefined} />
         <Metric tone="ci-duration" label="CI duration" value={workflowRunMetrics.averageMinutes ?? 'Unavailable'}
           detail="Avg. minutes" icon={<IconActivity size={17} />}
-          trend={metricSparkline('CI duration', workflowRunMetrics.trend, 'teal.5')} />
+          trend={workflowRunMetrics.complete
+            ? metricSparkline('CI duration', workflowRunMetrics.trend, 'teal.5') : undefined} />
         <Metric tone="review-latency" label="Review latency" value="Unavailable" detail="Hours" icon={<IconClockHour4 size={17} />} />
         <Metric tone="agent-spend" label="Agent spend" value="Unavailable" detail="USD" icon={<IconCurrencyDollar size={17} />} />
         <Metric tone="acceptance-rate" label="Acceptance rate" value={pullRequests.acceptanceRate === undefined ? undefined : `${pullRequests.acceptanceRate}%`} detail="Closed pull requests"
           icon={<IconCircleCheck size={17} />}
-          trend={metricSparkline('Acceptance rate', pullRequests.trend.map((item) => item.acceptance), 'teal.5')} />
+          trend={pullRequests.complete
+            ? metricSparkline('Acceptance rate', pullRequests.trend.map((item) => item.acceptance), 'teal.5') : undefined} />
         <Metric tone="autonomous-completion" label="Autonomous completion" value="Unavailable" detail="Completed agent runs" icon={<IconRobot size={17} />} />
       </div>
 
@@ -414,13 +442,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
           </p>
         </PanelCard>
 
-        <PanelCard className="reports-panel downloadable-reports-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconDownload size={15} />} title="Downloadable reports"
-            description="Export this live snapshot as CSV"
-            actions={<Button className="reports-download-button" leftSection={<IconDownload size={14} />}
-              onClick={downloadCSV}>Download CSV</Button>} />
-          <p className="downloadable-reports-note">Includes scoped objective, workflow, run, checkout, and product counts. Unavailable measures stay marked unavailable.</p>
-        </PanelCard>
+        <DownloadableReports reports={downloadableReports} />
       </div>
     </section>
   );

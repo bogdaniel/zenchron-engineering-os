@@ -116,19 +116,52 @@
   font-weight: 600;
 }
 .product-summary-table td, .product-summary-table th { padding: 7px 8px; }
-.reports-download-button.mantine-Button-root {
-  min-height: 30px;
-  border: 1px solid #8050cc;
-  color: white;
-  background: linear-gradient(100deg, #8e48df, #6033bf);
-  font-size: var(--metric-label-size);
+.downloadable-report-list { display: grid; gap: 1px; }
+.downloadable-report {
+  display: grid;
+  min-width: 0;
+  min-height: 29px;
+  grid-template-columns: 42px minmax(0, 1fr) 26px;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid #282638;
 }
-.downloadable-reports-note {
-  margin: 7px 0 0;
-  color: #89849a;
+.downloadable-report-format.mantine-Badge-root {
+  justify-content: center;
+  min-width: 39px;
+  height: 17px;
+  padding-inline: 4px;
+  color: #c5a1f5;
+  background: #2a1e3c;
+  font-size: 8px;
+  font-weight: 700;
+}
+.downloadable-report-format.unavailable.mantine-Badge-root { color: #a19bab; background: #292733; }
+.downloadable-report-copy { display: grid; min-width: 0; gap: 1px; }
+.downloadable-report-copy b {
+  overflow: hidden;
+  color: #e4deed;
   font-size: 10px;
-  line-height: 1.5;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.downloadable-report-copy span {
+  overflow: hidden;
+  color: #89849a;
+  font-size: 9px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.downloadable-report-button.mantine-Button-root {
+  width: 25px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  color: #d8c1fa;
+}
+.downloadable-report-button.mantine-Button-root:disabled { color: #625d6b; background: transparent; }
 .run-chart-layout {
   display: flex;
   min-height: 122px;

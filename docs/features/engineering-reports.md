@@ -44,7 +44,10 @@ flowchart LR
     Usage[Model usage and run evidence] -. not available .-> Autonomy[Agent spend and autonomous completion]
     PRs -. not available .-> Autonomy
     Reports --> Snapshot[Scoped live snapshot]
-    Snapshot --> CSV[Downloadable CSV report]
+    Snapshot --> ExecutiveCSV[Executive summary CSV]
+    Snapshot --> MetricsCSV[Detailed metrics CSV]
+    Snapshot --> WorkspaceCSV[Product and workspace CSV]
+    Usage[Model usage and run evidence] -. unavailable .-> SpendCSV[Agent spend export]
 ```
 
 ## Data rules
@@ -53,7 +56,7 @@ flowchart LR
 - Time range filters objective creation and agent-run creation; invalid and future timestamps are excluded. Product filters use product repository links, owner filters apply to objectives, and repository filters apply to checkout and run records.
 - The workflow selector stays disabled because agent-run records do not contain a workflow ID; the UI does not claim to filter data that has no workflow relationship.
 - Desktop layout follows the supplied report mock's 3/4/3 panel rhythm: a report-scope toolbar and seven delivery/autonomy KPI cards; delivery velocity, CI duration, and work outcomes on the first chart row; review latency, agent spend, acceptance/autonomy, and data-driven insights on the second; then product summary, workspace inventory, and CSV download panels. KPI values use live source records when available and otherwise stay marked unavailable. Current objective, workflow, run, and checkout counts remain in the insights, product summary, and workspace inventory. The grid collapses at tablet and phone widths.
-- Product summary rows join persisted product repository IDs to current scoped checkout, objective, and run records. Download CSV exports the scoped summary, product rows, and all seven KPI values; unsupported delivery measures remain explicitly unavailable.
+- Product summary rows join persisted product repository IDs to current scoped checkout, objective, and run records. The Downloads panel offers separate executive summary, detailed metrics, and product/workspace CSV files using the applied scope. Unsupported delivery measures remain explicitly unavailable; agent spend export stays disabled until usage records exist.
 - The Insights & Narrative panel derives its statements from current scoped snapshots and GitHub PR history. It does not infer status history or delivery trends from objective/run `updated_at`. Delivery source status reports missing remotes, unsupported remotes, provider errors, and incomplete history.
 - Agent-run counts and status distribution use recorded queue records from the selected time range, including cancelled
   runs. Success rate includes only terminal succeeded or failed runs; queued, running, and cancelled records are not

@@ -10,6 +10,8 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   ]);
   await expect(page.getByRole('heading', { name: 'Work outcomes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Insights & narrative' })).toBeVisible();
+  await expect(page.locator('.downloadable-report')).toHaveCount(4);
+  await expect(page.getByRole('button', { name: 'Agent spend & utilization unavailable' })).toBeDisabled();
   await expect(page.locator('.reports-empty-chart')).toHaveCount(5);
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
   await expect(page.locator('.reports-empty-chart').first()).toHaveAccessibleName('Connect a source to view this chart');
@@ -237,6 +239,7 @@ test('Reports suppresses GitHub delivery metrics when PR history is truncated', 
     .toContainText('Waiting for complete GitHub Actions history.');
   await expect(page.locator('.delivery-velocity-panel .reports-empty-chart'))
     .toContainText('Waiting for complete GitHub pull-request history.');
+  await expect(page.locator('.reports-metric .metric-sparkline')).toHaveCount(0);
   await expect(page.locator('.reports-insight').filter({ hasText: 'Delivery sources' }))
     .toContainText('2,000 pull-request report limit');
 });
@@ -320,17 +323,25 @@ test('report scope filters live snapshots by product and resets them', async ({ 
     .toContainText('No Git remotes are configured for these checkouts.');
   const productRow = page.locator('.product-summary-table tbody tr').filter({ hasText: 'Nova Platform' });
   await expect(productRow.locator('td')).toHaveText(['Nova Platform', '1', '1', '1']);
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download CSV' }).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^zenchron-report-\d{4}-\d{2}-\d{2}\.csv$/);
-  const csv = await page.evaluate(async () =>
-    await (window as Window & { downloadedCSV?: Promise<string> }).downloadedCSV,
-  );
-  expect(csv).toContain('"Product","Nova Platform","","1","1","1"');
-  for (const metric of ['Delivery velocity', 'Cycle time', 'CI duration', 'Review latency', 'Agent spend', 'Acceptance rate', 'Autonomous completion']) {
-    expect(csv).toContain(`"Snapshot","${metric}","Unavailable"`);
-  }
+  const downloadCsv = async (name: string) => {
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: `Download ${name} CSV` }).click();
+    const download = await downloadPromise;
+    const csv = await page.evaluate(async () =>
+      await (window as Window & { downloadedCSV?: Promise<string> }).downloadedCSV,
+    );
+    return { filename: download.suggestedFilename(), csv };
+  };
+  const executive = await downloadCsv('Executive summary');
+  expect(executive.filename).toMatch(/^zenchron-executive-summary-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(executive.csv).toContain('"Objectives","1"');
+  expect(executive.csv).toContain('"Local checkouts","1"');
+  const detailed = await downloadCsv('Detailed metrics');
+  expect(detailed.filename).toMatch(/^zenchron-detailed-metrics-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(detailed.csv).toContain('"Delivery velocity","Unavailable","No Git remotes are configured for these checkouts."');
+  const workspace = await downloadCsv('Product & workspace report');
+  expect(workspace.filename).toMatch(/^zenchron-product-workspace-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(workspace.csv).toContain('"Product","Nova Platform","1","1","1"');
   await page.getByRole('button', { name: 'Reset' }).click();
   await expect(objectiveInventoryCount).toHaveText('2');
   await expect(checkoutInventoryCount).toHaveText('2');
