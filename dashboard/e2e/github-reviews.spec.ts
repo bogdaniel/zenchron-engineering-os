@@ -1,5 +1,26 @@
 import { expect, test } from '@playwright/test';
 
+test('Reviews replaces the loading overlay after an empty GitHub response', async ({ page }) => {
+  const projectID = 'fedcbafedcbafedcbafedcbafedcbafe';
+  await page.route('**/api/v1/projects', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify([{
+      id: projectID, name: 'Nova Platform', branch: 'main', git_remote: 'github.com/acme/platform',
+      worker_id: '0123456789abcdef0123456789abcdef', worker_name: 'Mac', last_seen: new Date().toISOString(),
+      worker_status: 'online',
+    }]),
+  }));
+  await page.route(`**/api/v1/projects/${projectID}/pull-requests`, (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.route(`**/api/v1/projects/${projectID}/issues`, (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.goto('/#reviews');
+  await expect(page.locator('.reviews-grid-wrap')).toContainText('No open pull requests in this repository.');
+  await expect(page.locator('.reviews-grid-wrap')).not.toContainText('Loading GitHub items');
+});
+
 test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ page }) => {
   await page.setViewportSize({ width: 1512, height: 874 });
   const projectID = 'fedcbafedcbafedcbafedcbafedcbafe';

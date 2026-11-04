@@ -320,6 +320,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
                 overlayNoRowsTemplate="Agent runs and local branch diffs will appear here."
               /> : <AgGridReact<GitHubPullRequest | GitHubIssue>
                 rowData={visibleProviderItems} columnDefs={providerColumns} theme={reviewTheme}
+                loading={providerQuery.isLoading}
                 getRowId={({ data }) => String(data.number)}
                 onRowClicked={({ data }) => {
                   if (!data) return;
@@ -330,8 +331,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
                   setIssueCommentStatus('');
                   setIssueStateStatus('');
                 }}
-                overlayNoRowsTemplate={providerQuery.isLoading ? 'Loading GitHub items…'
-                  : providerQuery.isError ? 'GitHub data unavailable. Check the connection and try again.'
+                overlayNoRowsTemplate={providerQuery.isError ? 'GitHub data unavailable. Check the connection and try again.'
                     : searchTerm ? `No ${section === 'issues' ? 'issues' : 'pull requests'} match this search.`
                     : !selectedProject ? 'Connect a local GitHub checkout to see issues and pull requests.'
                       : `No open ${section === 'issues' ? 'issues' : 'pull requests'} in this repository.`}
