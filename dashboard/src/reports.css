@@ -268,7 +268,7 @@
 }
 .reports-empty-chart > span svg { color: #bd8aff; }
 .delivery-velocity-panel .reports-empty-chart, .ci-distribution-panel .reports-empty-chart { min-height: 86px; }
-.reports-acceptance-chart { margin-top: 2px; }
+.reports-acceptance-chart { min-height: 68px; margin-top: 2px; }
 .coverage-online {
   border: 1px solid #285343;
   color: #63dba8;
@@ -294,11 +294,11 @@
   .run-outcomes-panel { grid-column: 12 / span 4; grid-row: 1; }
   .review-latency-panel { grid-column: 1 / span 4; grid-row: 2; }
   .agent-spend-panel { grid-column: 5 / span 4; grid-row: 2; }
-  .acceptance-panel { grid-column: 9 / span 4; grid-row: 2; }
-  .reports-summary { grid-column: 13 / span 3; grid-row: 2 / span 2; }
+  .acceptance-panel { grid-column: 9 / span 3; grid-row: 2; }
+  .reports-summary { grid-column: 12 / span 4; grid-row: 2 / span 2; }
   .product-summary-panel { grid-column: 1 / span 4; grid-row: 3; }
   .inventory-panel { grid-column: 5 / span 4; grid-row: 3; }
-  .downloadable-reports-panel { grid-column: 9 / span 4; grid-row: 3; }
+  .downloadable-reports-panel { grid-column: 9 / span 3; grid-row: 3; }
 }
 @media (max-width: 1200px) {
   .reports-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }

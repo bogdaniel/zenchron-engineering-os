@@ -6,7 +6,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
   const referenceWidth = await page.locator('.sidebar').evaluate((sidebar) =>
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
-  expect(referenceWidth, 'full screen reference sidebar width').toBe(170);
+  expect(referenceWidth, 'full screen reference sidebar width').toBe(150);
   const pageSelectors: Record<string, { title: string; panel: string }> = {
     overview: { title: '.greeting h1', panel: '.activity-panel h3' },
     objectives: { title: '.page-heading h2', panel: '.panel-heading h3' },
@@ -46,12 +46,12 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
         weight: getComputedStyle(heading).fontWeight,
       })),
     }), selectors);
-    expect(Math.round(parseFloat(styles.sidebarWidth))).toBe(170);
+    expect(Math.round(parseFloat(styles.sidebarWidth))).toBe(150);
     expect(styles.bodyFont).toContain('Inter');
     expect(styles.navigationFontFamily).toBe(styles.bodyFont);
     expect(styles.titleFontFamily).toBe(styles.bodyFont);
     expect(styles.panelFontFamily).toBe(styles.bodyFont);
-    expect(styles.navigationFont).toBe('14px');
+    expect(styles.navigationFont).toBe('12px');
     expect(styles.navigationWeight).toBe('400');
     await expect(page.locator('.nav-link').filter({ hasText: 'Product Workspace' }), 'long navigation label stays on one line')
       .toHaveCSS('white-space', 'nowrap');
@@ -95,7 +95,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
   const framedReferenceWidth = await page.locator('.sidebar').evaluate((sidebar) =>
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
-  expect(framedReferenceWidth, 'monitor screen reference sidebar width').toBe(170);
+  expect(framedReferenceWidth, 'monitor screen reference sidebar width').toBe(150);
 
   await page.setViewportSize({ width: 390, height: 844 });
   for (const [route, selectors] of Object.entries(pageSelectors)) {
@@ -217,8 +217,8 @@ test('desktop sidebar keeps the compact width at reference and regular monitor s
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/#reports');
     await expect(page.locator('.reports-page')).toBeVisible();
-    expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(170);
-    expect(await page.locator('.reports-scope-bar').evaluate((bar) => bar.getBoundingClientRect().x)).toBe(188);
+    expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(150);
+    expect(await page.locator('.reports-scope-bar').evaluate((bar) => bar.getBoundingClientRect().x)).toBe(168);
   }
 });
 

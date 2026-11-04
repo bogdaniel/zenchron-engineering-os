@@ -55,7 +55,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   const product = panel('product-summary-panel');
   const inventory = panel('inventory-panel');
   const downloads = panel('downloadable-reports-panel');
-  expect(delivery.x).toBe(188);
+  expect(delivery.x).toBe(168);
   expect(Math.abs(delivery.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(outcomes.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(product.height - 188)).toBeLessThanOrEqual(2);
@@ -70,7 +70,13 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   expect(inventory.y).toBe(downloads.y);
   expect(delivery.width).toBeGreaterThan(ci.width);
   expect(ci.width).toBeGreaterThan(outcomes.width);
+  expect(acceptance.width).toBeLessThan(spend.width);
+  expect(coverage.width).toBeGreaterThan(acceptance.width);
+  expect(downloads.width).toBeLessThan(inventory.width);
+  expect(coverage.width).toBeGreaterThan(downloads.width);
   expect(coverage.height).toBeGreaterThan(product.y + product.height - coverage.y - 1);
+  const acceptanceChart = page.locator('.acceptance-panel .reports-empty-chart');
+  expect(await acceptanceChart.evaluate((chart) => chart.scrollHeight <= chart.clientHeight), 'acceptance empty state fits its chart').toBe(true);
   await expect(page.locator('.reports-summary')).toContainText('Key takeaway');
   await expect(page.locator('.reports-summary')).toContainText('Worker availability');
   await page.getByRole('combobox', { name: 'Insights view' }).click();

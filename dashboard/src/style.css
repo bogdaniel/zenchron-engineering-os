@@ -5,7 +5,7 @@
   background: #0a0b13;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --sidebar-width: 170px;
+  --sidebar-width: 150px;
   --page-title-size: 22px;
   --page-title-size-mobile: 20px;
   --page-title-weight: 650;
@@ -52,7 +52,7 @@ button:disabled, input:disabled {
   display: flex;
   width: var(--sidebar-width);
   flex-direction: column;
-  padding: 18px 10px 20px 14px;
+  padding: 18px 8px 20px 10px;
   border-right: 1px solid #252438;
   background:
     radial-gradient(ellipse at 8% 90%, #8e48d94a 0, transparent 40%),
@@ -113,12 +113,12 @@ button:disabled, input:disabled {
   display: flex;
   min-height: 44px;
   align-items: center;
-  gap: 8px;
-  padding: 0 2px 0 6px;
+  gap: 6px;
+  padding: 0 2px 0 4px;
   border: 1px solid transparent;
   border-radius: 11px;
   color: #a9a5b9;
-  font-size: 14px;
+  font-size: 12px;
   white-space: nowrap;
   transition: .16s ease;
 }
