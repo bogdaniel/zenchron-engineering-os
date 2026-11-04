@@ -43,9 +43,9 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
       brandMark: bounds('.brand-mark'), overviewLink: bounds('.nav-link[href="#overview"]'),
     };
   });
-  expect(layout.metrics?.x).toBe(208);
+  expect(layout.metrics?.x).toBe(188);
   expect(layout.metrics?.y).toBe(84);
-  expect(layout.metrics?.width).toBe(1450);
+  expect(layout.metrics?.width).toBe(1470);
   expect(layout.metrics?.height).toBe(100);
   expect(layout.workflow?.y).toBe(198);
   expect(layout.workflow?.height).toBeGreaterThanOrEqual(203);
@@ -67,12 +67,12 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
     return parseFloat(getComputedStyle(node.querySelector('b')!).fontSize) * zoom;
   });
   expect(overviewGraphLabelSize).toBeGreaterThanOrEqual(8);
-  expect(layout.activity?.x).toBeGreaterThan(1230);
+  expect(layout.activity?.x).toBeCloseTo(1225.4, 1);
   expect(layout.objectives?.y).toBeCloseTo(416, 0);
   expect(layout.review?.y).toBeCloseTo(590, 0);
   expect(layout.review?.height).toBe(280);
   expect(layout.footerDisplay).toBe('none');
-  expect(layout.brandMark?.x).toBe(38);
+  expect(layout.brandMark?.x).toBe(26);
   expect(layout.overviewLink?.x).toBe(14);
   expect(layout.overviewLink?.y).toBeCloseTo(92, 0);
 });
@@ -88,11 +88,11 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
       footerDisplay: getComputedStyle(document.querySelector('.page-footer')!).display,
     };
   });
-  expect(layout.metrics?.x).toBe(208);
+  expect(layout.metrics?.x).toBe(188);
   expect(layout.metrics?.y).toBe(84);
   expect(layout.workflow?.y).toBe(189);
   expect(layout.workflow?.height).toBe(202);
-  expect(layout.activity?.x).toBeCloseTo(1126.4, 1);
+  expect(layout.activity?.x).toBeCloseTo(1120.4, 1);
   expect(layout.objectives?.y).toBe(403);
   expect(layout.review?.y).toBe(573);
   expect(layout.review?.height).toBe(220);
@@ -110,11 +110,11 @@ test('Reviews matches the supplied desktop workspace frame', async ({ page }) =>
       titleIcon: bounds('.reviews-title-icon'), tabs: bounds('.reviews-tabs'), workspace: bounds('.reviews-workspace'),
     };
   });
-  expect(layout.sidebar?.width).toBe(190);
-  expect(layout.metrics?.x).toBe(208);
+  expect(layout.sidebar?.width).toBe(170);
+  expect(layout.metrics?.x).toBe(188);
   expect(layout.metrics?.y).toBe(92);
-  expect(layout.titleIcon?.x).toBe(208);
-  expect(layout.title?.x).toBe(236);
+  expect(layout.titleIcon?.x).toBe(188);
+  expect(layout.title?.x).toBe(216);
   expect(layout.tabs?.y).toBeCloseTo(205, 0);
   expect(layout.workspace?.y).toBeCloseTo(238, 0);
   expect(layout.workspace?.height).toBe(635);
@@ -188,8 +188,8 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
       table: bounds('.objective-table-panel'), detail: bounds('.objective-detail-panel'), capacity: bounds('.objective-capacity'),
     };
   });
-  expect(layout.sidebar?.width).toBe(190);
-  expect(layout.metrics?.x).toBe(208);
+  expect(layout.sidebar?.width).toBe(170);
+  expect(layout.metrics?.x).toBe(188);
   expect(layout.metrics?.y).toBeCloseTo(157.5, 0);
   expect(layout.content?.y).toBeCloseTo(263.5, 0);
   expect(layout.content?.height).toBe(603);

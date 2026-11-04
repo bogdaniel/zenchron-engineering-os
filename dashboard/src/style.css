@@ -5,7 +5,7 @@
   background: #0a0b13;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --sidebar-width: 190px;
+  --sidebar-width: 170px;
   --page-title-size: 22px;
   --page-title-size-mobile: 20px;
   --page-title-weight: 650;
@@ -52,7 +52,7 @@ button:disabled, input:disabled {
   display: flex;
   width: var(--sidebar-width);
   flex-direction: column;
-  padding: 18px 12px 20px 14px;
+  padding: 18px 10px 20px 14px;
   border-right: 1px solid #252438;
   background:
     radial-gradient(ellipse at 8% 90%, #8e48d94a 0, transparent 40%),
@@ -63,8 +63,8 @@ button:disabled, input:disabled {
 .brand {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin: 0 8px 29px 24px;
+  gap: 10px;
+  margin: 0 4px 29px 12px;
   font-size: 16px;
   font-weight: 750;
   letter-spacing: -.3px;
@@ -113,8 +113,8 @@ button:disabled, input:disabled {
   display: flex;
   min-height: 44px;
   align-items: center;
-  gap: 16px;
-  padding: 0 4px 0 8px;
+  gap: 8px;
+  padding: 0 2px 0 6px;
   border: 1px solid transparent;
   border-radius: 11px;
   color: #a9a5b9;
@@ -137,7 +137,7 @@ button:disabled, input:disabled {
 }
 .sidebar-bottom {
   margin-top: auto;
-  padding: 14px 11px 4px 24px;
+  padding: 14px 8px 4px 14px;
   border-top: 1px solid #252438;
 }
 .connection-indicator {

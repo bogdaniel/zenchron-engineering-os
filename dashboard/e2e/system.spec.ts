@@ -53,7 +53,7 @@ test('settings and integrations routes show live runtime and honest provider sta
   expect(columns).toBe(4);
   expect(operationColumns).toBe(3);
   expect(settingsTabs?.y).toBeCloseTo(140, 0);
-  expect(configRail?.x).toBe(208);
+  expect(configRail?.x).toBe(188);
   expect(configRail?.y).toBeCloseTo(177, 0);
   expect(configRail?.width).toBe(176);
   expect(integrationBounds?.x).toBe(configRail!.x + configRail!.width + 10);
