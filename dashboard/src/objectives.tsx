@@ -333,7 +333,7 @@ export function ObjectivesPage() {
               {updateMutation.isError && <Text className="form-error">{updateMutation.error.message}</Text>}
             </>
           ) : (
-            <div className="objective-detail-empty"><span className="detail-objective-icon"><IconTarget size={19} /></span><h3>Objective details</h3><p>Select an objective to see its plan and progress, or create the first objective for this workspace.</p><Button variant="light" onClick={() => setCreateOpen(true)}>Create objective</Button></div>
+            <div className="objective-detail-empty"><span className="detail-objective-icon"><IconTarget size={19} /></span><h3>Objective details</h3><p>Select an objective to see its plan and progress, or create the first objective for this workspace.</p><Button className="new-objective-button" onClick={() => setCreateOpen(true)}>Create objective</Button></div>
           )}
         </PanelCard>
       </div>

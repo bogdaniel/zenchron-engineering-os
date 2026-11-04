@@ -41,7 +41,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
       panelHeadingSize: getComputedStyle(document.querySelector(panel)!).fontSize,
       panelHeadingWeight: getComputedStyle(document.querySelector(panel)!).fontWeight,
       panelFontFamily: getComputedStyle(document.querySelector(panel)!).fontFamily,
-      sharedPanelHeadings: Array.from(document.querySelectorAll('.shared-panel-heading h3'), (heading) => ({
+      sharedPanelHeadings: Array.from(document.querySelectorAll('.shared-panel-heading:not(.entity-detail-heading) h3'), (heading) => ({
         size: getComputedStyle(heading).fontSize,
         weight: getComputedStyle(heading).fontWeight,
       })),

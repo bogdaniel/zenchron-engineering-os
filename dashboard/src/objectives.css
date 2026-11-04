@@ -118,7 +118,7 @@
 @media (min-width: 1351px) and (min-height: 840px) {
   .objectives-page { padding-top: 19px; }
   .app-shell .main-content .objectives-title-row .page-heading p { margin-top: 3px; }
-  .objectives-title-row { margin-bottom: 8px; }
+  .objectives-title-row { margin-bottom: 10.5px; }
   .objectives-title-copy { min-width: 0; }
   .objective-filters { width: min(560px, 100%); }
   .objective-metrics { grid-template-columns: 2fr 2fr repeat(4, .75fr); gap: 8px; }
