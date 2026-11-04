@@ -53,7 +53,7 @@ test('Product Workspace matches its desktop frame and filters products', async (
   expect(layout.directory?.x).toBe(188);
   expect(layout.directory?.y).toBe(94);
   expect(layout.directory?.width).toBe(260);
-  expect(layout.detail?.x).toBe(485);
+  expect(layout.detail?.x).toBe(465);
   expect(layout.metrics?.y).toBe(182);
   expect(layout.tabs?.y).toBe(270);
   expect(layout.content?.y).toBe(323);
