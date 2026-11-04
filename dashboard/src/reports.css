@@ -160,7 +160,7 @@
 .downloadable-report-copy span {
   overflow: hidden;
   color: #a9a5b9;
-  font-size: var(--panel-description-size);
+  font-size: 9px;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
