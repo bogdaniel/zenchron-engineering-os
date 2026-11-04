@@ -5,7 +5,7 @@
   background: #0a0b13;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --sidebar-width: 247px;
+  --sidebar-width: 220px;
   --page-title-size: 22px;
   --page-title-size-mobile: 20px;
   --page-title-weight: 650;
@@ -330,9 +330,6 @@ button:disabled, input:disabled {
   .metric-grid {
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
-}
-@media (min-width:1151px) and (max-width:1600px) {
-  .app-shell { --sidebar-width: 222px; }
 }
 @media (max-width:760px) {
   .app-shell { --sidebar-width: auto; }

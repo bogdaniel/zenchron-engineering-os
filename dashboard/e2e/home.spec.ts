@@ -37,9 +37,9 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
       brandMark: bounds('.brand-mark'), overviewLink: bounds('.nav-link[href="#overview"]'),
     };
   });
-  expect(layout.metrics?.x).toBe(265);
+  expect(layout.metrics?.x).toBe(238);
   expect(layout.metrics?.y).toBe(84);
-  expect(layout.metrics?.width).toBe(1393);
+  expect(layout.metrics?.width).toBe(1420);
   expect(layout.metrics?.height).toBe(100);
   expect(layout.workflow?.y).toBe(198);
   expect(layout.workflow?.height).toBeGreaterThanOrEqual(203);
@@ -82,11 +82,11 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
       footerDisplay: getComputedStyle(document.querySelector('.page-footer')!).display,
     };
   });
-  expect(layout.metrics?.x).toBe(240);
+  expect(layout.metrics?.x).toBe(238);
   expect(layout.metrics?.y).toBe(84);
   expect(layout.workflow?.y).toBe(189);
   expect(layout.workflow?.height).toBe(202);
-  expect(layout.activity?.x).toBe(1136);
+  expect(layout.activity?.x).toBeCloseTo(1135.4, 1);
   expect(layout.objectives?.y).toBe(403);
   expect(layout.review?.y).toBe(573);
   expect(layout.review?.height).toBe(220);
@@ -104,11 +104,11 @@ test('Reviews matches the supplied desktop workspace frame', async ({ page }) =>
       titleIcon: bounds('.reviews-title-icon'), tabs: bounds('.reviews-tabs'), workspace: bounds('.reviews-workspace'),
     };
   });
-  expect(layout.sidebar?.width).toBe(247);
-  expect(layout.metrics?.x).toBe(265);
+  expect(layout.sidebar?.width).toBe(220);
+  expect(layout.metrics?.x).toBe(238);
   expect(layout.metrics?.y).toBe(92);
-  expect(layout.titleIcon?.x).toBe(265);
-  expect(layout.title?.x).toBe(293);
+  expect(layout.titleIcon?.x).toBe(238);
+  expect(layout.title?.x).toBe(266);
   expect(layout.tabs?.y).toBeCloseTo(205, 0);
   expect(layout.workspace?.y).toBeCloseTo(238, 0);
   expect(layout.workspace?.height).toBe(635);
@@ -182,8 +182,8 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
       table: bounds('.objective-table-panel'), detail: bounds('.objective-detail-panel'), capacity: bounds('.objective-capacity'),
     };
   });
-  expect(layout.sidebar?.width).toBe(247);
-  expect(layout.metrics?.x).toBe(265);
+  expect(layout.sidebar?.width).toBe(220);
+  expect(layout.metrics?.x).toBe(238);
   expect(layout.metrics?.y).toBeCloseTo(157.5, 0);
   expect(layout.content?.y).toBeCloseTo(263.5, 0);
   expect(layout.content?.height).toBe(603);

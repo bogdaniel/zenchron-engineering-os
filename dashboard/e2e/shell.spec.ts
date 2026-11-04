@@ -6,7 +6,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
   const referenceWidth = await page.locator('.sidebar').evaluate((sidebar) =>
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
-  expect(referenceWidth, 'full screen reference sidebar width').toBe(247);
+  expect(referenceWidth, 'full screen reference sidebar width').toBe(220);
   const pageSelectors: Record<string, { title: string; panel: string }> = {
     overview: { title: '.greeting h1', panel: '.activity-panel h3' },
     objectives: { title: '.page-heading h2', panel: '.panel-heading h3' },
@@ -46,7 +46,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
         weight: getComputedStyle(heading).fontWeight,
       })),
     }), selectors);
-    expect(Math.round(parseFloat(styles.sidebarWidth))).toBe(247);
+    expect(Math.round(parseFloat(styles.sidebarWidth))).toBe(220);
     expect(styles.bodyFont).toContain('Inter');
     expect(styles.navigationFontFamily).toBe(styles.bodyFont);
     expect(styles.titleFontFamily).toBe(styles.bodyFont);
@@ -95,7 +95,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
   const framedReferenceWidth = await page.locator('.sidebar').evaluate((sidebar) =>
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
-  expect(framedReferenceWidth, 'monitor screen reference sidebar width').toBe(222);
+  expect(framedReferenceWidth, 'monitor screen reference sidebar width').toBe(220);
 
   await page.setViewportSize({ width: 390, height: 844 });
   for (const [route, selectors] of Object.entries(pageSelectors)) {
@@ -210,6 +210,16 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     detail: getComputedStyle(card.querySelector('small')!).fontSize,
   }));
     expect(compactMobileStyles).toEqual({ label: '11px', value: '21px', detail: '10px' });
+});
+
+test('desktop sidebar keeps the narrower width at reference and regular monitor sizes', async ({ page }) => {
+  for (const width of [1672, 1505]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/#reports');
+    await expect(page.locator('.reports-page')).toBeVisible();
+    expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(220);
+    expect(await page.locator('.reports-scope-bar').evaluate((bar) => bar.getBoundingClientRect().x)).toBe(238);
+  }
 });
 
 test('mobile overview matches the phone shell and keeps workflow/reviews accessible', async ({ page }) => {

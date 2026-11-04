@@ -10,6 +10,12 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   ]);
   await expect(page.getByRole('heading', { name: 'Work outcomes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Insights & narrative' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Insights view' })).toBeVisible();
+  await expect(page.locator('.reports-chart-legend')).toHaveCount(3);
+  await expect(page.locator('.run-outcome-legend')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
+  await expect(page.locator('.product-summary-panel')).toContainText('No products are configured');
+  expect(await page.locator('.reports-metric .metric-top svg').first().evaluate((icon) => getComputedStyle(icon).order)).toBe('-1');
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
   await expect(page.locator('.downloadable-report').first()).toHaveCSS('min-height', '30px');
   await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '12px');
@@ -46,7 +52,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   const product = panel('product-summary-panel');
   const inventory = panel('inventory-panel');
   const downloads = panel('downloadable-reports-panel');
-  expect(delivery.x).toBe(265);
+  expect(delivery.x).toBe(238);
   expect(Math.abs(delivery.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(outcomes.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(product.height - 188)).toBeLessThanOrEqual(2);
@@ -64,6 +70,10 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   expect(coverage.height).toBeGreaterThan(product.y + product.height - coverage.y - 1);
   await expect(page.locator('.reports-summary')).toContainText('Key takeaway');
   await expect(page.locator('.reports-summary')).toContainText('Worker availability');
+  await page.getByRole('combobox', { name: 'Insights view' }).click();
+  await page.getByRole('option', { name: 'Delivery' }).click();
+  await expect(page.locator('.reports-insight')).toHaveCount(1);
+  await expect(page.locator('.reports-insight')).toContainText('Delivery sources');
 
   await page.setViewportSize({ width: 390, height: 844 });
   const mobile = await page.locator('.reports-content-grid > *').evaluateAll((panels) => panels.map((panel) => {
@@ -179,7 +189,8 @@ test('Reports derives GitHub delivery metrics from complete pull-request history
     .toHaveCSS('fill', 'rgb(150, 145, 168)');
   const trend = page.locator('.reports-pull-request-chart');
   await expect(trend).toBeVisible();
-  await expect(trend).toContainText('Merged PRs');
+  await expect(page.locator('.delivery-velocity-panel .reports-chart-legend')).toContainText('Merged PRs');
+  await expect(page.locator('.delivery-velocity-panel .reports-chart-legend')).toContainText('Cycle time');
   await expect(trend.locator('.recharts-line')).toHaveCount(2);
   await expect(trend.locator('.recharts-cartesian-axis-tick-value').first())
     .toHaveCSS('fill', 'rgb(150, 145, 168)');
