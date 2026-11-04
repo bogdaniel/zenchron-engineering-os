@@ -37,6 +37,7 @@ Run the preview from the repository root. Install frontend dependencies once wit
 
 ## Focused verification
 
-Run `sh -n dev.sh dashboard/dev.sh`, then start the preview with isolated local ports and check `/healthz`,
+Run `sh -n dev.sh dashboard/dev.sh` and `node scripts/test_dev_preview.mjs`, then start the preview with isolated
+local ports and check `/healthz`,
 `/api/v1/workers/healthz`, and the dashboard URL before stopping it with Ctrl+C. Starting a second preview against an
 already responding API URL must exit before printing the ready message.
