@@ -50,10 +50,10 @@ test('Product Workspace matches its desktop frame and filters products', async (
       content: bounds('.workspace-content-grid'),
     };
   });
-  expect(layout.directory?.x).toBe(238);
+  expect(layout.directory?.x).toBe(223);
   expect(layout.directory?.y).toBe(94);
   expect(layout.directory?.width).toBe(260);
-  expect(layout.detail?.x).toBe(515);
+  expect(layout.detail?.x).toBe(500);
   expect(layout.metrics?.y).toBe(182);
   expect(layout.tabs?.y).toBe(270);
   expect(layout.content?.y).toBe(323);
@@ -74,6 +74,6 @@ test('Product Workspace matches its desktop frame and filters products', async (
   await page.setViewportSize({ width: 1672, height: 749 });
   await expect(page.locator('.workspace-title-row')).toBeHidden();
   await expect(page.getByRole('button', { name: '+ Add Product', exact: true })).toHaveCount(1);
-  expect(await page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().width)).toBe(220);
-  expect(await page.locator('.workspace-directory').evaluate((element) => element.getBoundingClientRect().x)).toBe(238);
+  expect(await page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().width)).toBe(205);
+  expect(await page.locator('.workspace-directory').evaluate((element) => element.getBoundingClientRect().x)).toBe(223);
 });
