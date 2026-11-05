@@ -21,7 +21,11 @@ flowchart LR
     Dashboard -->|Text, product, owner, status, due-quarter filters| Records[Filtered objective records]
     Records -->|Table view| Grid[AG Grid objective list]
     Records -->|Cards and Kanban views| Views[Cards grouped by status]
+    Records -->|Planning| Plan[Due-date ordered objective cards]
+    Records -->|Roadmap| Roadmap[Cards grouped by due quarter]
     Views -->|Select objective| Detail[Shared objective detail editor]
+    Plan --> Detail
+    Roadmap --> Detail
     Grid --> Detail
 ```
 
@@ -34,6 +38,7 @@ flowchart LR
   marking an objective `completed` sets progress to 100.
 - The dashboard filters by text, product, owner, status, and due-date quarter. The default is This Quarter; All due dates includes unscheduled objectives.
 - Table, Cards, and Kanban views render the same filtered records; selecting any record opens the same detail editor. Kanban groups by the saved objective status.
+- Planning sorts the filtered objectives by due date, with undated records last. Roadmap groups those same records by calendar quarter and places missing or invalid dates under Unscheduled. Both views use saved objective data and open the shared detail editor when a card is selected.
 - The progress panel shows each objective's current completion percentage; it does not infer a schedule or time range.
 - Product assignment uses the durable product ID; the control plane resolves the current product name in the objective
   response, so a product rename does not break the relationship or wait on a second dashboard query. Older free-text
@@ -51,3 +56,4 @@ product linking, and restart persistence. Focused dashboard E2E flows cover crea
 while the catalog loads, and the six-record planning view with a selected objective at the reference viewport. They
 also cover assigning an objective to a Product Workspace record:
 `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Objectives dashboard|Objectives grid|objectives can be created'`.
+The `e2e/objectives-views.spec.ts` flow also covers due-date ordering in Planning and quarter grouping in Roadmap.

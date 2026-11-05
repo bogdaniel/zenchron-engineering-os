@@ -98,6 +98,20 @@ function dueDateIsInQuarter(dueDate: string, quarterOffset: number, now: Date) {
   return due >= start && due < end;
 }
 
+function groupObjectivesByQuarter(items: Objective[]) {
+  const groups = new Map<string, { order: number; items: Objective[] }>();
+  for (const item of items) {
+    const due = item.due_date ? new Date(`${item.due_date}T00:00:00`) : undefined;
+    const quarter = due && !Number.isNaN(due.getTime()) ? Math.floor(due.getMonth() / 3) + 1 : undefined;
+    const key = quarter ? `${due!.getFullYear()} Q${quarter}` : 'Unscheduled';
+    const order = quarter ? due!.getFullYear() * 4 + quarter : Number.MAX_SAFE_INTEGER;
+    const group = groups.get(key) ?? { order, items: [] };
+    group.items.push(item);
+    groups.set(key, group);
+  }
+  return [...groups].sort((left, right) => left[1].order - right[1].order);
+}
+
 export function ObjectivesPage() {
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
@@ -111,6 +125,7 @@ export function ObjectivesPage() {
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dueQuarter, setDueQuarter] = useState('this');
+  const [section, setSection] = useState<'objectives' | 'planning' | 'roadmap'>('objectives');
   const [view, setView] = useState<'kanban' | 'table' | 'cards'>('table');
   const objectives = useQuery({ queryKey: ['objectives'], queryFn: loadObjectives });
   const products = useQuery({ queryKey: ['products'], queryFn: loadProducts });
@@ -206,6 +221,9 @@ export function ObjectivesPage() {
     (statusFilter === 'all' || item.status === statusFilter) &&
     (dueQuarter === 'all' || dueDateIsInQuarter(item.due_date, dueQuarter === 'this' ? 0 : -1, new Date())),
   );
+  const plannedItems = [...filteredItems].sort((left, right) =>
+    (left.due_date || '9999-12-31').localeCompare(right.due_date || '9999-12-31'));
+  const roadmapGroups = groupObjectivesByQuarter(filteredItems);
   const completed = items.filter((item) => item.status === 'completed').length;
   const onTrack = items.filter((item) => item.status === 'on_track').length;
   const atRisk = items.filter((item) => item.status === 'at_risk').length;
@@ -252,18 +270,38 @@ export function ObjectivesPage() {
       <div className="objective-content-grid">
         <div className="objective-table-stack">
           <PanelCard className="objective-table-panel" withBorder>
-            <div className="objectives-tabs">
-              <b>Objectives</b><button disabled>Planning</button><button disabled>Roadmap</button><span />
-              {(['kanban', 'table', 'cards'] as const).map((mode) => (
+            <div className="objectives-tabs" role="tablist" aria-label="Objective views">
+              {(['objectives', 'planning', 'roadmap'] as const).map((tab) => (
+                <button key={tab} type="button" role="tab" aria-selected={section === tab}
+                  className={section === tab ? 'objective-section-active' : ''} onClick={() => setSection(tab)}>
+                  {tab[0].toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+              <span />
+              {section === 'objectives' && (['kanban', 'table', 'cards'] as const).map((mode) => (
                 <button key={mode} type="button" aria-pressed={view === mode}
                   className={view === mode ? 'view-active' : ''} onClick={() => setView(mode)}>
                   {mode === 'kanban' ? 'Kanban' : mode[0].toUpperCase() + mode.slice(1)}
                 </button>
               ))}
             </div>
-            <div className="objective-grid-toolbar"><span>{objectives.isLoading ? 'Loading objectives…' : `${filteredItems.length} objectives`}</span><TextInput aria-label="Search objectives" placeholder="Search objectives…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} /><span>Select an objective to inspect details</span></div>
+            <div className="objective-grid-toolbar"><span>{objectives.isLoading ? 'Loading objectives…' : `${filteredItems.length} objectives`}</span><TextInput aria-label="Search objectives" placeholder="Search objectives…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} /><span>{section === 'planning' ? 'Sorted by due date' : 'Select an objective to inspect details'}</span></div>
             <div className={`objective-grid-wrap objective-view-${view}`}>
-              {objectives.isError ? <div className="objective-load-error">Could not load objectives. Refresh to try again.</div> : view === 'table' ? (
+              {objectives.isError ? <div className="objective-load-error">Could not load objectives. Refresh to try again.</div>
+                : section === 'planning' ? <div className="objective-planning-view" aria-label="Objective planning">
+                  {plannedItems.length ? plannedItems.map((item) => (
+                    <ObjectiveItemCard key={item.id} item={item} selected={selected?.id === item.id}
+                      productName={productName(item)} onSelect={selectObjective} />
+                  )) : <div className="objective-view-empty">No objectives match the selected planning scope.</div>}
+                </div> : section === 'roadmap' ? <div className="objective-roadmap-view" aria-label="Objective roadmap">
+                  {roadmapGroups.length ? roadmapGroups.map(([label, group]) => (
+                    <section className="objective-roadmap-group" aria-label={label} key={label}>
+                      <h4>{label}<span>{group.items.length}</span></h4>
+                      <div>{group.items.map((item) => <ObjectiveItemCard key={item.id} item={item}
+                        selected={selected?.id === item.id} productName={productName(item)} onSelect={selectObjective} />)}</div>
+                    </section>
+                  )) : <div className="objective-view-empty">No objectives match these filters.</div>}
+                </div> : view === 'table' ? (
                 <AgGridReact<Objective>
                   theme={objectiveTheme}
                   rowData={filteredItems}

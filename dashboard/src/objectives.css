@@ -36,6 +36,12 @@
 .objectives-tabs button[aria-pressed="true"] { border: 1px solid #594079; color: #e8d7ff; background: #2d2140; }
 .objective-card-grid, .objective-kanban { display: grid; height: 100%; gap: 8px; overflow: auto; padding: 8px; align-content: start; }
 .objective-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.objective-planning-view { display: grid; height: 100%; gap: 8px; overflow: auto; padding: 8px; align-content: start; }
+.objective-roadmap-view { display: flex; height: 100%; gap: 9px; overflow: auto; padding: 8px; align-items: stretch; }
+.objective-roadmap-group { display: flex; min-width: 220px; flex: 1 0 220px; flex-direction: column; gap: 7px; padding: 8px; border: 1px solid #2b293b; border-radius: 8px; background: #12121d; }
+.objective-roadmap-group h4 { display: flex; align-items: center; justify-content: space-between; margin: 0; color: #c5bfd2; font-size: 10px; font-weight: 600; }
+.objective-roadmap-group h4 span { color: #88839a; font-weight: 450; }
+.objective-roadmap-group > div { display: grid; gap: 7px; align-content: start; }
 .objective-kanban { grid-template-columns: repeat(5, minmax(118px, 1fr)); }
 .objective-kanban-column { display: flex; min-width: 0; flex-direction: column; gap: 7px; padding: 7px; border: 1px solid #2b293b; border-radius: 8px; background: #12121d; }
 .objective-kanban-column h4 { display: flex; align-items: center; justify-content: space-between; margin: 0 0 2px; color: #c5bfd2; font-size: 10px; font-weight: 600; }
