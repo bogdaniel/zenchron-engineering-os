@@ -5,13 +5,24 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   const profileID = 'ab'.repeat(16);
   const projectID = 'ef'.repeat(16);
   const workerID = 'cd'.repeat(16);
+  const updatedAt = new Date().toISOString();
+  const profile = (id: string, name: string, description: string, model: string, tools: string[], status = 'active') => ({
+    id, name, description, provider: 'anthropic', model, status,
+    system_prompt: `System prompt for ${name}.`, goal_prompt: `Goal prompt for ${name}.`,
+    tools, version: 3, updated_at: updatedAt,
+  });
   await page.route('**/api/v1/agents', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify([{
-      id: profileID, name: 'Code Reviewer', description: 'Review code for quality and safety.',
-      provider: 'anthropic', model: 'claude-3.7-sonnet', status: 'active',
-      system_prompt: 'Review code changes.', goal_prompt: 'Return actionable findings.',
-      tools: ['code.search', 'code.write', 'git.diff', 'git.read'], version: 3, updated_at: new Date().toISOString(),
-    }]),
+    status: 200, contentType: 'application/json', body: JSON.stringify([
+      { ...profile(profileID, 'Code Reviewer', 'Review code for quality and safety.', 'claude-3.7-sonnet',
+        ['code.search', 'code.write', 'git.diff', 'git.read']),
+      system_prompt: 'Review code changes.', goal_prompt: 'Return actionable findings.' },
+      profile('02'.repeat(16), 'Test Generator', 'Generate comprehensive tests.', 'gpt-4o', ['code.search', 'tests.run']),
+      profile('03'.repeat(16), 'Planner', 'Break objectives into executable plans.', 'claude-3.5-haiku', ['docs.search']),
+      profile('04'.repeat(16), 'Release Manager', 'Coordinate releases and rollout plans.', 'claude-3.5-haiku', ['git.read']),
+      profile('05'.repeat(16), 'Research Analyst', 'Research and summarize technical information.', 'gemini-1.5-pro',
+        ['docs.search'], 'disabled'),
+      profile('06'.repeat(16), 'Coverage Analyzer', 'Identify test coverage gaps.', 'gpt-4o', ['git.diff', 'tests.run']),
+    ]),
   }));
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify([{
@@ -24,6 +35,10 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   }));
   await page.goto('/#agents');
   await expect(page.getByRole('heading', { name: 'Code Reviewer' })).toBeVisible();
+  await expect(page.locator('.agent-row')).toHaveCount(6);
+  await expect(page.locator('.agent-row').nth(4)).toContainText('disabled');
+  await expect(page.locator('.agents-metric').nth(0).locator('strong')).toHaveText('6');
+  await expect(page.locator('.agents-metric').nth(1).locator('strong')).toHaveText('5');
   const profileRow = page.locator('.agent-row').filter({ hasText: 'Code Reviewer' });
   await expect(profileRow).toContainText('Last run 5m ago');
   await expect(profileRow).toContainText('1 completed · 100% success');

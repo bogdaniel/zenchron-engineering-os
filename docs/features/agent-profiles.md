@@ -60,3 +60,5 @@ The API validates field lengths and rejects unknown JSON fields, duplicate tools
 - `go test ./cmd/zenchron` covers profile validation, create/update behavior, and persistence through control-plane restart.
 - `cd dashboard && npm run test:e2e -- e2e/z_agents.spec.ts` checks runtime readiness, profile search and edits, and a
   completed worker run against a loopback model stub.
+- The populated desktop layout fixture uses six profiles (five active) plus a completed run; focused tablet and phone
+  checks verify that the profile, detail, and run panels do not overlap.
