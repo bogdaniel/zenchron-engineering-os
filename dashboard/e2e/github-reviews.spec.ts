@@ -41,7 +41,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await page.route(`**/api/v1/projects/${projectID}/pull-requests`, (route) => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify([{
-      number: 42, title: 'Improve agent review flow', state: 'open', html_url: 'https://github.com/acme/platform/pull/42',
+      number: 42, title: 'Improve agent review flow across multiple projects and the local control plane', state: 'open', html_url: 'https://github.com/acme/platform/pull/42',
       body: '<details><summary>Release notes</summary><p>Version <strong>0.12.1</strong> <a href="https://example.com/releases">release notes</a><img src="https://example.com/pixel" onerror="alert(1)"></p></details>', draft: false, updated_at: new Date().toISOString(),
       user: { login: 'maya' }, head: { ref: `zenchron/agent-run/${runID}` }, base: { ref: 'main' },
     }]),
@@ -90,6 +90,13 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(page.locator('.reviews-summary-copy a')).toHaveAttribute('href', 'https://example.com/releases');
   await expect(page.locator('.reviews-summary-copy [onerror]')).toHaveCount(0);
   await expect(page.locator('.reviews-summary-copy img')).toHaveCount(0);
+  const pullRequestTitle = page.locator('.reviews-grid-wrap .ag-cell[col-id="title"]').first();
+  await expect(pullRequestTitle).toHaveCSS('white-space', 'normal');
+  const pullRequestTitleHeight = await pullRequestTitle.evaluate((cell) => cell.getBoundingClientRect().height);
+  expect(pullRequestTitleHeight).toBeGreaterThan(36);
+  expect(pullRequestTitleHeight).toBeLessThan(80);
+  const stateHeader = page.locator('.reviews-grid-wrap .ag-header-cell[col-id="state"] .ag-header-cell-text');
+  expect(await stateHeader.evaluate((header) => header.scrollWidth <= header.clientWidth)).toBe(true);
   const detailTabs = page.getByRole('group', { name: 'Review detail sections' });
   await detailTabs.getByRole('button', { name: 'Conversations' }).click();
   await expect(page.locator('.reviews-detail-tab-panel')).toContainText('Existing GitHub conversation history is not synchronized yet.');

@@ -52,10 +52,16 @@ const issueSchema = z.array(githubItem.extend({ labels: z.array(z.object({ name:
 type GitHubPullRequest = z.infer<typeof pullRequestSchema>[number];
 type GitHubIssue = z.infer<typeof issueSchema>[number];
 const providerColumns: ColDef<GitHubPullRequest | GitHubIssue>[] = [
-  { field: 'number', headerName: '#', width: 64 },
-  { field: 'title', headerName: 'Title', flex: 2, minWidth: 120 },
-  { field: 'state', headerName: 'State', width: 75 },
-  { field: 'updated_at', headerName: 'Updated', flex: 1, minWidth: 85 },
+  { field: 'number', headerName: '#', width: 48 },
+  { field: 'title', headerName: 'Title', flex: 2, minWidth: 120, wrapText: true, autoHeight: true },
+  { field: 'state', headerName: 'State', width: 70 },
+  { field: 'updated_at', headerName: 'Date', flex: 1, minWidth: 72,
+    valueFormatter: ({ value }) => {
+      const timestamp = Date.parse(value ?? '');
+      return Number.isFinite(timestamp)
+        ? new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : 'Unavailable';
+    } },
 ];
 const reviewTheme = themeQuartz.withPart(colorSchemeDark).withParams({
   accentColor: '#a36bff', backgroundColor: '#11121b', foregroundColor: '#e4dfef',

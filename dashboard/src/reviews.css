@@ -245,6 +245,9 @@
 .reviews-grid-wrap .ag-header-cell-text {
   font-size: 11px;
 }
+.reviews-grid-wrap .ag-cell-wrap-text {
+  line-height: 1.3;
+}
 .reviews-grid-wrap .ag-overlay-no-rows-center {
   max-width: 160px;
   color: #9b95aa;
