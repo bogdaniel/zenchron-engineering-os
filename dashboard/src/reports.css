@@ -133,7 +133,7 @@
 }
 .report-summary-table td, .report-summary-table th { padding: 4px 2px; overflow-wrap: anywhere; vertical-align: top; }
 .report-summary-table .report-unavailable { font: inherit; text-decoration: none; cursor: help; }
-.downloadable-report-list { display: grid; gap: 1px; }
+.downloadable-report-list { display: grid; gap: 4px; }
 .downloadable-report {
   display: grid;
   min-width: 0;
