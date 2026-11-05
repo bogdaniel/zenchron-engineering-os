@@ -187,6 +187,8 @@
   padding: 9px 10px;
   border-bottom: 1px solid #302d42;
 }
+.reviews-panel-heading > div { min-width: 0; }
+.reviews-panel-heading > .reviews-required { flex: 0 0 auto; }
 .reviews-panel-heading p {
   margin: 4px 0 0;
   color: #88839a;
