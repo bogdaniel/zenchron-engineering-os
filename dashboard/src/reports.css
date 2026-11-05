@@ -152,8 +152,8 @@
   min-width: 30px;
   height: 17px;
   padding-inline: 4px;
-  color: #c5a1f5;
-  background: #2a1e3c;
+  color: #82c9f4;
+  background: #1b3040;
   font-size: 9px;
   font-weight: 700;
 }
@@ -161,14 +161,14 @@
 .downloadable-report-copy { display: grid; min-width: 0; gap: 1px; }
 .downloadable-report-copy b {
   color: #e4deed;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1.1;
   white-space: nowrap;
 }
 .downloadable-report-copy span {
   color: #a9a5b9;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
