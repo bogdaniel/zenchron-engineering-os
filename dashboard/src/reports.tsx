@@ -214,7 +214,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
   ];
   const downloadableReports = [
     {
-      name: 'Executive summary', detail: 'Objectives, delivery, and run outcomes', format: 'CSV',
+      name: 'Executive summary', detail: 'Objectives, delivery, and runs', format: 'CSV',
       download: () => downloadCSV('executive-summary', [
         ['Metric', 'Value'],
         ['Time range', timeRanges.find((range) => range.value === appliedScope.timeRange)?.label ?? 'All time'],
@@ -225,11 +225,11 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
       ]),
     },
     {
-      name: 'Detailed metrics', detail: 'Metric values and source completeness', format: 'CSV',
+      name: 'Detailed metrics', detail: 'Metrics with source completeness', format: 'CSV',
       download: () => downloadCSV('detailed-metrics', [['Metric', 'Value', 'Source'], ...metricRows]),
     },
     {
-      name: 'Agent spend & utilization', detail: 'Usage values unavailable until provider records connect', format: 'CSV',
+      name: 'Agent spend & utilization', detail: 'Unavailable until usage data connects', format: 'CSV',
       download: () => downloadCSV('agent-spend-utilization', [
         ['Agent', 'Project', 'Branch', 'Status', 'Spend (USD)', 'Usage', 'Source'],
         ...(scopedRuns ?? []).map((run) => [run.agent_name, run.project_name, run.branch, run.status,
