@@ -200,7 +200,7 @@ export function ObjectivesPage() {
     { field: 'status', headerName: 'Status', flex: 1, minWidth: 85, cellRenderer: ({ value }: ICellRendererParams<Objective, Objective['status']>) => statusBadge(value ?? 'in_progress') },
     { field: 'progress', headerName: 'Progress', flex: 1, minWidth: 90, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => <div className="grid-progress"><Progress value={value ?? 0} size="xs" /><span>{value ?? 0}%</span></div> },
     {
-      field: 'product', headerName: 'Product', flex: 1, minWidth: 85,
+      field: 'product', headerName: 'Product', flex: 1, minWidth: 108,
       valueGetter: ({ data }) => data ? productName(data) : 'Unassigned',
     },
     { field: 'due_date', headerName: 'Due date', flex: 1, minWidth: 85 },
