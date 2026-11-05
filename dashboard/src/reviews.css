@@ -71,10 +71,11 @@
 .reviews-metric > div {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 6px;
   color: #b4aec3;
 }
+.reviews-metric .metric-top > svg { order: -1; }
 .reviews-metric svg {
   flex: 0 0 auto;
   color: #bd8cff;

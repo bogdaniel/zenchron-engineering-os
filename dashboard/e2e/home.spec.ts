@@ -108,13 +108,19 @@ test('Reviews matches the supplied desktop workspace frame', async ({ page }) =>
     return {
       sidebar: bounds('.sidebar'), metrics: bounds('.reviews-metrics'), title: bounds('.reviews-title-copy h2'),
       titleIcon: bounds('.reviews-title-icon'), tabs: bounds('.reviews-tabs'), workspace: bounds('.reviews-workspace'),
+      metricIconGap: (() => {
+        const icon = document.querySelector('.reviews-metric .metric-top > svg')!.getBoundingClientRect();
+        const label = document.querySelector('.reviews-metric .metric-top > span')!.getBoundingClientRect();
+        return label.left - icon.right;
+      })(),
     };
   });
   expect(layout.sidebar?.width).toBe(112);
   expect(layout.metrics?.x).toBe(130);
   expect(layout.metrics?.y).toBe(92);
+  expect(layout.metricIconGap).toBeCloseTo(6, 0);
   expect(layout.titleIcon?.x).toBe(130);
-  expect(layout.title?.x).toBe(174);
+  expect(layout.title?.x).toBe(158);
   expect(layout.tabs?.y).toBeCloseTo(205, 0);
   expect(layout.workspace?.y).toBeCloseTo(238, 0);
   expect(layout.workspace?.height).toBe(635);
