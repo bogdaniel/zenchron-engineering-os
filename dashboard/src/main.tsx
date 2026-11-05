@@ -203,7 +203,7 @@ function App() {
             <TextInput
               className="search-box"
               leftSection={<IconSearch size={17} />}
-              placeholder="Search projects, runs, reviews…"
+              placeholder="Search Zenchron…"
               disabled
               rightSection={<kbd>⌘ K</kbd>}
               aria-label="Search"

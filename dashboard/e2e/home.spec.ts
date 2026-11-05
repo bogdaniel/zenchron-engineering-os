@@ -12,6 +12,7 @@ test('dashboard displays the connected control plane and local worker', async ({
   );
   expect(overviewIconsLeadLabels, 'Overview KPI icons sit before their labels').toBe(true);
   await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Search' })).toHaveAttribute('placeholder', 'Search Zenchron…');
   await expect(page.getByRole('heading', { name: 'Workflow Orchestration' })).toBeVisible();
   await expect(page.locator('.plan-panel .panel-actions')).toHaveCount(0);
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
