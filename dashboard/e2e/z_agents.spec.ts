@@ -39,6 +39,13 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   await expect(page.locator('.agent-row').nth(4)).toContainText('disabled');
   await expect(page.locator('.agents-metric').nth(0).locator('strong')).toHaveText('6');
   await expect(page.locator('.agents-metric').nth(1).locator('strong')).toHaveText('5');
+  const firstMetric = page.locator('.agents-metric').first();
+  const [metricIcon, metricLabel] = await Promise.all([
+    firstMetric.locator('.metric-top > svg').boundingBox(),
+    firstMetric.locator('.metric-top > span').boundingBox(),
+  ]);
+  expect(metricIcon && metricLabel).toBeTruthy();
+  expect(metricIcon!.x + metricIcon!.width).toBeLessThan(metricLabel!.x);
   const profileRow = page.locator('.agent-row').filter({ hasText: 'Code Reviewer' });
   await expect(profileRow).toContainText('Last run 5m ago');
   await expect(profileRow).toContainText('1 completed · 100% success');

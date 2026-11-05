@@ -31,14 +31,15 @@
 .app-shell .main-content .agents-metric.shared-metric-card strong { margin-top: 1px; }
 .agents-metric .metric-top {
   display: block;
+  padding-left: 24px;
   color: #b4aec3;
+  line-height: 1;
 }
-.agents-metric .metric-top { line-height: 1; }
 .app-shell .main-content .agents-metric.shared-metric-card small { line-height: 1; }
 .agents-metric .metric-top > svg {
   position: absolute;
   top: 10px;
-  right: 10px;
+  left: 10px;
   color: #bd8cff;
 }
 .agents-metric.green {
