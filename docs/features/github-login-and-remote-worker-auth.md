@@ -57,5 +57,8 @@ refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does no
 
 ## Verification
 
-Focused checks: `go test ./cmd/zenchron ./cmd/zenchron-worker`, `cd dashboard && npm run typecheck`, and a dashboard
-E2E that covers the sign-in screen and local-preview compatibility.
+Focused checks: `go test ./cmd/zenchron ./cmd/zenchron-worker`, `cd dashboard && npm run typecheck`, and the auth and
+Settings dashboard E2E specs. `cd dashboard && npm run test:e2e:agent-runtime` launches real control-plane and worker
+processes with auth enabled, confirms anonymous API and wrong worker-token requests fail, then verifies the authenticated
+worker completes a model run on an isolated branch. It signs a temporary allowlisted session fixture; the GitHub OAuth
+exchange itself is covered with a local provider stub in the Go tests.

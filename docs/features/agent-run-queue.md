@@ -77,9 +77,10 @@ endpoints. GitHub App credentials or the optional personal-token fallback stay o
 provider items and submit PR comments or request-changes when the installation has Pull requests write permission.
 
 Run `cd dashboard && npm run test:e2e:agent-runtime` for the process-level smoke check. It builds and launches the real
-control plane and worker against a temporary Git checkout and the loopback Chat Completions stub, queues a profile with
-`code.write`, then verifies the committed branch, captured diff, and unchanged source checkout. The check uses temporary
-state and removes it when it exits.
+control plane and worker with auth enabled, verifies anonymous dashboard and invalid worker requests are rejected,
+then uses an allowlisted test session while the worker discovers a temporary Git checkout and runs against the loopback
+Chat Completions stub. It verifies the committed branch, captured diff, and unchanged source checkout. The check uses
+temporary state and removes it when it exits.
 
 Queued runs can be cancelled immediately. For a running run, the control plane persists a cancellation request and the
 assigned worker polls that run's cancellation state while its model call is active. The worker cancels the request,
