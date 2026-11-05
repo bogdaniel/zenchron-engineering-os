@@ -116,7 +116,8 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
                 ? 'GitHub pull-request history is unavailable.'
                 : !pullRequests.complete
                   ? 'History exceeds the 2,000 pull-request report limit; narrow the time range.'
-                  : `${pullRequests.mergedCount} merged pull requests from ${pullRequests.githubProjectCount} GitHub repositories` +
+                  : `${pullRequests.mergedCount} merged pull requests from ${pullRequests.githubProjectCount} GitHub ` +
+                    `${pullRequests.githubProjectCount === 1 ? 'repository' : 'repositories'}` +
                     `${pullRequests.unsupportedRemoteCount ? `; ${pullRequests.unsupportedRemoteCount} non-GitHub remotes excluded` : ''}` +
                     `${pullRequests.unconfiguredCheckoutCount
                       ? `; ${pullRequests.unconfiguredCheckoutCount} checkout${pullRequests.unconfiguredCheckoutCount === 1 ? '' : 's'} ` +
@@ -166,6 +167,12 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
     { label: 'Local checkouts', count: scopedProjects?.length },
   ];
   const pullRequestOutcomeSections = pullRequests.outcomes.filter((outcome) => outcome.value > 0);
+  const outcomeSummary = pullRequests.outcomes.map((outcome) => `${outcome.value} ${outcome.name.toLowerCase()}`).join(' · ');
+  const keyTakeaway = pullRequests.complete
+    ? pullRequestOutcomeSections.length
+      ? `Pull-request outcomes in this scope: ${outcomeSummary}.`
+      : 'No pull-request activity was recorded in this scope.'
+    : deliverySourceDetail;
   const summaryInsights = [
     { group: 'objectives', icon: <IconCircleCheck size={15} />, title: 'Objectives', detail: objectiveCount === undefined ? 'Objective data unavailable.' : `${completed} of ${objectiveCount} completed in this scope.` },
     {
@@ -418,7 +425,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
             </div>)}
           </div>
           <div className="reports-key-takeaway"><IconSparkles size={14} /><span><b>Key takeaway</b>
-            Snapshot counts are available; delivery trends need provider event data.</span></div>
+            {keyTakeaway}</span></div>
         </PanelCard>
 
         <ProductSummaryPanel rows={productSummaries} loading={products.isLoading} error={products.isError}

@@ -101,6 +101,11 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   });
   expect(acceptanceLayout.bottom).toBeLessThanOrEqual(acceptanceLayout.panelBottom - acceptanceLayout.paddingBottom);
   await expect(page.locator('.reports-summary')).toContainText('Key takeaway');
+  await expect(page.locator('.reports-key-takeaway')).toContainText(
+    'Pull-request outcomes in this scope: 0 merged · 0 closed unmerged · 4 open.',
+  );
+  await expect(page.locator('.reports-insight').filter({ hasText: 'Delivery sources' }))
+    .toContainText('0 merged pull requests from 1 GitHub repository.');
   await expect(page.locator('.reports-summary')).toContainText('Worker availability');
   await page.getByRole('combobox', { name: 'Insights view' }).click();
   await page.getByRole('option', { name: 'Delivery' }).click();
@@ -312,6 +317,7 @@ test('Reports explains complete provider histories with no chart events', async 
     .toContainText('No completed GitHub Actions runs in this period.');
   await expect(page.locator('.work-outcomes-panel .reports-empty'))
     .toHaveText('No pull requests match this report scope.');
+  await expect(page.locator('.reports-key-takeaway')).toContainText('No pull-request activity was recorded in this scope.');
   await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' }).locator('strong')).toHaveText('0');
   await expect(page.locator('.reports-metric').filter({ hasText: 'CI duration' }).locator('strong')).toHaveText('Unavailable');
 });
@@ -350,6 +356,7 @@ test('Reports suppresses GitHub delivery metrics when PR history is truncated', 
   await expect(page.locator('.reports-metric .metric-sparkline')).toHaveCount(0);
   await expect(page.locator('.reports-insight').filter({ hasText: 'Delivery sources' }))
     .toContainText('2,000 pull-request report limit');
+  await expect(page.locator('.reports-key-takeaway')).toContainText('2,000 pull-request report limit');
 });
 
 test('report scope filters live snapshots by product and resets them', async ({ page }) => {
