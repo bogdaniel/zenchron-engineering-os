@@ -32,6 +32,7 @@ test('Product Workspace matches its desktop frame and filters products', async (
   await expect(page.getByRole('heading', { name: 'Product Workspace' })).toBeVisible();
   await expect(page.locator('.workspace-project-heading h3')).toHaveText('Nova Platform');
   await expect(page.locator('.workspace-project-heading h3')).toHaveCSS('font-size', '18px');
+  await expect(page.locator('.workspace-project-option b').first()).toHaveCSS('font-size', '12px');
   const firstMetric = page.locator('.workspace-metric').first();
   const [metricIcon, metricLabel] = await Promise.all([
     firstMetric.locator('.metric-top > svg').boundingBox(),

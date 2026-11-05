@@ -1,7 +1,8 @@
 # Product workspace
 
 The Product Workspace manages durable products and links them to repositories reported by local workers. Its directory
-search filters products by name; creating a workspace uses the existing product record and editor. Objectives can be
+shows full product names in 12px medium text, wrapping within the 260px rail; repository counts remain secondary at 10px.
+Search filters products by name; creating a workspace uses the existing product record and editor. Objectives can be
 assigned to products by stable ID; reusable workflow and agent definitions remain workspace-wide. Files, decisions,
 stakeholders, and release streams remain unavailable without their source services.
 

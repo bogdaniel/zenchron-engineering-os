@@ -65,14 +65,22 @@
 }
 .workspace-project-icon.large { width: 40px; height: 40px; }
 .workspace-project-name { min-width: 0; flex: 1; }
-.workspace-project-name b, .workspace-project-name small {
-  display: block;
+.workspace-project-name b, .workspace-project-name small { display: block; }
+.workspace-project-name b {
+  overflow-wrap: anywhere;
+  color: #e8e3ef;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.workspace-project-name small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-top: 4px;
+  color: #8f8a9f;
+  font-size: 9px;
 }
-.workspace-project-name b { font-size: 9px; font-weight: 600; }
-.workspace-project-name small { margin-top: 4px; color: #8f8a9f; font-size: 8px; }
 .workspace-status {
   border: 1px solid #59442f;
   color: #e7b869;
@@ -262,8 +270,8 @@
   .workspace-product-search { margin-bottom: 11px; }
   .workspace-project-list { gap: 6px; }
   .workspace-project-option { min-height: 58px; padding: 8px; }
-  .workspace-project-name b { font-size: 11px; }
-  .workspace-project-name small { font-size: 9px; }
+  .workspace-project-name b { font-size: 12px; }
+  .workspace-project-name small { font-size: 10px; }
   .workspace-project-heading { height: 73px; min-height: 73px; }
   .workspace-project-heading h3 { font-size: var(--entity-detail-title-size); }
   .workspace-project-heading p { font-size: 11px; }
