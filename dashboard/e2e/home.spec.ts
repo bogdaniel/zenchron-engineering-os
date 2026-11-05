@@ -13,6 +13,7 @@ test('dashboard displays the connected control plane and local worker', async ({
   expect(overviewIconsLeadLabels, 'Overview KPI icons sit before their labels').toBe(true);
   await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Workflow orchestration' })).toBeVisible();
+  await expect(page.locator('.plan-panel .panel-actions')).toHaveCount(0);
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
   await expect(page.locator('.workflow-overview-canvas .react-flow__edge')).toHaveCount(6);
   const workflowSummary = page.locator('.workflow-overview-canvas');

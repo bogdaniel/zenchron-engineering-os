@@ -72,7 +72,7 @@ flowchart LR
 At desktop widths the overview uses a fixed left navigation rail, five summary cards with leading icons, a workflow/activity
 row, four operational panels, and a three-panel delivery row. At the tall desktop mockup size, the first row stays 204px tall as
 live events arrive; compact activity rows keep project and worker updates from pushing the lower panels down. The
-operational panels show objective status, approval availability, run history, and trusted-branch/evidence availability.
+operational panels show objective status, approval availability in the empty-state copy, run history, and trusted-branch/evidence availability.
 At mobile widths the navigation becomes a five-item bottom tab bar (Home, Workflows, Agents, Reviews, and Profile).
 The overview keeps the four cards shown in the phone mock (objectives, agents, CI, and budget) in two columns, and
 Recent Activity follows those cards without the desktop workflow canvas; the Workflows tab opens the full workflow view.

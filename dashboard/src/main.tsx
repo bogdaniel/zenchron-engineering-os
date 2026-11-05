@@ -299,8 +299,7 @@ function App() {
 
             <PanelCard className="panel plan-panel" id="approvals" withBorder>
               <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconHistory size={18} /></span>}
-                title="Plan approvals" description="Human review before agent execution"
-                actions={<Badge className="muted-tag" variant="light">Unavailable</Badge>} />
+                title="Plan approvals" description="Human review before agent execution" />
               <div className="compact-empty"><IconHistory size={20} />
                 <span>No pending approvals</span>
                 <small>Approval gates are not connected yet.</small>
