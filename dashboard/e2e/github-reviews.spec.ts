@@ -127,6 +127,10 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(page.locator('.reviews-detail-tab-panel')).toContainText('Required checks unavailable');
   await detailTabs.getByRole('button', { name: 'Code changes' }).click();
   await expect(page.locator('.reviews-pr-diff')).toBeVisible();
+  await expect(page.locator('.reviews-context-panels')).toContainText('AI Suggestions');
+  await expect(page.locator('.reviews-context-panels')).toContainText('Evidence Artifacts');
+  await expect(page.locator('.reviews-context-panels')).toContainText('Review Checklist');
+  await expect(page.locator('.reviews-context-panels')).toContainText('Artifact data is unavailable.');
   await expect(detailTabs.getByRole('button', { name: 'Code changes' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.reviews-metric .metric-top').first()).toHaveCSS('font-size', '12px');
   await expect(page.locator('.reviews-metric strong').first()).toHaveCSS('font-size', '26px');

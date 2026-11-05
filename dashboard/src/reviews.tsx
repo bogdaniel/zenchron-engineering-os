@@ -12,7 +12,7 @@ import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { Project } from './projects';
 import {
   IconChecks, IconChevronDown, IconClockHour4, IconCode, IconDownload, IconFileText, IconFilter,
-  IconGitMerge, IconGitPullRequest, IconLock, IconMessageCircle, IconSearch, IconShieldCheck,
+  IconGitMerge, IconGitPullRequest, IconLock, IconMessageCircle, IconSearch, IconShieldCheck, IconSparkles,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
 import { PanelHeading } from './PanelHeading';
@@ -576,6 +576,21 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
             >{selected?.cancel_requested ? 'Stopping…' : 'Cancel run'}</Button>
             <span />
             {cancelRun.isError && <span className="reviews-action-error" role="alert">{cancelRun.error.message}</span>}
+          </div>}
+          {detailTab === 'code-changes' && section === 'pull-requests' && selectedPullRequest &&
+            <div className="reviews-context-panels" aria-label="Additional review context">
+            <section className="reviews-context-card">
+              <h4><IconSparkles size={13} /> AI Suggestions</h4>
+              <span>Suggestions are unavailable for this pull request.</span>
+            </section>
+            <section className="reviews-context-card">
+              <h4><IconShieldCheck size={13} /> Evidence Artifacts</h4>
+              <span>Artifact data is unavailable.</span>
+            </section>
+            <section className="reviews-context-card">
+              <h4><IconChecks size={13} /> Review Checklist</h4>
+              <span>Provider check data is unavailable.</span>
+            </section>
           </div>}
           </PanelCard>
         </Panel>

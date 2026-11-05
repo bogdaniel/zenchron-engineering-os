@@ -467,6 +467,35 @@
 .reviews-detail-tabs button:hover { color: #f0eaff; background: #282036; }
 .reviews-detail-tabs button:focus-visible { outline: 2px solid #bd8cff; outline-offset: 1px; }
 .reviews-detail-tab-panel { min-height: 120px; }
+.reviews-context-panels {
+  display: grid;
+  flex: 0 0 96px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 7px 8px 8px;
+  border-top: 1px solid #302d42;
+}
+.reviews-context-card {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid #343044;
+  border-radius: 7px;
+  background: #171621;
+}
+.reviews-context-card h4 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: #d9d1e5;
+  font-size: 10px;
+  font-weight: 600;
+}
+.reviews-context-card h4 svg { flex: 0 0 auto; color: #bd91ff; }
+.reviews-context-card span { color: #928ba0; font-size: 9px; line-height: 1.4; }
 .reviews-change-empty {
   display: flex;
   min-height: 120px;
@@ -679,4 +708,5 @@
     cursor: row-resize;
   }
   .reviews-resize-handle::before { inset: 3px 0 auto; width: 100%; height: 2px; }
+  .reviews-context-panels { flex-basis: auto; grid-template-columns: 1fr; }
 }
