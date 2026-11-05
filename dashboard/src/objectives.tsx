@@ -116,6 +116,7 @@ export function ObjectivesPage() {
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [detailTab, setDetailTab] = useState<'overview' | 'milestones' | 'pull-requests' | 'activity'>('overview');
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [progressValue, setProgressValue] = useState<number>(0);
   const [statusValue, setStatusValue] = useState<Objective['status']>('in_progress');
@@ -160,6 +161,7 @@ export function ObjectivesPage() {
       await queryClient.invalidateQueries({ queryKey: ['objectives'] });
       setSelectedID(item.id);
       setEditing(false);
+      setDetailTab('overview');
       setProgressValue(item.progress);
       setStatusValue(item.status);
       setProductIDValue(item.product_id);
@@ -234,9 +236,19 @@ export function ObjectivesPage() {
   function selectObjective(item: Objective) {
     setSelectedID(item.id);
     setEditing(false);
+    setDetailTab('overview');
     setProgressValue(item.progress);
     setStatusValue(item.status);
     setProductIDValue(item.product_id);
+  }
+
+  function cancelEdit() {
+    if (!selected) return;
+    setProgressValue(selected.progress);
+    setStatusValue(selected.status);
+    setProductIDValue(selected.product_id);
+    updateMutation.reset();
+    setEditing(false);
   }
 
   return (
@@ -354,25 +366,30 @@ export function ObjectivesPage() {
                 description={<small>{selected.id.slice(0, 8).toUpperCase()}</small>}
                 icon={<span className="detail-objective-icon"><IconTarget size={19} /></span>}
                 actions={<Button className="edit-objective-button" onClick={() => {
-                  if (editing) {
-                    setProgressValue(selected.progress);
-                    setStatusValue(selected.status);
-                    setProductIDValue(selected.product_id);
-                    updateMutation.reset();
-                  }
-                  setEditing(!editing);
+                  if (editing) cancelEdit();
+                  else { setDetailTab('overview'); setEditing(true); }
                 }}>{editing ? 'Cancel edit' : 'Edit objective'}</Button>} />
               <div className="detail-summary">{statusBadge(statusValue)}<span>{progressValue}% complete</span><Progress value={progressValue} size="sm" /></div>
               <div className="detail-meta-grid"><div><small>Owner</small><b>{selected.owner || 'Unassigned'}</b></div><div><small>Product</small><b>{productName(selected)}</b></div><div><small>Due date</small><b>{selected.due_date || 'No date'}</b></div><div><small>Created</small><b>{new Date(selected.created_at).toLocaleDateString()}</b></div></div>
-              {!editing ? <>
+              <div className="objective-detail-tabs" role="tablist" aria-label="Objective details">
+                {([
+                  ['overview', 'Overview'], ['milestones', 'Milestones'],
+                  ['pull-requests', 'Related PRs'], ['activity', 'Activity'],
+                ] as const).map(([id, label]) => <button key={id} type="button" role="tab"
+                  aria-selected={detailTab === id} className={detailTab === id ? 'active' : ''}
+                  onClick={() => { if (editing) cancelEdit(); setDetailTab(id); }}>{label}</button>)}
+              </div>
+              {!editing && detailTab === 'overview' ? <>
                 <div className="objective-overview-grid">
                   <section className="objective-overview-card"><b>Description</b><p>{selected.description || 'No description provided.'}</p></section>
                   <section className="objective-overview-card"><b>Blockers</b><p>Not included in the available objective data.</p></section>
                   <section className="objective-overview-card"><b>Acceptance criteria</b><p>Not included in the available objective data.</p></section>
                   <section className="objective-overview-card"><b>Related pull requests</b><p>Not included in the available objective data.</p></section>
-                  <section className="objective-overview-card objective-overview-wide"><b>Plan and activity</b><p>Milestones and activity are not included in the available objective data.</p></section>
+                  <section className="objective-overview-card"><b>Plan summary</b><p>{selected.due_date ? `Target date: ${selected.due_date}` : 'No target date provided.'}</p></section>
+                  <section className="objective-overview-card"><b>Activity feed</b><p>Not included in the available objective data.</p></section>
+                  <section className="objective-overview-card objective-overview-wide objective-progress-card"><b>Objective progress</b><Progress value={selected.progress} /><span>{selected.progress}%</span></section>
                 </div>
-              </> : <>
+              </> : editing ? <>
                 <div className="detail-edit-grid">
                   <Select label="Status" value={statusValue} data={statusOptions}
                     onChange={(value) => { if (value) setStatusValue(value as Objective['status']); }} />
@@ -386,9 +403,12 @@ export function ObjectivesPage() {
                   status: statusValue,
                   progress: progressValue,
                   ...(productIDValue !== selected.product_id ? { product_id: productIDValue } : {}),
-                }, { onSuccess: () => setEditing(false) })}>Save updates</Button>
+                }, { onSuccess: () => { setDetailTab('overview'); setEditing(false); } })}>Save updates</Button>
                 {updateMutation.isError && <Text className="form-error">{updateMutation.error.message}</Text>}
-              </>}
+              </> : <section className="objective-detail-unavailable" role="tabpanel">
+                <b>{detailTab === 'pull-requests' ? 'Related pull requests' : detailTab[0].toUpperCase() + detailTab.slice(1)}</b>
+                <p>This information is not included in the available objective data.</p>
+              </section>}
             </>
           ) : (
             <div className="objective-detail-empty"><span className="detail-objective-icon"><IconTarget size={19} /></span><h3>Objective details</h3><p>Select an objective to see its plan and progress, or create the first objective for this workspace.</p><Button className="new-objective-button" onClick={() => setCreateOpen(true)}>Create objective</Button></div>

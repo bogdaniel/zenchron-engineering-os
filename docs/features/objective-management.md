@@ -27,6 +27,7 @@ flowchart LR
     Plan --> Detail
     Roadmap --> Detail
     Grid --> Detail
+    Detail --> Tabs[Overview milestones pull requests activity tabs]
     Detail -->|Edit objective| Editor[Objective status progress and product editor]
 ```
 
@@ -39,7 +40,8 @@ flowchart LR
   marking an objective `completed` sets progress to 100.
 - The dashboard filters by text, product, owner, status, and due-date quarter. The default is This Quarter; All due dates includes unscheduled objectives.
 - Table, Cards, and Kanban views render the same filtered records; selecting any record opens the read-only objective overview. The status, progress, and product editor appears only after choosing **Edit objective**. Kanban groups by the saved objective status.
-- The overview lays out description, blockers, acceptance criteria, pull requests, and plan/activity sections; fields absent from the current objective data are labeled unavailable rather than populated with sample records.
+- The overview, milestones, related pull requests, and activity tabs switch the detail panel. Tabs without supported data show an unavailable state.
+- The overview lays out description, blockers, acceptance criteria, related pull requests, plan summary, activity feed, and progress; fields absent from the current objective data are labeled unavailable rather than populated with sample records.
 - Planning sorts the filtered objectives by due date, with undated records last. Roadmap groups those same records by calendar quarter and places missing or invalid dates under Unscheduled. Both views use saved objective data and open the overview panel when a card is selected.
 - The progress panel shows each objective's current completion percentage; it does not infer a schedule or time range.
 - Product assignment uses the durable product ID; the control plane resolves the current product name in the objective

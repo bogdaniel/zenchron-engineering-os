@@ -266,6 +266,11 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   await expect(page.locator('.detail-summary')).toContainText('78% complete');
   await expect(page.locator('.objective-overview-grid')).toContainText('Related pull requests');
   await expect(page.getByLabel('Progress')).toHaveCount(0);
+  const milestonesTab = page.getByRole('tab', { name: 'Milestones' });
+  await milestonesTab.click();
+  await expect(milestonesTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel')).toContainText('not included in the available objective data');
+  await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.locator('.capacity-bars > div')).toHaveCount(6);
   await expect(page.getByRole('region', { name: 'Objective metrics' }).locator('.objective-metric')).toHaveCount(6);
   const objectiveMetric = page.locator('.objective-metric').first();
