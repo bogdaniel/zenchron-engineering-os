@@ -155,6 +155,14 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
   await page.goto('/');
   await expect(page.locator('.metric-grid .metric-card:visible')).toHaveCount(4);
   await expect(page.locator('.activity-panel')).toBeVisible();
+  const mobileOverviewLayout = await page.evaluate(() => {
+    const metrics = document.querySelector('.metric-grid')!.getBoundingClientRect();
+    const activity = document.querySelector('.activity-panel')!.getBoundingClientRect();
+    return { metricTop: metrics.top, activityGap: activity.top - metrics.bottom, activityHeight: activity.height };
+  });
+  expect(mobileOverviewLayout.metricTop).toBeCloseTo(283, 0);
+  expect(mobileOverviewLayout.activityGap).toBeCloseTo(18, 0);
+  expect(mobileOverviewLayout.activityHeight).toBeGreaterThanOrEqual(245);
   await expect(page.locator('.greeting-mobile-copy')).toHaveText('Your engineering mission at a glance.');
   await expect(page.locator('.greeting-desktop-copy')).toBeHidden();
   await expect(page.getByRole('navigation', { name: 'Overview shortcuts' }).getByRole('link'))
