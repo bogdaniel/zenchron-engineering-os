@@ -39,6 +39,8 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   await expect(page.locator('.agent-row').nth(4)).toContainText('disabled');
   await expect(page.locator('.agents-metric').nth(0).locator('strong')).toHaveText('6');
   await expect(page.locator('.agents-metric').nth(1).locator('strong')).toHaveText('5');
+  await expect(page.locator('.agents-metric').filter({ hasText: 'Model cost (30d)' }))
+    .toContainText('Provider usage records are unavailable');
   const firstMetric = page.locator('.agents-metric').first();
   const [metricIcon, metricLabel] = await Promise.all([
     firstMetric.locator('.metric-top > svg').boundingBox(),

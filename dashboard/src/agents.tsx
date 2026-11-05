@@ -232,7 +232,7 @@ export function AgentsPage({ projects, workers }: { projects: Project[]; workers
       <MetricCard className="agents-metric green" label="Success rate"
         value={runs.isLoading ? 'Loading…' : runs.isError ? 'Unavailable' : successRate}
         detail="Completed runs · last 30d" icon={<IconShieldCheck size={18} />} />
-      <MetricCard className="agents-metric" label="Model cost (30d)" value="Unavailable" detail="Provider calls are not connected" icon={<IconCpu size={18} />} />
+      <MetricCard className="agents-metric" label="Model cost (30d)" value="Unavailable" detail="Provider usage records are unavailable" icon={<IconCpu size={18} />} />
     </section>
     <div className="agents-content-grid">
       <PanelCard className="agents-list-panel" withBorder>
