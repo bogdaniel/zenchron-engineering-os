@@ -262,13 +262,24 @@
   gap: 4px;
   padding: 0 8px 8px;
 }
-.reviews-queue-states span {
+.reviews-queue-states span,
+.reviews-queue-states button {
   padding: 4px 6px;
   border: 1px solid #383449;
   border-radius: 10px;
   color: #a9a2b5;
   font-size: 11px;
 }
+.reviews-queue-states button {
+  background: transparent;
+  cursor: pointer;
+}
+.reviews-queue-states button.selected {
+  border-color: #705099;
+  color: #e2d2f7;
+  background: #30213f;
+}
+.reviews-queue-states button:focus-visible { outline: 2px solid #bd8cff; outline-offset: 1px; }
 .reviews-grid-wrap {
   flex: 1;
   min-height: 0;

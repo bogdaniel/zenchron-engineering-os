@@ -51,6 +51,7 @@ const pullRequestSchema = z.array(githubItem.extend({
 const issueSchema = z.array(githubItem.extend({ labels: z.array(z.object({ name: z.string() })) }));
 type GitHubPullRequest = z.infer<typeof pullRequestSchema>[number];
 type GitHubIssue = z.infer<typeof issueSchema>[number];
+type ProviderQueueFilter = 'all' | 'open' | 'draft' | 'closed';
 const reviewTheme = themeQuartz.withPart(colorSchemeDark).withParams({
   accentColor: '#a36bff', backgroundColor: '#11121b', foregroundColor: '#e4dfef',
   borderColor: '#2c293d', headerBackgroundColor: '#171622', headerTextColor: '#a7a1b8', fontSize: 11,
@@ -113,6 +114,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [selectedProviderNumber, setSelectedProviderNumber] = useState<number | null>(null);
   const [providerSearch, setProviderSearch] = useState('');
+  const [providerFilter, setProviderFilter] = useState<ProviderQueueFilter>('all');
   const [comment, setComment] = useState('');
   const [providerReviewBody, setProviderReviewBody] = useState('');
   const [providerReviewStatus, setProviderReviewStatus] = useState('');
@@ -135,9 +137,26 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
   const selected = localBranches.find((run) => run.id === selectedID) ?? localBranches[0];
   const providerItems = section === 'pull-requests' ? pullRequests.data ?? [] : issues.data ?? [];
   const searchTerm = providerSearch.trim().toLowerCase();
-  const visibleProviderItems = providerItems.filter((item) =>
-    `${item.number} ${item.title} ${item.user.login}`.toLowerCase().includes(searchTerm),
-  );
+  const visibleProviderItems = providerItems.filter((item) => {
+    if (!`${item.number} ${item.title} ${item.user.login}`.toLowerCase().includes(searchTerm)) return false;
+    if (providerFilter === 'all') return true;
+    if (section === 'pull-requests') {
+      const pullRequest = item as GitHubPullRequest;
+      return providerFilter === 'draft' ? pullRequest.draft : item.state === 'open' && !pullRequest.draft;
+    }
+    return item.state === providerFilter;
+  });
+  const providerQueueFilters: { value: ProviderQueueFilter; label: string; count: number }[] = section === 'pull-requests'
+    ? [
+      { value: 'all', label: 'All', count: providerItems.length },
+      { value: 'open', label: 'Open', count: providerItems.filter((item) => item.state === 'open' && 'draft' in item && !item.draft).length },
+      { value: 'draft', label: 'Draft', count: providerItems.filter((item) => 'draft' in item && item.draft).length },
+    ]
+    : [
+      { value: 'all', label: 'All', count: providerItems.length },
+      { value: 'open', label: 'Open', count: providerItems.filter((item) => item.state === 'open').length },
+      { value: 'closed', label: 'Closed', count: providerItems.filter((item) => item.state === 'closed').length },
+    ];
   const selectedProviderItem = visibleProviderItems.find((item) => item.number === selectedProviderNumber) ?? visibleProviderItems[0];
   const selectedPullRequest = section === 'pull-requests' ? selectedProviderItem as GitHubPullRequest | undefined : undefined;
   const selectedIssue = section === 'issues' ? selectedProviderItem as GitHubIssue | undefined : undefined;
@@ -269,6 +288,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
               if (!key) return;
               setSection(key);
               setProviderSearch('');
+              setProviderFilter('all');
               setProviderReviewStatus('');
             }}
           >{tab}</button>;
@@ -318,8 +338,10 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
               <span>Succeeded {localBranches.filter((run) => run.status === 'succeeded').length}</span>
               <span>Failed {localBranches.filter((run) => run.status === 'failed').length}</span>
             </> : <>
-              <span>Open {providerItems.length}</span>
-              <span>Updated from GitHub</span>
+              {providerQueueFilters.map((filter) => <button type="button" key={filter.value}
+                aria-pressed={providerFilter === filter.value}
+                className={providerFilter === filter.value ? 'selected' : ''}
+                onClick={() => setProviderFilter(filter.value)}>{filter.label} {filter.count}</button>)}
               {providerQuery.isFetching && <span>Syncing…</span>}
             </>}
           </div>

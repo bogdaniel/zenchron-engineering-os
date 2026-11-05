@@ -59,7 +59,8 @@ requires an online worker with model runtime and `code.write` permission. Provid
 local branch rows show the actual run status and project. File, added-line, and removed-line counts are derived from the
 loaded local diff; truncated diffs show lower-bound counts. Risk, evidence, CI, and policy results remain unavailable.
 GitHub requests use compact selectable cards so the number, status, title, author, branch, and update date stay legible in
-the narrow queue. Local branch runs continue to use AG Grid.
+the narrow queue. Its status chips filter the loaded provider items by open/draft pull requests or open/closed issues;
+search uses the same loaded list. Local branch runs continue to use AG Grid.
 
 ## Verification
 

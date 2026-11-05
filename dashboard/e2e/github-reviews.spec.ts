@@ -40,11 +40,18 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   }));
   await page.route(`**/api/v1/projects/${projectID}/pull-requests`, (route) => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify([{
-      number: 42, title: 'Improve agent review flow across multiple projects and the local control plane', state: 'open', html_url: 'https://github.com/acme/platform/pull/42',
-      body: '<details><summary>Release notes</summary><p>Version <strong>0.12.1</strong> <a href="https://example.com/releases">release notes</a><img src="https://example.com/pixel" onerror="alert(1)"></p></details>', draft: false, updated_at: new Date().toISOString(),
-      user: { login: 'maya' }, head: { ref: `zenchron/agent-run/${runID}` }, base: { ref: 'main' },
-    }]),
+    body: JSON.stringify([
+      {
+        number: 42, title: 'Improve agent review flow across multiple projects and the local control plane', state: 'open', html_url: 'https://github.com/acme/platform/pull/42',
+        body: '<details><summary>Release notes</summary><p>Version <strong>0.12.1</strong> <a href="https://example.com/releases">release notes</a><img src="https://example.com/pixel" onerror="alert(1)"></p></details>', draft: false, updated_at: new Date().toISOString(),
+        user: { login: 'maya' }, head: { ref: `zenchron/agent-run/${runID}` }, base: { ref: 'main' },
+      },
+      {
+        number: 43, title: 'Add review checklist coverage', state: 'open', html_url: 'https://github.com/acme/platform/pull/43',
+        body: '', draft: true, updated_at: new Date().toISOString(),
+        user: { login: 'alex' }, head: { ref: 'feature/review-checklist' }, base: { ref: 'main' },
+      },
+    ]),
   }));
   await page.route(`**/api/v1/projects/${projectID}/issues`, (route) => route.fulfill({
     status: 200, contentType: 'application/json',
@@ -101,6 +108,11 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(pullRequestCard.locator('.reviews-provider-number')).toHaveText('#42');
   await expect(pullRequestCard.locator('strong')).toContainText('Improve agent review flow across multiple projects');
   await expect(pullRequestCard).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Draft 1' }).click();
+  await expect(page.locator('.reviews-provider-card')).toHaveCount(1);
+  await expect(page.locator('.reviews-provider-card')).toContainText('#43');
+  await page.getByRole('button', { name: 'Open 1' }).click();
+  await expect(page.locator('.reviews-provider-card')).toContainText('#42');
   const detailTabs = page.getByRole('group', { name: 'Review detail sections' });
   await detailTabs.getByRole('button', { name: 'Conversations' }).click();
   await expect(page.locator('.reviews-detail-tab-panel')).toContainText('Existing GitHub conversation history is not synchronized yet.');
