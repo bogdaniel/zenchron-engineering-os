@@ -30,7 +30,11 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
     /Autonomous completion/,
   ]);
   await expect(page.getByRole('heading', { name: 'Work outcomes' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Insights & narrative' })).toBeVisible();
+  const insightsHeading = page.locator('.reports-summary .reports-panel-heading h3');
+  await expect(insightsHeading).toHaveText('Insights & narrative');
+  expect(await insightsHeading.evaluate((heading) =>
+    heading.scrollHeight <= parseFloat(getComputedStyle(heading).lineHeight) + 1,
+  ), 'Insights heading stays on one line at the mock viewport').toBe(true);
   await expect(page.getByRole('combobox', { name: 'Insights view' })).toBeVisible();
   await expect(page.locator('.reports-chart-legend')).toHaveCount(3);
   await expect(page.locator('.report-outcome-legend')).toBeVisible();
@@ -111,10 +115,11 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   expect(inventory.y).toBe(downloads.y);
   expect(delivery.width).toBeGreaterThan(ci.width);
   expect(ci.width).toBeGreaterThan(outcomes.width);
-  expect(acceptance.width).toBeGreaterThan(spend.width);
-  expect(coverage.width).toBeCloseTo(acceptance.width, 0);
+  expect(spend.width).toBeGreaterThanOrEqual(review.width);
+  expect(acceptance.width).toBeCloseTo(review.width, 0);
+  expect(coverage.width).toBeLessThan(acceptance.width);
   expect(downloads.width).toBeLessThan(inventory.width);
-  expect(coverage.width).toBeGreaterThan(downloads.width);
+  expect(coverage.width).toBeCloseTo(downloads.width, 0);
   expect(coverage.height).toBeGreaterThan(product.y + product.height - coverage.y - 1);
   const acceptanceChart = page.locator('.acceptance-panel .reports-empty-chart');
   const acceptanceLayout = await acceptanceChart.evaluate((chart) => {
@@ -166,7 +171,9 @@ test('Reports headings fit the mock display viewport', async ({ page }) => {
   const [titleBounds, filterBounds] = await Promise.all([insightsTitle.boundingBox(), filter.boundingBox()]);
   expect(titleBounds && filterBounds).toBeTruthy();
   expect(Math.abs(titleBounds!.y - filterBounds!.y)).toBeLessThanOrEqual(1);
-  await expect(filter).toHaveCSS('width', '144px');
+  await expect(filter).toHaveCSS('width', '122px');
+  await expect(filter.locator('input')).toHaveCSS('font-size', '8px');
+  await expect(filter.locator('input')).toHaveValue('Executive summary');
 
   const reportTitlesFit = await page.locator('.downloadable-report-copy b').evaluateAll((titles) =>
     titles.every((title) => title.scrollWidth <= title.clientWidth &&
