@@ -103,14 +103,20 @@
 .product-summary-panel { grid-column: span 5; }
 .reports-summary { grid-column: span 3; }
 .downloadable-reports-panel { grid-column: span 3; }
-.reports-panel-heading { align-items: flex-start; margin-bottom: 4px; }
+.reports-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
 .reports-panel-heading > div { display: flex; min-width: 0; align-items: flex-start; gap: 7px; }
 .reports-panel-heading > div > svg { flex: 0 0 auto; margin-top: 1px; color: #bd8aff; }
 .reports-panel-heading p { line-height: 1.2; }
 .acceptance-panel .reports-panel-heading > div { gap: 4px; }
 .acceptance-panel .reports-panel-heading h3 { letter-spacing: -.5px; white-space: nowrap; }
 .reports-insight-filter.mantine-Select-root { width: 144px; flex: 0 0 auto; }
-.reports-insight-filter .mantine-Select-input { min-height: 24px; height: 24px; border-color: #38324c; background: #1b1928; font-size: var(--metric-detail-size); }
+.reports-insight-filter .mantine-Select-input { min-height: 24px; height: 24px; border-color: #38324c; background: #1b1928; font-size: 10px; }
 .product-summary-table-wrap { overflow-x: auto; }
 .product-summary-table {
   width: 100%;
@@ -305,6 +311,9 @@
   .product-summary-panel { grid-column: 1 / span 4; grid-row: 3; }
   .inventory-panel { grid-column: 5 / span 4; grid-row: 3; }
   .downloadable-reports-panel { grid-column: 9 / span 3; grid-row: 3; }
+}
+@media (min-width: 1201px) and (max-width: 1600px) {
+  .acceptance-panel .reports-panel-heading h3 { letter-spacing: -1.2px; }
 }
 @media (max-width: 1200px) {
   .reports-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }

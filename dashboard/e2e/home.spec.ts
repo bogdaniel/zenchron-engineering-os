@@ -43,7 +43,7 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
       brandMark: bounds('.brand-mark'), overviewLink: bounds('.nav-link[href="#overview"]'),
     };
   });
-  expect(layout.metrics?.x).toBe(146);
+  expect(layout.metrics?.x).toBe(130);
   expect(layout.metrics?.y).toBe(84);
   expect(layout.metrics?.width).toBe(1512);
   expect(layout.metrics?.height).toBe(100);
@@ -88,7 +88,7 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
       footerDisplay: getComputedStyle(document.querySelector('.page-footer')!).display,
     };
   });
-  expect(layout.metrics?.x).toBe(146);
+  expect(layout.metrics?.x).toBe(130);
   expect(layout.metrics?.y).toBe(84);
   expect(layout.workflow?.y).toBe(189);
   expect(layout.workflow?.height).toBe(202);
@@ -110,10 +110,10 @@ test('Reviews matches the supplied desktop workspace frame', async ({ page }) =>
       titleIcon: bounds('.reviews-title-icon'), tabs: bounds('.reviews-tabs'), workspace: bounds('.reviews-workspace'),
     };
   });
-  expect(layout.sidebar?.width).toBe(128);
-  expect(layout.metrics?.x).toBe(146);
+  expect(layout.sidebar?.width).toBe(112);
+  expect(layout.metrics?.x).toBe(130);
   expect(layout.metrics?.y).toBe(92);
-  expect(layout.titleIcon?.x).toBe(146);
+  expect(layout.titleIcon?.x).toBe(130);
   expect(layout.title?.x).toBe(174);
   expect(layout.tabs?.y).toBeCloseTo(205, 0);
   expect(layout.workspace?.y).toBeCloseTo(238, 0);
@@ -188,8 +188,8 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
       table: bounds('.objective-table-panel'), detail: bounds('.objective-detail-panel'), capacity: bounds('.objective-capacity'),
     };
   });
-  expect(layout.sidebar?.width).toBe(128);
-  expect(layout.metrics?.x).toBe(146);
+  expect(layout.sidebar?.width).toBe(112);
+  expect(layout.metrics?.x).toBe(130);
   expect(layout.metrics?.y).toBeCloseTo(157.5, 0);
   expect(layout.content?.y).toBeCloseTo(263.5, 0);
   expect(layout.content?.height).toBe(603);

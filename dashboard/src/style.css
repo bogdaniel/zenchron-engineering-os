@@ -5,7 +5,7 @@
   background: #0a0b13;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --sidebar-width: 128px;
+  --sidebar-width: 112px;
   --page-title-size: 22px;
   --page-title-size-mobile: 20px;
   --page-title-weight: 650;
@@ -52,7 +52,7 @@ button:disabled, input:disabled {
   display: flex;
   width: var(--sidebar-width);
   flex-direction: column;
-  padding: 18px 4px 20px;
+  padding: 18px 3px 20px;
   border-right: 1px solid #252438;
   background:
     radial-gradient(ellipse at 8% 90%, #8e48d94a 0, transparent 40%),
@@ -63,9 +63,9 @@ button:disabled, input:disabled {
 .brand {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin: 0 0 29px;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 750;
   letter-spacing: -.3px;
 }
@@ -80,13 +80,13 @@ button:disabled, input:disabled {
 .brand-mark {
   position: relative;
   display: block;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   flex: 0 0 auto;
 }
 .brand-mark::before, .brand-mark::after {
   position: absolute;
-  width: 23px;
+  width: 20px;
   height: 9px;
   border-radius: 2px;
   background: linear-gradient(90deg, #a659ff, #7137ef);
@@ -118,7 +118,7 @@ button:disabled, input:disabled {
   border: 1px solid transparent;
   border-radius: 11px;
   color: #a9a5b9;
-  font-size: 12px;
+  font-size: 10.5px;
   letter-spacing: -.25px;
   white-space: nowrap;
   transition: .16s ease;
@@ -143,7 +143,7 @@ button:disabled, input:disabled {
 }
 .sidebar-bottom {
   margin-top: auto;
-  padding: 14px 8px 4px 14px;
+  padding: 14px 6px 4px 8px;
   border-top: 1px solid #252438;
 }
 .connection-indicator {
@@ -163,8 +163,8 @@ button:disabled, input:disabled {
 .sidebar-bottom p {
   margin: 12px 0 0;
   color: #77738d;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: 11px;
+  line-height: 1.45;
 }
 .main-content {
   max-width: 1700px;

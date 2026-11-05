@@ -58,7 +58,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   const product = panel('product-summary-panel');
   const inventory = panel('inventory-panel');
   const downloads = panel('downloadable-reports-panel');
-  expect(delivery.x).toBe(146);
+  expect(delivery.x).toBe(130);
   expect(Math.abs(delivery.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(outcomes.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(product.height - 188)).toBeLessThanOrEqual(2);
@@ -100,6 +100,26 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   expect(mobile).toHaveLength(10);
   expect(Math.max(...mobile.map(({ x, width }) => x + width))).toBeLessThanOrEqual(390);
   expect(mobile.every((panel, index) => index === 0 || panel.y > mobile[index - 1].y)).toBe(true);
+});
+
+test('Reports headings fit the mock display viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 1505, height: 847 });
+  await page.goto('/#reports');
+
+  const acceptanceTitle = page.locator('.acceptance-panel .reports-panel-heading h3');
+  const acceptanceBounds = await acceptanceTitle.evaluate((title) => {
+    const { right } = title.getBoundingClientRect();
+    const panel = title.closest('.acceptance-panel')!.getBoundingClientRect();
+    return { right, panelRight: panel.right };
+  });
+  expect(acceptanceBounds.right).toBeLessThanOrEqual(acceptanceBounds.panelRight - 8);
+
+  const insightsTitle = page.locator('.reports-summary .reports-panel-heading h3');
+  const filter = page.locator('.reports-insight-filter');
+  const [titleBounds, filterBounds] = await Promise.all([insightsTitle.boundingBox(), filter.boundingBox()]);
+  expect(titleBounds && filterBounds).toBeTruthy();
+  expect(Math.abs(titleBounds!.y - filterBounds!.y)).toBeLessThanOrEqual(1);
+  await expect(filter).toHaveCSS('width', '144px');
 });
 
 test('30-day run metrics exclude future and invalid timestamps', async ({ page }) => {
