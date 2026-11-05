@@ -16,6 +16,12 @@
     transform: translate(-50%, -50%);
   }
 }
+@media (min-width: 1260px) and (max-width: 1621px) {
+  .overview-shell .search-box { width: min(400px, calc(100vw - 1222px)); }
+}
+@media (min-width: 1260px) and (max-width: 1360px) {
+  .overview-shell .search-box { display: none; }
+}
 .metric-card {
   min-height: 90px;
   padding: 9px 15px;

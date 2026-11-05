@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 test('dashboard displays the connected control plane and local worker', async ({ page }) => {
   await page.setViewportSize({ width: 1490, height: 829 });
   await page.goto('/');
+  await expect(page.locator('.search-box')).toBeVisible();
   const overviewIconsLeadLabels = await page.locator('.metric-card .metric-top').evaluateAll((headers) =>
     headers.every((header) => {
       const icon = header.querySelector('svg')?.getBoundingClientRect();
@@ -11,6 +12,15 @@ test('dashboard displays the connected control plane and local worker', async ({
     }),
   );
   expect(overviewIconsLeadLabels, 'Overview KPI icons sit before their labels').toBe(true);
+  const headerRegions = await page.evaluate(() => {
+    const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    return { greetingRight: rect('.greeting').right, search: rect('.search-box'), actionsLeft: rect('.top-actions').left };
+  });
+  expect(headerRegions.search.left).toBeGreaterThanOrEqual(headerRegions.greetingRight);
+  expect(headerRegions.search.right).toBeLessThanOrEqual(headerRegions.actionsLeft);
+  await page.setViewportSize({ width: 1360, height: 829 });
+  await expect(page.locator('.search-box')).toBeHidden();
+  await page.setViewportSize({ width: 1490, height: 829 });
   await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Search' })).toHaveAttribute('placeholder', 'Search Zenchron…');
   await expect(page.getByRole('heading', { name: 'Workflow Orchestration' })).toBeVisible();
@@ -86,6 +96,7 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {
+      greeting: bounds('.greeting'), topActions: bounds('.top-actions'),
       metrics: bounds('.metric-grid'), workflow: bounds('.workflow-panel'), activity: bounds('.activity-panel'),
       objectives: bounds('.objective-panel'), review: bounds('.review-panel'), footerDisplay:
         getComputedStyle(document.querySelector('.page-footer')!).display,
@@ -131,8 +142,8 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
   expect(layout.overviewLink?.x).toBe(14);
   expect(layout.overviewLink?.y).toBeCloseTo(92, 0);
   expect(layout.search?.width).toBe(400);
-  const topActions = await page.locator('.top-actions').boundingBox();
-  expect(topActions?.x).toBeGreaterThanOrEqual(layout.search!.x! + layout.search!.width!);
+  expect(layout.search?.x).toBeGreaterThanOrEqual(layout.greeting!.x! + layout.greeting!.width!);
+  expect(layout.search!.x! + layout.search!.width!).toBeLessThanOrEqual(layout.topActions!.x!);
   await expect(page.locator('.greeting h1')).toHaveText(/Good morning, .+ 👋/);
   await expect(page.locator('.greeting-desktop-copy')).toBeVisible();
 });
@@ -144,6 +155,7 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {
+      greeting: bounds('.greeting'), search: bounds('.search-box'), topActions: bounds('.top-actions'),
       metrics: bounds('.metric-grid'), workflow: bounds('.workflow-panel'), activity: bounds('.activity-panel'),
       objectives: bounds('.objective-panel'), review: bounds('.review-panel'), timeline: bounds('.timeline-panel'),
       footerDisplay: getComputedStyle(document.querySelector('.page-footer')!).display,
@@ -159,6 +171,8 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
   expect(layout.review?.height).toBe(220);
   expect(layout.timeline?.y).toBe(573);
   expect(layout.footerDisplay).toBe('none');
+  expect(layout.search?.x).toBeGreaterThanOrEqual(layout.greeting!.x! + layout.greeting!.width!);
+  expect(layout.search!.x! + layout.search!.width!).toBeLessThanOrEqual(layout.topActions!.x!);
 });
 
 test('mobile Overview keeps to the supplied phone summary', async ({ page }) => {
