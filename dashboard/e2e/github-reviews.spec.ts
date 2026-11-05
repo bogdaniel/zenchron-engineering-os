@@ -74,7 +74,10 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   });
   await page.route(`**/api/v1/projects/${projectID}/pull-requests/42/diff`, (route) => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ diff: 'diff --git a/retry.go b/retry.go\n+return retry(ctx)\n' }),
+    body: JSON.stringify({ diff: 'diff --git a/retry.go b/retry.go\n--- a/retry.go\n+++ b/retry.go\n@@ -1 +1 @@\n-old\n+return retry(ctx)\n' }),
+  }));
+  await page.route(`**/api/v1/projects/${projectID}/pull-requests/43/diff`, (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ diff: 'diff --git a/README.md b/README.md' }),
   }));
   await page.route(`**/api/v1/projects/${projectID}/pull-requests/*/reviews`, async (route) => {
     const review = route.request().postDataJSON() as { body: string; event: string };
@@ -149,6 +152,12 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await search.fill('');
   await expect(page.locator('.reviews-code-editor[aria-label="Pull request diff"]')).toBeVisible();
   await expect(page.locator('.reviews-pr-diff .view-lines')).toContainText('+return retry(ctx)');
+  await page.getByRole('button', { name: 'Draft 1' }).click();
+  await page.locator('.reviews-provider-card').filter({ hasText: '#43' }).click();
+  await expect(page.locator('.reviews-pr-diff-empty')).toHaveText(
+    'No readable text patch was returned. Review file changes on GitHub.',
+  );
+  await page.getByRole('button', { name: 'Open 1' }).click();
   await page.getByRole('button', { name: 'Issues' }).click();
   await expect(page.getByRole('textbox', { name: 'Search issues' })).toBeVisible();
   await expect(page.locator('.reviews-grid-wrap')).toContainText('Add setup instructions');

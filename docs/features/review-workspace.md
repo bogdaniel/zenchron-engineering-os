@@ -29,7 +29,9 @@ flowchart LR
     Render --> Detail
     Browser -->|GET selected PR diff| API
     API -->|Bounded diff request| GitHub
-    GitHub -->|application/vnd.github.diff| Detail
+    GitHub -->|Unified patch with hunk| Monaco
+    GitHub -->|Empty or header-only patch| NoPatch[Explicit no-readable-patch state]
+    NoPatch --> Detail
     Queue -->|Select run with diff| Diff[GET /api/v1/agent-runs/{id}/diff]
     Diff -->|Unified patch| Monaco[Read-only Monaco editor]
     Monaco --> Detail
@@ -50,7 +52,7 @@ flowchart LR
     GitHub -. inbound reviews, checks, and merge unavailable .-> Governance
 ```
 
-Provider descriptions render as sanitized Markdown/HTML; external images are stripped. The summary panel identifies whether its content belongs to a local branch, GitHub pull request, or GitHub issue. The Code changes, Conversations, Evidence, and Checklist controls switch the detail panel. The Code changes panel reserves a lower row for suggestions, evidence artifacts, and checklist information, with explicit unavailable states while those provider details are not synced. The Conversations view submits issue/PR feedback and shows local run comments; its composer fills the available detail width. Existing provider conversation, check, and artifact data show explicit unavailable states until synced.
+Provider descriptions render as sanitized Markdown/HTML; external images are stripped. A provider diff without a unified hunk shows a clear no-readable-patch state and leaves the GitHub file-changes link available. The summary panel identifies whether its content belongs to a local branch, GitHub pull request, or GitHub issue. The Code changes, Conversations, Evidence, and Checklist controls switch the detail panel. The Code changes panel reserves a lower row for suggestions, evidence artifacts, and checklist information, with explicit unavailable states while those provider details are not synced. The Conversations view submits issue/PR feedback and shows local run comments; its composer fills the available detail width. Existing provider conversation, check, and artifact data show explicit unavailable states until synced.
 The summary rail keeps evidence export and approval actions beside the checks; unavailable actions remain disabled. Its request-changes and issue-comment shortcuts open the existing Conversations composer.
 
 At desktop widths the provider queue, diff detail, and summary panes start at 24/52/24 percent to match the supplied

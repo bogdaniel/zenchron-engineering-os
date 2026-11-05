@@ -48,6 +48,15 @@
 .reviews-pr-diff .reviews-code-editor {
   height: 300px;
 }
+.reviews-pr-diff-empty {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  padding: 12px;
+  color: #9992aa;
+  font-size: 11px;
+  text-align: center;
+}
 .reviews-comments {
   max-height: 82px;
   overflow-y: auto;

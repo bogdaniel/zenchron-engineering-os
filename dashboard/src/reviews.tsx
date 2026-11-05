@@ -166,6 +166,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
     queryFn: () => loadPullRequestDiff(selectedProject!.id, selectedPullRequest!.number),
     enabled: Boolean(selectedProject && selectedPullRequest), staleTime: 60_000,
   });
+  const pullRequestPatch = pullRequestDiff.data?.diff;
   const canComment = Boolean(section === 'local-branches' && selected &&
     ['succeeded', 'failed', 'cancelled'].includes(selected.status) && selected.diff_available);
   const metricValues = [
@@ -496,7 +497,9 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
                   <div className="reviews-diff-meta"><span>Pull request diff</span><span>{selectedPullRequest.head.ref}</span></div>
                   {pullRequestDiff.isLoading ? <span>Loading pull request diff…</span>
                     : pullRequestDiff.isError ? <span className="reviews-action-error" role="alert">{pullRequestDiff.error.message}</span>
-                      : <CodeDiff label="Pull request diff" value={pullRequestDiff.data?.diff || 'This pull request has no text diff.'} />}
+                      : pullRequestPatch && /^@@+ /m.test(pullRequestPatch)
+                        ? <CodeDiff label="Pull request diff" value={pullRequestPatch} />
+                        : <div className="reviews-pr-diff-empty" role="status">No readable text patch was returned. Review file changes on GitHub.</div>}
                 </div>}
               </div>
             ) : section === 'local-branches' && selected && diff.data ? (
