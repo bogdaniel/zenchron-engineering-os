@@ -25,11 +25,16 @@ sequenceDiagram
 
 ## Configuration
 
-Register a GitHub OAuth App with callback URL `<ZENCHRON_PUBLIC_URL>/auth/github/callback`, then configure the control
-plane:
+Configure a GitHub OAuth App or GitHub App user-authorization flow with callback URL
+`<ZENCHRON_PUBLIC_URL>/auth/github/callback`, then configure the control plane. For a GitHub App, sign-in uses its
+Client ID and Client Secret; the numeric App ID and private key are for separate server-side GitHub API access.
+The optional “Request user authorization (OAuth) during installation” setting controls installation-time authorization;
+the dashboard starts its own OAuth web flow. For the local preview, use
+`http://127.0.0.1:4173/auth/github/callback` and set `ZENCHRON_PUBLIC_URL=http://127.0.0.1:4173`.
 
-- `ZENCHRON_PUBLIC_URL`: public HTTPS origin, for example `https://engineering.example.com`.
-- `ZENCHRON_GITHUB_CLIENT_ID` and `ZENCHRON_GITHUB_CLIENT_SECRET`: OAuth App credentials.
+- `ZENCHRON_PUBLIC_URL`: public HTTPS origin for remote use, for example `https://engineering.example.com`; loopback
+  development may use `http://127.0.0.1:4173`.
+- `ZENCHRON_GITHUB_CLIENT_ID` and `ZENCHRON_GITHUB_CLIENT_SECRET`: OAuth app or GitHub App user-authorization credentials.
 - `ZENCHRON_GITHUB_ALLOWED_USERS`: comma-separated GitHub usernames permitted to sign in.
 - `ZENCHRON_SESSION_SECRET`: at least 32 random bytes; `openssl rand -hex 32` creates a suitable value.
 - `ZENCHRON_WORKER_TOKEN`: shared secret also configured on each remote worker.
