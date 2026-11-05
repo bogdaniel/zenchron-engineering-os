@@ -57,7 +57,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     expect(styles.navigationFontFamily).toBe(styles.bodyFont);
     expect(styles.titleFontFamily).toBe(styles.bodyFont);
     expect(styles.panelFontFamily).toBe(styles.bodyFont);
-    expect(styles.navigationFont).toBe('14px');
+    expect(styles.navigationFont).toBe('15px');
     expect(styles.navigationWeight).toBe('500');
     expect((await page.locator('.nav-link').first().boundingBox())?.height).toBe(42);
     const workspaceLabel = page.locator('.nav-link .nav-label').filter({ hasText: 'Product Workspace' });
