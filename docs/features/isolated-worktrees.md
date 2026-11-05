@@ -22,8 +22,9 @@ The control plane and worker must use the same release: older workers do not ech
 are rejected.
 
 This dashboard operation prepares a worktree only; agent runs use separate per-run worktrees. It does not invoke an
-agent, modify source files, commit changes, or open a pull request. The control plane API still listens on loopback
-until authentication is implemented.
+agent, modify source files, commit changes, or open a pull request. The control plane API defaults to loopback; remote
+listening requires the GitHub OAuth and worker authentication settings described in
+[GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md).
 
 ## Feature diagram
 

@@ -178,7 +178,7 @@ function App() {
             ))}
           </nav>
           <div className="sidebar-bottom">
-            <div className="connection-indicator"><span /> Local preview</div>
+            <div className="connection-indicator"><span /> {auth.data?.local ? 'Local preview' : 'Authenticated workspace'}</div>
             <p>One place to coordinate projects, agents, and delivery.</p>
           </div>
         </aside>
@@ -232,6 +232,7 @@ function App() {
             <SystemPage
               section={activePage === 'settings' ? 'settings' : 'integrations'}
               apiOnline={health.isSuccess}
+              githubLogin={auth.data?.local === false}
               workerCount={workers.data?.length ?? 0}
               onlineWorkerCount={onlineWorkers.length}
               modelRuntimeWorkerCount={onlineWorkers.filter((worker) => worker.agent_runtime_enabled).length}

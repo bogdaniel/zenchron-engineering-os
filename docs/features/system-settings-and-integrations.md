@@ -24,8 +24,8 @@ flowchart LR
     Integrations --> Boundaries[Read-only settings status panels]
     Boundaries --> Secrets[Credentials stay on API and worker]
     Boundaries --> Missing[Policies, roles, budgets, notifications, audit: unavailable]
-    Settings[Settings route] --> Boundary[Loopback API and JSON snapshot boundary]
-    Settings --> Access[Identity and authorization: unavailable]
+    Settings[Settings route] --> Boundary[Local or GitHub OAuth API access; JSON snapshots]
+    Settings --> Access[OAuth username allowlist; organization roles unavailable]
     Settings --> Audit[Actor audit and run evidence: unavailable]
 ```
 
@@ -33,10 +33,10 @@ flowchart LR
 
 - API and worker status reuse the overview's live TanStack Query results; the page does not create a second data source.
 - A sanitized `github.com/owner/repository` locator enables issue and PR sync in Reviews. PR review submission requires
-  control-plane GitHub authentication with Pull requests write permission; GitHub records the app or token actor because
-  dashboard user identity and authorization are not implemented.
+  control-plane GitHub authentication with Pull requests write permission; GitHub records the app or token actor. The
+  dashboard session identifies an allowlisted OAuth user, but organization roles are not enforced.
 - The worker reports only whether its model endpoint is configured; the endpoint and credentials stay on that worker.
-- Settings report the current loopback-only API and versioned JSON state boundary. They do not expose write controls for
+- Settings report the current API security configuration and versioned JSON state boundary. They do not expose write controls for
   settings the service cannot persist or enforce.
 - The Integrations overview uses the mockup's configuration rail and settings-panel layout and the shared dashboard
   panel typography, but keeps panels read-only where no backing API exists.

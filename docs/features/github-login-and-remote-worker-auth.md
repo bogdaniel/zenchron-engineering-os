@@ -18,6 +18,7 @@ sequenceDiagram
     API-->>User: 8-hour signed HttpOnly session cookie
     User->>API: Dashboard API request with session cookie
     API->>API: Validate signature, expiry, allowlist
+    API->>API: Reject cross-origin session-authenticated mutations
     Worker->>API: Worker endpoint with Bearer worker token over HTTPS
     API->>API: Validate worker credential
 ```
@@ -43,8 +44,10 @@ refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does no
 
 ## Security boundary and limits
 
-- Dashboard API requests require a signed session cookie. OAuth state is random, short-lived, HttpOnly, and SameSite
-  Lax. The session cookie is HttpOnly, SameSite Lax, Secure on HTTPS, and expires after eight hours.
+- Dashboard API requests require a signed session cookie. State-changing dashboard requests also validate a supplied
+  `Origin` against `ZENCHRON_PUBLIC_URL`; requests without an `Origin` remain available to non-browser clients. Worker
+  bearer requests use their separate credential check. OAuth state is random, short-lived, HttpOnly, and SameSite Lax.
+  The session cookie is HttpOnly, SameSite Lax, Secure on HTTPS, and expires after eight hours.
 - The user access token is used only to fetch the GitHub username and avatar; it is discarded and never used for
   repository access. Repository operations continue to use the control-plane GitHub App or token configuration.
 - The allowlist is checked at login and on each session request, so removing a username takes effect immediately.

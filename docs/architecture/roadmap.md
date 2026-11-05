@@ -39,10 +39,12 @@ and `/api/v1/projects` show the online local worker and checkout, focused contro
 Projects and isolated-worktree E2E flows pass through the dashboard. `./dev.sh` now starts all three local processes
 and waits for API, worker, and dashboard readiness.
 
-### 1. Durable and secure core
+### 1. Durable and secure core — GitHub sign-in and remote request authentication implemented
 
-Persistent workspace state, user identity, roles, secrets handling, and audit events. Accept when restart and
-authorization tests pass and no unauthenticated remote listener is exposed.
+GitHub OAuth sign-in, username allowlisting, signed sessions, separate worker bearer authentication, and browser-origin
+checks for session-authenticated mutations are implemented. Persistent workspace state exists for selected JSON
+snapshots, but database-backed storage, organization roles, per-worker identity, secrets management, and audit events
+remain outstanding.
 
 ### 2. Project connections — GitHub read sync and PR review submission partially implemented
 
@@ -84,13 +86,14 @@ Product/workspace views, workflows, agents, reviews, reports, integrations, and 
 mockup view maps to a named route and is checked against real data contracts.
 
 Phases can overlap when their data contracts are stable. The current loopback preview supports local agent execution;
-hosted control and merge authorization still require durable audit, user identity, and policy enforcement.
+hosted multi-organization control and merge authorization still require durable audit, organization identity, and
+policy enforcement.
 
 ## Current implementation
 
 - The loopback Go API and local worker exchange heartbeats.
-- `./dev.sh` starts the API, worker, and live-reloading dashboard together; the API and dashboard remain bound to
-  loopback until authentication is implemented.
+- `./dev.sh` starts the API, worker, and live-reloading dashboard together on loopback. A non-loopback API listener
+  requires complete GitHub OAuth, session, worker-token, allowlist, and public-HTTPS configuration.
 - Reviews reads the latest 100 open GitHub pull requests and issues for one selected `github.com` checkout at a time,
   and loads a bounded diff for a selected pull request. It can submit issue comments, change issue state, top-level PR
   comments, and requests for changes through the control plane. GitHub App or personal-token credentials stay in
@@ -130,7 +133,8 @@ hosted control and merge authorization still require durable audit, user identit
   requests on Zenchron run branches are attached to their runs; an eligible change request queues another pass. Reviews
   made directly on GitHub are not imported. Checks, approval, and merge actions remain unavailable.
 - Settings and Integrations routes show live API, worker, and checkout status while clearly marking external providers,
-  identity, authorization, and audit history unavailable.
+  organization roles, authorization policy, and audit history unavailable. GitHub OAuth username-allowlisted sign-in is
+  implemented for remote API access.
 - Reports summarizes current objective, workflow, agent-profile, worker, and checkout records. GitHub PR history now
   supplies work-outcome categories and delivery measures when the selected window contains relevant events; completed
   GitHub Actions history supplies CI duration. Agent-run success uses recorded terminal runs. Model spend, review
@@ -138,8 +142,8 @@ hosted control and merge authorization still require durable audit, user identit
 - Product Workspace persists products and links them to live worker-reported repositories. Objectives can link to a
   product by ID; workflow and agent definitions remain reusable workspace-wide, while files, decisions, stakeholders,
   and release streams remain unavailable.
-- Users and roles, database-backed storage, direct GitHub review import, GitHub merge and approval actions, other Git
-  provider write actions, and production model credential management are not yet implemented.
+- Organization users and roles, database-backed storage, direct GitHub review import, GitHub merge and approval actions,
+  other Git provider write actions, and production model credential management are not yet implemented.
 
 ## UI and data rules
 
@@ -154,8 +158,8 @@ hosted control and merge authorization still require durable audit, user identit
 
 ## Open production decisions
 
-- Choose hosting, worker connectivity, identity, authorization, secrets, storage, and audit boundaries before exposing
-  the API beyond loopback or enabling provider writes for a hosted control plane.
+- Choose hosting, worker connectivity, organization authorization, secrets, storage, and audit boundaries before
+  enabling the hosted control plane for multiple organizations.
 - Agree the identities and relationships needed for projects, workers, agent work, branches, reviews, and follow-up
   changes before expanding beyond the accepted bootstrap milestone.
 - Decide the review and merge authority model before expanding provider write actions or automated continuation beyond

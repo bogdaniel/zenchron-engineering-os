@@ -49,7 +49,10 @@ On first run, install dashboard dependencies with `cd dashboard && npm ci`. The 
 displays worker heartbeats and locally discovered Git checkouts. Set `ZENCHRON_PROJECTS_ROOT` before starting the worker
 to scan a folder (default `.`).
 
-The API listens on loopback. Objective, product, workflow, and agent profile data persist under
+The API listens on loopback by default; a remote listener requires the GitHub OAuth, allowlist, session, worker-token,
+and HTTPS public-origin configuration described in
+[GitHub sign-in and remote worker authentication](docs/features/github-login-and-remote-worker-auth.md). Objective,
+product, workflow, and agent profile data persist under
 `<UserConfigDir>/zenchron`; set `ZENCHRON_DATA_DIR` to use another directory. Worker presence resets when the API
 restarts. This snapshot store is single-process and capped at 16 MiB per file.
 

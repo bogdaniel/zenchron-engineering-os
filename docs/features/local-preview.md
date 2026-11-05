@@ -27,8 +27,10 @@ sequenceDiagram
     Start->>UI: Stop server and rebuild watcher
 ```
 
-The control plane and dashboard bind to loopback by default. The API remains loopback-only until authentication is
-implemented. `ZENCHRON_LISTEN_ADDR` and `ZENCHRON_DASHBOARD_PORT` select local ports; `ZENCHRON_PROJECTS_ROOT` selects
+The control plane and dashboard bind to loopback by default. The API can bind to a remote interface only when the
+GitHub OAuth and worker authentication settings described in
+[GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md) are configured.
+`ZENCHRON_LISTEN_ADDR` and `ZENCHRON_DASHBOARD_PORT` select local ports; `ZENCHRON_PROJECTS_ROOT` selects
 the folder scanned by the worker. `ZENCHRON_LLM_BASE_URL` and `ZENCHRON_LLM_API_KEY` are forwarded only to the worker.
 The launcher exits with a clear message if the selected service URL is already responding, rather than mistaking an
 existing preview for the child process it just started.

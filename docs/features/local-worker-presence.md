@@ -64,7 +64,11 @@ The worker sends an immediate heartbeat and repeats every five seconds. Worker a
 
 ## Security and scope
 
-The control plane accepts only loopback listen addresses until authenticated API access is implemented. The default is `127.0.0.1:8080`; do not expose this unauthenticated bootstrap service to a network. `ZENCHRON_LISTEN_ADDR` can select another loopback address. The worker defaults to `http://127.0.0.1:8080` and accepts `ZENCHRON_CONTROL_PLANE_URL` and `ZENCHRON_WORKER_NAME` overrides for local development.
+The control plane defaults to `127.0.0.1:8080`. A non-loopback listener requires GitHub OAuth credentials, an
+allowlist, a session secret, a separate worker token, and an HTTPS `ZENCHRON_PUBLIC_URL`; see [GitHub sign-in and
+remote worker authentication](github-login-and-remote-worker-auth.md). The worker defaults to
+`http://127.0.0.1:8080` for local development and accepts `ZENCHRON_CONTROL_PLANE_URL` and `ZENCHRON_WORKER_NAME`
+overrides. Remote workers require HTTPS and the configured bearer token.
 
 The worker prepares isolated worktrees through the leased command channel and can execute agent runs when
 `ZENCHRON_LLM_BASE_URL` is configured. Optional `code.write` changes stay on a per-run branch. Successful non-empty

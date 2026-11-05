@@ -25,6 +25,7 @@ type SystemSection = 'integrations' | 'settings';
 interface SystemPageProps {
   section: SystemSection;
   apiOnline: boolean;
+  githubLogin: boolean;
   workerCount: number;
   onlineWorkerCount: number;
   modelRuntimeWorkerCount: number;
@@ -34,7 +35,7 @@ interface SystemPageProps {
 }
 
 export function SystemPage({
-  section, apiOnline, workerCount, onlineWorkerCount, modelRuntimeWorkerCount, modelRuntimeUnknownWorkerCount,
+  section, apiOnline, githubLogin, workerCount, onlineWorkerCount, modelRuntimeWorkerCount, modelRuntimeUnknownWorkerCount,
   projectCount, gitHubProjectCount,
 }: SystemPageProps) {
   const modelEndpointDetail = modelRuntimeWorkerCount
@@ -53,7 +54,9 @@ export function SystemPage({
     {
       title: 'Control plane API',
       category: 'Runtime',
-      detail: 'Local HTTP service for workspace state and worker commands.',
+      detail: githubLogin
+        ? 'Authenticated API for workspace state and worker commands.'
+        : 'Loopback HTTP service for workspace state and worker commands.',
       status: apiOnline ? 'Online' : 'Offline',
       icon: <IconActivity size={19} />,
       healthy: apiOnline,
@@ -205,7 +208,7 @@ export function SystemPage({
               <PanelCard className="system-operation-card" withBorder>
                 <PanelHeading title="Controller configuration" icon={<IconSettings size={16} />} />
                 <div className="system-setting-values">
-                  <span>API exposure<b>Loopback only</b></span>
+                  <span>Dashboard auth<b>{githubLogin ? 'GitHub OAuth' : 'Local preview'}</b></span>
                   <span>Online workers<b>{onlineWorkerCount} of {workerCount}</b></span>
                   <span>Local checkouts<b>{projectCount}</b></span>
                 </div>
@@ -217,7 +220,7 @@ export function SystemPage({
               </PanelCard>
               <PanelCard className="system-operation-card system-audit-card" withBorder>
                 <PanelHeading title="Recent audit log" icon={<IconHistory size={16} />} />
-                <p>Actor-bound audit history is unavailable until user identity and audit storage are implemented.</p>
+                <p>Audit history is unavailable until audit storage is implemented.</p>
                 <Badge className="system-status unavailable" variant="light">Unavailable</Badge>
               </PanelCard>
             </div>
@@ -235,10 +238,12 @@ export function SystemPage({
               title="Local control plane"
               icon={<span className="system-setting-icon"><IconActivity size={19} /></span>} />
             <dl>
-              <div><dt>API exposure</dt><dd>Loopback only</dd></div>
+              <div><dt>Dashboard auth</dt><dd>{githubLogin ? 'GitHub OAuth' : 'Local preview'}</dd></div>
               <div><dt>State storage</dt><dd>Versioned JSON snapshots</dd></div>
             </dl>
-            <p>Remote access stays disabled until authentication is implemented.</p>
+            <p>{githubLogin
+              ? 'Remote API access requires HTTPS and the configured worker bearer token.'
+              : 'Remote access requires GitHub sign-in and worker authentication to be configured.'}</p>
           </PanelCard>
           <PanelCard className="system-setting-card" withBorder>
             <PanelHeading className="system-setting-heading" eyebrow="Workers & projects" title="Live inventory"
@@ -250,13 +255,15 @@ export function SystemPage({
             <p>Checkout names are visible; local filesystem paths stay on each worker.</p>
           </PanelCard>
           <PanelCard className="system-setting-card" withBorder>
-            <PanelHeading className="system-setting-heading" eyebrow="Access & policy" title="Not configured"
+            <PanelHeading className="system-setting-heading" eyebrow="Access & policy" title={githubLogin ? 'GitHub sign-in' : 'Local preview'}
               icon={<span className="system-setting-icon"><IconShieldCheck size={19} /></span>} />
             <dl>
-              <div><dt>User accounts</dt><dd>Unavailable</dd></div>
+              <div><dt>User accounts</dt><dd>{githubLogin ? 'Allowlisted GitHub users' : 'Local workspace'}</dd></div>
               <div><dt>Roles and permissions</dt><dd>Unavailable</dd></div>
             </dl>
-            <p>The preview has no identity or authorization layer.</p>
+            <p>{githubLogin
+              ? 'GitHub OAuth identifies users; organization roles and permissions are not enforced.'
+              : 'Local preview has no sign-in or organization authorization.'}</p>
           </PanelCard>
           <PanelCard className="system-setting-card" withBorder>
             <PanelHeading className="system-setting-heading" eyebrow="Secrets" title="No provider secrets"
@@ -287,7 +294,7 @@ export function SystemPage({
               <div><dt>Actor history</dt><dd>Unavailable</dd></div>
               <div><dt>Run artifacts</dt><dd>Unavailable</dd></div>
             </dl>
-            <p>Audit events require identity; artifacts require agent runs.</p>
+            <p>Audit events require audit storage; artifacts require agent runs.</p>
           </PanelCard>
         </div>
       )}

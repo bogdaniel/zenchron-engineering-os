@@ -28,7 +28,7 @@ test('settings and integrations routes show live runtime and honest provider sta
   expect(runtimeHeartbeat.legacyStatus).toBe(200);
   expect(runtimeHeartbeat.unknown).toBeGreaterThan(0);
   await page.reload();
-  await page.getByRole('link', { name: 'Integrations' }).click();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Integrations' }).click();
   await expect(page.getByRole('heading', { name: 'Settings & Integrations' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Local workers' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Configuration categories' })).toBeVisible();
@@ -76,7 +76,7 @@ test('settings and integrations routes show live runtime and honest provider sta
   )).toBeVisible();
 
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Settings' }).click();
-  await expect(page.getByText('Loopback only')).toBeVisible();
+  await expect(page.locator('.system-setting-card').filter({ hasText: 'Dashboard auth' })).toContainText('Local preview');
   await expect(page.getByText('Roles and permissions')).toBeVisible();
   const workerSettings = page.locator('.system-setting-card').filter({ hasText: 'Workers & projects' });
   await expect(workerSettings).toContainText('Local checkouts');
@@ -88,4 +88,20 @@ test('settings and integrations routes show live runtime and honest provider sta
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.system-health')).toContainText('API online');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('Settings reflects an authenticated GitHub session', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: false, login: 'engineer' }),
+  }));
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await expect(page.getByText('GitHub OAuth', { exact: true })).toBeVisible();
+  await expect(page.getByText('Allowlisted GitHub users')).toBeVisible();
+  await expect(page.getByText('GitHub OAuth identifies users; organization roles and permissions are not enforced.')).toBeVisible();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Integrations' }).click();
+  await expect(page.getByText('Authenticated API for workspace state and worker commands.')).toBeVisible();
+  await expect(page.locator('.system-operation-card').filter({ hasText: 'Controller configuration' })).toContainText('GitHub OAuth');
 });

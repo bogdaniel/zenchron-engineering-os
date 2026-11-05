@@ -32,6 +32,62 @@ func TestAuthenticationSeparatesDashboardAndWorkerRequests(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedAPIMutationsRejectCrossOriginRequests(t *testing.T) {
+	config := testAuthConfig()
+	user := authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	session, err := signSession(user, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passed := 0
+	server := authHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		passed++
+		w.WriteHeader(http.StatusNoContent)
+	}), config)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/test", nil)
+	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	request.Header.Set("Origin", "https://attacker.example")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || passed != 0 {
+		t.Fatalf("cross-origin mutation returned HTTP %d and passed through %d times", response.Code, passed)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/test", nil)
+	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	request.Header.Set("Origin", config.publicURL.String())
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || passed != 1 {
+		t.Fatalf("same-origin mutation returned HTTP %d and passed through %d times", response.Code, passed)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/test", nil)
+	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || passed != 2 {
+		t.Fatalf("mutation without Origin returned HTTP %d and passed through %d times", response.Code, passed)
+	}
+
+	request = httptest.NewRequest(http.MethodPut, "/api/v1/workers/0123456789abcdef0123456789abcdef/heartbeat", nil)
+	request.Header.Set("Origin", "https://attacker.example")
+	request.Header.Set("Authorization", "Bearer "+config.workerToken)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || passed != 3 {
+		t.Fatalf("worker request returned HTTP %d and passed through %d times", response.Code, passed)
+	}
+}
+
+func TestRequestOriginAcceptsImplicitHTTPSPort(t *testing.T) {
+	config := testAuthConfig()
+	config.publicURL = mustURL("https://zenchron.example:443")
+	if !validRequestOrigin("https://zenchron.example", config) {
+		t.Fatal("same-origin request without the explicit default HTTPS port was rejected")
+	}
+}
+
 func TestGitHubOAuthCreatesAllowlistedSession(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

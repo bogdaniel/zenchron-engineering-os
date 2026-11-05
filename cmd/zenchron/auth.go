@@ -113,16 +113,9 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
-			if origin := r.Header.Get("Origin"); origin != "" {
-				parsed, err := url.Parse(origin)
-				scheme := "http"
-				if config.https {
-					scheme = "https"
-				}
-				if err != nil || !strings.EqualFold(parsed.Host, r.Host) || !strings.EqualFold(parsed.Scheme, scheme) {
-					http.Error(w, "invalid request origin", http.StatusForbidden)
-					return
-				}
+			if !validRequestOrigin(r.Header.Get("Origin"), config) {
+				http.Error(w, "invalid request origin", http.StatusForbidden)
+				return
 			}
 			http.SetCookie(w, &http.Cookie{Name: authSessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: config.https, SameSite: http.SameSiteLaxMode, MaxAge: -1})
 			w.WriteHeader(http.StatusNoContent)
@@ -134,13 +127,43 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 					http.Error(w, "worker authentication required", http.StatusUnauthorized)
 					return
 				}
-			} else if _, ok := readSession(r, config); !ok {
-				http.Error(w, "authentication required", http.StatusUnauthorized)
-				return
+			} else {
+				if _, ok := readSession(r, config); !ok {
+					http.Error(w, "authentication required", http.StatusUnauthorized)
+					return
+				}
+				if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions &&
+					!validRequestOrigin(r.Header.Get("Origin"), config) {
+					http.Error(w, "invalid request origin", http.StatusForbidden)
+					return
+				}
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func validRequestOrigin(origin string, config *authConfig) bool {
+	if origin == "" {
+		return true
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || !strings.EqualFold(parsed.Scheme, config.publicURL.Scheme) ||
+		!strings.EqualFold(parsed.Hostname(), config.publicURL.Hostname()) || parsed.User != nil || parsed.Path != "" ||
+		parsed.RawQuery != "" || parsed.Fragment != "" {
+		return false
+	}
+	return effectiveOriginPort(parsed) == effectiveOriginPort(config.publicURL)
+}
+
+func effectiveOriginPort(origin *url.URL) string {
+	if port := origin.Port(); port != "" {
+		return port
+	}
+	if strings.EqualFold(origin.Scheme, "https") {
+		return "443"
+	}
+	return "80"
 }
 
 func isWorkerAPIRequest(method, path string) bool {
