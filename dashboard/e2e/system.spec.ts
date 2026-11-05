@@ -36,6 +36,10 @@ test('settings and integrations routes show live runtime and honest provider sta
   await expect(page.getByRole('heading', { name: 'Recent audit log' })).toBeVisible();
   await expect(page.locator('.system-operation-card')).toHaveCount(8);
   await expect(page.locator('.system-operation-card .shared-panel-heading h3').first()).toHaveCSS('font-size', '14px');
+  await expect(page.locator('.system-config-nav > a.active')).toHaveCSS('font-size', '10px');
+  await expect(page.locator('.system-service-copy h4').first()).toHaveCSS('font-size', '13px');
+  await expect(page.locator('.system-service-copy p').first()).toHaveCSS('font-size', '10px');
+  await expect(page.locator('.system-operation-card p').first()).toHaveCSS('font-size', '11px');
   const integrationGrid = page.locator('.system-service-grid');
   const serviceCards = page.locator('.system-service-card');
   const configRail = await page.locator('.system-config-nav').boundingBox();
@@ -81,4 +85,7 @@ test('settings and integrations routes show live runtime and honest provider sta
   )).toBeVisible();
   await page.evaluate(() => { window.location.hash = '#integrations'; });
   await expect(page.getByRole('heading', { name: 'Integrations overview' })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.system-health')).toContainText('API online');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

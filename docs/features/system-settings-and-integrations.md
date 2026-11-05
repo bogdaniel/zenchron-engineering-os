@@ -38,8 +38,8 @@ flowchart LR
 - The worker reports only whether its model endpoint is configured; the endpoint and credentials stay on that worker.
 - Settings report the current loopback-only API and versioned JSON state boundary. They do not expose write controls for
   settings the service cannot persist or enforce.
-- The Integrations overview uses the mockup's configuration rail and settings-panel layout, but keeps panels read-only
-  where no backing API exists.
+- The Integrations overview uses the mockup's configuration rail and settings-panel layout and the shared dashboard
+  panel typography, but keeps panels read-only where no backing API exists.
 - GitHub App credentials or the `ZENCHRON_GITHUB_TOKEN` fallback are configured in the control-plane environment,
   never in the worker or dashboard. Public repository reads work without credentials; private reads and PR review
   submissions require repository permissions.
