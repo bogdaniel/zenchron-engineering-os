@@ -51,13 +51,13 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     expect(styles.navigationFontFamily).toBe(styles.bodyFont);
     expect(styles.titleFontFamily).toBe(styles.bodyFont);
     expect(styles.panelFontFamily).toBe(styles.bodyFont);
-    expect(styles.navigationFont).toBe('16px');
+    expect(styles.navigationFont).toBe('14px');
     expect(styles.navigationWeight).toBe('400');
     expect((await page.locator('.nav-link').first().boundingBox())?.height).toBe(46);
-    const workspaceLink = page.locator('.nav-link').filter({ hasText: 'Product Workspace' });
-    await expect(workspaceLink, 'long navigation label remains readable').toHaveCSS('white-space', 'normal');
-    expect(await workspaceLink.evaluate((link) => link.scrollWidth <= link.clientWidth),
-      'long navigation label wraps inside the sidebar').toBe(true);
+    const workspaceLabel = page.locator('.nav-link .nav-label').filter({ hasText: 'Product Workspace' });
+    await expect(workspaceLabel, 'long navigation label stays on one line').toHaveCSS('white-space', 'nowrap');
+    expect(await workspaceLabel.evaluate((label) => label.scrollWidth <= label.clientWidth),
+      'long navigation label fits without clipping').toBe(true);
     expect(styles.topbarHeight).toBe('80px');
     if (selectors.title) {
       if (route !== 'overview') expect(styles.hasSharedHeading).toBe(true);

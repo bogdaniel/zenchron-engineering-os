@@ -122,9 +122,9 @@ button:disabled, input:disabled {
   border: 1px solid transparent;
   border-radius: 11px;
   color: #a9a5b9;
-  font-size: 16px;
+  font-size: 14px;
   letter-spacing: -.1px;
-  white-space: normal;
+  white-space: nowrap;
   transition: .16s ease;
 }
 .nav-label { min-width: 0; }
