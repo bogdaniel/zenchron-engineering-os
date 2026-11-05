@@ -106,7 +106,11 @@
   padding: 10px;
   border-top: 1px solid #302d42;
 }
+.reviews-github-composer .mantine-Textarea-wrapper {
+  width: 100%;
+}
 .reviews-github-composer .mantine-Textarea-input {
+  width: 100%;
   min-height: 48px;
   border-color: #353149;
   color: #ddd7e6;

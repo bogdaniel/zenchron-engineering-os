@@ -118,7 +118,12 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await page.locator('.reviews-summary-review-actions').getByRole('button', { name: 'Request changes' }).click();
   const detailTabs = page.getByRole('group', { name: 'Review detail sections' });
   await expect(detailTabs.getByRole('button', { name: 'Conversations' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByLabel('GitHub pull request review')).toBeVisible();
+  const reviewInput = page.getByLabel('GitHub pull request review');
+  await expect(reviewInput).toBeVisible();
+  const inputBounds = await reviewInput.boundingBox();
+  const composerBounds = await page.locator('.reviews-github-composer').boundingBox();
+  expect(inputBounds && composerBounds).toBeTruthy();
+  expect(inputBounds!.width).toBeGreaterThan(composerBounds!.width * 0.9);
   await detailTabs.getByRole('button', { name: 'Conversations' }).click();
   await expect(page.locator('.reviews-detail-tab-panel')).toContainText('Existing GitHub conversation history is not synchronized yet.');
   await detailTabs.getByRole('button', { name: 'Evidence' }).click();
