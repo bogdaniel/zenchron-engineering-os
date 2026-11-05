@@ -1,8 +1,9 @@
 # One-command local preview
 
 `./dev.sh` starts the loopback Go control plane, its local project worker, and the live-reloading dashboard as one
-development session. The worker waits for the API, and the script waits until the worker and dashboard are reachable
-before printing the dashboard URL. Ctrl+C stops the child services.
+development session. Reserve `127.0.0.1:4173` for the latest dashboard source and `127.0.0.1:8080` for its control
+plane and worker so the manual-review URL stays fixed. Focused browser tests use separate temporary ports. Ctrl+C stops
+the child services.
 
 ```mermaid
 sequenceDiagram
@@ -12,14 +13,17 @@ sequenceDiagram
     participant Worker as Local worker
     participant UI as Dashboard dev server
     Dev->>Start: Start local preview
-    Start->>API: Start API unless /healthz already responds
-    Start->>API: Wait for /healthz and confirm the child is still running
-    Start->>Worker: Start with API URL and inherited model settings
-    Worker->>API: Heartbeat with local project inventory
-    Start->>API: Wait for worker readiness
-    Start->>UI: Start frontend rebuild watcher and static server
+    Start->>API: Start control plane on 8080
+    alt API is healthy
+        Start->>Worker: Start with API URL and inherited model settings
+        Worker->>API: Heartbeat with local project inventory
+        Start->>API: Wait for worker readiness
+    else API fails
+        Start->>Start: Continue without stopping the dashboard
+    end
+    Start->>UI: Start source watcher and dashboard on 4173
     Start->>UI: Wait for dashboard HTTP response
-    Start-->>Dev: Print dashboard URL
+    Start-->>Dev: Keep dashboard available at the fixed URL
     Dev->>UI: Review live dashboard changes
     Dev->>Start: Ctrl+C
     Start->>API: Stop child services
@@ -27,13 +31,17 @@ sequenceDiagram
     Start->>UI: Stop server and rebuild watcher
 ```
 
-The control plane and dashboard bind to loopback by default. The API can bind to a remote interface only when the
-GitHub OAuth and worker authentication settings described in
+The control plane and dashboard bind to loopback by default. Without OAuth settings, the local dashboard signs in as
+`Local workspace`; exercise GitHub sign-in by setting the OAuth, session, allowlist, and public-origin variables from
+[GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md) before starting the preview.
+The API can bind to a remote interface only when the GitHub OAuth and worker authentication settings described in
 [GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md) are configured.
 `ZENCHRON_LISTEN_ADDR` and `ZENCHRON_DASHBOARD_PORT` select local ports; `ZENCHRON_PROJECTS_ROOT` selects
 the folder scanned by the worker. `ZENCHRON_LLM_BASE_URL` and `ZENCHRON_LLM_API_KEY` are forwarded only to the worker.
-The launcher exits with a clear message if the selected service URL is already responding, rather than mistaking an
-existing preview for the child process it just started.
+The launcher exits with a clear message if either fixed URL is already responding, rather than mistaking an existing
+preview for the child process it just started. If the Go control plane or worker fails after startup, the dashboard
+continues serving the latest successful frontend build so layout work remains reviewable; API-backed features show
+their normal unavailable state until the service returns. The fixed ports are reserved for this manual-review preview.
 
 Run the preview from the repository root. Install frontend dependencies once with `cd dashboard && npm ci`.
 

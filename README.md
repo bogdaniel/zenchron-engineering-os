@@ -10,9 +10,10 @@ Start the Go control plane, local worker, and live-reloading dashboard together 
 ./dev.sh
 ```
 
-Open <http://127.0.0.1:4173>. The preview stops all three services when you press Ctrl+C. Set
-`ZENCHRON_LISTEN_ADDR`, `ZENCHRON_DASHBOARD_PORT`, `ZENCHRON_PROJECTS_ROOT`, or `ZENCHRON_DATA_DIR` before launch to
-change the local setup.
+Open <http://127.0.0.1:4173>. Keep dashboard port `4173` and control-plane/worker port `8080` for the latest-source
+manual-review preview; focused tests use their own temporary ports. The preview stops all services when you press
+Ctrl+C. Set `ZENCHRON_LISTEN_ADDR`, `ZENCHRON_DASHBOARD_PORT`, `ZENCHRON_PROJECTS_ROOT`, or `ZENCHRON_DATA_DIR`
+before launch to change the local setup.
 
 To enable queued agent runs, set an OpenAI-compatible Chat Completions endpoint before starting the preview. The
 root `./dev.sh` passes these settings only to the local worker; the API and dashboard do not inherit the model key. Keep
