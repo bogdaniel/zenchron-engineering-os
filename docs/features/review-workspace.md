@@ -16,7 +16,7 @@ originating run; an eligible request for changes queues a follow-up on the same 
 flowchart LR
     User[Developer or reviewer] --> Browser[Reviews page]
     Browser --> Split[Keyboard-accessible resizable panel group]
-    Split --> Queue[AG Grid provider or local queue]
+    Split --> Queue[Selectable GitHub request cards or local AG Grid queue]
     Split --> Detail[GitHub item or isolated branch detail]
     Split --> Governance[Evidence, checks, and merge governance]
     Runs[Agent run history API] --> Queue
@@ -57,8 +57,8 @@ to ten comments of 1,000 bytes. Local comments and request-changes are available
 requires an online worker with model runtime and `code.write` permission. Provider-backed PR metrics remain unavailable while
 local branch rows show the actual run status and project. File, added-line, and removed-line counts are derived from the
 loaded local diff; truncated diffs show lower-bound counts. Risk, evidence, CI, and policy results remain unavailable.
-The provider queue keeps compact number, state, and date columns so wrapped pull-request titles get the remaining width
-without clipping the state heading.
+GitHub requests use compact selectable cards so the number, status, title, author, branch, and update date stay legible in
+the narrow queue. Local branch runs continue to use AG Grid.
 
 ## Verification
 

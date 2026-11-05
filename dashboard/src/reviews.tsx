@@ -51,18 +51,6 @@ const pullRequestSchema = z.array(githubItem.extend({
 const issueSchema = z.array(githubItem.extend({ labels: z.array(z.object({ name: z.string() })) }));
 type GitHubPullRequest = z.infer<typeof pullRequestSchema>[number];
 type GitHubIssue = z.infer<typeof issueSchema>[number];
-const providerColumns: ColDef<GitHubPullRequest | GitHubIssue>[] = [
-  { field: 'number', headerName: '#', width: 36 },
-  { field: 'title', headerName: 'Title', flex: 3, minWidth: 120, wrapText: true, autoHeight: true },
-  { field: 'state', headerName: 'State', width: 60 },
-  { field: 'updated_at', headerName: 'Date', flex: 1, minWidth: 52,
-    valueFormatter: ({ value }) => {
-      const timestamp = Date.parse(value ?? '');
-      return Number.isFinite(timestamp)
-        ? new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-        : 'Unavailable';
-    } },
-];
 const reviewTheme = themeQuartz.withPart(colorSchemeDark).withParams({
   accentColor: '#a36bff', backgroundColor: '#11121b', foregroundColor: '#e4dfef',
   borderColor: '#2c293d', headerBackgroundColor: '#171622', headerTextColor: '#a7a1b8', fontSize: 11,
@@ -306,7 +294,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
         style={{ height: stacked ? '1090px' : 'calc(100vh - 239px)' }}
         defaultLayout={stacked
           ? { queue: 33, detail: 39, summary: 28 }
-          : { queue: 24, detail: 52, summary: 24 }}
+          : { queue: 27, detail: 49, summary: 24 }}
       >
         <Panel id="queue" className="reviews-pane" minSize={stacked ? '340px' : '220px'}>
           <PanelCard className="reviews-queue" withBorder>
@@ -340,24 +328,43 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
                 rowData={localBranches} columnDefs={columns} theme={reviewTheme} getRowId={({ data }) => data.id}
                 onRowClicked={({ data }) => data && setSelectedID(data.id)}
                 overlayNoRowsTemplate="Agent runs and local branch diffs will appear here."
-              /> : <AgGridReact<GitHubPullRequest | GitHubIssue>
-                rowData={visibleProviderItems} columnDefs={providerColumns} theme={reviewTheme}
-                loading={providerQuery.isLoading}
-                getRowId={({ data }) => String(data.number)}
-                onRowClicked={({ data }) => {
-                  if (!data) return;
-                  setSelectedProviderNumber(data.number);
-                  setProviderReviewBody('');
-                  setProviderReviewStatus('');
-                  setIssueCommentBody('');
-                  setIssueCommentStatus('');
-                  setIssueStateStatus('');
-                }}
-                overlayNoRowsTemplate={providerQuery.isError ? 'GitHub data unavailable. Check the connection and try again.'
-                    : searchTerm ? `No ${section === 'issues' ? 'issues' : 'pull requests'} match this search.`
+              /> : providerQuery.isLoading ? <div className="reviews-queue-empty">Loading GitHub items…</div>
+                : providerQuery.isError ? <div className="reviews-queue-empty">GitHub data unavailable. Check the connection and try again.</div>
+                  : visibleProviderItems.length ? <div className="reviews-provider-list">
+                    {visibleProviderItems.map((item) => {
+                      const pullRequest = section === 'pull-requests' ? item as GitHubPullRequest : undefined;
+                      const selected = item.number === selectedProviderItem?.number;
+                      const updatedAt = Date.parse(item.updated_at);
+                      return <button type="button" key={item.number}
+                        className={`reviews-provider-card${selected ? ' selected' : ''}`}
+                        aria-pressed={selected}
+                        onClick={() => {
+                          setSelectedProviderNumber(item.number);
+                          setProviderReviewBody('');
+                          setProviderReviewStatus('');
+                          setIssueCommentBody('');
+                          setIssueCommentStatus('');
+                          setIssueStateStatus('');
+                        }}>
+                        <span className="reviews-provider-card-top">
+                          <span className="reviews-provider-number">{pullRequest ? <IconGitPullRequest size={13} /> : <IconFileText size={13} />} #{item.number}</span>
+                          <span className="reviews-provider-state">{pullRequest?.draft ? 'Draft' : item.state}</span>
+                        </span>
+                        <strong>{item.title}</strong>
+                        <span className="reviews-provider-meta">
+                          <span className="reviews-provider-avatar" aria-hidden="true">{item.user.login.slice(0, 1).toUpperCase()}</span>
+                          {item.user.login}
+                          {pullRequest && <><span aria-hidden="true">·</span>{pullRequest.head.ref} → {pullRequest.base.ref}</>}
+                          <span className="reviews-provider-date">{Number.isFinite(updatedAt)
+                            ? new Date(updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Date unavailable'}</span>
+                        </span>
+                      </button>;
+                    })}
+                  </div>
+                  : <div className="reviews-queue-empty">{searchTerm
+                    ? `No ${section === 'issues' ? 'issues' : 'pull requests'} match this search.`
                     : !selectedProject ? 'Connect a local GitHub checkout to see issues and pull requests.'
-                      : `No open ${section === 'issues' ? 'issues' : 'pull requests'} in this repository.`}
-              />}
+                      : `No open ${section === 'issues' ? 'issues' : 'pull requests'} in this repository.`}</div>}
           </div>
           </PanelCard>
         </Panel>
