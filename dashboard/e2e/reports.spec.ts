@@ -1,8 +1,21 @@
 import { expect, test } from '@playwright/test';
 
 test('Reports panel rows match the desktop mockup proportions', async ({ page }) => {
+  const projectID = 'a'.repeat(32);
   await page.route('**/api/v1/products', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.route('**/api/v1/projects', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify([{ id: projectID, name: 'Platform', branch: 'main', git_remote: 'github.com/acme/platform',
+      worker_id: 'b'.repeat(32), worker_name: 'Mac', worker_status: 'online', last_seen: new Date().toISOString() }]),
+  }));
+  await page.route('**/api/v1/projects/*/pull-request-history*', (route) => route.fulfill({ status: 200,
+    contentType: 'application/json', body: JSON.stringify({ complete: true, items: Array.from({ length: 4 }, () => ({
+      created_at: new Date().toISOString(), closed_at: null, merged_at: null,
+    })) }),
+  }));
+  await page.route('**/api/v1/projects/*/workflow-run-history*', (route) => route.fulfill({ status: 200,
+    contentType: 'application/json', body: JSON.stringify({ complete: true, items: [] }),
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
@@ -15,7 +28,8 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.getByRole('heading', { name: 'Insights & narrative' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Insights view' })).toBeVisible();
   await expect(page.locator('.reports-chart-legend')).toHaveCount(3);
-  await expect(page.locator('.run-outcome-legend')).toBeVisible();
+  await expect(page.locator('.report-outcome-legend')).toBeVisible();
+  await expect(page.locator('.reports-outcomes-layout .report-chart-label')).toHaveText('4');
   await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
   await expect(page.locator('.product-summary-panel')).toContainText('No products are configured');
   expect(await page.locator('.reports-metric .metric-top svg').first().evaluate((icon) => getComputedStyle(icon).order)).toBe('-1');
@@ -26,8 +40,9 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.getByRole('button', { name: 'Download Agent spend & utilization CSV' })).toBeEnabled();
   await expect(page.locator('.reports-empty-chart')).toHaveCount(5);
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
-  await expect(page.locator('.reports-empty-chart').first()).toHaveAccessibleName('Connect a source to view this chart');
-  await expect(page.locator('.reports-empty-chart').first()).toContainText('Connect a source to view this chart');
+  await expect(page.locator('.reports-empty-chart').first())
+    .toHaveAccessibleName('No merged pull requests in this period.');
+  await expect(page.locator('.reports-empty-chart').first()).toContainText('No merged pull requests in this period.');
   const acceptanceTitle = page.locator('.acceptance-panel .reports-panel-heading h3');
   expect(await acceptanceTitle.evaluate((title) => title.scrollWidth <= title.clientWidth),
     'acceptance title stays on one line').toBe(true);
@@ -50,7 +65,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   const panel = (name: string) => rows.find((row) => row.classes.includes(name))!;
   const delivery = panel('delivery-velocity-panel');
   const ci = panel('ci-distribution-panel');
-  const outcomes = panel('run-outcomes-panel');
+  const outcomes = panel('work-outcomes-panel');
   const review = panel('review-latency-panel');
   const spend = panel('agent-spend-panel');
   const acceptance = panel('acceptance-panel');
@@ -151,29 +166,39 @@ test('30-day run metrics exclude future and invalid timestamps', async ({ page }
   }));
 
   await page.goto('/#reports');
-  await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText('1');
+  const agentActivity = page.locator('.reports-insight').filter({ hasText: 'Agent activity' });
+  await expect(agentActivity).toContainText('1 recorded run in this period');
+  await expect(agentActivity).toContainText('100% terminal success');
   await page.goto('/#agents');
   await expect(page.locator('.agents-metric').filter({ hasText: 'Total runs (30d)' }).locator('strong')).toHaveText('1');
 });
 
-test('run outcome distribution includes cancelled runs without counting them as successes', async ({ page }) => {
-  const createdAt = new Date().toISOString();
-  const run = (id: string, status: 'succeeded' | 'cancelled') => ({
-    id, agent_id: 'a'.repeat(32), agent_name: 'Reviewer', project_id: 'b'.repeat(32), project_name: 'Platform',
-    worker_id: 'c'.repeat(32), worker_name: 'Mac', branch: `agent/${id}`, prompt: 'Review changes.',
-    status, attempts: 1, created_at: createdAt, updated_at: createdAt,
-  });
-  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify([run('1'.repeat(32), 'succeeded'), run('2'.repeat(32), 'cancelled')]),
+test('work outcomes count merged, closed unmerged, and open pull requests in range', async ({ page }) => {
+  const now = Date.now();
+  const stamp = (hoursAgo: number) => new Date(now - hoursAgo * 60 * 60 * 1000).toISOString();
+  const projectID = 'a'.repeat(32);
+  await page.route('**/api/v1/projects', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify([{ id: projectID, name: 'Platform', branch: 'main', git_remote: 'github.com/acme/platform',
+      worker_id: 'b'.repeat(32), worker_name: 'Mac', worker_status: 'online', last_seen: stamp(0) }]),
+  }));
+  await page.route('**/api/v1/projects/*/pull-request-history*', (route) => route.fulfill({ status: 200,
+    contentType: 'application/json', body: JSON.stringify({ complete: true, items: [
+      { created_at: stamp(24), closed_at: stamp(3), merged_at: stamp(3) },
+      { created_at: stamp(24), closed_at: stamp(2), merged_at: null },
+      { created_at: stamp(1), closed_at: null, merged_at: null },
+      { created_at: stamp(-1), closed_at: null, merged_at: null },
+      { created_at: stamp(31 * 24), closed_at: stamp(32 * 24), merged_at: stamp(32 * 24) },
+    ] }),
   }));
 
   await page.goto('/#reports');
-  await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText('2');
-  const cancelled = page.locator('.run-outcome-legend > div').filter({ hasText: 'Cancelled' });
-  await expect(cancelled).toContainText('1');
-  await expect(page.locator('.run-outcomes-panel .coverage-online')).toHaveText('100% success');
+  await expect(page.locator('.reports-outcomes-layout .report-chart-label')).toHaveText('3');
+  const legend = page.locator('.report-outcome-legend');
+  await expect(legend.locator('> div')).toHaveText([
+    /Merged\s*1/, /Closed unmerged\s*1/, /Open\s*1/,
+  ]);
+  await expect(page.locator('.work-outcomes-panel .shared-panel-heading p'))
+    .toHaveText('Pull request status · last 30 days');
 });
 
 test('workspace inventory does not imply a complete snapshot when agent runs fail to load', async ({ page }) => {
@@ -273,6 +298,8 @@ test('Reports explains complete provider histories with no chart events', async 
     .toContainText('No merged pull requests in this period.');
   await expect(page.locator('.ci-distribution-panel .reports-empty-chart'))
     .toContainText('No completed GitHub Actions runs in this period.');
+  await expect(page.locator('.work-outcomes-panel .reports-empty'))
+    .toHaveText('No pull requests match this report scope.');
   await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' }).locator('strong')).toHaveText('0');
   await expect(page.locator('.reports-metric').filter({ hasText: 'CI duration' }).locator('strong')).toHaveText('Unavailable');
 });
@@ -367,11 +394,15 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   await page.goto('/#reports');
   await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
   await expect(page.getByLabel('Workflow filter unavailable because runs are not linked to workflows')).toBeDisabled();
-  await expect(page.locator('.run-outcomes-panel .shared-panel-heading p')).toHaveText('Recorded status · last 30 days');
+  await expect(page.locator('.work-outcomes-panel .reports-empty'))
+    .toHaveText('Connect a supported GitHub repository to view pull-request outcomes.');
+  await expect(page.locator('.work-outcomes-panel .shared-panel-heading p'))
+    .toHaveText('Pull request status · last 30 days');
   await page.getByRole('combobox', { name: 'Time range' }).click();
   await page.getByRole('option', { name: 'Last 90 days' }).click();
   await page.getByRole('button', { name: 'Apply filters' }).click();
-  await expect(page.locator('.run-outcomes-panel .shared-panel-heading p')).toHaveText('Recorded status · last 90 days');
+  await expect(page.locator('.work-outcomes-panel .shared-panel-heading p'))
+    .toHaveText('Pull request status · last 90 days');
   const objectiveInventoryCount = page.locator('.inventory-bar-row').filter({ hasText: 'Objectives' }).locator('b');
   const checkoutInventoryCount = page.locator('.inventory-bar-row').filter({ hasText: 'Local checkouts' }).locator('b');
   await expect(objectiveInventoryCount).toHaveText('2');
@@ -379,7 +410,7 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   await page.getByRole('option', { name: 'Platform', exact: true }).click();
   await page.getByRole('button', { name: 'Apply filters' }).click();
   await expect(objectiveInventoryCount).toHaveText('1');
-  await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText('2');
+  await expect(page.locator('.reports-insight').filter({ hasText: 'Agent activity' })).toContainText('2 recorded runs');
   await page.getByRole('button', { name: 'Reset' }).click();
   await expect(objectiveInventoryCount).toHaveText('2');
   await page.getByRole('combobox', { name: 'Product' }).click();
@@ -388,7 +419,8 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   await page.getByRole('button', { name: 'Apply filters' }).click();
   await expect(objectiveInventoryCount).toHaveText('1');
   await expect(checkoutInventoryCount).toHaveText('1');
-  await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText('1');
+  await expect(page.locator('.reports-insight').filter({ hasText: 'Agent activity' }))
+    .toContainText('1 recorded run in this period');
   await expect(page.locator('.reports-insight').filter({ hasText: 'Delivery sources' }))
     .toContainText('No Git remotes are configured for these checkouts.');
   const productRow = page.locator('.product-summary-table tbody tr').filter({ hasText: 'Nova Platform' });

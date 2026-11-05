@@ -1,16 +1,7 @@
 import type { ReactNode } from 'react';
 import { IconChartBar } from '@tabler/icons-react';
-import type { AgentRun } from './agents';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
-
-export const runStatuses = [
-  { value: 'succeeded', label: 'Succeeded', color: 'teal.5' },
-  { value: 'running', label: 'Running', color: 'blue.5' },
-  { value: 'queued', label: 'Queued', color: 'violet.5' },
-  { value: 'failed', label: 'Failed', color: 'red.5' },
-  { value: 'cancelled', label: 'Cancelled', color: 'gray.5' },
-] as const;
 
 export function ChartLegend({ items }: { items: { tone: string; label: string }[] }) {
   return <div className="reports-chart-legend" role="group" aria-label="Chart legend">
@@ -18,11 +9,11 @@ export function ChartLegend({ items }: { items: { tone: string; label: string }[
   </div>;
 }
 
-export function RunOutcomeLegend({ runs }: { runs?: AgentRun[] }) {
-  return <div className="run-outcome-legend" role="group" aria-label="Agent run outcomes legend">
-    {runStatuses.map((status) => <div key={status.value}>
-      <i className={`run-outcome-dot ${status.value}`} />
-      <span>{status.label}</span><b>{runs === undefined ? '—' : runs.filter((run) => run.status === status.value).length}</b>
+export function ReportOutcomeLegend({ items }: { items: { name: string; value: number; color: string }[] }) {
+  return <div className="report-outcome-legend" role="group" aria-label="Pull request outcomes legend">
+    {items.map(({ name, value, color }) => <div key={name}>
+      <i className="report-outcome-dot" style={{ backgroundColor: color }} />
+      <span>{name}</span><b>{value}</b>
     </div>)}
   </div>;
 }

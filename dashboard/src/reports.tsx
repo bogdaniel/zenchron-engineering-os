@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BarChart, CompositeChart, DonutChart, LineChart, Sparkline } from '@mantine/charts';
-import { Badge, Button, Progress, Select, Table } from '@mantine/core';
+import { Button, Progress, Select, Table } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import {
   IconActivity, IconChartBar, IconCircleCheck, IconCpu, IconFilter, IconFolders,
@@ -11,7 +11,7 @@ import { agentsSchema, loadAgentRuns } from './agents';
 import type { Objective } from './objectives';
 import type { Project } from './projects';
 import { loadProducts } from './productEditor';
-import { ChartLegend, RunOutcomeLegend, runStatuses, UnavailableChart, UnavailableMetricsPanel } from './ReportVisuals';
+import { ChartLegend, ReportOutcomeLegend, UnavailableChart, UnavailableMetricsPanel } from './ReportVisuals';
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
@@ -146,6 +146,9 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
   const runSuccessRate = finishedRuns.length
     ? `${Math.round(finishedRuns.filter((run) => run.status === 'succeeded').length / finishedRuns.length * 100)}%`
     : undefined;
+  const recordedRunCount = scopedRuns?.length ?? 0;
+  const selectedRangeLabel = timeRanges.find((range) => range.value === appliedScope.timeRange)?.label.toLowerCase()
+    ?? 'all time';
   const inventory = [
     { label: 'Objectives', count: objectiveCount, icon: <IconCircleCheck size={15} /> },
     {
@@ -161,17 +164,17 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
     { label: 'Local checkouts', count: scopedProjects?.length, icon: <IconFolders size={15} /> },
   ];
   const maximumCount = Math.max(1, ...inventory.flatMap((item) => item.count === undefined ? [] : [item.count]));
-  const runSections = scopedRuns?.length
-    ? runStatuses.flatMap((status) => {
-        const count = scopedRuns.filter((run) => run.status === status.value).length;
-        return count ? [{ name: status.label, value: count, color: status.color }] : [];
-      })
-    : [];
+  const pullRequestOutcomeSections = pullRequests.outcomes.filter((outcome) => outcome.value > 0);
   const completeMetrics = apiOnline && objectives !== undefined && projects !== undefined && workers !== undefined &&
     workflows.isSuccess && agents.isSuccess && products.isSuccess && runs.isSuccess;
   const summaryInsights = [
     { group: 'objectives', icon: <IconCircleCheck size={15} />, title: 'Objectives', detail: objectiveCount === undefined ? 'Objective data unavailable.' : `${completed} of ${objectiveCount} completed in this scope.` },
-    { group: 'execution', icon: <IconSparkles size={15} />, title: 'Agent activity', detail: runs.isLoading ? 'Agent run data is loading.' : runs.isError ? 'Agent run data unavailable.' : `${scopedRuns?.length ?? 0} recorded runs in this period.` },
+    {
+      group: 'execution', icon: <IconSparkles size={15} />, title: 'Agent activity',
+      detail: runs.isLoading ? 'Agent run data is loading.' : runs.isError ? 'Agent run data unavailable.'
+        : `${recordedRunCount} recorded ${recordedRunCount === 1 ? 'run' : 'runs'} in this period; ` +
+          `${runSuccessRate ?? 'no terminal run outcomes'}${runSuccessRate ? ' terminal success' : ''}.`,
+    },
     { group: 'execution', icon: <IconRobot size={15} />, title: 'Worker availability', detail: workers === undefined ? 'Worker inventory unavailable.' : `${onlineWorkers} of ${workers.length} workers are online.` },
     { group: 'delivery', icon: <IconFolders size={15} />, title: 'Delivery sources', detail: deliverySourceDetail },
   ];
@@ -350,22 +353,27 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
               : 'Connect a source to view this chart'} />}
         </PanelCard>
 
-        <PanelCard className="reports-panel run-outcomes-panel" withBorder>
+        <PanelCard className="reports-panel work-outcomes-panel" withBorder>
           <PanelHeading className="reports-panel-heading" icon={<IconRoute size={15} />} title="Work outcomes"
-            description={`Recorded status · ${timeRanges.find((range) => range.value === appliedScope.timeRange)?.label.toLowerCase() ?? 'all time'}`}
-            actions={runSuccessRate && <Badge className="coverage-online" variant="light">{runSuccessRate} success</Badge>} />
-          {runs.isLoading ? <div className="reports-empty">Loading agent runs…</div>
-            : runs.isError ? <div className="reports-empty">Agent run data unavailable.</div>
-              : <div className={`run-chart-layout${runSections.length ? '' : ' run-chart-empty'}`}>
-                {runSections.length ? <DonutChart
+            description={`Pull request status · ${selectedRangeLabel}`} />
+          {pullRequests.isLoading ? <div className="reports-empty">Loading pull-request outcomes…</div>
+            : pullRequests.isError ? <div className="reports-empty">Pull-request outcomes are unavailable.</div>
+              : !pullRequests.complete ? <div className="reports-empty" role="status">
+                {pullRequests.githubProjectCount
+                  ? 'Pull-request history is incomplete; narrow the time range.'
+                  : 'Connect a supported GitHub repository to view pull-request outcomes.'}
+              </div>
+              : <div className={`reports-outcomes-layout${pullRequestOutcomeSections.length ? '' :
+                ' reports-outcomes-empty'}`}>
+                {pullRequestOutcomeSections.length ? <DonutChart
                   size={120}
                   thickness={15}
-                  data={runSections}
-                  chartLabel={`${scopedRuns?.length ?? 0}`}
+                  data={pullRequestOutcomeSections}
+                  chartLabel={`${pullRequestOutcomeSections.reduce((count, outcome) => count + outcome.value, 0)}`}
                   classNames={{ label: 'report-chart-label' }}
-                  aria-label={`Agent run outcomes for ${timeRanges.find((range) => range.value === appliedScope.timeRange)?.label.toLowerCase() ?? 'all time'}`}
-                /> : <div className="reports-empty">No agent runs match this report scope.</div>}
-                <RunOutcomeLegend runs={runs.isSuccess ? scopedRuns ?? [] : undefined} />
+                  aria-label={`Pull request outcomes for ${selectedRangeLabel}`}
+                /> : <div className="reports-empty" role="status">No pull requests match this report scope.</div>}
+                <ReportOutcomeLegend items={pullRequests.outcomes} />
               </div>}
         </PanelCard>
         <UnavailableMetricsPanel className="review-latency-panel" title="Review latency trend"

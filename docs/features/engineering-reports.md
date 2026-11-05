@@ -33,7 +33,7 @@ flowchart LR
     Scope --> Projects
     Scope --> Runs
     Scope -. workflow filter disabled until runs have workflow IDs .-> Workflows
-    Runs --> OutcomeChart[Work outcomes · selected time range]
+    PRHistory --> OutcomeChart[Work outcomes · selected time range]
     Products --> ProductSummary[Product summary table]
     Scope --> ProductSummary
     Workflows --> Inventory[Current inventory bars]
@@ -56,12 +56,16 @@ flowchart LR
 - Summary counts use named fields from the control-plane APIs and represent current snapshots, not historical trends.
 - Time range filters objective creation and agent-run creation; invalid and future timestamps are excluded. Product filters use product repository links, owner filters apply to objectives, and repository filters apply to checkout and run records.
 - The workflow selector stays disabled because agent-run records do not contain a workflow ID; the UI does not claim to filter data that has no workflow relationship.
-- Desktop layout follows the supplied report mock's 3/4/3 panel rhythm: a report-scope toolbar and seven delivery/autonomy KPI cards; delivery velocity, CI duration, and work outcomes on the first chart row; review latency, agent spend, acceptance/autonomy, and data-driven insights on the second; then product summary, workspace summary, and CSV download panels. Chart legends remain visible while source data is unavailable. Insights can be filtered by executive summary, delivery, execution, or objectives. KPI values use live source records when available and otherwise stay marked unavailable. Current objective, workflow, run, and checkout counts remain visible; when no products exist, the summary explains how many checkouts are available to group. The grid collapses at tablet and phone widths.
+- Desktop layout follows the supplied report mock's 3/4/3 panel rhythm: a report-scope toolbar and seven delivery/autonomy KPI cards; delivery velocity, CI duration, and work outcomes on the first chart row; review latency, agent spend, acceptance/autonomy, and data-driven insights on the second; then product summary, workspace summary, and CSV download panels. Metric chart legends stay visible when their source data is unavailable; Work outcomes shows an explicit status until complete PR history is available. Insights can be filtered by executive summary, delivery, execution, or objectives. KPI values use live source records when available and otherwise stay marked unavailable. Current objective, workflow, run, and checkout counts remain visible; when no products exist, the summary explains how many checkouts are available to group. The grid collapses at tablet and phone widths.
 - Product summary rows join persisted product repository IDs to current scoped checkout, objective, and run records. The Downloads panel offers executive summary, detailed metrics, agent spend/utilization, and product/workspace CSV files using the applied scope. Each row shows its format, report name, source detail, and download action at the shared dashboard text scale. The spend export includes scoped run records while marking spend and usage unavailable until provider usage records exist.
 - The Insights & Narrative panel derives its statements from current scoped snapshots and GitHub PR history. It does not infer status history or delivery trends from objective/run `updated_at`. Delivery source status reports missing remotes, unsupported remotes, provider errors, and incomplete history.
-- Agent-run counts and status distribution use recorded queue records from the selected time range, including cancelled
-  runs. Success rate includes only terminal succeeded or failed runs; queued, running, and cancelled records are not
-  counted as successful work.
+- The Work outcomes chart uses complete GitHub pull-request history and counts merged PRs by merge time, closed
+  unmerged PRs by close time, and still-open PRs by creation time within the selected range. It does not infer review
+  decisions from PR state. Incomplete history or a missing GitHub source produces an explicit status instead of a
+  partial or fabricated chart.
+- Agent-run counts use recorded queue records from the selected time range, including cancelled runs. The execution
+  insight and export show success only for terminal succeeded or failed runs; queued, running, and cancelled records
+  are not counted as successful work.
 - Workflow and agent totals are definition counts; agent definitions do not imply agent execution.
 - Delivery velocity, cycle time, and acceptance rate use actual GitHub pull-request history from configured GitHub
   checkouts. Velocity is merged PRs per week over the selected window, cycle time is average creation-to-merge hours,
@@ -82,7 +86,7 @@ flowchart LR
   chart panels retain a grid plot area and explain the missing connection instead of implying that the source was
   queried and returned no events.
 - Work outcomes use Mantine Charts `DonutChart`, with its keyboard-accessible chart surface and tooltip; the adjacent
-  legend repeats run statuses and counts for quick scanning. The inventory bars use Mantine `Progress`.
+  legend repeats PR outcomes and counts for quick scanning. The inventory bars use Mantine `Progress`.
 
 ## Verification
 

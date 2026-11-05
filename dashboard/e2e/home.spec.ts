@@ -389,7 +389,9 @@ test('Reports summarizes live objectives and run records without inventing deliv
     const response = await fetch('/api/v1/agent-runs');
     if (!response.ok) throw new Error(`Agent run list failed: ${response.status}`);
     const runs = await response.json();
-    return { total: runs.length, succeeded: runs.filter((item: { status: string }) => item.status === 'succeeded').length };
+    const succeeded = runs.filter((item: { status: string }) => item.status === 'succeeded').length;
+    const failed = runs.filter((item: { status: string }) => item.status === 'failed').length;
+    return { total: runs.length, succeeded, terminal: succeeded + failed };
   });
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
@@ -397,12 +399,21 @@ test('Reports summarizes live objectives and run records without inventing deliv
   await expect(page.locator('.reports-insights')).toContainText(
     `${objectiveCounts.completed} of ${objectiveCounts.total} completed in this scope.`,
   );
-  await expect(page.locator('.reports-insights')).toContainText(`${runCounts.total} recorded runs in this period.`);
+  const agentActivity = page.locator('.reports-insight').filter({ hasText: 'Agent activity' });
+  await expect(agentActivity).toContainText(
+    `${runCounts.total} recorded ${runCounts.total === 1 ? 'run' : 'runs'} in this period`,
+  );
+  const terminalSuccess = runCounts.terminal
+    ? `${Math.round(runCounts.succeeded / runCounts.terminal * 100)}% terminal success`
+    : 'no terminal run outcomes';
+  await expect(agentActivity).toContainText(terminalSuccess);
   await expect(page.getByRole('heading', { name: 'Work outcomes' })).toBeVisible();
-  await expect(page.locator('.run-chart-layout [role="application"]')).toBeVisible();
-  await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText(String(runCounts.total));
-  await expect(page.locator('.run-outcome-legend')).toContainText('Succeeded');
-  await expect(page.locator('.run-outcome-legend')).toContainText(String(runCounts.succeeded));
+  const pullRequestOutcomeChart = page.locator('.reports-outcomes-layout [role="application"]');
+  if (await pullRequestOutcomeChart.count()) {
+    await expect(pullRequestOutcomeChart).toHaveAttribute('aria-label', /Pull request outcomes/);
+  } else {
+    await expect(page.locator('.work-outcomes-panel .reports-empty')).toContainText(/pull-request|repository|history/i);
+  }
   await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Delivery velocity & cycle time' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'CI duration distribution' })).toBeVisible();

@@ -16,6 +16,7 @@ const rangeDurations: Record<Exclude<TimeRange, 'all'>, number> = {
   '365d': 365 * 24 * 60 * 60 * 1000,
 };
 const days = 24 * 60 * 60 * 1000;
+const outcomeColors = { merged: '#40d9a3', closed: '#fa668b', open: '#b177ff' };
 
 function inRange(timestamp: string, range: TimeRange, now = Date.now()) {
   const date = Date.parse(timestamp);
@@ -88,6 +89,23 @@ export function useReportPullRequestMetrics(projects: Project[] | undefined, ran
   });
   const complete = githubProjects.length > 0 && history.isSuccess && history.data.complete;
   const items = history.data?.items ?? [];
+  const outcomes = [
+    {
+      name: 'Merged',
+      value: items.filter((item) => item.merged_at && inRange(item.merged_at, range)).length,
+      color: outcomeColors.merged,
+    },
+    {
+      name: 'Closed unmerged',
+      value: items.filter((item) => item.closed_at && !item.merged_at && inRange(item.closed_at, range)).length,
+      color: outcomeColors.closed,
+    },
+    {
+      name: 'Open',
+      value: items.filter((item) => !item.closed_at && inRange(item.created_at, range)).length,
+      color: outcomeColors.open,
+    },
+  ];
   const merged = items.filter((item) => item.merged_at && inRange(item.merged_at, range));
   const closed = items.filter((item) => item.closed_at && inRange(item.closed_at, range));
   const cycleTimes = merged.flatMap((pull) => {
@@ -109,6 +127,7 @@ export function useReportPullRequestMetrics(projects: Project[] | undefined, ran
     unconfiguredCheckoutCount: projects?.filter((project) => !project.git_remote).length ?? 0,
     complete,
     mergedCount: merged.length,
+    outcomes,
     deliveryVelocity: complete ? Math.round(merged.length / spanDays * 7 * 10) / 10 : undefined,
     cycleTime: complete ? cycleTime : undefined,
     acceptanceRate: complete && closed.length ? Math.round(merged.length / closed.length * 100) : undefined,

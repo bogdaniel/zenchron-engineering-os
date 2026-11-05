@@ -66,7 +66,7 @@
 .reports-metric {
   min-width: 0;
   min-height: 88px;
-  padding: 9px;
+  padding: 7px 9px;
 }
 .reports-metric.velocity { border-color: #7650a4; background: linear-gradient(145deg, #271b38, #12131d 80%); }
 .reports-metric.cycle-time { border-color: #2e6873; background: linear-gradient(145deg, #16313a, #12131d 80%); }
@@ -81,7 +81,7 @@
   gap: 6px;
 }
 .reports-metric .metric-top > svg { order: -1; }
-.reports-metric .metric-value-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; }
+.reports-metric .metric-value-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .reports-metric .metric-value-row > strong { margin-top: 0; }
 .reports-metric .metric-sparkline { flex: 0 0 54px; }
 .reports-metric svg { flex: 0 0 auto; color: #bd8aff; }
@@ -97,7 +97,7 @@
   min-width: 0;
   padding: 8px 9px;
 }
-.run-outcomes-panel { grid-column: span 4; padding-block: 6px; }
+.work-outcomes-panel { grid-column: span 4; padding-block: 6px; }
 .inventory-panel { grid-column: span 4; }
 .delivery-velocity-panel, .ci-distribution-panel, .review-latency-panel, .agent-spend-panel, .acceptance-panel { grid-column: span 3; }
 .product-summary-panel { grid-column: span 5; }
@@ -186,7 +186,7 @@
 }
 .downloadable-report-button.mantine-Button-root:hover { color: white; background: #3a2753; }
 .downloadable-report-button.mantine-Button-root:disabled { color: #625d6b; background: transparent; }
-.run-chart-layout {
+.reports-outcomes-layout {
   display: flex;
   min-height: 122px;
   align-items: center;
@@ -198,8 +198,8 @@
   font-size: 21px;
   font-weight: 650;
 }
-.run-outcome-legend { display: grid; gap: 4px; }
-.run-outcome-legend > div {
+.report-outcome-legend { display: grid; gap: 4px; }
+.report-outcome-legend > div {
   display: grid;
   grid-template-columns: 7px minmax(60px, 1fr) auto;
   align-items: center;
@@ -207,20 +207,15 @@
   color: #a9a5b9;
   font-size: var(--metric-detail-size);
 }
-.run-outcome-legend b { color: #eee9f6; font-size: var(--metric-label-size); }
-.run-chart-empty { align-items: center; }
-.run-chart-empty .reports-empty { flex: 1; min-height: 0; }
+.report-outcome-legend b { color: #eee9f6; font-size: var(--metric-label-size); }
+.reports-outcomes-empty { align-items: center; }
+.reports-outcomes-empty .reports-empty { flex: 1; min-height: 0; }
 .reports-chart-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 3px 0 4px; color: #a9a5b9; font-size: var(--metric-detail-size); }
 .reports-chart-legend > span { display: inline-flex; align-items: center; gap: 5px; }
 .reports-legend-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
 .reports-legend-dot.violet { background: #bd8aff; }
 .reports-legend-dot.teal { background: #35d6b1; }
-.run-outcome-dot { width: 7px; height: 7px; border-radius: 50%; }
-.run-outcome-dot.succeeded { background: #40d9a3; }
-.run-outcome-dot.running { background: #67a8ff; }
-.run-outcome-dot.queued { background: #b177ff; }
-.run-outcome-dot.failed { background: #fa668b; }
-.run-outcome-dot.cancelled { background: #89849a; }
+.report-outcome-dot { width: 7px; height: 7px; border-radius: 50%; }
 .reports-empty {
   display: grid;
   min-height: 110px;
@@ -298,12 +293,12 @@
 .reports-key-takeaway b { display: block; margin-bottom: 2px; color: #ddc8ff; font-size: var(--panel-description-size); }
 @media (min-width: 1201px) {
   .reports-summary { min-height: 175px; }
-  .run-outcomes-panel { min-height: 175px; }
+  .work-outcomes-panel { min-height: 175px; }
   .delivery-velocity-panel, .ci-distribution-panel, .review-latency-panel, .agent-spend-panel, .acceptance-panel { min-height: 168px; }
   .product-summary-panel, .inventory-panel, .downloadable-reports-panel { min-height: 188px; }
   .delivery-velocity-panel { grid-column: 1 / span 6; grid-row: 1; }
   .ci-distribution-panel { grid-column: 7 / span 5; grid-row: 1; }
-  .run-outcomes-panel { grid-column: 12 / span 4; grid-row: 1; }
+  .work-outcomes-panel { grid-column: 12 / span 4; grid-row: 1; }
   .review-latency-panel { grid-column: 1 / span 4; grid-row: 2; }
   .agent-spend-panel { grid-column: 5 / span 4; grid-row: 2; }
   .acceptance-panel { grid-column: 9 / span 3; grid-row: 2; }
