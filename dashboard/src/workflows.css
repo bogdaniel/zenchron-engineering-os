@@ -2,7 +2,7 @@
   min-height: calc(100vh - 104px);
   padding: 10px 0 8px;
 }
-.workflow-builder-layout { min-width: 0; max-width: 1320px; }
+.workflow-builder-layout { min-width: 0; }
 .workflow-page-heading {
   display: flex;
   align-items: center;

@@ -31,20 +31,22 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   const canvasPanel = await page.locator('.workflow-canvas-wrap').boundingBox();
   const preview = await page.locator('.workflow-run-preview').boundingBox();
   const properties = await page.locator('.workflow-properties').boundingBox();
+  const builder = await page.locator('.workflow-builder-layout').boundingBox();
   expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(112);
   expect(palette?.x).toBe(130);
   expect(palette?.y).toBeGreaterThanOrEqual(201);
   expect(palette?.y).toBeLessThanOrEqual(203);
   expect(palette?.width).toBe(220);
   expect(palette?.height).toBeGreaterThanOrEqual(650);
-  expect(canvasPanel?.x).toBe(376);
-  expect(canvasPanel?.width).toBe(792);
+  expect(canvasPanel?.x).toBe(palette!.x + palette!.width + 10);
+  expect(canvasPanel?.width).toBeGreaterThan(900);
   expect(canvasPanel?.height).toBe(413);
-  expect(properties?.x).toBe(1178);
+  expect(properties && builder).toBeTruthy();
+  expect(properties!.x + properties!.width).toBeCloseTo(builder!.x + builder!.width, 0);
   expect(properties?.y).toBe(90);
   expect(properties?.height).toBeGreaterThanOrEqual(760);
   expect(await page.locator('.workflow-properties').evaluate((panel) => panel.getBoundingClientRect().width)).toBe(288);
-  expect(preview?.x).toBe(376);
+  expect(preview?.x).toBe(canvasPanel?.x);
   expect(await page.locator('.workflow-canvas .workflow-node small').evaluateAll((descriptions) =>
     descriptions.every((description) => description.scrollWidth <= description.clientWidth))).toBe(true);
   expect(preview?.y).toBeGreaterThanOrEqual(621);
@@ -68,7 +70,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   expect(attributionBox && canvasPanel && attributionBox.y).toBeGreaterThan(canvasPanel!.y + canvasPanel!.height / 2);
   expect(attributionBox && miniMap && attributionBox.x + attributionBox.width).toBeLessThan(miniMap!.x);
   expect(workflowNode?.height).toBeGreaterThanOrEqual(54);
-  expect(workflowNode?.height).toBeLessThanOrEqual(56);
+  expect(workflowNode?.height).toBeLessThanOrEqual(72);
   const graphLabelSize = await page.evaluate(() => {
     const node = document.querySelector('.workflow-canvas .workflow-node');
     const viewport = document.querySelector('.workflow-canvas .react-flow__viewport');
