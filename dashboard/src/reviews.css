@@ -132,7 +132,7 @@
   box-shadow: 0 0 12px #8f48d944;
 }
 .reviews-tabs button:disabled {
-  opacity: .56;
+  opacity: 1;
 }
 .reviews-tab-spacer {
   flex: 1;
