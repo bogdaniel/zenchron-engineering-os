@@ -97,6 +97,22 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   expect(runs!.y).toBeGreaterThan(detail!.y);
   expect(runs!.y + runs!.height).toBeLessThanOrEqual((list!.y + list!.height) + 1);
   await expect(page.locator('.agents-panel-heading h3').first()).toHaveCSS('font-size', '14px');
+
+  await page.setViewportSize({ width: 1672, height: 749 });
+  const compact = await page.evaluate(() => Object.fromEntries(
+    ['.agents-content-grid', '.agents-list-panel', '.agents-detail-panel', '.agents-runs-panel']
+      .map((selector) => {
+        const { x, y, width, height, bottom } = document.querySelector(selector)!.getBoundingClientRect();
+        return [selector, { x, y, width, height, bottom }];
+      }),
+  ));
+  const compactList = compact['.agents-list-panel'];
+  const compactDetail = compact['.agents-detail-panel'];
+  const compactRuns = compact['.agents-runs-panel'];
+  expect(compactList.height).toBeGreaterThan(compactDetail.height);
+  expect(compactRuns.x).toBeCloseTo(compactDetail.x, 0);
+  expect(compactRuns.bottom).toBeLessThanOrEqual(compactList.bottom + 1);
+  expect(compact['.agents-content-grid'].bottom).toBeLessThanOrEqual(749);
 });
 
 test('Agents layout fits tablet and phone widths without panel overlap', async ({ page }) => {
