@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +42,38 @@ try {
   await new Promise((resolveClose, rejectClose) => {
     server.close((error) => error ? rejectClose(error) : resolveClose());
   });
+}
+
+const envPreviewRoot = await mkdtemp(join(tmpdir(), 'zenchron-preview-env-test-'));
+const envCheckServer = createServer((_, response) => response.end('{"status":"ok"}'));
+await new Promise((resolveListen) => envCheckServer.listen(0, '127.0.0.1', resolveListen));
+try {
+  const address = envCheckServer.address();
+  if (!address || typeof address === 'string') throw new Error('env-check server did not bind a TCP port');
+  await copyFile(join(repository, 'dev.sh'), join(envPreviewRoot, 'dev.sh'));
+  await writeFile(join(envPreviewRoot, '.env.local'), `ZENCHRON_LISTEN_ADDR=127.0.0.1:${address.port}\n`);
+  const env = { ...process.env };
+  delete env.ZENCHRON_LISTEN_ADDR;
+  const child = spawn('sh', ['./dev.sh'], {
+    cwd: envPreviewRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env,
+  });
+  let output = '';
+  for (const stream of [child.stdout, child.stderr]) stream.on('data', (chunk) => { output += chunk; });
+  const result = await new Promise((resolveExit, rejectExit) => {
+    child.once('error', rejectExit);
+    child.once('close', (status, signal) => resolveExit({ status, signal }));
+  });
+  if (result.signal || result.status === 0 || !output.includes('Control plane is already responding at http://127.0.0.1:')) {
+    throw new Error(`preview did not load .env.local before checking its configured API address:\n${output}`);
+  }
+  console.log('PASS: preview loads its ignored .env.local before starting services.');
+} finally {
+  await new Promise((resolveClose, rejectClose) => {
+    envCheckServer.close((error) => error ? rejectClose(error) : resolveClose());
+  });
+  await rm(envPreviewRoot, { recursive: true, force: true });
 }
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'zenchron-preview-test-'));

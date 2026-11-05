@@ -44,6 +44,9 @@ The control plane and dashboard bind to loopback by default. Without OAuth setti
 disabled in local mode because OAuth is not configured. Exercise real GitHub sign-in by setting the OAuth, session,
 allowlist, and public-origin variables from
 [GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md) before starting the preview.
+The launcher reads optional root `.env.local` before starting services; `.env.*` is ignored by Git. Set its permissions to
+`600` and keep client secrets there rather than in tracked files. For loopback login, set `ZENCHRON_PUBLIC_URL` to
+`http://127.0.0.1:4173`; the callback is `http://127.0.0.1:4173/auth/github/callback`.
 The API can bind to a remote interface only when the GitHub OAuth and worker authentication settings described in
 [GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md) are configured.
 `ZENCHRON_LISTEN_ADDR` and `ZENCHRON_DASHBOARD_PORT` select local ports; `ZENCHRON_PROJECTS_ROOT` selects

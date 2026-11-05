@@ -2,6 +2,11 @@
 set -eu
 
 cd "$(dirname "$0")"
+if [ -f .env.local ]; then
+  set -a
+  . ./.env.local
+  set +a
+fi
 PATH="$(pwd)/dashboard/node_modules/.bin:${PATH}"
 export PATH
 
