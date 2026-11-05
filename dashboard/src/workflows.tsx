@@ -166,6 +166,7 @@ async function layoutNodes(
     layoutOptions: {
       'elk.algorithm': 'layered', 'elk.direction': 'RIGHT', 'elk.spacing.nodeNode': String(size.spacing),
       'elk.layered.spacing.nodeNodeBetweenLayers': String(size.spacing),
+      'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
     },
     children: nodes.map((node) => ({ id: node.id, width: size.width, height: size.height })),
     edges: edges.map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),

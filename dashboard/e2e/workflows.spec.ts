@@ -88,6 +88,12 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   const editorStatus = await page.locator('.workflow-status').boundingBox();
   expect(canvasPanel && editorStatus && editorStatus.y + editorStatus.height)
     .toBeLessThanOrEqual(canvasPanel!.y + canvasPanel!.height);
+  await page.getByRole('button', { name: 'Auto layout' }).click();
+  const branchNodes = await Promise.all(['code-reviewer', 'test-generator', 'coverage-analyzer']
+    .map((kind) => page.locator(`.workflow-canvas .workflow-node.${kind}`).boundingBox()));
+  expect(branchNodes.every(Boolean)).toBe(true);
+  expect(branchNodes[0]!.y).toBeLessThan(branchNodes[1]!.y);
+  expect(branchNodes[1]!.y).toBeLessThan(branchNodes[2]!.y);
   await page.setViewportSize({ width: 1522, height: 856 });
   const workflowTitle = page.locator('.workflow-page-heading .page-heading h2');
   await expect(workflowTitle).toHaveCSS('font-size', '22px');

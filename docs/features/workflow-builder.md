@@ -43,7 +43,9 @@ flowchart LR
 - Node icons and accent colors follow the stable component type, so changing a node label does not change its visual role.
   Palette descriptions wrap to three lines, and canvas descriptions wrap to two lines instead of being cut off horizontally.
 - The canvas supports dragging nodes, connecting ports, editing labels and descriptions, adding components, deleting
-  components, and ELK auto-layout. Compact layer spacing and node sizing keep the complete graph legible in the canvas;
+  components, and ELK auto-layout. Auto-layout preserves model order for sibling nodes, keeping Code Reviewer above
+  Test Generator and Coverage Analyzer as shown in the mock. Compact layer spacing and node sizing keep the complete graph
+  legible in the canvas;
   React Flow controls sit at the canvas top-right and a compact mini-map stays at bottom-right.
 - Palette components show their type icon and purpose, and can be clicked or dragged onto the canvas; dragged nodes
   are centered under the cursor using React Flow viewport coordinates.
