@@ -7,6 +7,12 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
   expect(referenceWidth, 'full screen reference sidebar width').toBe(208);
+  await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link'))
+    .toHaveText([
+      'Overview', 'Objectives', 'Workflows', 'Agents', 'Product Workspace', 'Reviews', 'Integrations', 'Reports', 'Settings',
+    ]);
+  await expect(page.locator('.sidebar-bottom strong')).toHaveText('Zenchron Engineering');
+  await expect(page.locator('.sidebar-bottom p')).toHaveText('Autonomous, verifiable, and aligned engineering.');
   const pageSelectors: Record<string, { title: string; panel: string }> = {
     overview: { title: '.greeting h1', panel: '.activity-panel h3' },
     objectives: { title: '.page-heading h2', panel: '.panel-heading h3' },
@@ -51,9 +57,9 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     expect(styles.navigationFontFamily).toBe(styles.bodyFont);
     expect(styles.titleFontFamily).toBe(styles.bodyFont);
     expect(styles.panelFontFamily).toBe(styles.bodyFont);
-    expect(styles.navigationFont).toBe('15px');
+    expect(styles.navigationFont).toBe('14px');
     expect(styles.navigationWeight).toBe('500');
-    expect((await page.locator('.nav-link').first().boundingBox())?.height).toBe(46);
+    expect((await page.locator('.nav-link').first().boundingBox())?.height).toBe(42);
     const workspaceLabel = page.locator('.nav-link .nav-label').filter({ hasText: 'Product Workspace' });
     await expect(workspaceLabel, 'long navigation label stays on one line').toHaveCSS('white-space', 'nowrap');
     expect(await workspaceLabel.evaluate((label) => label.scrollWidth <= label.clientWidth),
@@ -101,6 +107,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
   expect(framedReferenceWidth, 'monitor screen reference sidebar width').toBe(208);
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.nav-link').first()).toHaveCSS('font-weight', '400');
   for (const [route, selectors] of Object.entries(pageSelectors)) {
     await page.evaluate((hash) => { window.location.hash = `#${hash}`; }, route);
     await expect(page.locator('.app-shell')).toHaveClass(new RegExp(`${route}-shell`));
@@ -140,6 +147,10 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
         .toHaveCSS('font-size', '10px');
     }
   }
+  const mobileNavigationLabels = await page.locator('.nav-link:visible .nav-label').evaluateAll((labels) =>
+    labels.map((label) => label.getAttribute('data-mobile-label') ?? label.textContent?.trim()),
+  );
+  expect(mobileNavigationLabels).toEqual(['Home', 'Workflows', 'Agents', 'Reviews', 'Profile']);
 
   const metricCards = {
     overview: '.metric-card.shared-metric-card',

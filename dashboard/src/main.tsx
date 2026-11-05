@@ -53,7 +53,6 @@ const navigation = [
   { label: 'Objectives', href: '#objectives', icon: IconTarget },
   { label: 'Workflows', href: '#workflows', icon: IconRoute },
   { label: 'Agents', href: '#agents', icon: IconRobot },
-  { label: 'Projects', href: '#projects', icon: IconFolders },
   { label: 'Product Workspace', href: '#workspace', icon: IconLayersIntersect },
   { label: 'Reviews', href: '#reviews', icon: IconGitPullRequest },
   { label: 'Integrations', href: '#integrations', icon: IconPlugConnected },
@@ -182,8 +181,8 @@ function App() {
             ))}
           </nav>
           <div className="sidebar-bottom">
-            <div className="connection-indicator"><span /> {sessionUnavailable ? 'Session unavailable' : auth.data?.local ? 'Local preview' : 'Authenticated workspace'}</div>
-            <p>One place to coordinate projects, agents, and delivery.</p>
+            <strong>Zenchron Engineering</strong>
+            <p>Autonomous, verifiable, and aligned engineering.</p>
             {auth.data?.local && <a className="preview-login-link" href="/?preview=login">Preview sign-in</a>}
           </div>
         </aside>

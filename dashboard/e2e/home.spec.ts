@@ -34,7 +34,8 @@ test('dashboard displays the connected control plane and local worker', async ({
   const footer = await page.locator('.page-footer').boundingBox();
   expect(footer).not.toBeNull();
   expect(footer!.y + footer!.height).toBeLessThanOrEqual(829);
-  await page.getByRole('link', { name: 'Projects', exact: true }).click();
+  await page.getByRole('link', { name: 'Product Workspace' }).click();
+  await page.getByRole('link', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
 });
 
@@ -336,7 +337,8 @@ test('Objectives grid keeps product names while the catalog loads', async ({ pag
 
 test('Projects page shows the live local worker inventory', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('link', { name: 'Projects', exact: true }).click();
+  await page.getByRole('link', { name: 'Product Workspace' }).click();
+  await page.getByRole('link', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.locator('.project-detail-heading h3')).toHaveCSS('font-size', '18px');
   await expect(page.locator('.project-detail-heading h3')).toHaveCSS('font-weight', '650');
@@ -356,7 +358,8 @@ test('Projects page shows the live local worker inventory', async ({ page }) => 
 test('worker prepares an isolated Git branch without moving the source checkout', async ({ page }) => {
   const branch = `zenchron/e2e-${Date.now()}`;
   await page.goto('/');
-  await page.getByRole('link', { name: 'Projects', exact: true }).click();
+  await page.getByRole('link', { name: 'Product Workspace' }).click();
+  await page.getByRole('link', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await page.getByRole('button', { name: 'Prepare isolated branch' }).click();
   const dialog = page.getByRole('dialog', { name: 'Prepare isolated branch' });
