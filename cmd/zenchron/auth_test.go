@@ -98,7 +98,7 @@ func TestGitHubOAuthCreatesAllowlistedSession(t *testing.T) {
 				t.Errorf("token request form = %v, error = %v", r.Form, err)
 			}
 			_, _ = w.Write([]byte(`{"access_token":"temporary-user-token"}`))
-		case "/api/user":
+		case "/user":
 			if r.Header.Get("Authorization") != "Bearer temporary-user-token" {
 				t.Errorf("identity authorization = %q", r.Header.Get("Authorization"))
 			}
@@ -114,6 +114,7 @@ func TestGitHubOAuthCreatesAllowlistedSession(t *testing.T) {
 	defer provider.Close()
 	config := testAuthConfig()
 	config.githubURL = provider.URL
+	config.githubAPIURL = provider.URL
 	server := authHandler(newMux(), config)
 
 	start := httptest.NewRecorder()
@@ -197,6 +198,7 @@ func TestGitHubOAuthRejectsStateAndUnlistedUsers(t *testing.T) {
 	}))
 	defer provider.Close()
 	config.githubURL = provider.URL
+	config.githubAPIURL = provider.URL
 	start := httptest.NewRecorder()
 	server.ServeHTTP(start, httptest.NewRequest(http.MethodGet, "/auth/github", nil))
 	state := start.Result().Cookies()[0]
@@ -204,8 +206,32 @@ func TestGitHubOAuthRejectsStateAndUnlistedUsers(t *testing.T) {
 	request.AddCookie(state)
 	response = httptest.NewRecorder()
 	server.ServeHTTP(response, request)
-	if response.Code != http.StatusForbidden {
-		t.Fatalf("unlisted GitHub account returned HTTP %d", response.Code)
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "GitHub account is not authorized") {
+		t.Fatalf("unlisted GitHub account returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestGitHubOAuthSeparatesTokenExchangeFailureFromAllowlistDenial(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/login/oauth/access_token" {
+			t.Errorf("unexpected provider path %q", r.URL.Path)
+		}
+		http.Error(w, "invalid client credentials", http.StatusUnauthorized)
+	}))
+	defer provider.Close()
+	config := testAuthConfig()
+	config.githubURL = provider.URL
+	config.githubAPIURL = provider.URL
+	server := authHandler(newMux(), config)
+	start := httptest.NewRecorder()
+	server.ServeHTTP(start, httptest.NewRequest(http.MethodGet, "/auth/github", nil))
+	state := start.Result().Cookies()[0]
+	request := httptest.NewRequest(http.MethodGet, "/auth/github/callback?code=x&state="+url.QueryEscape(state.Value), nil)
+	request.AddCookie(state)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), "check the OAuth app credentials") {
+		t.Fatalf("token exchange failure returned HTTP %d: %s", response.Code, response.Body.String())
 	}
 }
 
@@ -222,6 +248,7 @@ func TestOAuthTokenExchangeDoesNotFollowRedirects(t *testing.T) {
 	defer provider.Close()
 	config := testAuthConfig()
 	config.githubURL = provider.URL
+	config.githubAPIURL = provider.URL
 	request := httptest.NewRequest(http.MethodGet, "/auth/github/callback", nil)
 	if _, err := fetchGitHubUser(request, config, "one-time-code"); err == nil {
 		t.Fatal("OAuth redirect was accepted")
@@ -261,7 +288,7 @@ func TestReadSessionRejectsTamperingAndExpiry(t *testing.T) {
 func testAuthConfig() *authConfig {
 	return &authConfig{clientID: "client-id", clientSecret: "client-secret", sessionKey: []byte(strings.Repeat("s", 32)),
 		workerToken: testWorkerToken, allowedUsers: []string{"engineer"}, publicURL: mustURL("https://zenchron.example"), https: true,
-		githubURL: "https://github.com"}
+		githubURL: "https://github.com", githubAPIURL: "https://api.github.com"}
 }
 
 const testWorkerToken = "worker-secret-for-auth-tests-1234567890"

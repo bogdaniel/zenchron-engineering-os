@@ -134,7 +134,7 @@ policy enforcement.
   made directly on GitHub are not imported. Checks, approval, and merge actions remain unavailable.
 - Settings and Integrations routes show live API, worker, and checkout status while clearly marking external providers,
   organization roles, authorization policy, and audit history unavailable. GitHub OAuth username-allowlisted sign-in is
-  implemented for remote API access.
+  implemented for remote API access and has been verified against the test app on the loopback preview.
 - Reports summarizes current objective, workflow, agent-profile, worker, and checkout records. GitHub PR history now
   supplies work-outcome categories and delivery measures when the selected window contains relevant events; completed
   GitHub Actions history supplies CI duration. Agent-run success uses recorded terminal runs. Model spend, review

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,6 +29,7 @@ type authConfig struct {
 	publicURL    *url.URL
 	https        bool
 	githubURL    string
+	githubAPIURL string
 }
 
 type authUser struct {
@@ -75,7 +77,7 @@ func loadAuthConfig() (*authConfig, bool, error) {
 	return &authConfig{
 		clientID: strings.TrimSpace(os.Getenv("ZENCHRON_GITHUB_CLIENT_ID")), clientSecret: strings.TrimSpace(os.Getenv("ZENCHRON_GITHUB_CLIENT_SECRET")),
 		sessionKey: secret, workerToken: workerToken, allowedUsers: allowedUsers,
-		publicURL: publicURL, https: publicURL.Scheme == "https", githubURL: "https://github.com",
+		publicURL: publicURL, https: publicURL.Scheme == "https", githubURL: "https://github.com", githubAPIURL: "https://api.github.com",
 	}, true, nil
 }
 
@@ -220,7 +222,12 @@ func completeGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authCon
 		return
 	}
 	user, err := fetchGitHubUser(r, config, code)
-	if err != nil || !slices.Contains(config.allowedUsers, strings.ToLower(user.Login)) {
+	if err != nil {
+		log.Printf("GitHub OAuth identity lookup failed: %v", err)
+		http.Error(w, "GitHub sign-in could not verify your account; check the OAuth app credentials and retry", http.StatusBadGateway)
+		return
+	}
+	if !slices.Contains(config.allowedUsers, strings.ToLower(user.Login)) {
 		http.Error(w, "GitHub account is not authorized", http.StatusForbidden)
 		return
 	}
@@ -264,7 +271,7 @@ func fetchGitHubUser(r *http.Request, config *authConfig, code string) (authUser
 	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&token); err != nil || token.AccessToken == "" {
 		return user, fmt.Errorf("GitHub token response is invalid")
 	}
-	request, err = http.NewRequestWithContext(r.Context(), http.MethodGet, config.githubURL+"/api/user", nil)
+	request, err = http.NewRequestWithContext(r.Context(), http.MethodGet, config.githubAPIURL+"/user", nil)
 	if err != nil {
 		return user, err
 	}

@@ -57,6 +57,9 @@ refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does no
   repository access. Repository operations continue to use the control-plane GitHub App or token configuration.
 - The allowlist is checked at login and on each session request, so removing a username takes effect immediately.
   Rotating `ZENCHRON_SESSION_SECRET` invalidates all sessions.
+- OAuth token-exchange failures return a distinct gateway error; only a successfully verified but unlisted GitHub username
+  receives the account-not-authorized response.
+- GitHub OAuth codes are exchanged at `github.com`; user identity is fetched separately from `api.github.com/user`.
 - Worker endpoints use a separate bearer token. This first remote-worker bootstrap shares one token across workers;
   any worker holding it can authenticate as any worker ID. Per-worker enrollment, revocation, and role-based access
   remain required before multi-tenant or untrusted-worker deployment.
@@ -69,4 +72,4 @@ Focused checks: `go test ./cmd/zenchron ./cmd/zenchron-worker`, `cd dashboard &&
 Settings dashboard E2E specs. `cd dashboard && npm run test:e2e:agent-runtime` launches real control-plane and worker
 processes with auth enabled, confirms anonymous API and wrong worker-token requests fail, then verifies the authenticated
 worker completes a model run on an isolated branch. It signs a temporary allowlisted session fixture; the GitHub OAuth
-exchange itself is covered with a local provider stub in the Go tests.
+exchange is covered with a local provider stub and was verified live against the GitHub test app on the loopback preview.
