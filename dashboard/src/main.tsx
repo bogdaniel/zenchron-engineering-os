@@ -149,19 +149,16 @@ function App() {
     enabled: auth.data?.authenticated === true,
   });
   const openObjectives = objectives.data?.filter((objective) => objective.status !== 'completed') ?? [];
+  const unauthorized = (auth.error as (Error & { status?: number }) | null)?.status === 401;
+  const sessionUnavailable = auth.isError && !unauthorized;
   if (auth.isLoading) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
-  if (auth.isError) {
-    const unauthorized = (auth.error as Error & { status?: number }).status === 401;
-    return <div className="auth-screen">
-      <div className="auth-card">
-        <span className="brand-mark" aria-hidden="true" />
-        <div><h1>Zenchron Engineering</h1><p>{unauthorized ? 'Sign in to access your engineering control plane.' : 'Zenchron could not verify your session.'}</p></div>
-        {unauthorized
-          ? <a className="github-login-button" href="/auth/github"><IconBrandGithub size={19} /> Continue with GitHub</a>
-          : <button className="github-login-button" onClick={() => void auth.refetch()}>Retry session check</button>}
-      </div>
-    </div>;
-  }
+  if (auth.isError && unauthorized) return <div className="auth-screen">
+    <div className="auth-card">
+      <span className="brand-mark" aria-hidden="true" />
+      <div><h1>Zenchron Engineering</h1><p>Sign in to access your engineering control plane.</p></div>
+      <a className="github-login-button" href="/auth/github"><IconBrandGithub size={19} /> Continue with GitHub</a>
+    </div>
+  </div>;
   return (
     <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
       <div className={`app-shell ${activePage}-shell`} id="overview">
@@ -181,7 +178,7 @@ function App() {
             ))}
           </nav>
           <div className="sidebar-bottom">
-            <div className="connection-indicator"><span /> {auth.data?.local ? 'Local preview' : 'Authenticated workspace'}</div>
+            <div className="connection-indicator"><span /> {sessionUnavailable ? 'Session unavailable' : auth.data?.local ? 'Local preview' : 'Authenticated workspace'}</div>
             <p>One place to coordinate projects, agents, and delivery.</p>
           </div>
         </aside>
@@ -206,7 +203,7 @@ function App() {
             />
             <div className="top-actions">
               <button className="icon-button" aria-label="Notifications" disabled><IconBell size={19} /></button>
-              {!auth.data?.local && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
+              {auth.data?.authenticated && auth.data.local === false && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
                 await fetch('/api/v1/auth/logout', { method: 'POST' });
                 await auth.refetch();
               }}><IconLogout size={17} /></button>}
@@ -214,13 +211,18 @@ function App() {
                 <span className="workspace-glyph">Z</span> Workspace <IconChevronDown size={15} />
               </button>
               <div className="user-chip">
-                {auth.data?.avatar_url ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" /> : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login.slice(0, 1).toUpperCase()}</span>}
-                <span>{auth.data?.local ? 'Local workspace' : auth.data?.login}<small>{auth.data?.local ? 'Administrator' : 'GitHub account'}</small></span>
+                {auth.data?.avatar_url ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" /> : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?'}</span>}
+                <span>{auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}<small>{auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Preview only'}</small></span>
               </div>
             </div>
           </header>
 
-          {activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} /> : activePage === 'workflows' ? <WorkflowsPage /> : activePage === 'projects' ? (
+          {sessionUnavailable ? <section className="session-preview-region" aria-labelledby="session-preview-title"><PanelCard className="session-preview-card" withBorder>
+            <IconActivity size={24} aria-hidden="true" />
+            <h2 id="session-preview-title">Session check unavailable</h2>
+            <p>The dashboard shell is available, but page data stays hidden until your session can be verified.</p>
+            <button className="github-login-button" onClick={() => void auth.refetch()}>Retry session check</button>
+          </PanelCard></section> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} /> : activePage === 'workflows' ? <WorkflowsPage /> : activePage === 'projects' ? (
             <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} />
           ) : activePage === 'workspace' ? (
             <WorkspacePage

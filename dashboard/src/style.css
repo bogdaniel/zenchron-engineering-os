@@ -312,6 +312,11 @@ button:disabled, input:disabled {
 .auth-card .brand-mark { width: 38px; height: 38px; }
 .auth-card h1 { margin: 0; font-size: 21px; font-weight: 650; }
 .auth-card p { margin: 7px 0 0; color: #aaa5b9; font-size: 12px; }
+.session-preview-card { display: grid; max-width: 520px; justify-items: center; gap: 12px; margin: 96px auto; padding: 30px; text-align: center; }
+.session-preview-card > svg { color: #bd8aff; }
+.session-preview-card h2 { margin: 0; color: #eee9f6; font-size: 18px; font-weight: 650; }
+.session-preview-card p { max-width: 400px; margin: 0; color: #aaa5b9; font-size: 12px; line-height: 1.5; }
+.session-preview-card .github-login-button { max-width: 280px; }
 .github-login-button {
   display: flex;
   min-height: 42px;

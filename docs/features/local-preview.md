@@ -24,6 +24,14 @@ sequenceDiagram
     Start->>UI: Start source watcher and dashboard on 4173
     Start->>UI: Wait for dashboard HTTP response
     Start-->>Dev: Keep dashboard available at the fixed URL
+    alt Session verified
+        UI-->>Dev: Render the selected authenticated page
+    else Session returns HTTP 401
+        UI-->>Dev: Show GitHub sign-in
+    else Session verification is unavailable
+        UI-->>Dev: Keep the shell visible and hide API-backed page data
+        Dev->>UI: Retry session check
+    end
     Dev->>UI: Review live dashboard changes
     Dev->>Start: Ctrl+C
     Start->>API: Stop child services
@@ -40,14 +48,16 @@ The API can bind to a remote interface only when the GitHub OAuth and worker aut
 the folder scanned by the worker. `ZENCHRON_LLM_BASE_URL` and `ZENCHRON_LLM_API_KEY` are forwarded only to the worker.
 The launcher exits with a clear message if either fixed URL is already responding, rather than mistaking an existing
 preview for the child process it just started. If the Go control plane or worker fails after startup, the dashboard
-continues serving the latest successful frontend build so layout work remains reviewable; API-backed features show
-their normal unavailable state until the service returns. The fixed ports are reserved for this manual-review preview.
+continues serving the latest successful frontend build so layout work remains reviewable. An HTTP 401 shows GitHub sign-in;
+if session verification fails for another reason, the dashboard shell stays visible while API-backed page data is hidden and
+the user can retry. The fixed ports are reserved for this manual-review preview.
 
 Run the preview from the repository root. Install frontend dependencies once with `cd dashboard && npm ci`.
 
 ## Focused verification
 
-Run `sh -n dev.sh dashboard/dev.sh` and `node scripts/test_dev_preview.mjs`, then start the preview with isolated
-local ports and check `/healthz`,
+Run `sh -n dev.sh dashboard/dev.sh` and `node scripts/test_dev_preview.mjs`; `cd dashboard && npm run test:e2e --
+e2e/auth.spec.ts` verifies the GitHub sign-in gate and shell fallback when session verification fails. Then start the
+preview with isolated local ports and check `/healthz`,
 `/api/v1/workers/healthz`, and the dashboard URL before stopping it with Ctrl+C. Starting a second preview against an
 already responding API URL must exit before printing the ready message.
