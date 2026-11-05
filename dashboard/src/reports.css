@@ -117,21 +117,21 @@
 .acceptance-panel .reports-panel-heading h3 { letter-spacing: -.5px; white-space: nowrap; }
 .reports-insight-filter.mantine-Select-root { width: 144px; flex: 0 0 auto; }
 .reports-insight-filter .mantine-Select-input { min-height: 24px; height: 24px; border-color: #38324c; background: #1b1928; font-size: 10px; }
-.product-summary-table-wrap { overflow-x: auto; }
-.product-summary-table {
+.report-summary-table-wrap { overflow-x: auto; }
+.report-summary-table {
   width: 100%;
   table-layout: fixed;
   color: #c8c3d2;
-  font-size: var(--metric-detail-size);
+  font-size: 9px;
 }
-.product-summary-table th:first-child, .product-summary-table td:first-child { width: 36%; text-align: left; }
-.product-summary-table th:not(:first-child), .product-summary-table td:not(:first-child) { text-align: right; }
-.product-summary-table th {
+.report-summary-table th:first-child, .report-summary-table td:first-child { width: 25%; text-align: left; }
+.report-summary-table th:not(:first-child), .report-summary-table td:not(:first-child) { text-align: right; }
+.report-summary-table th {
   color: #8f899f;
   font-weight: 600;
   line-height: 1.2;
 }
-.product-summary-table td, .product-summary-table th { padding: 5px 3px; overflow-wrap: anywhere; }
+.report-summary-table td, .report-summary-table th { padding: 4px 2px; overflow-wrap: anywhere; vertical-align: top; }
 .downloadable-report-list { display: grid; gap: 1px; }
 .downloadable-report {
   display: grid;
@@ -222,18 +222,6 @@
   font-size: var(--metric-label-size);
   text-align: center;
 }
-.inventory-bars { display: grid; gap: 2px; }
-.inventory-bar-row { display: grid; gap: 1px; }
-.inventory-label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #b7b2c6;
-  font-size: var(--metric-label-size);
-}
-.inventory-label svg { color: #bd8aff; }
-.inventory-label b { margin-left: auto; color: #f3effa; font-weight: 600; }
-.inventory-bar-row .mantine-Progress-root { background: #272436; }
 .inventory-footnote, .delivery-note {
   margin: 5px 0 0;
   color: #89849a;

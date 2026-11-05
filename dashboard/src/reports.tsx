@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BarChart, CompositeChart, DonutChart, LineChart, Sparkline } from '@mantine/charts';
-import { Button, Progress, Select, Table } from '@mantine/core';
+import { Button, Select } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import {
   IconActivity, IconChartBar, IconCircleCheck, IconCpu, IconFilter, IconFolders,
@@ -18,6 +18,8 @@ import { PanelHeading } from './PanelHeading';
 import { workflowsSchema } from './workflows';
 import { useReportPullRequestMetrics } from './reportPullRequests';
 import { useReportWorkflowRunMetrics } from './reportWorkflowRuns';
+import { summarizeProductDelivery } from './reportSummaryMetrics';
+import { ProductSummaryPanel, WorkspaceSummaryPanel } from './ReportSummaries';
 import { DownloadableReports } from './DownloadableReports';
 import './reports.css';
 
@@ -132,6 +134,14 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
     return {
       id: product.id,
       name: product.name,
+      autonomousCompletion: undefined,
+      ...summarizeProductDelivery(
+        (projects ?? []).filter((project) => repositoryIDs.has(project.id) &&
+          (appliedScope.repository === 'all' || project.id === appliedScope.repository)),
+        pullRequests.repositories,
+        workflowRunMetrics.repositories,
+        appliedScope.timeRange,
+      ),
       repositories: projects === undefined ? undefined
         : scopedProjects?.filter((project) => repositoryIDs.has(project.id)).length,
       objectives: scopedObjectives?.filter((objective) => objective.product_id === product.id).length,
@@ -150,23 +160,12 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
   const selectedRangeLabel = timeRanges.find((range) => range.value === appliedScope.timeRange)?.label.toLowerCase()
     ?? 'all time';
   const inventory = [
-    { label: 'Objectives', count: objectiveCount, icon: <IconCircleCheck size={15} /> },
-    {
-      label: 'Workflow definitions',
-      count: workflows.isSuccess ? workflows.data.length : undefined,
-      icon: <IconRoute size={15} />,
-    },
-    {
-      label: 'Agent profiles',
-      count: agents.isSuccess ? agents.data.length : undefined,
-      icon: <IconRobot size={15} />,
-    },
-    { label: 'Local checkouts', count: scopedProjects?.length, icon: <IconFolders size={15} /> },
+    { label: 'Objectives', count: objectiveCount },
+    { label: 'Workflow definitions', count: workflows.isSuccess ? workflows.data.length : undefined },
+    { label: 'Agent profiles', count: agents.isSuccess ? agents.data.length : undefined },
+    { label: 'Local checkouts', count: scopedProjects?.length },
   ];
-  const maximumCount = Math.max(1, ...inventory.flatMap((item) => item.count === undefined ? [] : [item.count]));
   const pullRequestOutcomeSections = pullRequests.outcomes.filter((outcome) => outcome.value > 0);
-  const completeMetrics = apiOnline && objectives !== undefined && projects !== undefined && workers !== undefined &&
-    workflows.isSuccess && agents.isSuccess && products.isSuccess && runs.isSuccess;
   const summaryInsights = [
     { group: 'objectives', icon: <IconCircleCheck size={15} />, title: 'Objectives', detail: objectiveCount === undefined ? 'Objective data unavailable.' : `${completed} of ${objectiveCount} completed in this scope.` },
     {
@@ -238,18 +237,27 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
       ]),
     },
     {
-      name: 'Product & workspace report', detail: 'Product, repository, and inventory counts', format: 'CSV',
+      name: 'Product & workspace report', detail: 'Product delivery metrics and workspace counts', format: 'CSV',
       download: () => downloadCSV('product-workspace', [
-        ['Record', 'Name', 'Repositories', 'Objectives', 'Agent runs', 'Worker', 'Status'],
+        ['Record', 'Name', 'Repositories', 'Objectives', 'Agent runs', 'Velocity (PRs/week)', 'Cycle time (hours)',
+          'CI duration (minutes)', 'Acceptance rate (%)', 'Autonomous completion (%)', 'Worker', 'Status'],
         ...productSummaries.map((product) => [
-          'Product', product.name, product.repositories, product.objectives, product.runs, '', '',
+          'Product', product.name, product.repositories, product.objectives, product.runs,
+          product.deliveryVelocity ?? 'Unavailable', product.cycleTime ?? 'Unavailable',
+          product.ciDuration ?? 'Unavailable', product.acceptanceRate ?? 'Unavailable',
+          product.autonomousCompletion ?? 'Unavailable', '', '',
         ]),
+        ['Workspace', 'Local workspace', '', objectiveCount ?? 'Unavailable', '',
+          pullRequests.deliveryVelocity ?? 'Unavailable', pullRequests.cycleTime ?? 'Unavailable',
+          workflowRunMetrics.averageMinutes ?? 'Unavailable', pullRequests.acceptanceRate ?? 'Unavailable',
+          'Unavailable', '', ''],
         ...scopedProjects?.map((project) => [
-          'Repository', project.name, 1, '',
-          scopedRuns?.filter((run) => run.project_id === project.id).length,
-          project.worker_name, project.worker_status,
+          'Repository', project.name, 1, '', scopedRuns?.filter((run) => run.project_id === project.id).length,
+          '', '', '', '', '', project.worker_name, project.worker_status,
         ]) ?? [],
-        ...inventory.map((item) => ['Inventory', item.label, '', '', item.count, '', 'Current snapshot']),
+        ...inventory.map((item) => [
+          'Inventory', item.label, '', '', item.count ?? 'Unavailable', '', '', '', '', '', '', 'Current snapshot',
+        ]),
       ]),
     },
   ];
@@ -413,55 +421,16 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
             Snapshot counts are available; delivery trends need provider event data.</span></div>
         </PanelCard>
 
-        <PanelCard className="reports-panel product-summary-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconFolders size={15} />} title="Product summary"
-            description="Current counts for the selected report scope" />
-          {products.isLoading ? <div className="reports-empty">Loading product summaries…</div>
-            : products.isError ? <div className="reports-empty">Product data unavailable.</div>
-              : productSummaries.length ? (
-                <div className="product-summary-table-wrap">
-                  <Table className="product-summary-table" aria-label="Product summary">
-                    <Table.Thead><Table.Tr>
-                      <Table.Th>Product</Table.Th><Table.Th>Local checkouts</Table.Th>
-                      <Table.Th>Objectives</Table.Th><Table.Th>Agent runs</Table.Th>
-                    </Table.Tr></Table.Thead>
-                    <Table.Tbody>{productSummaries.map((product) => (
-                      <Table.Tr key={product.id}>
-                        <Table.Td>{product.name}</Table.Td><Table.Td>{product.repositories ?? 'Unavailable'}</Table.Td>
-                        <Table.Td>{product.objectives ?? 'Unavailable'}</Table.Td>
-                        <Table.Td>{product.runs ?? 'Unavailable'}</Table.Td>
-                      </Table.Tr>
-                    ))}</Table.Tbody>
-                  </Table>
-                </div>
-              ) : <div className="reports-empty">No products are configured. {scopedProjects?.length ?? 0} local
-                {scopedProjects?.length === 1 ? ' checkout is' : ' checkouts are'} available to group.</div>}
-        </PanelCard>
+        <ProductSummaryPanel rows={productSummaries} loading={products.isLoading} error={products.isError}
+          checkoutCount={scopedProjects?.length} />
 
-        <PanelCard className="reports-panel inventory-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconFolders size={15} />} title="Workspace summary"
-            description="Current configuration records and local resources" />
-          <div className="inventory-bars">
-            {inventory.map((item) => (
-              <div className="inventory-bar-row" key={item.label}>
-                <div className="inventory-label">{item.icon}<span>{item.label}</span>
-                  <b>{item.count ?? 'Unavailable'}</b></div>
-                <Progress
-                  value={item.count === undefined ? 0 : item.count / maximumCount * 100}
-                  color="violet.5"
-                  size="sm"
-                  aria-label={`${item.label} count`}
-                />
-              </div>
-            ))}
-          </div>
-          <p className="inventory-footnote">
-            {completeMetrics
-              ? `${onlineWorkers} of ${workers.length} workers are online; these totals are a current snapshot, ` +
-                'not delivery trends.'
-              : 'One or more sources are still loading or unavailable.'}
-          </p>
-        </PanelCard>
+        <WorkspaceSummaryPanel workItems={objectiveCount} metrics={{
+          deliveryVelocity: pullRequests.deliveryVelocity,
+          cycleTime: pullRequests.cycleTime,
+          ciDuration: workflowRunMetrics.averageMinutes,
+          acceptanceRate: pullRequests.acceptanceRate,
+          autonomousCompletion: undefined,
+        }} />
 
         <DownloadableReports reports={downloadableReports} />
       </div>

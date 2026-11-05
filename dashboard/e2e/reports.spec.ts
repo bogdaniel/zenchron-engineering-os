@@ -205,10 +205,18 @@ test('work outcomes count merged, closed unmerged, and open pull requests in ran
     .toHaveText('Pull request status · last 30 days');
 });
 
-test('workspace inventory does not imply a complete snapshot when agent runs fail to load', async ({ page }) => {
+test('workspace summary does not infer autonomy when agent runs fail to load', async ({ page }) => {
+  await page.route('**/api/v1/objectives', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.route('**/api/v1/projects', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill({ status: 503, body: 'Unavailable' }));
   await page.goto('/#reports');
-  await expect(page.locator('.inventory-footnote')).toHaveText('One or more sources are still loading or unavailable.');
+  await expect(page.locator('.inventory-panel .report-summary-table tbody tr td')).toHaveText([
+    'Local workspace', '0', 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable',
+  ]);
 });
 
 test('Reports derives GitHub delivery metrics from complete pull-request history', async ({ page }) => {
@@ -407,29 +415,30 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   await page.getByRole('button', { name: 'Apply filters' }).click();
   await expect(page.locator('.work-outcomes-panel .shared-panel-heading p'))
     .toHaveText('Pull request status · last 90 days');
-  const objectiveInventoryCount = page.locator('.inventory-bar-row').filter({ hasText: 'Objectives' }).locator('b');
-  const checkoutInventoryCount = page.locator('.inventory-bar-row').filter({ hasText: 'Local checkouts' }).locator('b');
-  await expect(objectiveInventoryCount).toHaveText('2');
+  const workspaceItems = page.locator('.inventory-panel .report-summary-table tbody tr td').nth(1);
+  await expect(workspaceItems).toHaveText('2');
   await page.getByRole('combobox', { name: 'Objective owner' }).click();
   await page.getByRole('option', { name: 'Platform', exact: true }).click();
   await page.getByRole('button', { name: 'Apply filters' }).click();
-  await expect(objectiveInventoryCount).toHaveText('1');
+  await expect(workspaceItems).toHaveText('1');
   await expect(page.locator('.reports-insight').filter({ hasText: 'Agent activity' })).toContainText('2 recorded runs');
   await page.getByRole('button', { name: 'Reset' }).click();
-  await expect(objectiveInventoryCount).toHaveText('2');
+  await expect(workspaceItems).toHaveText('2');
   await page.getByRole('combobox', { name: 'Product' }).click();
   await page.getByRole('option', { name: 'Nova Platform' }).click();
-  await expect(objectiveInventoryCount).toHaveText('2');
+  await expect(workspaceItems).toHaveText('2');
   await page.getByRole('button', { name: 'Apply filters' }).click();
-  await expect(objectiveInventoryCount).toHaveText('1');
-  await expect(checkoutInventoryCount).toHaveText('1');
+  await expect(workspaceItems).toHaveText('1');
   await expect(page.locator('.reports-insight').filter({ hasText: 'Agent activity' }))
     .toContainText('1 recorded run in this period');
   await expect(page.locator('.reports-insight').filter({ hasText: 'Delivery sources' }))
     .toContainText('No Git remotes are configured for these checkouts.');
-  const productRow = page.locator('.product-summary-table tbody tr').filter({ hasText: 'Nova Platform' });
-  await expect(productRow.locator('td')).toHaveText(['Nova Platform', '1', '1', '1']);
-  expect(await page.locator('.product-summary-table-wrap').evaluate((table) =>
+  const productRow = page.locator('.product-summary-panel .report-summary-table tbody tr')
+    .filter({ hasText: 'Nova Platform' });
+  await expect(productRow.locator('td')).toHaveText([
+    'Nova Platform', 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable',
+  ]);
+  expect(await page.locator('.report-summary-table-wrap').first().evaluate((table) =>
     table.scrollWidth <= table.clientWidth,
   ), 'product summary table fits its desktop card').toBe(true);
   const downloadCsv = async (name: string) => {
@@ -455,8 +464,9 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   expect(spend.csv).toContain('"Provider usage records are not connected"');
   const workspace = await downloadCsv('Product & workspace report');
   expect(workspace.filename).toMatch(/^zenchron-product-workspace-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(workspace.csv).toContain('"Velocity (PRs/week)"');
   expect(workspace.csv).toContain('"Product","Nova Platform","1","1","1"');
+  expect(workspace.csv).toContain('"Workspace","Local workspace"');
   await page.getByRole('button', { name: 'Reset' }).click();
-  await expect(objectiveInventoryCount).toHaveText('2');
-  await expect(checkoutInventoryCount).toHaveText('2');
+  await expect(workspaceItems).toHaveText('2');
 });

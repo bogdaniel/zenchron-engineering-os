@@ -35,11 +35,13 @@ flowchart LR
     Scope -. workflow filter disabled until runs have workflow IDs .-> Workflows
     PRHistory --> OutcomeChart[Work outcomes · selected time range]
     Products --> ProductSummary[Product summary table]
+    PRHistory --> ProductSummary
+    WorkflowRunHistory --> ProductSummary
     Scope --> ProductSummary
-    Workflows --> Inventory[Current inventory bars]
-    Agents --> Inventory
-    Projects --> Inventory
-    Workers --> Inventory
+    PRHistory --> WorkspaceSummary[Workspace delivery summary]
+    WorkflowRunHistory --> WorkspaceSummary
+    Objectives --> WorkspaceSummary
+    Scope --> WorkspaceSummary
     Reviews[Provider review events] -. not available .-> Latency[Review latency]
     Usage[Model usage and run evidence] -. not available .-> Autonomy[Agent spend and autonomous completion]
     PRs -. not available .-> Autonomy
@@ -56,8 +58,8 @@ flowchart LR
 - Summary counts use named fields from the control-plane APIs and represent current snapshots, not historical trends.
 - Time range filters objective creation and agent-run creation; invalid and future timestamps are excluded. Product filters use product repository links, owner filters apply to objectives, and repository filters apply to checkout and run records.
 - The workflow selector stays disabled because agent-run records do not contain a workflow ID; the UI does not claim to filter data that has no workflow relationship.
-- Desktop layout follows the supplied report mock's 3/4/3 panel rhythm: a report-scope toolbar and seven delivery/autonomy KPI cards; delivery velocity, CI duration, and work outcomes on the first chart row; review latency, agent spend, acceptance/autonomy, and data-driven insights on the second; then product summary, workspace summary, and CSV download panels. Metric chart legends stay visible when their source data is unavailable; Work outcomes shows an explicit status until complete PR history is available. Insights can be filtered by executive summary, delivery, execution, or objectives. KPI values use live source records when available and otherwise stay marked unavailable. Current objective, workflow, run, and checkout counts remain visible; when no products exist, the summary explains how many checkouts are available to group. The grid collapses at tablet and phone widths.
-- Product summary rows join persisted product repository IDs to current scoped checkout, objective, and run records. The Downloads panel offers executive summary, detailed metrics, agent spend/utilization, and product/workspace CSV files using the applied scope. Each row shows its format, report name, fully readable source detail, and download action at the shared dashboard text scale; long details wrap and the bottom row can grow at narrower desktop widths. The spend export includes scoped run records while marking spend and usage unavailable until provider usage records exist.
+- Desktop layout follows the supplied report mock's 3/4/3 panel rhythm: a report-scope toolbar and seven delivery/autonomy KPI cards; delivery velocity, CI duration, and work outcomes on the first chart row; review latency, agent spend, acceptance/autonomy, and data-driven insights on the second; then product summary, workspace summary, and CSV download panels. Metric chart legends stay visible when their source data is unavailable; Work outcomes shows an explicit status until complete PR history is available. Insights can be filtered by executive summary, delivery, execution, or objectives. KPI values use live source records when available and otherwise stay marked unavailable. Product summary shows linked GitHub delivery measures, while workspace summary uses the selected scope and objective count. When no products exist, the summary explains how many checkouts are available to group. The grid collapses at tablet and phone widths.
+- Product summary rows use PR and GitHub Actions history attributed to unique supported GitHub remotes linked to each product. Velocity, cycle time, and acceptance rate follow the same formulas and completeness limits as the workspace KPIs; CI duration is the average of qualifying completed runs. Missing or incomplete history stays unavailable. The workspace summary applies the active report scope and counts objectives as work items. Autonomous completion remains unavailable because agent-run records do not record whether a person had to intervene. The Downloads panel offers executive summary, detailed metrics, agent spend/utilization, and product/workspace CSV files using the applied scope. The product/workspace export includes the same delivery metrics as the summary tables alongside repository and objective counts. Each row shows its format, report name, fully readable source detail, and download action at the shared dashboard text scale; long details wrap and the bottom row can grow at narrower desktop widths. The spend export includes scoped run records while marking spend and usage unavailable until provider usage records exist.
 - The Insights & Narrative panel derives its statements from current scoped snapshots and GitHub PR history. It does not infer status history or delivery trends from objective/run `updated_at`. Delivery source status reports missing remotes, unsupported remotes, provider errors, and incomplete history.
 - The Work outcomes chart uses complete GitHub pull-request history and counts merged PRs by merge time, closed
   unmerged PRs by close time, and still-open PRs by creation time within the selected range. It does not infer review
@@ -101,5 +103,7 @@ cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep "Reports page"
 `cd dashboard && npm run test:e2e -- e2e/reports.spec.ts` checks date-window validation, product-scope apply/reset,
 product counts, complete and truncated GitHub PR and Actions histories, derived delivery metrics, and all four downloaded
 CSV reports against isolated API responses.
+`cd dashboard && npm run test:e2e -- e2e/report-summary-metrics.spec.ts` checks per-product and workspace metric
+attribution from distinct GitHub PR and Actions histories.
 `GOCACHE=/tmp/zenchron-gocache go test ./cmd/zenchron -run 'TestGitHub(WorkflowRunHistory|PullRequestHistory)' -count=1`
 checks both history endpoints' pagination, cutoffs, limits, and timestamp validation.
