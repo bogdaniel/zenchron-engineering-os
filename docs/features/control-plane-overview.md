@@ -33,13 +33,14 @@ flowchart LR
     Dashboard -->|GET /api/v1/projects/{id}/workflow-run-history<br/>last 30 days| ActionRuns[GitHub Actions history]
     PRHistory --> PRQueue[Open PR queue count<br/>all history · complete only]
     ActionRuns --> CIHealth[Completed-run success rate<br/>last 30 days · complete only]
+    PRHistory --> DeliveryChart[Overview delivery chart<br/>merged PRs · complete history only]
     Worker[Local Go worker] -->|Heartbeat + checkout names/opaque IDs| Registry[(Transient worker registry)]
     Registry --> Workers
     Registry --> Projects
     Objectives --> ObjectiveState[(Versioned JSON snapshot)]
     Workflows --> WorkflowState[(Versioned JSON snapshot)]
     Runs --> RunState[(Versioned JSON snapshot)]
-    Dashboard --> Empty[Budgets, approvals, evidence,<br/>timeline, analytics: not wired yet]
+    Dashboard --> Empty[Budgets, approvals, evidence,<br/>timeline: not wired yet]
 ```
 
 ## Live data and empty states
@@ -64,8 +65,10 @@ flowchart LR
 - Reviews can inspect actual diffs from completed or partially completed agent runs, read open GitHub issues and pull
   requests, and load a bounded diff for a selected pull request. It can submit top-level PR comments and request changes
   using the configured control-plane token; provider approvals, checks, and merge remain unavailable.
-- Budget usage, approval records, evidence artifacts, delivery timeline, and overview analytics do not have backend
-  sources yet. The UI uses unavailable or empty states instead of sample values.
+- Overview delivery analytics uses the same complete GitHub pull-request history as Reports and charts merged PRs over
+  the available history. It shows an empty state when there are no merged records or the history is incomplete.
+- Budget usage, approval records, evidence artifacts, and delivery timeline do not have backend sources yet. The UI
+  uses unavailable or empty states instead of sample values.
 - The overview Reviews card lists only agent runs with captured local diffs and links to the Reviews page for comments
   and request-changes; provider-sourced pull requests and issues appear in their own Reviews queues.
 - Local branch runs and their diffs/comments are available in Reviews alongside provider-sourced open items.

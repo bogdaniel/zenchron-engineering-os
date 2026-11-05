@@ -86,6 +86,8 @@ test('Overview PR queue and CI health use complete GitHub history', async ({ pag
   const ci = page.locator('.metric-card.green');
   await expect(ci.locator('strong')).toHaveText('67%');
   await expect(ci.locator('small')).toHaveText('2 of 3 completed runs passed');
+  await expect(page.getByRole('img', { name: 'Merged pull requests by period' })).toBeVisible();
+  await expect(page.locator('.overview-delivery-summary')).toContainText('1');
 });
 
 test('Overview matches the supplied tall desktop mockup proportions', async ({ page }) => {

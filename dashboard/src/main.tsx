@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { LineChart } from '@mantine/charts';
 import { Badge, MantineProvider, TextInput } from '@mantine/core';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -364,8 +365,8 @@ function App() {
 
             <PanelCard className="panel analytics-panel" id="reports" withBorder>
               <PanelHeading className="panel-heading" icon={<span className="section-icon teal-icon"><IconChartBar size={18} /></span>}
-                title="Analytics" description="Delivery velocity" />
-              <div className="chart-empty"><IconChartBar size={23} /><span>No delivery data yet</span><small>Metrics appear after the first completed run.</small></div>
+                title="Analytics" description="Pull-request delivery" />
+              <OverviewDeliveryChart projects={projects.data} loading={projects.isLoading} error={projects.isError} />
             </PanelCard>
           </div>
 
@@ -375,6 +376,31 @@ function App() {
       </div>
     </MantineProvider>
   );
+}
+
+function OverviewDeliveryChart({ projects, loading, error }: {
+  projects: Project[] | undefined;
+  loading: boolean;
+  error: boolean;
+}) {
+  const pullRequests = useReportPullRequestMetrics(projects, 'all');
+  const hasMerges = pullRequests.trend.some((item) => item.merged > 0);
+  if (loading || pullRequests.isLoading) return <div className="chart-empty"><span>Loading pull-request history…</span></div>;
+  if (error || pullRequests.isError || !pullRequests.complete || !hasMerges) {
+    return <div className="chart-empty"><IconChartBar size={23} />
+      <span>{pullRequests.githubProjectCount ? 'No merged pull requests yet' : 'No delivery data yet'}</span>
+      <small>{pullRequests.githubProjectCount ? 'Merged pull requests will appear here.' : 'Connect a GitHub repository to view delivery.'}</small>
+    </div>;
+  }
+  return <div className="overview-delivery-chart">
+    <div className="overview-delivery-summary"><strong>{pullRequests.deliveryVelocity}</strong><span>merged PRs / week</span></div>
+    <div role="img" aria-label="Merged pull requests by period">
+      <LineChart h={128} data={pullRequests.trend} dataKey="date"
+        series={[{ name: 'merged', color: 'violet.5', label: 'Merged PRs' }]}
+        curveType="monotone" withDots withTooltip gridAxis="xy" tickLine="xy" />
+    </div>
+    <div className="overview-delivery-legend"><span />Merged PRs · all history</div>
+  </div>;
 }
 
 function OverviewMetrics({ projects, projectsLoading, projectsError, openObjectives, runningAgents, onlineWorkers }: {
