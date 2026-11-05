@@ -20,6 +20,8 @@ func TestAuthenticationSeparatesDashboardAndWorkerRequests(t *testing.T) {
 		{http.MethodGet, "/api/v1/workers", "", http.StatusUnauthorized},
 		{http.MethodPut, "/api/v1/workers/0123456789abcdef0123456789abcdef/heartbeat", "", http.StatusUnauthorized},
 		{http.MethodPut, "/api/v1/workers/0123456789abcdef0123456789abcdef/heartbeat", "Bearer " + testWorkerToken, http.StatusOK},
+		{http.MethodGet, "/api/v1/workers/healthz", "", http.StatusUnauthorized},
+		{http.MethodGet, "/api/v1/workers/healthz", "Bearer " + testWorkerToken, http.StatusOK},
 		{http.MethodGet, "/api/v1/workers", "Bearer " + testWorkerToken, http.StatusUnauthorized},
 	} {
 		request := httptest.NewRequest(test.method, test.path, strings.NewReader(`{"name":"test"}`))

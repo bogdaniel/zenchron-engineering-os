@@ -57,6 +57,9 @@ continues serving the latest successful frontend build so layout work remains re
 if session verification fails for another reason, the dashboard shell stays visible while API-backed page data is hidden and
 the user can retry. The fixed ports are reserved for this manual-review preview.
 
+When OAuth is configured, the worker readiness endpoint requires the shared worker bearer token; the launcher uses that
+token for its readiness check. OAuth secrets and the worker token are not forwarded to the dashboard process.
+
 Run the preview from the repository root. Install frontend dependencies once with `cd dashboard && npm ci`.
 
 ## Focused verification

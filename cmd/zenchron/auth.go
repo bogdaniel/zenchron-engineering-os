@@ -167,6 +167,9 @@ func effectiveOriginPort(origin *url.URL) string {
 }
 
 func isWorkerAPIRequest(method, path string) bool {
+	if method == http.MethodGet && path == "/api/v1/workers/healthz" {
+		return true
+	}
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) < 5 || parts[0] != "api" || parts[1] != "v1" || parts[2] != "workers" {
 		return false

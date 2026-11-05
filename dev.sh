@@ -47,7 +47,12 @@ wait_for() {
   pid=$2
   label=$3
   attempt=0
-  until curl -fsS "$url" >/dev/null 2>&1; do
+  while :; do
+    if [ -n "${4:-}" ]; then
+      curl -fsS -H "$4" "$url" >/dev/null 2>&1 && break
+    else
+      curl -fsS "$url" >/dev/null 2>&1 && break
+    fi
     if ! kill -0 "$pid" 2>/dev/null || [ "$attempt" -ge 60 ]; then
       echo "${label} did not become ready at ${url}" >&2
       return 1
@@ -80,17 +85,21 @@ fi
 if [ "$api_ready" -eq 1 ]; then
   (
     unset ZENCHRON_GITHUB_TOKEN ZENCHRON_GITHUB_APP_ID ZENCHRON_GITHUB_INSTALLATION_ID
-    unset ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH
+    unset ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH ZENCHRON_GITHUB_CLIENT_ID ZENCHRON_GITHUB_CLIENT_SECRET
+    unset ZENCHRON_SESSION_SECRET ZENCHRON_GITHUB_ALLOWED_USERS ZENCHRON_PUBLIC_URL
     exec go run ./cmd/zenchron-worker
   ) &
   worker_pid=$!
-  if ! wait_for "${control_plane_url}/api/v1/workers/healthz" "$worker_pid" "Local worker"; then
+  if ! wait_for "${control_plane_url}/api/v1/workers/healthz" "$worker_pid" "Local worker" \
+      "Authorization: Bearer ${ZENCHRON_WORKER_TOKEN:-}"; then
     echo "Local worker unavailable; the dashboard will remain available." >&2
   fi
 fi
 
 (cd dashboard && unset ZENCHRON_GITHUB_TOKEN ZENCHRON_GITHUB_APP_ID ZENCHRON_GITHUB_INSTALLATION_ID
-  unset ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH ZENCHRON_LLM_BASE_URL ZENCHRON_LLM_API_KEY
+  unset ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH ZENCHRON_GITHUB_CLIENT_ID ZENCHRON_GITHUB_CLIENT_SECRET
+  unset ZENCHRON_SESSION_SECRET ZENCHRON_WORKER_TOKEN ZENCHRON_GITHUB_ALLOWED_USERS ZENCHRON_PUBLIC_URL
+  unset ZENCHRON_LLM_BASE_URL ZENCHRON_LLM_API_KEY
   exec sh ./dev.sh) &
 dashboard_pid=$!
 if ! wait_for "$dashboard_url" "$dashboard_pid" "Dashboard"; then exit 1; fi
