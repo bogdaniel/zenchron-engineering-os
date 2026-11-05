@@ -147,11 +147,11 @@
 .downloadable-report {
   display: grid;
   min-width: 0;
-  min-height: 32px;
-  grid-template-columns: 32px minmax(0, 1fr) 22px;
+  min-height: 34px;
+  grid-template-columns: 36px minmax(0, 1fr) 24px;
   align-items: center;
-  gap: 4px;
-  padding: 0 4px;
+  gap: 6px;
+  padding: 0 5px;
   border: 1px solid #302a40;
   border-radius: 6px;
   background: linear-gradient(105deg, #191724, #15141f);
@@ -160,7 +160,7 @@
 .downloadable-report-format.mantine-Badge-root {
   justify-content: center;
   min-width: 30px;
-  height: 17px;
+  height: 19px;
   padding-inline: 4px;
   color: #82c9f4;
   background: #1b3040;
@@ -171,21 +171,21 @@
 .downloadable-report-copy { display: grid; min-width: 0; gap: 1px; }
 .downloadable-report-copy b {
   color: #e4deed;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.1;
   white-space: nowrap;
 }
 .downloadable-report-copy span {
   color: #a9a5b9;
-  font-size: var(--panel-description-size);
+  font-size: 10px;
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
 .downloadable-report-button.mantine-Button-root {
-  width: 22px;
-  height: 22px;
-  min-height: 22px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
   padding: 0;
   border: 1px solid #46375c;
   border-radius: 5px;

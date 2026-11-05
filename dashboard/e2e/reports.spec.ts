@@ -52,9 +52,9 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.locator('.downloadable-report-format')).toHaveText(['CSV', 'CSV', 'CSV', 'CSV']);
   await expect(page.locator('.downloadable-reports-panel .shared-panel-heading p')).toHaveCount(0);
   await expect(page.locator('.downloadable-report-list')).toHaveCSS('row-gap', '4px');
-  await expect(page.locator('.downloadable-report').first()).toHaveCSS('min-height', '32px');
-  await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '11px');
-  await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '11px');
+  await expect(page.locator('.downloadable-report').first()).toHaveCSS('min-height', '34px');
+  await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '12px');
+  await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '10px');
   await expect(page.getByRole('button', { name: 'Download Agent Spend & Utilization CSV' })).toBeEnabled();
   await expect(page.locator('.reports-empty-chart')).toHaveCount(4);
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
