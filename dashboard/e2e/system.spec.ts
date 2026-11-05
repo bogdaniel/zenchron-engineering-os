@@ -36,7 +36,8 @@ test('settings and integrations routes show live runtime and honest provider sta
   await expect(page.getByRole('heading', { name: 'Recent audit log' })).toBeVisible();
   await expect(page.locator('.system-operation-card')).toHaveCount(8);
   await expect(page.locator('.system-operation-card .shared-panel-heading h3').first()).toHaveCSS('font-size', '14px');
-  await expect(page.locator('.system-config-nav > a.active')).toHaveCSS('font-size', '10px');
+  await expect(page.locator('.system-config-nav > a.active')).toHaveCSS('font-size', '11px');
+  await expect(page.locator('.system-config-nav > span > svg')).toHaveCount(10);
   await expect(page.locator('.system-service-copy h4').first()).toHaveCSS('font-size', '13px');
   await expect(page.locator('.system-service-copy p').first()).toHaveCSS('font-size', '10px');
   await expect(page.locator('.system-operation-card p').first()).toHaveCSS('font-size', '11px');

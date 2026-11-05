@@ -131,18 +131,18 @@ export function SystemPage({
           <nav className="system-config-nav" aria-label="Configuration categories">
             <b>Configuration</b>
             <small>INTEGRATIONS</small>
-            <a className="active" href="#integrations">Connected integrations</a>
-            <span>Model providers<small>Worker status</small></span>
-            <span>Runners &amp; infrastructure<small>Worker status</small></span>
-            <span>Storage &amp; evidence<small>Unavailable</small></span>
+            <a className="active" href="#integrations"><IconActivity size={12} />Connected integrations</a>
+            <span><IconRobot size={12} />Model providers</span>
+            <span><IconCloud size={12} />Runners &amp; infrastructure</span>
+            <span><IconDatabase size={12} />Storage &amp; evidence</span>
             <small>SETTINGS</small>
-            <span><IconBuilding size={14} />Organization profile<small>Unavailable</small></span>
-            <span><IconChecklist size={14} />Policies<small>Unavailable</small></span>
-            <span><IconUsers size={14} />Permissions<small>Unavailable</small></span>
-            <span><IconCurrencyDollar size={14} />Budgets<small>Unavailable</small></span>
-            <span><IconKey size={14} />Secrets<small>Worker managed</small></span>
-            <span><IconSettings size={14} />Controller configuration<small>Read only</small></span>
-            <span><IconBell size={14} />Notification rules<small>Unavailable</small></span>
+            <span><IconBuilding size={12} />Organization profile</span>
+            <span><IconChecklist size={12} />Policies</span>
+            <span><IconUsers size={12} />Permissions</span>
+            <span><IconCurrencyDollar size={12} />Budgets</span>
+            <span><IconKey size={12} />Secrets</span>
+            <span><IconSettings size={12} />Controller configuration</span>
+            <span><IconBell size={12} />Notification rules</span>
           </nav>
 
           <div className="system-workspace-main">

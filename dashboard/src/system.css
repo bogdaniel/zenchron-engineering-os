@@ -101,21 +101,19 @@
   border-radius: 10px;
   background: linear-gradient(145deg, #191728, #12131d 78%);
 }
-.system-config-nav > b { margin: 0 2px 8px; color: #e7e2ef; font-size: 12px; }
-.system-config-nav > small { margin: 8px 2px 2px; color: #888297; font-size: 9px; font-weight: 650; letter-spacing: .5px; }
+.system-config-nav > b { margin: 0 2px 8px; color: #e7e2ef; font-size: 13px; }
+.system-config-nav > small { margin: 8px 2px 2px; color: #888297; font-size: 10px; font-weight: 650; letter-spacing: .5px; }
 .system-config-nav > span, .system-config-nav > a {
   display: flex;
   min-height: 28px;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
+  gap: 4px;
+  padding: 4px;
   border-radius: 7px;
   color: #a9a5b9;
-  font-size: 10px;
+  font-size: 11px;
 }
-.system-config-nav > span { flex-wrap: wrap; }
-.system-config-nav > span small { flex-basis: 100%; padding-left: 20px; color: #777287; font-size: 9px; }
-.system-config-nav > span > svg { flex: 0 0 auto; color: #9c86be; }
+.system-config-nav > span > svg, .system-config-nav > a > svg { flex: 0 0 auto; color: #9c86be; }
 .system-config-nav > a.active { border: 1px solid #604098; color: #efe5ff; background: linear-gradient(100deg,#542683,#261b3d); }
 .system-workspace-main { min-width: 0; }
 .system-integration-header { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }

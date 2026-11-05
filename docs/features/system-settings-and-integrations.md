@@ -39,7 +39,8 @@ flowchart LR
 - Settings report the current API security configuration and versioned JSON state boundary. They do not expose write controls for
   settings the service cannot persist or enforce.
 - The Integrations overview uses the mockup's configuration rail and settings-panel layout and the shared dashboard
-  panel typography, but keeps panels read-only where no backing API exists.
+  panel typography. Its rail uses icon-led category labels; connection status stays in the main cards instead of
+  repeating in the navigation. Panels remain read-only where no backing API exists.
 - GitHub App credentials or the `ZENCHRON_GITHUB_TOKEN` fallback are configured in the control-plane environment,
   never in the worker or dashboard. Public repository reads work without credentials; private reads and PR review
   submissions require repository permissions.
