@@ -1,5 +1,6 @@
 import { IconFolders, IconStack } from '@tabler/icons-react';
 import { Table } from '@mantine/core';
+import type { ReactNode } from 'react';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
 
@@ -20,8 +21,10 @@ export interface ProductDeliverySummary extends DeliveryMetrics {
   runs: number | undefined;
 }
 
-function show(value: number | undefined, unit = '') {
-  return value === undefined ? 'Unavailable' : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${unit}`;
+function show(value: number | undefined, unit = ''): ReactNode {
+  return value === undefined
+    ? <abbr className="report-unavailable" aria-label="Unavailable" title="Unavailable">N/A</abbr>
+    : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${unit}`;
 }
 
 export function ProductSummaryPanel({ rows, loading, error, checkoutCount }: {

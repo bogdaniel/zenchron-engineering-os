@@ -36,7 +36,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.locator('.reports-outcomes-layout .report-chart-label')).toHaveText('4');
   await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
   await expect(page.locator('.product-summary-panel .report-summary-table tbody tr td')).toHaveText([
-    'Unassigned repositories', '0 / wk', 'Unavailable', '2.1 min', 'Unavailable', 'Unavailable',
+    'Unassigned repositories', '0 / wk', 'N/A', '2.1 min', 'N/A', 'N/A',
   ]);
   expect(await page.locator('.reports-metric .metric-top svg').first().evaluate((icon) => getComputedStyle(icon).order)).toBe('-1');
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
@@ -226,7 +226,7 @@ test('workspace summary does not infer autonomy when agent runs fail to load', a
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill({ status: 503, body: 'Unavailable' }));
   await page.goto('/#reports');
   await expect(page.locator('.inventory-panel .report-summary-table tbody tr td')).toHaveText([
-    'Local workspace', '0', 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable',
+    'Local workspace', '0', 'N/A', 'N/A', 'N/A', 'N/A',
   ]);
 });
 
@@ -449,8 +449,9 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   const productRow = page.locator('.product-summary-panel .report-summary-table tbody tr')
     .filter({ hasText: 'Nova Platform' });
   await expect(productRow.locator('td')).toHaveText([
-    'Nova Platform', 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable',
+    'Nova Platform', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A',
   ]);
+  await expect(productRow.locator('td abbr').first()).toHaveAttribute('aria-label', 'Unavailable');
   expect(await page.locator('.report-summary-table-wrap').first().evaluate((table) =>
     table.scrollWidth <= table.clientWidth,
   ), 'product summary table fits its desktop card').toBe(true);

@@ -50,12 +50,13 @@ test('product and workspace summaries use scoped GitHub PR and Actions evidence'
   const productRows = page.locator('.product-summary-panel .report-summary-table tbody tr');
   await expect(productRows).toHaveCount(2);
   await expect(productRows.nth(0).locator('td')).toHaveText([
-    'Alpha', '0.2 / wk', '24 h', '4 min', '50%', 'Unavailable',
+    'Alpha', '0.2 / wk', '24 h', '4 min', '50%', 'N/A',
   ]);
   await expect(productRows.nth(1).locator('td')).toHaveText([
-    'Beta', '0 / wk', 'Unavailable', '8 min', 'Unavailable', 'Unavailable',
+    'Beta', '0 / wk', 'N/A', '8 min', 'N/A', 'N/A',
   ]);
+  await expect(productRows.nth(0).locator('td abbr')).toHaveAttribute('aria-label', 'Unavailable');
   await expect(page.locator('.inventory-panel .report-summary-table tbody tr td')).toHaveText([
-    'Local workspace', '0', '0.2 / wk', '24 h', '50%', 'Unavailable',
+    'Local workspace', '0', '0.2 / wk', '24 h', '50%', 'N/A',
   ]);
 });
