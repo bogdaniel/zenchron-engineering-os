@@ -23,6 +23,37 @@ const objectives = [
   },
 ];
 
+test('empty objective workspace shows a first-objective prompt without stale selection guidance', async ({ page }) => {
+  await page.route('**/api/v1/objectives', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.route('**/api/v1/products', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/#objectives');
+
+  await expect(page.locator('.ag-overlay-no-rows-center')).toHaveText('No objectives yet. Create one to begin.');
+  await expect(page.locator('.objective-grid-toolbar')).not.toContainText('Select an objective to inspect details');
+  await expect(page.locator('.objective-detail-empty')).toContainText(/create the first objective/i);
+});
+
+test('filtered objective table distinguishes no matches from an empty workspace', async ({ page }) => {
+  await page.route('**/api/v1/objectives', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify(objectives),
+  }));
+  await page.route('**/api/v1/products', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/#objectives');
+  await page.getByRole('textbox', { name: 'Search objectives' }).fill('missing objective');
+
+  await expect(page.locator('.ag-overlay-no-rows-center')).toHaveText('No objectives match these filters.');
+  await expect(page.locator('.objective-grid-toolbar')).toContainText('No objectives match these filters.');
+  await expect(page.locator('.objective-grid-toolbar')).not.toContainText('Select an objective to inspect details');
+});
+
 test('objective quarter filter and table, cards, and Kanban views share records', async ({ page }) => {
   await page.route('**/api/v1/objectives', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify(objectives),

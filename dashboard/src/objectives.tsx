@@ -232,6 +232,10 @@ export function ObjectivesPage() {
   );
   const plannedItems = [...filteredItems].sort((left, right) =>
     (left.due_date || '9999-12-31').localeCompare(right.due_date || '9999-12-31'));
+  const gridEmptyMessage = items.length
+    ? 'No objectives match these filters.' : 'No objectives yet. Create one to begin.';
+  const gridHint = !filteredItems.length ? (items.length ? 'No objectives match these filters.' : '')
+    : section === 'planning' ? 'Sorted by due date' : 'Select an objective to inspect details';
   const roadmapGroups = groupObjectivesByQuarter(filteredItems);
   const completed = items.filter((item) => item.status === 'completed').length;
   const onTrack = items.filter((item) => item.status === 'on_track').length;
@@ -305,7 +309,7 @@ export function ObjectivesPage() {
                 </button>
               ))}
             </div>
-            <div className="objective-grid-toolbar"><span>{objectives.isLoading ? 'Loading objectives…' : `${filteredItems.length} objectives`}</span><TextInput aria-label="Search objectives" placeholder="Search objectives…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} /><span>{section === 'planning' ? 'Sorted by due date' : 'Select an objective to inspect details'}</span></div>
+            <div className="objective-grid-toolbar"><span>{objectives.isLoading ? 'Loading objectives…' : `${filteredItems.length} objectives`}</span><TextInput aria-label="Search objectives" placeholder="Search objectives…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} /><span>{gridHint}</span></div>
             <div className={`objective-grid-wrap objective-view-${view}`}>
               {objectives.isError ? <div className="objective-load-error">Could not load objectives. Refresh to try again.</div>
                 : section === 'planning' ? <div className="objective-planning-view" aria-label="Objective planning">
@@ -332,7 +336,7 @@ export function ObjectivesPage() {
                   pagination
                   paginationPageSize={6}
                   onRowClicked={({ data }) => { if (data) selectObjective(data); }}
-                  overlayNoRowsTemplate={'<span class="ag-overlay-no-rows-center">No objectives yet. Create one to begin.</span>'}
+                  overlayNoRowsTemplate={`<span class="ag-overlay-no-rows-center">${gridEmptyMessage}</span>`}
                 />
               ) : view === 'cards' ? (
                 <div className="objective-card-grid">

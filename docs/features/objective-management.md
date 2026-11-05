@@ -39,6 +39,7 @@ flowchart LR
 - `PATCH /api/v1/objectives/{id}` accepts status, progress, and/or product assignment. Progress is limited to 0–100;
   marking an objective `completed` sets progress to 100.
 - The dashboard filters by text, product, owner, status, and due-date quarter. The default is This Quarter; All due dates includes unscheduled objectives.
+- Empty workspaces prompt the user to create the first objective. When filters hide all records, the table and toolbar say no objectives match instead of implying the workspace is empty.
 - Table, Cards, and Kanban views render the same filtered records; selecting any record opens the read-only objective overview. The status, progress, and product editor appears only after choosing **Edit objective**. Kanban groups by the saved objective status.
 - The overview, milestones, related pull requests, and activity tabs switch the detail panel. Tabs without supported data show an unavailable state.
 - The overview lays out description, blockers, acceptance criteria, related pull requests, plan summary, activity feed, and progress; fields absent from the current objective data are labeled unavailable rather than populated with sample records.
