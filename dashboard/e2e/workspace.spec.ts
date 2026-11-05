@@ -32,6 +32,14 @@ test('Product Workspace matches its desktop frame and filters products', async (
   await expect(page.getByRole('heading', { name: 'Product Workspace' })).toBeVisible();
   await expect(page.locator('.workspace-project-heading h3')).toHaveText('Nova Platform');
   await expect(page.locator('.workspace-project-heading h3')).toHaveCSS('font-size', '18px');
+  const firstMetric = page.locator('.workspace-metric').first();
+  const [metricIcon, metricLabel] = await Promise.all([
+    firstMetric.locator('.metric-top > svg').boundingBox(),
+    firstMetric.locator('.metric-top > span').boundingBox(),
+  ]);
+  expect(metricIcon && metricLabel).toBeTruthy();
+  expect(metricIcon!.x + metricIcon!.width).toBeLessThan(metricLabel!.x);
+  expect(metricLabel!.x - metricIcon!.x - metricIcon!.width).toBeCloseTo(6, 0);
   await expect(page.locator('.workspace-repository-row')).toHaveCount(1);
   await expect(page.locator('.workspace-repository-row')).toContainText('nova-platform');
   await expect(page.locator('.workspace-repository-row')).toContainText('Mac Studio · main');
@@ -53,7 +61,7 @@ test('Product Workspace matches its desktop frame and filters products', async (
   expect(layout.directory?.x).toBe(130);
   expect(layout.directory?.y).toBe(94);
   expect(layout.directory?.width).toBe(260);
-  expect(layout.detail?.x).toBe(423);
+  expect(layout.detail?.x).toBe(407);
   expect(layout.metrics?.y).toBe(182);
   expect(layout.tabs?.y).toBe(270);
   expect(layout.content?.y).toBe(323);

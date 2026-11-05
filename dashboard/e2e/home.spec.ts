@@ -210,6 +210,13 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   await expect(page.locator('.detail-summary')).toContainText('78% complete');
   await expect(page.locator('.capacity-bars > div')).toHaveCount(6);
   await expect(page.getByRole('region', { name: 'Objective metrics' }).locator('.objective-metric')).toHaveCount(6);
+  const objectiveMetric = page.locator('.objective-metric').first();
+  const [metricIcon, metricLabel] = await Promise.all([
+    objectiveMetric.locator('.metric-top > svg').boundingBox(),
+    objectiveMetric.locator('.metric-top > span').boundingBox(),
+  ]);
+  expect(metricIcon && metricLabel).toBeTruthy();
+  expect(metricIcon!.x + metricIcon!.width).toBeLessThan(metricLabel!.x);
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {

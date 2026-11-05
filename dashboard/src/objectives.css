@@ -8,9 +8,9 @@
 .new-objective-button:hover { background: linear-gradient(100deg, #9a59e9, #7142cc); }
 .objective-metrics { display: grid; grid-template-columns: 2.2fr 2.2fr repeat(4, .75fr); gap: 9px; }
 .objective-metric { position: relative; min-height: 91px; padding: 11px 12px; }
-.objective-metric .metric-top { display: block; color: #b2aec1; }
-.objective-metric .metric-top > span { display: block; max-width: calc(100% - 22px); white-space: nowrap; }
-.objective-metric .metric-top > svg { position: absolute; top: 11px; right: 11px; color: #ba8cff; }
+.objective-metric .metric-top { display: flex; align-items: center; gap: 6px; color: #b2aec1; }
+.objective-metric .metric-top > span { min-width: 0; white-space: nowrap; }
+.objective-metric .metric-top > svg { position: static; order: -1; flex: 0 0 auto; color: #ba8cff; }
 .objective-metric.teal { border-color: #28515a; background: linear-gradient(145deg, #14272d, #12131d 80%); }
 .objective-metric.teal .metric-top > svg { color: #66d4ce; }
 .objective-metric.green { border-color: #285343; }
