@@ -168,7 +168,7 @@
 }
 .downloadable-report-copy span {
   color: #a9a5b9;
-  font-size: 10px;
+  font-size: var(--panel-description-size);
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
