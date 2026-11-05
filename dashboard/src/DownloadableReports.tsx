@@ -13,7 +13,7 @@ export interface DownloadableReport {
 export function DownloadableReports({ reports }: { reports: DownloadableReport[] }) {
   return (
     <PanelCard className="reports-panel downloadable-reports-panel" withBorder>
-      <PanelHeading className="reports-panel-heading" icon={<IconDownload size={15} />} title="Downloadable reports" />
+      <PanelHeading className="reports-panel-heading" icon={<IconDownload size={15} />} title="Downloadable Reports" />
       <div className="downloadable-report-list">
         {reports.map((report) => (
           <div className="downloadable-report" key={report.name}>

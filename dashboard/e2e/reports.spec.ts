@@ -40,12 +40,13 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   ]);
   expect(await page.locator('.reports-metric .metric-top svg').first().evaluate((icon) => getComputedStyle(icon).order)).toBe('-1');
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
+  await expect(page.locator('.downloadable-report-format')).toHaveText(['CSV', 'CSV', 'CSV', 'CSV']);
   await expect(page.locator('.downloadable-reports-panel .shared-panel-heading p')).toHaveCount(0);
   await expect(page.locator('.downloadable-report-list')).toHaveCSS('row-gap', '4px');
   await expect(page.locator('.downloadable-report').first()).toHaveCSS('min-height', '32px');
-  await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '11px');
+  await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '10px');
   await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '10px');
-  await expect(page.getByRole('button', { name: 'Download Agent spend & utilization CSV' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Download Agent Spend & Utilization CSV' })).toBeEnabled();
   await expect(page.locator('.reports-empty-chart')).toHaveCount(4);
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
   await expect(page.locator('.reports-empty-chart').first())
@@ -150,7 +151,8 @@ test('Reports headings fit the mock display viewport', async ({ page }) => {
   await expect(filter).toHaveCSS('width', '144px');
 
   const reportTitlesFit = await page.locator('.downloadable-report-copy b').evaluateAll((titles) =>
-    titles.every((title) => title.scrollWidth <= title.clientWidth),
+    titles.every((title) => title.scrollWidth <= title.clientWidth &&
+      title.getBoundingClientRect().height <= parseFloat(getComputedStyle(title).lineHeight) + 1),
   );
   expect(reportTitlesFit, 'download report names remain fully readable').toBe(true);
   const reportDetailsFit = await page.locator('.downloadable-report-copy span').evaluateAll((details) =>
@@ -466,19 +468,19 @@ test('report scope filters live snapshots by product and resets them', async ({ 
     );
     return { filename: download.suggestedFilename(), csv };
   };
-  const executive = await downloadCsv('Executive summary');
+  const executive = await downloadCsv('Executive Summary');
   expect(executive.filename).toMatch(/^zenchron-executive-summary-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(executive.csv).toContain('"Objectives","1"');
   expect(executive.csv).toContain('"Local checkouts","1"');
-  const detailed = await downloadCsv('Detailed metrics');
+  const detailed = await downloadCsv('Detailed Metrics');
   expect(detailed.filename).toMatch(/^zenchron-detailed-metrics-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(detailed.csv).toContain('"Delivery velocity","Unavailable","No Git remotes are configured for these checkouts."');
-  const spend = await downloadCsv('Agent spend & utilization');
+  const spend = await downloadCsv('Agent Spend & Utilization');
   expect(spend.filename).toMatch(/^zenchron-agent-spend-utilization-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(spend.csv).toContain('"Spend (USD)","Usage","Source"');
   expect(spend.csv).toContain('"Reviewer","Nova Platform"');
   expect(spend.csv).toContain('"Provider usage records are not connected"');
-  const workspace = await downloadCsv('Product & workspace report');
+  const workspace = await downloadCsv('Product & Workspace Report');
   expect(workspace.filename).toMatch(/^zenchron-product-workspace-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(workspace.csv).toContain('"Velocity (PRs/week)"');
   expect(workspace.csv).toContain('"Product","Nova Platform","1","1","1"');

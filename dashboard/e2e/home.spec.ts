@@ -495,7 +495,7 @@ test('Reports summarizes live objectives and run records without inventing deliv
   await expect(page.getByRole('heading', { name: 'Delivery velocity & cycle time' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'CI duration distribution' })).toBeVisible();
   await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' })).toContainText('Unavailable');
-  await expect(page.getByRole('button', { name: 'Download Executive summary CSV' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Download Executive Summary CSV' })).toBeVisible();
 });
 
 test('Product Workspace groups live repositories into persisted products', async ({ page }) => {

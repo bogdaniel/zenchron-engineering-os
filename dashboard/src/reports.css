@@ -138,7 +138,7 @@
   display: grid;
   min-width: 0;
   min-height: 32px;
-  grid-template-columns: 32px minmax(0, 1fr) 24px;
+  grid-template-columns: 32px minmax(0, 1fr) 22px;
   align-items: center;
   gap: 4px;
   padding: 0 4px;
@@ -161,10 +161,10 @@
 .downloadable-report-copy { display: grid; min-width: 0; gap: 1px; }
 .downloadable-report-copy b {
   color: #e4deed;
-  font-size: var(--metric-detail-size);
+  font-size: 10px;
   font-weight: 600;
   line-height: 1.1;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 .downloadable-report-copy span {
   color: #a9a5b9;
@@ -173,9 +173,9 @@
   overflow-wrap: anywhere;
 }
 .downloadable-report-button.mantine-Button-root {
-  width: 25px;
-  height: 24px;
-  min-height: 24px;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
   padding: 0;
   border: 1px solid #46375c;
   border-radius: 5px;
