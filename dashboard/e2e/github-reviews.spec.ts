@@ -85,6 +85,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   expect(workspace?.height).toBe(635);
   expect((workspace?.y ?? 0) + (workspace?.height ?? 0)).toBeLessThanOrEqual(874);
   await expect(page.getByText('GitHub · Nova Platform')).toBeVisible();
+  await expect(page.locator('.reviews-summary .reviews-panel-heading p')).toHaveText('GitHub pull request context');
   await expect(page.locator('.reviews-summary-copy details summary')).toHaveText('Release notes');
   await expect(page.locator('.reviews-summary-copy')).not.toContainText('<details>');
   await expect(page.locator('.reviews-summary-copy a')).toHaveAttribute('href', 'https://example.com/releases');
@@ -123,6 +124,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(page.getByRole('textbox', { name: 'Search issues' })).toBeVisible();
   await expect(page.locator('.reviews-grid-wrap')).toContainText('Add setup instructions');
   await expect(page.locator('.reviews-provider-detail')).toContainText('Document local worker setup.');
+  await expect(page.locator('.reviews-summary .reviews-panel-heading p')).toHaveText('GitHub issue context');
   await expect(page.getByRole('link', { name: 'Open issue on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/platform/issues/51');
   await page.getByRole('button', { name: 'Conversations' }).click();
   await page.getByLabel('GitHub issue comment').fill('I will add the setup instructions.');

@@ -555,7 +555,9 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
         <Separator id="detail-summary-separator" className="reviews-resize-handle" aria-label="Resize review detail and summary" />
         <Panel id="summary" className="reviews-pane" minSize={stacked ? '300px' : '205px'}>
           <PanelCard className="reviews-summary" withBorder>
-          <PanelHeading className="reviews-panel-heading" title="Review Summary" description="Local branch context"
+          <PanelHeading className="reviews-panel-heading" title="Review Summary" description={section === 'local-branches'
+            ? 'Local branch context' : selectedPullRequest ? 'GitHub pull request context'
+              : selectedIssue ? 'GitHub issue context' : 'Select a GitHub item for context'}
             actions={<IconShieldCheck size={17} />} />
           <GitHubMarkdown className="reviews-summary-copy reviews-markdown" value={section === 'local-branches'
             ? selected?.output ?? selected?.error ?? 'Select a local branch to review its agent run.'

@@ -48,7 +48,7 @@ flowchart LR
     GitHub -. inbound reviews, checks, and merge unavailable .-> Governance
 ```
 
-Provider descriptions render as sanitized Markdown/HTML; external images are stripped. The Code changes, Conversations, Evidence, and Checklist controls switch the detail panel. The Conversations view submits issue/PR feedback and shows local run comments; existing provider conversation, check, and artifact data show explicit unavailable states until synced.
+Provider descriptions render as sanitized Markdown/HTML; external images are stripped. The summary panel identifies whether its content belongs to a local branch, GitHub pull request, or GitHub issue. The Code changes, Conversations, Evidence, and Checklist controls switch the detail panel. The Conversations view submits issue/PR feedback and shows local run comments; existing provider conversation, check, and artifact data show explicit unavailable states until synced.
 
 At desktop widths the local branch queue, diff detail, and summary panes resize independently with drag handles or arrow
 keys; the panel group fills the remaining viewport below the review toolbar so its bottom actions stay visible. At narrower
