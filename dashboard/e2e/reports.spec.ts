@@ -16,10 +16,11 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   }));
   const runFinished = Date.now();
   await page.route('**/api/v1/projects/*/workflow-run-history*', (route) => route.fulfill({ status: 200,
-    contentType: 'application/json', body: JSON.stringify({ complete: true, items: [{
-      created_at: new Date(runFinished - 126_000).toISOString(), status: 'completed', conclusion: 'success',
-      run_started_at: new Date(runFinished - 126_000).toISOString(), updated_at: new Date(runFinished).toISOString(),
-    }] }),
+    contentType: 'application/json', body: JSON.stringify({ complete: true, items: Array.from({ length: 20 }, (_, index) => {
+      const runStartedAt = new Date(runFinished - (index + 1) * 60_000).toISOString();
+      return { created_at: runStartedAt, status: 'completed', conclusion: 'success', run_started_at: runStartedAt,
+        updated_at: new Date(runFinished).toISOString() };
+    }) }),
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
@@ -36,8 +37,16 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.locator('.reports-outcomes-layout .report-chart-label')).toHaveText('4');
   await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
   await expect(page.locator('.product-summary-panel .report-summary-table tbody tr td')).toHaveText([
-    'Unassigned repositories', '0 / wk', 'N/A', '2.1 min', 'N/A', 'N/A',
+    'Unassigned repositories', '0 / wk', 'N/A', '10.5 min', 'N/A', 'N/A',
   ]);
+  await expect(page.getByRole('group', { name: 'CI duration percentiles' }).locator('span'))
+    .toHaveText(['p50 10.0m', 'p95 19.0m']);
+  const percentileBounds = await page.getByRole('group', { name: 'CI duration percentiles' }).boundingBox();
+  const ciPanelBounds = await page.locator('.ci-distribution-panel').boundingBox();
+  expect(percentileBounds && ciPanelBounds).toBeTruthy();
+  expect(percentileBounds!.x + percentileBounds!.width).toBeLessThanOrEqual(
+    ciPanelBounds!.x + ciPanelBounds!.width - 8,
+  );
   expect(await page.locator('.reports-metric .metric-top svg').first().evaluate((icon) => getComputedStyle(icon).order)).toBe('-1');
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
   await expect(page.locator('.downloadable-report-format')).toHaveText(['CSV', 'CSV', 'CSV', 'CSV']);

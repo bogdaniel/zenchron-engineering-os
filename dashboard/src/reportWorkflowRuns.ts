@@ -62,6 +62,10 @@ export function useReportWorkflowRunMetrics(projects: Project[] | undefined, ran
   });
   const successfulRuns = concludedRuns.filter((run) => run.conclusion === 'success').length;
   const durations = samples.map((sample) => sample.duration);
+  const sortedDurations = [...durations].sort((a, b) => a - b);
+  const percentile = (rank: number) => complete && sortedDurations.length
+    ? Math.round(sortedDurations[Math.ceil(sortedDurations.length * rank) - 1] * 10) / 10
+    : undefined;
   const averageMinutes = complete && durations.length
     ? Math.round(durations.reduce((sum, duration) => sum + duration, 0) / durations.length * 10) / 10
     : undefined;
@@ -87,6 +91,8 @@ export function useReportWorkflowRunMetrics(projects: Project[] | undefined, ran
     githubProjectCount: githubProjects.length,
     complete,
     averageMinutes,
+    p50Minutes: percentile(0.5),
+    p95Minutes: percentile(0.95),
     completedRunCount: concludedRuns.length,
     successfulRuns,
     successRate: complete && concludedRuns.length

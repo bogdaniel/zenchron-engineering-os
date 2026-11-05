@@ -27,7 +27,7 @@ flowchart LR
     PRs --> Velocity[Delivery velocity and cycle time]
     PRs --> Acceptance[Acceptance rate]
     WorkflowRunHistory --> Actions[GitHub Actions workflow runs]
-    Actions --> Duration[CI duration distribution]
+    Actions --> Duration[CI duration distribution and p50/p95]
     Actions --> CIHealth[CI success rate from completed conclusions]
     Scope[Time · product · owner · repository] --> Objectives
     Products --> Scope
@@ -83,6 +83,7 @@ flowchart LR
   can report the last-30-day completed-run success rate. Histories are capped at 1,000 runs per repository; larger
   histories are marked incomplete. The average is shown in the KPI and runs are grouped into minute ranges in the
   distribution chart. Complete history with no qualifying events shows an explicit empty state instead of a blank chart.
+  The distribution header shows nearest-rank p50 and p95 durations from the same scoped completed runs when samples exist.
 - Provider chart labels use the dashboard's light text palette so axes remain readable against the dark chart surface.
 - KPI sparklines summarize the selected-window PR merge, PR cycle-time, PR acceptance, and completed Actions duration
   buckets. They are shown only when the underlying metric has events; unavailable measures do not get invented trends.

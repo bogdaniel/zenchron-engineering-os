@@ -113,6 +113,16 @@
 .reports-panel-heading > div { display: flex; min-width: 0; align-items: flex-start; gap: 7px; }
 .reports-panel-heading > div > svg { flex: 0 0 auto; margin-top: 1px; color: #bd8aff; }
 .reports-panel-heading p { line-height: 1.2; }
+.reports-percentiles { display: flex; flex: 0 0 auto; gap: 4px; }
+.reports-percentiles span {
+  padding: 2px 5px;
+  border: 1px solid #38324c;
+  border-radius: 5px;
+  color: #c9c3d5;
+  background: #1b1928;
+  font-size: 9px;
+  line-height: 1.2;
+}
 .acceptance-panel .reports-panel-heading > div { gap: 4px; }
 .acceptance-panel .reports-panel-heading h3 { letter-spacing: -.5px; white-space: nowrap; }
 .reports-insight-filter.mantine-Select-root { width: 144px; flex: 0 0 auto; }

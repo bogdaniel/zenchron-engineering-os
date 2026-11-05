@@ -360,7 +360,12 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
               : 'Connect a source to view this chart'} />}
         </PanelCard>
         <PanelCard className="reports-panel ci-distribution-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconActivity size={15} />} title="CI duration distribution" />
+          <PanelHeading className="reports-panel-heading" icon={<IconActivity size={15} />} title="CI duration distribution"
+            actions={workflowRunMetrics.p50Minutes !== undefined && workflowRunMetrics.p95Minutes !== undefined &&
+              <div className="reports-percentiles" role="group" aria-label="CI duration percentiles">
+                <span>p50 {workflowRunMetrics.p50Minutes.toFixed(1)}m</span>
+                <span>p95 {workflowRunMetrics.p95Minutes.toFixed(1)}m</span>
+              </div>} />
           <ChartLegend items={[{ tone: 'teal', label: 'Completed GitHub Actions runs' }]} />
           {workflowRunMetrics.complete && workflowRunMetrics.runCount > 0 ? <BarChart
             className="reports-ci-chart"
