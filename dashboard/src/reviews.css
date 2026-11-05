@@ -614,6 +614,18 @@
   flex: 0 0 auto;
   color: #bd91ff;
 }
+.reviews-summary-actions { display: grid; gap: 7px; padding: 0 9px 9px; }
+.reviews-summary-actions > .mantine-Button-root {
+  min-height: 28px;
+  height: 28px;
+  border-color: #39344b;
+  color: #bfb8cd;
+  background: #1a1926;
+  font-size: 10px;
+}
+.reviews-summary-review-actions { display: grid; grid-template-columns: 1fr 1.25fr; gap: 6px; }
+.reviews-summary-review-actions .mantine-Button-root { min-height: 29px; height: 29px; padding: 0 6px; font-size: 10px; }
+.reviews-summary-review-actions .mantine-Button-root:disabled { opacity: .5; }
 .reviews-governance-heading {
   justify-content: flex-start;
   gap: 6px;

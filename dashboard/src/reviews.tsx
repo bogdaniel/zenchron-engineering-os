@@ -568,17 +568,15 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
               >Request changes</Button>
             </div>
           </div> : null}
-          <div className="reviews-review-actions">
-            <Button variant="default" disabled><IconDownload size={14} /> Export evidence</Button>
+          {section === 'local-branches' && <div className="reviews-review-actions">
             <Button
               variant="default"
               disabled={section !== 'local-branches' || !selected || !['queued', 'running'].includes(selected.status) || selected.cancel_requested || cancelRun.isPending}
               onClick={() => cancelRun.mutate()}
             >{selected?.cancel_requested ? 'Stopping…' : 'Cancel run'}</Button>
             <span />
-            <Button color="green" disabled>Approve</Button>
             {cancelRun.isError && <span className="reviews-action-error" role="alert">{cancelRun.error.message}</span>}
-          </div>
+          </div>}
           </PanelCard>
         </Panel>
         <Separator id="detail-summary-separator" className="reviews-resize-handle" aria-label="Resize review detail and summary" />
@@ -600,6 +598,14 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
           <div className="reviews-checks-heading"><b>Required checks</b><span>Unavailable</span></div>
           <div className="reviews-check-empty">
             <IconLock size={16} /> Checks and policy results need provider data.
+          </div>
+          <div className="reviews-summary-actions">
+            <Button variant="default" disabled fullWidth><IconDownload size={14} /> Export evidence</Button>
+            <div className="reviews-summary-review-actions">
+              <Button color="green" disabled>Approve</Button>
+              {selectedPullRequest && <Button color="violet" onClick={() => setDetailTab('conversations')}>Request changes</Button>}
+              {selectedIssue && <Button variant="default" onClick={() => setDetailTab('conversations')}>Add comment</Button>}
+            </div>
           </div>
           <div className="reviews-governance-heading"><IconGitMerge size={15} /><b>Merge Governance</b></div>
           <div className="reviews-governance-row"><span>Target branch</span><b>{section === 'local-branches'

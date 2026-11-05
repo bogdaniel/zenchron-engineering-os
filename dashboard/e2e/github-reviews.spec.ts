@@ -113,7 +113,12 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(page.locator('.reviews-provider-card')).toContainText('#43');
   await page.getByRole('button', { name: 'Open 1' }).click();
   await expect(page.locator('.reviews-provider-card')).toContainText('#42');
+  await expect(page.locator('.reviews-summary-actions').getByRole('button', { name: 'Export evidence' })).toBeDisabled();
+  await expect(page.locator('.reviews-summary-review-actions').getByRole('button', { name: 'Approve' })).toBeDisabled();
+  await page.locator('.reviews-summary-review-actions').getByRole('button', { name: 'Request changes' }).click();
   const detailTabs = page.getByRole('group', { name: 'Review detail sections' });
+  await expect(detailTabs.getByRole('button', { name: 'Conversations' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('GitHub pull request review')).toBeVisible();
   await detailTabs.getByRole('button', { name: 'Conversations' }).click();
   await expect(page.locator('.reviews-detail-tab-panel')).toContainText('Existing GitHub conversation history is not synchronized yet.');
   await detailTabs.getByRole('button', { name: 'Evidence' }).click();
@@ -141,9 +146,11 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(page.locator('.reviews-provider-detail')).toContainText('Document local worker setup.');
   await expect(page.locator('.reviews-summary .reviews-panel-heading p')).toHaveText('GitHub issue context');
   await expect(page.getByRole('link', { name: 'Open issue on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/platform/issues/51');
+  await page.locator('.reviews-summary-review-actions').getByRole('button', { name: 'Add comment' }).click();
+  await expect(page.getByLabel('GitHub issue comment')).toBeVisible();
   await page.getByRole('button', { name: 'Conversations' }).click();
   await page.getByLabel('GitHub issue comment').fill('I will add the setup instructions.');
-  await page.getByRole('button', { name: 'Add comment' }).click();
+  await page.locator('.reviews-detail-tab-panel').getByRole('button', { name: 'Add comment' }).click();
   await expect(page.getByRole('status')).toHaveText('Comment submitted to GitHub.');
   expect(issueComments).toEqual([{ body: 'I will add the setup instructions.', number: 51 }]);
   await page.getByRole('button', { name: 'Close issue' }).click();
@@ -157,11 +164,11 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Comment submitted to GitHub and attached to the agent run.');
   await page.getByLabel('GitHub pull request review').fill('Please add retry coverage before merging.');
-  await page.getByRole('button', { name: 'Request changes' }).click();
+  await page.locator('.reviews-detail-tab-panel').getByRole('button', { name: 'Request changes' }).click();
   await expect(page.getByRole('status')).toHaveText('Changes requested on GitHub; agent run queued.');
   canQueue = false;
   await page.getByLabel('GitHub pull request review').fill('Keep this feedback until the worker is available.');
-  await page.getByRole('button', { name: 'Request changes' }).click();
+  await page.locator('.reviews-detail-tab-panel').getByRole('button', { name: 'Request changes' }).click();
   await expect(page.getByRole('status')).toHaveText(
     'Changes requested on GitHub; run feedback stored, but the agent is not eligible for another pass yet.',
   );

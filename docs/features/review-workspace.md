@@ -49,6 +49,7 @@ flowchart LR
 ```
 
 Provider descriptions render as sanitized Markdown/HTML; external images are stripped. The summary panel identifies whether its content belongs to a local branch, GitHub pull request, or GitHub issue. The Code changes, Conversations, Evidence, and Checklist controls switch the detail panel. The Conversations view submits issue/PR feedback and shows local run comments; existing provider conversation, check, and artifact data show explicit unavailable states until synced.
+The summary rail keeps evidence export and approval actions beside the checks; unavailable actions remain disabled. Its request-changes and issue-comment shortcuts open the existing Conversations composer.
 
 At desktop widths the provider queue, diff detail, and summary panes start at 24/52/24 percent to match the supplied
 layout, then resize independently with drag handles or arrow keys; the panel group fills the remaining viewport below the
