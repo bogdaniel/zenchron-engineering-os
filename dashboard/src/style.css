@@ -211,13 +211,17 @@ button:disabled, input:disabled {
 .app-shell .main-content .reports-greeting .page-heading p {
   overflow: hidden;
   margin-top: 2px;
-  font-size: var(--page-description-size);
+  font-size: 10.5px;
+  letter-spacing: -.1px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .search-box {
   width: min(360px,30vw);
   margin: 0 auto;
+}
+@media (min-width: 1201px) {
+  .reports-greeting + .search-box { width: 300px; flex: 0 0 300px; }
 }
 .search-box input {
   color: #eee;

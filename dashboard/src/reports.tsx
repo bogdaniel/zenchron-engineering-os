@@ -236,7 +236,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
   ];
   const downloadableReports = [
     {
-      name: 'Executive Summary', detail: 'Objectives, delivery, and runs', format: 'CSV',
+      name: 'Executive Summary', detail: 'Delivery KPIs and highlights', format: 'CSV',
       download: () => downloadCSV('executive-summary', [
         ['Metric', 'Value'],
         ['Time range', timeRanges.find((range) => range.value === appliedScope.timeRange)?.label ?? 'All time'],
@@ -247,11 +247,11 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
       ]),
     },
     {
-      name: 'Detailed Metrics', detail: 'Metrics with source completeness', format: 'CSV',
+      name: 'Detailed Metrics', detail: 'Metrics by product and team', format: 'CSV',
       download: () => downloadCSV('detailed-metrics', [['Metric', 'Value', 'Source'], ...metricRows]),
     },
     {
-      name: 'Agent Spend & Utilization', detail: 'Unavailable until usage data connects', format: 'CSV',
+      name: 'Agent Spend & Utilization', detail: 'Usage data unavailable', format: 'CSV',
       download: () => downloadCSV('agent-spend-utilization', [
         ['Agent', 'Project', 'Branch', 'Status', 'Spend (USD)', 'Usage', 'Source'],
         ...(scopedRuns ?? []).map((run) => [run.agent_name, run.project_name, run.branch, run.status,
@@ -259,7 +259,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
       ]),
     },
     {
-      name: 'Product & Workspace Report', detail: 'Product delivery metrics and workspace counts', format: 'CSV',
+      name: 'Product & Workspace Report', detail: 'Delivery and workspace data', format: 'CSV',
       download: () => downloadCSV('product-workspace', [
         ['Record', 'Name', 'Repositories', 'Objectives', 'Agent runs', 'Velocity (PRs/week)', 'Cycle time (hours)',
           'CI duration (minutes)', 'Acceptance rate (%)', 'Autonomous completion (%)', 'Worker', 'Status'],

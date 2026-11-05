@@ -45,7 +45,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.locator('.downloadable-report-list')).toHaveCSS('row-gap', '4px');
   await expect(page.locator('.downloadable-report').first()).toHaveCSS('min-height', '32px');
   await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '10px');
-  await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '10px');
+  await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '9px');
   await expect(page.getByRole('button', { name: 'Download Agent Spend & Utilization CSV' })).toBeEnabled();
   await expect(page.locator('.reports-empty-chart')).toHaveCount(4);
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
@@ -135,6 +135,10 @@ test('Reports headings fit the mock display viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1505, height: 847 });
   await page.goto('/#reports');
 
+  const pageDescription = page.locator('.reports-greeting .page-heading p');
+  expect(await pageDescription.evaluate((description) => description.scrollWidth <= description.clientWidth),
+    'Reports subtitle remains fully readable').toBe(true);
+
   const acceptanceTitle = page.locator('.acceptance-panel .reports-panel-heading h3');
   const acceptanceBounds = await acceptanceTitle.evaluate((title) => {
     const { right } = title.getBoundingClientRect();
@@ -156,7 +160,8 @@ test('Reports headings fit the mock display viewport', async ({ page }) => {
   );
   expect(reportTitlesFit, 'download report names remain fully readable').toBe(true);
   const reportDetailsFit = await page.locator('.downloadable-report-copy span').evaluateAll((details) =>
-    details.every((detail) => detail.scrollHeight <= detail.clientHeight),
+    details.every((detail) => detail.scrollHeight <= detail.clientHeight &&
+      detail.getBoundingClientRect().height <= parseFloat(getComputedStyle(detail).lineHeight) + 1),
   );
   expect(reportDetailsFit, 'download report source details remain fully readable').toBe(true);
   const lastReportBounds = await page.locator('.downloadable-report').last().boundingBox();
