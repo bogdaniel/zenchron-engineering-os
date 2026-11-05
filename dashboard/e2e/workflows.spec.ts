@@ -11,11 +11,14 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   expect(mockTitleBox?.height).toBeLessThan(30);
   expect(mockTitleBox && mockToolbarBox && Math.abs(mockTitleBox.y - mockToolbarBox.y)).toBeLessThan(16);
   await expect(page.getByRole('combobox', { name: 'Workflow' })).toHaveValue('PR Review & Release Orchestration');
-  await expect(page.getByRole('textbox', { name: 'Label' })).toHaveValue('Agent Router');
+  await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Router');
+  await expect(page.getByRole('textbox', { name: 'Type' })).toHaveValue('Agent Router');
+  await expect(page.getByRole('textbox', { name: 'Type' })).toHaveAttribute('readonly', '');
+  await expect(page.getByRole('region', { name: 'Basic configuration' })).toBeVisible();
   await expect(page.locator('.workflow-properties .workflow-subheading h3')).toHaveText('Agent Router');
-  await expect(page.getByLabel('Name')).toBeHidden();
+  await expect(page.getByLabel('Name', { exact: true })).toBeHidden();
   await page.getByText('Workflow settings', { exact: true }).click();
-  await expect(page.getByLabel('Name')).toHaveValue('PR Review & Release Orchestration');
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('PR Review & Release Orchestration');
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCSS('background-color', 'rgb(103, 65, 217)');
   await expect(page.locator('.workflow-run-preview')).toContainText('Execution preview unavailable');
   await expect(page.locator('.workflow-preview-summary')).toContainText('Components 9');
@@ -126,7 +129,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await page.getByRole('option', { name: 'PR Review & Release Orchestration' }).click();
   await expect(page.getByRole('combobox', { name: 'Workflow' })).toHaveValue('PR Review & Release Orchestration');
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
-  await expect(page.getByRole('textbox', { name: 'Label' })).toHaveValue('Agent Router');
+  await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Router');
   const dragHandle = page.getByRole('button', { name: 'Drag Agent Task to canvas' });
   const source = await dragHandle.boundingBox();
   const canvas = await page.locator('.workflow-canvas').boundingBox();

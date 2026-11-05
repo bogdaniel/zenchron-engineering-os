@@ -300,6 +300,10 @@ export function WorkflowsPage() {
   const [createDescription, setCreateDescription] = useState('');
   const [paletteSearch, setPaletteSearch] = useState('');
   const selected = nodes.find((node) => node.id === selectedId);
+  const InspectorIcon = workflowNodeIcons[selected?.data.kind ?? 'agent-router'];
+  const selectedType = selected
+    ? components.find(([, type]) => type === selected.data.kind)?.[2] ?? selected.data.kind
+    : '';
   const activeWorkflow = query.data?.find((workflow) => workflow.id === selectedWorkflowId) ?? query.data?.[0];
   const mobileStages = activeWorkflow ? mobileWorkflowGraph(activeWorkflow).nodes : [];
   const approvalRequired = activeWorkflow?.nodes.some((node) => node.type === 'human-approval') ?? false;
@@ -599,17 +603,24 @@ export function WorkflowsPage() {
       </div>
       </DndContext>
       <aside className="workflow-properties">
-        <PanelHeading className="workflow-subheading" title={selected?.data.label ?? 'Selected component'} />
+        <PanelHeading className="workflow-subheading" title={selected?.data.label ?? 'Selected component'}
+          icon={selected && <span className="workflow-inspector-icon" aria-hidden="true"><InspectorIcon size={18} /></span>} />
         {selected ? <>
-          <TextInput
-            label="Label" value={selected.data.label}
-            onChange={(event) => updateSelected('label', event.currentTarget.value)} maxLength={100}
-          />
-          <Textarea
-            label="Description" value={selected.data.description}
-            onChange={(event) => updateSelected('description', event.currentTarget.value)}
-            maxLength={500} autosize minRows={2}
-          />
+          <section className="workflow-basic-configuration" aria-label="Basic configuration">
+            <h4>Basic Configuration</h4>
+            <div className="workflow-basic-fields">
+              <TextInput
+                label="Node Name" value={selected.data.label}
+                onChange={(event) => updateSelected('label', event.currentTarget.value)} maxLength={100}
+              />
+              <TextInput label="Type" value={selectedType} readOnly />
+              <Textarea
+                label="Description" value={selected.data.description}
+                onChange={(event) => updateSelected('description', event.currentTarget.value)}
+                maxLength={500} autosize minRows={2}
+              />
+            </div>
+          </section>
           <Button color="red" variant="subtle" onClick={() => {
             setNodes((current) => current.filter((node) => node.id !== selectedId));
             setEdges((current) => current.filter((edge) => edge.source !== selectedId && edge.target !== selectedId));

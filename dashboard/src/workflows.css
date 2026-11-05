@@ -103,6 +103,21 @@
   align-items: center;
   gap: 8px;
 }
+.workflow-inspector-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #594079;
+  border-radius: 9px;
+  color: #ce9dff;
+  background: #2a1e3a;
+}
+.workflow-basic-configuration { display: grid; gap: 8px; }
+.workflow-basic-configuration h4 { margin: 0; color: #dcd6e7; font-size: 12px; font-weight: 600; }
+.workflow-basic-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.workflow-basic-fields .mantine-Textarea-root { grid-column: 1 / -1; }
 .workflow-palette-search .mantine-Input-input {
   min-height: 32px;
   border-color: #34304b;
@@ -425,6 +440,7 @@
   .workflow-divider {
     grid-column: 1 / -1;
   }
+  .workflow-basic-configuration { grid-column: 1 / -1; }
 }
 @media (min-width: 1051px) {
   .workflow-builder-layout {

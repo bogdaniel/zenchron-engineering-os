@@ -58,6 +58,8 @@ flowchart LR
 - The builder content stays within the supplied desktop frame width while the shared app shell provides the same rail and
   typography as other routes. `PanelHeading` supplies component and node headings; the selected node opens in the
   inspector first, with workflow-level fields available in a collapsed native disclosure below it.
+- The node inspector groups the persisted name and description under Basic Configuration, shows type from the saved node
+  kind as read-only, and uses the matching component icon. It exposes no fields beyond the saved workflow shape.
 - The installed `react-resizable-panels` separator adjusts the canvas and run-preview heights. Its default split keeps
   the canvas aligned with the supplied desktop mock; the keyboard-focusable separator can also be resized with arrow keys.
 - The palette groups all node types accepted by the control plane. Builder is the only active workflow section;
