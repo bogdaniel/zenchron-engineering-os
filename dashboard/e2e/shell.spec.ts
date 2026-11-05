@@ -6,7 +6,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
   const referenceWidth = await page.locator('.sidebar').evaluate((sidebar) =>
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
-  expect(referenceWidth, 'full screen reference sidebar width').toBe(272);
+  expect(referenceWidth, 'full screen reference sidebar width').toBe(208);
   await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link'))
     .toHaveText([
       'Overview', 'Objectives', 'Workflows', 'Agents', 'Product Workspace', 'Reviews', 'Integrations', 'Reports', 'Settings',
@@ -52,7 +52,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
         weight: getComputedStyle(heading).fontWeight,
       })),
     }), selectors);
-    expect(Math.round(parseFloat(styles.sidebarWidth))).toBe(272);
+    expect(Math.round(parseFloat(styles.sidebarWidth))).toBe(208);
     expect(styles.bodyFont).toContain('Inter');
     expect(styles.navigationFontFamily).toBe(styles.bodyFont);
     expect(styles.titleFontFamily).toBe(styles.bodyFont);
@@ -104,7 +104,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
   const framedReferenceWidth = await page.locator('.sidebar').evaluate((sidebar) =>
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
-  expect(framedReferenceWidth, 'monitor screen reference sidebar width').toBe(272);
+  expect(framedReferenceWidth, 'monitor screen reference sidebar width').toBe(208);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.nav-link').first()).toHaveCSS('font-weight', '400');
@@ -231,8 +231,8 @@ test('desktop sidebar matches mock width at reference and regular monitor sizes'
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/#reports');
     await expect(page.locator('.reports-page')).toBeVisible();
-    expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(272);
-    expect(await page.locator('.reports-scope-bar').evaluate((bar) => bar.getBoundingClientRect().x)).toBe(290);
+    expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(208);
+    expect(await page.locator('.reports-scope-bar').evaluate((bar) => bar.getBoundingClientRect().x)).toBe(226);
     expect(await page.locator('.sidebar nav .nav-link').evaluateAll((links) =>
       links.every((link) => link.scrollWidth <= link.clientWidth),
     ), 'all desktop navigation labels fit without clipping').toBe(true);
