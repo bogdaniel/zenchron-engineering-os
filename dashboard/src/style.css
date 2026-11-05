@@ -107,10 +107,14 @@ button:disabled, input:disabled {
 }
 .sidebar nav {
   display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
   gap: 3px;
 }
 .nav-link {
   display: flex;
+  width: 100%;
+  min-width: 0;
   min-height: 38px;
   align-items: center;
   gap: 2px;
@@ -120,9 +124,10 @@ button:disabled, input:disabled {
   color: #a9a5b9;
   font-size: 12px;
   letter-spacing: -.25px;
-  white-space: nowrap;
+  white-space: normal;
   transition: .16s ease;
 }
+.nav-label { min-width: 0; }
 .nav-link:hover {
   color: #fff;
   background: #171624;
