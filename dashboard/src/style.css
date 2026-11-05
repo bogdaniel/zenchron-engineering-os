@@ -107,11 +107,11 @@ button:disabled, input:disabled {
 }
 .sidebar nav {
   display: grid;
-  gap: 5px;
+  gap: 3px;
 }
 .nav-link {
   display: flex;
-  min-height: 44px;
+  min-height: 38px;
   align-items: center;
   gap: 2px;
   padding: 0 1px;

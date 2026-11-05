@@ -53,6 +53,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     expect(styles.panelFontFamily).toBe(styles.bodyFont);
     expect(styles.navigationFont).toBe('12px');
     expect(styles.navigationWeight).toBe('400');
+    expect((await page.locator('.nav-link').first().boundingBox())?.height).toBe(38);
     await expect(page.locator('.nav-link').filter({ hasText: 'Product Workspace' }), 'long navigation label stays on one line')
       .toHaveCSS('white-space', 'nowrap');
     expect(styles.topbarHeight).toBe('80px');
