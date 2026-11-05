@@ -57,6 +57,8 @@ to ten comments of 1,000 bytes. Local comments and request-changes are available
 requires an online worker with model runtime and `code.write` permission. Provider-backed PR metrics remain unavailable while
 local branch rows show the actual run status and project. File, added-line, and removed-line counts are derived from the
 loaded local diff; truncated diffs show lower-bound counts. Risk, evidence, CI, and policy results remain unavailable.
+The provider queue keeps compact number, state, and date columns so wrapped pull-request titles get the remaining width
+without clipping the state heading.
 
 ## Verification
 

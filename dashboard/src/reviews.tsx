@@ -52,10 +52,10 @@ const issueSchema = z.array(githubItem.extend({ labels: z.array(z.object({ name:
 type GitHubPullRequest = z.infer<typeof pullRequestSchema>[number];
 type GitHubIssue = z.infer<typeof issueSchema>[number];
 const providerColumns: ColDef<GitHubPullRequest | GitHubIssue>[] = [
-  { field: 'number', headerName: '#', width: 48 },
-  { field: 'title', headerName: 'Title', flex: 2, minWidth: 120, wrapText: true, autoHeight: true },
-  { field: 'state', headerName: 'State', width: 70 },
-  { field: 'updated_at', headerName: 'Date', flex: 1, minWidth: 72,
+  { field: 'number', headerName: '#', width: 36 },
+  { field: 'title', headerName: 'Title', flex: 3, minWidth: 120, wrapText: true, autoHeight: true },
+  { field: 'state', headerName: 'State', width: 60 },
+  { field: 'updated_at', headerName: 'Date', flex: 1, minWidth: 52,
     valueFormatter: ({ value }) => {
       const timestamp = Date.parse(value ?? '');
       return Number.isFinite(timestamp)
