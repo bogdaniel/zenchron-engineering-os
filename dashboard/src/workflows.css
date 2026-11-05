@@ -205,7 +205,7 @@
   text-overflow: ellipsis;
   white-space: normal;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 .workflow-canvas-wrap {
   display: flex;
@@ -296,10 +296,14 @@
 }
 .workflow-node small {
   overflow: hidden;
+  display: -webkit-box;
   color: #aaa4ba;
   font-size: 16px;
+  line-height: 1.2;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .workflow-node .react-flow__handle {
   width: 8px;
@@ -491,7 +495,7 @@
   .workflow-mobile-summary b { display: block; margin-top: 4px; color: #e8e2f1; font-size: 11px; }
   .workflow-mobile-summary p { grid-column: 1 / -1; margin: 0; color: #a49cb5; font-size: 10px; }
   .workflow-mobile-details { display: grid; gap: 4px; margin-bottom: 6px; }
-  .workflow-mobile-detail-panel { display: grid; gap: 6px; padding: 8px 10px; }
+  .workflow-mobile-detail-panel { display: grid; gap: 6px; padding: 6px 10px; }
   .workflow-mobile-detail-panel .shared-panel-heading { min-height: 24px; }
   .workflow-mobile-detail-panel .shared-panel-heading h3 { font-size: 11px; }
   .workflow-mobile-task-list { display: grid; gap: 3px; }

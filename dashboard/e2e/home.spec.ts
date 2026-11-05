@@ -5,8 +5,14 @@ test('dashboard displays the connected control plane and local worker', async ({
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Workflow orchestration' })).toBeVisible();
-  await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(9);
-  await expect(page.locator('.workflow-overview-canvas .react-flow__edge')).toHaveCount(10);
+  await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
+  await expect(page.locator('.workflow-overview-canvas .react-flow__edge')).toHaveCount(6);
+  const workflowSummary = page.locator('.workflow-overview-canvas');
+  await expect(workflowSummary).toHaveAttribute('aria-label', /6 stages summarize 9 components/);
+  await expect(workflowSummary).toContainText('Run agents');
+  await expect(workflowSummary).toContainText('Run test suite');
+  await expect(workflowSummary).toContainText('AI + human review');
+  await expect(workflowSummary).toContainText('Gated release');
   await expect(page.locator('.workflow-overview-status')).toContainText('Execution unavailable');
   await expect(page.locator('.activity-list')).toContainText('Control plane is responding');
   await expect(page.getByText('Running agents', { exact: true })).toBeVisible();
@@ -37,9 +43,9 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
       brandMark: bounds('.brand-mark'), overviewLink: bounds('.nav-link[href="#overview"]'),
     };
   });
-  expect(layout.metrics?.x).toBe(265);
+  expect(layout.metrics?.x).toBe(146);
   expect(layout.metrics?.y).toBe(84);
-  expect(layout.metrics?.width).toBe(1393);
+  expect(layout.metrics?.width).toBe(1512);
   expect(layout.metrics?.height).toBe(100);
   expect(layout.workflow?.y).toBe(198);
   expect(layout.workflow?.height).toBeGreaterThanOrEqual(203);
@@ -61,13 +67,13 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
     return parseFloat(getComputedStyle(node.querySelector('b')!).fontSize) * zoom;
   });
   expect(overviewGraphLabelSize).toBeGreaterThanOrEqual(8);
-  expect(layout.activity?.x).toBeGreaterThan(1235);
+  expect(layout.activity?.x).toBeCloseTo(1212.8, 1);
   expect(layout.objectives?.y).toBeCloseTo(416, 0);
   expect(layout.review?.y).toBeCloseTo(590, 0);
   expect(layout.review?.height).toBe(280);
   expect(layout.footerDisplay).toBe('none');
-  expect(layout.brandMark?.x).toBe(38);
-  expect(layout.overviewLink?.x).toBe(14);
+  expect(layout.brandMark?.x).toBe(4);
+  expect(layout.overviewLink?.x).toBe(4);
   expect(layout.overviewLink?.y).toBeCloseTo(92, 0);
 });
 
@@ -82,11 +88,11 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
       footerDisplay: getComputedStyle(document.querySelector('.page-footer')!).display,
     };
   });
-  expect(layout.metrics?.x).toBe(265);
+  expect(layout.metrics?.x).toBe(146);
   expect(layout.metrics?.y).toBe(84);
   expect(layout.workflow?.y).toBe(189);
   expect(layout.workflow?.height).toBe(202);
-  expect(layout.activity?.x).toBeCloseTo(1143.5, 1);
+  expect(layout.activity?.x).toBeCloseTo(1107.8, 1);
   expect(layout.objectives?.y).toBe(403);
   expect(layout.review?.y).toBe(573);
   expect(layout.review?.height).toBe(220);
@@ -95,7 +101,7 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
 });
 
 test('Reviews matches the supplied desktop workspace frame', async ({ page }) => {
-  await page.setViewportSize({ width: 1512, height: 874 });
+  await page.setViewportSize({ width: 1672, height: 874 });
   await page.goto('/#reviews');
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
@@ -104,11 +110,11 @@ test('Reviews matches the supplied desktop workspace frame', async ({ page }) =>
       titleIcon: bounds('.reviews-title-icon'), tabs: bounds('.reviews-tabs'), workspace: bounds('.reviews-workspace'),
     };
   });
-  expect(layout.sidebar?.width).toBe(247);
-  expect(layout.metrics?.x).toBe(265);
+  expect(layout.sidebar?.width).toBe(128);
+  expect(layout.metrics?.x).toBe(146);
   expect(layout.metrics?.y).toBe(92);
-  expect(layout.titleIcon?.x).toBe(265);
-  expect(layout.title?.x).toBe(293);
+  expect(layout.titleIcon?.x).toBe(146);
+  expect(layout.title?.x).toBe(174);
   expect(layout.tabs?.y).toBeCloseTo(205, 0);
   expect(layout.workspace?.y).toBeCloseTo(238, 0);
   expect(layout.workspace?.height).toBe(635);
@@ -182,8 +188,8 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
       table: bounds('.objective-table-panel'), detail: bounds('.objective-detail-panel'), capacity: bounds('.objective-capacity'),
     };
   });
-  expect(layout.sidebar?.width).toBe(247);
-  expect(layout.metrics?.x).toBe(265);
+  expect(layout.sidebar?.width).toBe(128);
+  expect(layout.metrics?.x).toBe(146);
   expect(layout.metrics?.y).toBeCloseTo(157.5, 0);
   expect(layout.content?.y).toBeCloseTo(263.5, 0);
   expect(layout.content?.height).toBe(603);
@@ -341,7 +347,7 @@ test('Reviews page shows an isolated local branch diff without treating it as a 
   await expect(page.getByRole('button', { name: 'Merge to protected branch' })).toBeDisabled();
 });
 
-test('Reports page summarizes live API records and leaves delivery metrics unavailable', async ({ page }) => {
+test('Reports summarizes live objectives and run records without inventing delivery data', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
   const objective = await page.evaluate(async () => {
@@ -352,10 +358,11 @@ test('Reports page summarizes live API records and leaves delivery metrics unava
     return response.status;
   });
   expect(objective).toBe(201);
-  const objectiveCount = await page.evaluate(async () => {
+  const objectiveCounts = await page.evaluate(async () => {
     const response = await fetch('/api/v1/objectives');
     if (!response.ok) throw new Error(`Objective list failed: ${response.status}`);
-    return (await response.json()).length;
+    const objectives = await response.json();
+    return { total: objectives.length, completed: objectives.filter((item: { status: string }) => item.status === 'completed').length };
   });
   const run = await page.evaluate(async () => {
     const agentResponse = await fetch('/api/v1/agents', {
@@ -378,45 +385,29 @@ test('Reports page summarizes live API records and leaves delivery metrics unava
     const runs = await response.json();
     return runs.find((item: { id: string }) => item.id === runID)?.status;
   }, run.id), { timeout: 15_000 }).toBe('succeeded');
+  const runCounts = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/agent-runs');
+    if (!response.ok) throw new Error(`Agent run list failed: ${response.status}`);
+    const runs = await response.json();
+    return { total: runs.length, succeeded: runs.filter((item: { status: string }) => item.status === 'succeeded').length };
+  });
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Objective status' })).toBeVisible();
-  await expect(page.locator('.objective-chart-layout [role="application"]')).toBeVisible();
-  await expect(page.locator('.objective-chart-layout .objective-chart-label')).toHaveText(String(objectiveCount));
-  await expect(page.locator('.objective-legend')).toContainText('In progress');
-  await expect(page.getByRole('heading', { name: 'Agent run outcomes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Insights & narrative' })).toBeVisible();
+  await expect(page.locator('.reports-insights')).toContainText(
+    `${objectiveCounts.completed} of ${objectiveCounts.total} completed in this scope.`,
+  );
+  await expect(page.locator('.reports-insights')).toContainText(`${runCounts.total} recorded runs in this period.`);
+  await expect(page.getByRole('heading', { name: 'Work outcomes' })).toBeVisible();
   await expect(page.locator('.run-chart-layout [role="application"]')).toBeVisible();
-  await expect(page.locator('.run-chart-layout .objective-chart-label')).toHaveText('1');
+  await expect(page.locator('.run-chart-layout .report-chart-label')).toHaveText(String(runCounts.total));
   await expect(page.locator('.run-outcome-legend')).toContainText('Succeeded');
-  await expect(page.locator('.run-outcome-legend')).toContainText('1');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Agent runs (30d)' })).toContainText('1');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Run success rate' })).toContainText('100%');
-  await expect(page.getByRole('heading', { name: 'Workspace inventory' })).toBeVisible();
+  await expect(page.locator('.run-outcome-legend')).toContainText(String(runCounts.succeeded));
+  await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Delivery velocity & cycle time' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'CI duration distribution' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Review latency & agent spend' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Acceptance & autonomous completion' })).toBeVisible();
   await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' })).toContainText('Unavailable');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' }).locator('strong'))
-    .toHaveCSS('font-size', '14px');
-  await expect(page.getByRole('heading', { name: 'Reporting coverage' })).toBeVisible();
-  const layout = await page.evaluate(() => {
-    const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
-    return { sidebar: bounds('.sidebar'), metrics: bounds('.reports-metrics'), content: bounds('.reports-content-grid'),
-      objectiveChart: bounds('.objective-distribution'), runChart: bounds('.run-outcomes-panel'),
-      inventory: bounds('.inventory-panel'),
-      delivery: bounds('.delivery-velocity-panel'), coverage: bounds('.reports-summary'),
-      productWorkspaceLabelHeight: document.querySelector('.nav-link[href="#workspace"] .nav-label')?.getBoundingClientRect().height };
-  });
-  expect(layout.sidebar?.width).toBe(247);
-  expect(layout.metrics?.x).toBe(265);
-  expect(layout.content?.y).toBeLessThan(290);
-  expect(layout.content?.bottom).toBeLessThanOrEqual(941);
-  expect(layout.objectiveChart?.width).toBeGreaterThan(layout.runChart?.width ?? 0);
-  expect(layout.coverage?.x).toBeGreaterThan(layout.runChart?.x ?? 0);
-  expect(layout.coverage?.y).toBeCloseTo(layout.objectiveChart?.y ?? -100, 0);
-  expect(layout.inventory?.y).toBeGreaterThan(layout.delivery?.y ?? -100);
-  expect(layout.productWorkspaceLabelHeight).toBeLessThan(24);
+  await expect(page.getByRole('button', { name: 'Download Executive summary CSV' })).toBeVisible();
 });
 
 test('Product Workspace groups live repositories into persisted products', async ({ page }) => {

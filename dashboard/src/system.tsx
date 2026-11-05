@@ -199,7 +199,7 @@ export function SystemPage({
               </PanelCard>
               <PanelCard className="system-operation-card" withBorder>
                 <PanelHeading title="Secrets" icon={<IconKey size={16} />} />
-                <p>Model credentials stay on workers; the GitHub token stays on the control plane.</p>
+                <p>Model credentials stay on workers; GitHub credentials stay on the control plane.</p>
                 <Badge className="system-status healthy" variant="light">Boundary enforced</Badge>
               </PanelCard>
               <PanelCard className="system-operation-card" withBorder>

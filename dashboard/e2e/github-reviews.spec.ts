@@ -42,7 +42,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
     status: 200, contentType: 'application/json',
     body: JSON.stringify([{
       number: 42, title: 'Improve agent review flow', state: 'open', html_url: 'https://github.com/acme/platform/pull/42',
-      body: 'Keep PR data in the provider.', draft: false, updated_at: new Date().toISOString(),
+      body: '<details><summary>Release notes</summary><p>Version <strong>0.12.1</strong> <a href="https://example.com/releases">release notes</a><img src="https://example.com/pixel" onerror="alert(1)"></p></details>', draft: false, updated_at: new Date().toISOString(),
       user: { login: 'maya' }, head: { ref: `zenchron/agent-run/${runID}` }, base: { ref: 'main' },
     }]),
   }));
@@ -85,10 +85,25 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   expect(workspace?.height).toBe(635);
   expect((workspace?.y ?? 0) + (workspace?.height ?? 0)).toBeLessThanOrEqual(874);
   await expect(page.getByText('GitHub · Nova Platform')).toBeVisible();
+  await expect(page.locator('.reviews-summary-copy details summary')).toHaveText('Release notes');
+  await expect(page.locator('.reviews-summary-copy')).not.toContainText('<details>');
+  await expect(page.locator('.reviews-summary-copy a')).toHaveAttribute('href', 'https://example.com/releases');
+  await expect(page.locator('.reviews-summary-copy [onerror]')).toHaveCount(0);
+  await expect(page.locator('.reviews-summary-copy img')).toHaveCount(0);
+  const detailTabs = page.getByRole('group', { name: 'Review detail sections' });
+  await detailTabs.getByRole('button', { name: 'Conversations' }).click();
+  await expect(page.locator('.reviews-detail-tab-panel')).toContainText('Existing GitHub conversation history is not synchronized yet.');
+  await detailTabs.getByRole('button', { name: 'Evidence' }).click();
+  await expect(page.locator('.reviews-detail-tab-panel')).toContainText('Evidence unavailable');
+  await detailTabs.getByRole('button', { name: 'Checklist' }).click();
+  await expect(page.locator('.reviews-detail-tab-panel')).toContainText('Required checks unavailable');
+  await detailTabs.getByRole('button', { name: 'Code changes' }).click();
+  await expect(page.locator('.reviews-pr-diff')).toBeVisible();
+  await expect(detailTabs.getByRole('button', { name: 'Code changes' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.reviews-metric .metric-top').first()).toHaveCSS('font-size', '12px');
   await expect(page.locator('.reviews-metric strong').first()).toHaveCSS('font-size', '26px');
   await expect(page.locator('.reviews-grid-wrap')).toContainText('Improve agent review flow');
-  await expect(page.locator('.reviews-detail-heading p')).toHaveCSS('font-size', '12px');
+  await expect(page.locator('.reviews-detail-heading p')).toHaveCSS('font-size', '11px');
   const search = page.getByRole('textbox', { name: 'Search pull requests' });
   await search.fill('42');
   await expect(page.locator('.reviews-grid-wrap')).toContainText('Improve agent review flow');
@@ -102,6 +117,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(page.locator('.reviews-grid-wrap')).toContainText('Add setup instructions');
   await expect(page.locator('.reviews-provider-detail')).toContainText('Document local worker setup.');
   await expect(page.getByRole('link', { name: 'Open issue on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/platform/issues/51');
+  await page.getByRole('button', { name: 'Conversations' }).click();
   await page.getByLabel('GitHub issue comment').fill('I will add the setup instructions.');
   await page.getByRole('button', { name: 'Add comment' }).click();
   await expect(page.getByRole('status')).toHaveText('Comment submitted to GitHub.');
@@ -112,6 +128,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(page.getByText('Issue open on GitHub.', { exact: true })).toBeVisible();
   expect(issueStates).toEqual(['closed', 'open']);
   await page.getByRole('button', { name: 'Pull requests' }).click();
+  await page.getByRole('button', { name: 'Conversations' }).click();
   await page.getByLabel('GitHub pull request review').fill('Thanks for adding the API coverage.');
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Comment submitted to GitHub and attached to the agent run.');

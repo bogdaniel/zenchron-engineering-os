@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('Product Workspace matches its desktop frame and filters products', async ({ page }) => {
-  await page.setViewportSize({ width: 1522, height: 856 });
+  await page.setViewportSize({ width: 1672, height: 856 });
   const projectID = 'c'.repeat(32);
   await page.route('**/api/v1/products', (route) => route.fulfill({
     status: 200,
@@ -50,10 +50,10 @@ test('Product Workspace matches its desktop frame and filters products', async (
       content: bounds('.workspace-content-grid'),
     };
   });
-  expect(layout.directory?.x).toBe(265);
+  expect(layout.directory?.x).toBe(146);
   expect(layout.directory?.y).toBe(94);
   expect(layout.directory?.width).toBe(260);
-  expect(layout.detail?.x).toBe(542);
+  expect(layout.detail?.x).toBe(423);
   expect(layout.metrics?.y).toBe(182);
   expect(layout.tabs?.y).toBe(270);
   expect(layout.content?.y).toBe(323);
@@ -71,9 +71,9 @@ test('Product Workspace matches its desktop frame and filters products', async (
   await page.getByRole('textbox', { name: 'Search products' }).fill('no match');
   await expect(page.locator('.workspace-directory')).toContainText('No products match your search.');
 
-  await page.setViewportSize({ width: 1522, height: 749 });
+  await page.setViewportSize({ width: 1672, height: 749 });
   await expect(page.locator('.workspace-title-row')).toBeHidden();
   await expect(page.getByRole('button', { name: '+ Add Product', exact: true })).toHaveCount(1);
-  expect(await page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().width)).toBe(247);
-  expect(await page.locator('.workspace-directory').evaluate((element) => element.getBoundingClientRect().x)).toBe(265);
+  expect(await page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().width)).toBe(128);
+  expect(await page.locator('.workspace-directory').evaluate((element) => element.getBoundingClientRect().x)).toBe(146);
 });

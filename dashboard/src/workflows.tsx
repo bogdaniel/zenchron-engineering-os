@@ -44,14 +44,30 @@ const workflowNodeWidth = 190;
 const workflowNodeHeight = 110;
 const overviewNodeLayout = { width: 164, height: 50, spacing: 8 };
 const mobileOverviewStages: {
-  id: string; label: string; kind: ComponentType; types: ComponentType[]; position: { x: number; y: number };
+  id: string; label: string; description: string; kind: ComponentType; types: ComponentType[];
+  position: { x: number; y: number };
 }[] = [
-  { id: 'trigger', label: 'Trigger', kind: 'trigger', types: ['trigger'], position: { x: 0, y: 36 } },
-  { id: 'plan', label: 'Plan', kind: 'planner', types: ['planner'], position: { x: 54, y: 36 } },
-  { id: 'build', label: 'Build', kind: 'agent-router', types: ['agent-router', 'agent-task'], position: { x: 108, y: 36 } },
-  { id: 'test', label: 'Test', kind: 'test-generator', types: ['test-generator', 'coverage-analyzer', 'condition', 'loop'], position: { x: 162, y: 10 } },
-  { id: 'review', label: 'Review', kind: 'code-reviewer', types: ['code-reviewer'], position: { x: 162, y: 62 } },
-  { id: 'merge', label: 'Merge', kind: 'merge-gate', types: ['human-approval', 'merge-gate', 'publish-report'], position: { x: 216, y: 36 } },
+  {
+    id: 'trigger', label: 'Trigger', description: 'PR or objective update', kind: 'trigger', types: ['trigger'],
+    position: { x: 0, y: 36 },
+  },
+  { id: 'plan', label: 'Plan', description: 'Generate plan', kind: 'planner', types: ['planner'], position: { x: 54, y: 36 } },
+  {
+    id: 'build', label: 'Build', description: 'Run agents', kind: 'agent-router', types: ['agent-router', 'agent-task'],
+    position: { x: 108, y: 36 },
+  },
+  {
+    id: 'test', label: 'Test', description: 'Run test suite', kind: 'test-generator',
+    types: ['test-generator', 'coverage-analyzer', 'condition', 'loop'], position: { x: 162, y: 10 },
+  },
+  {
+    id: 'review', label: 'Review', description: 'AI + human review', kind: 'code-reviewer', types: ['code-reviewer'],
+    position: { x: 162, y: 62 },
+  },
+  {
+    id: 'merge', label: 'Merge', description: 'Gated release', kind: 'merge-gate',
+    types: ['human-approval', 'merge-gate', 'publish-report'], position: { x: 216, y: 36 },
+  },
 ];
 
 const components = [
@@ -160,32 +176,22 @@ async function layoutNodes(
   });
 }
 
-function workflowGraph(workflow: Workflow) {
-  return {
-    nodes: workflow.nodes.map((node) => ({
-      ...node, type: 'workflow', data: { ...node.data, kind: node.type },
-    })),
-    edges: workflow.edges.map((edge) => ({ ...edge, type: 'smoothstep', animated: false })),
-  };
-}
-
 function mobileWorkflowGraph(workflow: Workflow) {
   const stageByType = new Map<ComponentType, string>();
   for (const stage of mobileOverviewStages) {
     for (const type of stage.types) stageByType.set(type, stage.id);
   }
   const stageByNode = new Map<string, string>();
-  const counts = new Map<string, number>();
   for (const node of workflow.nodes) {
     const stage = stageByType.get(node.type);
     if (!stage) continue;
     stageByNode.set(node.id, stage);
-    counts.set(stage, (counts.get(stage) ?? 0) + 1);
   }
-  const stages = mobileOverviewStages.filter(({ id }) => counts.has(id));
-  const nodes: WorkflowNode[] = stages.map(({ id, label, kind, position }) => ({
+  const configuredStages = new Set(stageByNode.values());
+  const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id));
+  const nodes: WorkflowNode[] = stages.map(({ id, label, description, kind, position }) => ({
     id, type: 'workflow', position,
-    data: { kind, label, description: `${counts.get(id)} configured components` },
+    data: { kind, label, description },
   }));
   const stageIDs = new Set(stages.map(({ id }) => id));
   const edgeIDs = new Set<string>();
@@ -199,6 +205,15 @@ function mobileWorkflowGraph(workflow: Workflow) {
     return [{ id, source, target, type: 'smoothstep' as const, animated: false }];
   });
   return { nodes, edges };
+}
+
+function workflowGraph(workflow: Workflow) {
+  return {
+    nodes: workflow.nodes.map((node) => ({
+      ...node, type: 'workflow', data: { ...node.data, kind: node.type },
+    })),
+    edges: workflow.edges.map((edge) => ({ ...edge, type: 'smoothstep', animated: false })),
+  };
 }
 
 export function WorkflowOverview({ mobile = false, workflowID }: { mobile?: boolean; workflowID?: string }) {
@@ -220,7 +235,7 @@ export function WorkflowOverview({ mobile = false, workflowID }: { mobile?: bool
       return;
     }
     let isCurrent = true;
-    const graph = workflowGraph(workflow);
+    const graph = mobileWorkflowGraph(workflow);
     setLayoutError(false);
     void layoutNodes(graph.nodes, graph.edges, overviewNodeLayout).then((laidOut) => {
       if (!isCurrent) return;
@@ -244,9 +259,10 @@ export function WorkflowOverview({ mobile = false, workflowID }: { mobile?: bool
         : layoutError ? <div className="workflow-overview-message" role="status">Could not arrange workflow graph</div>
           : <>
             <div className="workflow-overview-canvas" role="img"
-              aria-label={mobile
-                ? `Key workflow stages for ${workflow.name}; ${nodes.length} stages summarize ${workflow.nodes.length} components`
-                : `Saved workflow ${workflow.name}, ${workflow.nodes.length} components and ${workflow.edges.length} connections`}>
+              aria-label={
+                `Key workflow stages for ${workflow.name}; ${nodes.length} stages summarize ` +
+                `${workflow.nodes.length} components`
+              }>
               <ReactFlow
                 nodes={nodes} edges={edges} nodeTypes={flowNodeTypes} fitView={!mobile} minZoom={mobile ? 0.9 : 0.15}
                 maxZoom={0.9} defaultViewport={mobile ? { x: 18, y: 8, zoom: 0.9 } : undefined}

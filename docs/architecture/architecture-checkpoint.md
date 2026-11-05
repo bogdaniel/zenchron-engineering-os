@@ -54,7 +54,8 @@ flowchart LR
 - The worker owns model calls, repository access, local commits, and optional run-branch publication. When publication
   is requested for a successful non-empty run on a supported GitHub checkout, it verifies the push remote and pushes
   only the generated branch with the workstation's Git credentials. The control plane can then create or reuse the
-  pull request and persist its link using its own `ZENCHRON_GITHUB_TOKEN`; that token is not sent to the worker.
+  pull request and persist its link using its own GitHub App installation token or personal-token fallback; provider
+  credentials are not sent to the worker.
 - The Reviews dashboard can submit a top-level GitHub comment or request changes. The control plane uses the pull
   request head branch to associate feedback with a run-created PR and persist it on that run. A request queues another
   pass only when the run has capacity and the assigned worker is online with the required runtime and write tool.

@@ -55,8 +55,8 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   const metrics = await page.locator('.agents-metrics').boundingBox();
   const noteCount = await page.locator('.agents-runtime-note').count();
   expect(list && detail && runs && sidebar && metrics).toBeTruthy();
-  expect(sidebar!.width).toBe(247);
-  expect(metrics!.x).toBe(265);
+  expect(sidebar!.width).toBe(128);
+  expect(metrics!.x).toBe(146);
   expect(Math.abs(metrics!.y - 136.5)).toBeLessThanOrEqual(1);
   expect(Math.abs(metrics!.height - 65)).toBeLessThanOrEqual(1);
   expect(Math.abs(list!.y - 213.5)).toBeLessThanOrEqual(1);
@@ -99,6 +99,9 @@ test('Agents layout fits tablet and phone widths without panel overlap', async (
 
 test('Agents empty state uses the primary create action', async ({ page }) => {
   await page.route('**/api/v1/agents', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',
   }));
   await page.goto('/#agents');

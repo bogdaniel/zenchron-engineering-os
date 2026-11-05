@@ -47,8 +47,9 @@ authorization tests pass and no unauthenticated remote listener is exposed.
 ### 2. Project connections — GitHub read sync and PR review submission partially implemented
 
 Git provider installation, repository mapping, issues, and pull-request synchronization. The control plane reads open
-issues and pull requests from GitHub.com and can submit PR comments or request changes when its token has Pull requests
-write permission. It can comment on, close, and reopen issues with an Issues: write or Pull requests: write token. Dashboard-submitted
+issues and pull requests from GitHub.com and can submit PR comments or request changes when its GitHub App installation
+or personal-token fallback has Pull requests: write permission. It can comment on, close, and reopen issues with Issues:
+write or Pull requests: write. Dashboard-submitted
 feedback on Zenchron run branches is matched to the originating run; eligible
 change requests queue a follow-up pass. GitHub Enterprise host mapping, other providers, historical sync, and importing
 feedback submitted directly on GitHub remain outstanding. Accept with provider-backed fixtures and a live read/write
@@ -92,9 +93,12 @@ hosted control and merge authorization still require durable audit, user identit
   loopback until authentication is implemented.
 - Reviews reads the latest 100 open GitHub pull requests and issues for one selected `github.com` checkout at a time,
   and loads a bounded diff for a selected pull request. It can submit issue comments, change issue state, top-level PR
-  comments, and requests for changes through the control plane. `ZENCHRON_GITHUB_TOKEN` stays in
+  comments, and requests for changes through the control plane. GitHub App or personal-token credentials stay in
   the control plane; public read sync needs no token and review submission needs Pull requests write permission. Inbound
   review handoff, GitHub Enterprise host mapping, and historical sync remain outstanding.
+- GitHub App authentication uses a server-side PEM key, signs RS256 JWTs, and caches installation tokens; the existing
+  `ZENCHRON_GITHUB_TOKEN` remains a personal-token fallback. App token minting is covered by a local fake-server test;
+  a real installation read/write round-trip is still unverified.
 - The worker discovers direct-child Git checkouts and reports opaque IDs, names, current branches, and a sanitized
   `origin` host/repository locator. It strips URL credentials and query strings and does not send local paths.
 - The dashboard has a live overview plus objective, workflow, project inventory, Agents, and Reviews routes. Its shared
@@ -105,7 +109,7 @@ hosted control and merge authorization still require durable audit, user identit
 - Agent profiles store prompt configuration and tool allowlists. With `ZENCHRON_LLM_BASE_URL` configured on a worker,
   the OpenAI-compatible Chat Completions loop executes bounded read tools and optional `code.write` in per-run Git
   worktrees; successful, reviewable changes are committed locally on the isolated branch. A successful non-empty run
-  can push only that branch and create or reuse a pull request when the control-plane token and GitHub.com origin are
+  can push only that branch and create or reuse a pull request when control-plane GitHub authentication and a GitHub.com origin are
   configured. Test execution, provider spend, and evidence capture remain unavailable.
 - Agent run prompts can be durably queued for an active profile and online project, claimed by its assigned worker,
   and completed with a fenced result. A worker without a configured model endpoint leaves runs queued; see
@@ -127,8 +131,9 @@ hosted control and merge authorization still require durable audit, user identit
   made directly on GitHub are not imported. Checks, approval, and merge actions remain unavailable.
 - Settings and Integrations routes show live API, worker, and checkout status while clearly marking external providers,
   identity, authorization, and audit history unavailable.
-- Reports summarizes current objective, workflow, agent-profile, worker, and checkout records; delivery trends stay
-  unavailable until PR, CI, and agent-run events are recorded.
+- Reports summarizes current objective, workflow, agent-profile, worker, and checkout records. Completed GitHub Actions
+  history now supplies CI-duration data for the registered checkout; PR-based delivery metrics and agent outcomes remain
+  empty or unavailable until their corresponding events exist. Model spend and review latency still need provider data.
 - Product Workspace persists products and links them to live worker-reported repositories. Objectives can link to a
   product by ID; workflow and agent definitions remain reusable workspace-wide, while files, decisions, stakeholders,
   and release streams remain unavailable.

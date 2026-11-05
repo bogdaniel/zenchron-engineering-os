@@ -6,7 +6,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
   const referenceWidth = await page.locator('.sidebar').evaluate((sidebar) =>
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
-  expect(referenceWidth, 'full screen reference sidebar width').toBe(247);
+  expect(referenceWidth, 'full screen reference sidebar width').toBe(128);
   const pageSelectors: Record<string, { title: string; panel: string }> = {
     overview: { title: '.greeting h1', panel: '.activity-panel h3' },
     objectives: { title: '.page-heading h2', panel: '.panel-heading h3' },
@@ -41,17 +41,17 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
       panelHeadingSize: getComputedStyle(document.querySelector(panel)!).fontSize,
       panelHeadingWeight: getComputedStyle(document.querySelector(panel)!).fontWeight,
       panelFontFamily: getComputedStyle(document.querySelector(panel)!).fontFamily,
-      sharedPanelHeadings: Array.from(document.querySelectorAll('.shared-panel-heading h3'), (heading) => ({
+      sharedPanelHeadings: Array.from(document.querySelectorAll('.shared-panel-heading:not(.entity-detail-heading) h3'), (heading) => ({
         size: getComputedStyle(heading).fontSize,
         weight: getComputedStyle(heading).fontWeight,
       })),
     }), selectors);
-    expect(Math.round(parseFloat(styles.sidebarWidth))).toBe(247);
+    expect(Math.round(parseFloat(styles.sidebarWidth))).toBe(128);
     expect(styles.bodyFont).toContain('Inter');
     expect(styles.navigationFontFamily).toBe(styles.bodyFont);
     expect(styles.titleFontFamily).toBe(styles.bodyFont);
     expect(styles.panelFontFamily).toBe(styles.bodyFont);
-    expect(styles.navigationFont).toBe('14px');
+    expect(styles.navigationFont).toBe('12px');
     expect(styles.navigationWeight).toBe('400');
     await expect(page.locator('.nav-link').filter({ hasText: 'Product Workspace' }), 'long navigation label stays on one line')
       .toHaveCSS('white-space', 'nowrap');
@@ -95,7 +95,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
   const framedReferenceWidth = await page.locator('.sidebar').evaluate((sidebar) =>
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
-  expect(framedReferenceWidth, 'monitor screen reference sidebar width').toBe(222);
+  expect(framedReferenceWidth, 'monitor screen reference sidebar width').toBe(128);
 
   await page.setViewportSize({ width: 390, height: 844 });
   for (const [route, selectors] of Object.entries(pageSelectors)) {
@@ -210,6 +210,19 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     detail: getComputedStyle(card.querySelector('small')!).fontSize,
   }));
     expect(compactMobileStyles).toEqual({ label: '11px', value: '21px', detail: '10px' });
+});
+
+test('desktop sidebar keeps the compact width at reference and regular monitor sizes', async ({ page }) => {
+  for (const width of [1672, 1505]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/#reports');
+    await expect(page.locator('.reports-page')).toBeVisible();
+    expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(128);
+    expect(await page.locator('.reports-scope-bar').evaluate((bar) => bar.getBoundingClientRect().x)).toBe(146);
+    expect(await page.locator('.sidebar nav .nav-link').evaluateAll((links) =>
+      links.every((link) => link.scrollWidth <= link.clientWidth),
+    ), 'all desktop navigation labels fit without clipping').toBe(true);
+  }
 });
 
 test('mobile overview matches the phone shell and keeps workflow/reviews accessible', async ({ page }) => {

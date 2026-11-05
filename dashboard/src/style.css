@@ -5,7 +5,7 @@
   background: #0a0b13;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --sidebar-width: 247px;
+  --sidebar-width: 128px;
   --page-title-size: 22px;
   --page-title-size-mobile: 20px;
   --page-title-weight: 650;
@@ -52,7 +52,7 @@ button:disabled, input:disabled {
   display: flex;
   width: var(--sidebar-width);
   flex-direction: column;
-  padding: 18px 12px 20px 14px;
+  padding: 18px 4px 20px;
   border-right: 1px solid #252438;
   background:
     radial-gradient(ellipse at 8% 90%, #8e48d94a 0, transparent 40%),
@@ -63,8 +63,8 @@ button:disabled, input:disabled {
 .brand {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin: 0 8px 29px 24px;
+  gap: 6px;
+  margin: 0 0 29px;
   font-size: 16px;
   font-weight: 750;
   letter-spacing: -.3px;
@@ -113,12 +113,13 @@ button:disabled, input:disabled {
   display: flex;
   min-height: 44px;
   align-items: center;
-  gap: 16px;
-  padding: 0 4px 0 8px;
+  gap: 2px;
+  padding: 0 1px;
   border: 1px solid transparent;
   border-radius: 11px;
   color: #a9a5b9;
-  font-size: 14px;
+  font-size: 12px;
+  letter-spacing: -.25px;
   white-space: nowrap;
   transition: .16s ease;
 }
@@ -132,12 +133,17 @@ button:disabled, input:disabled {
   background: linear-gradient(100deg,#542683,#261b3d);
   box-shadow: inset 0 0 22px #b765ff24, 0 0 18px #9c55ff1c;
 }
+.nav-link svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
 .nav-link.active svg {
   color: #d6a5ff;
 }
 .sidebar-bottom {
   margin-top: auto;
-  padding: 14px 11px 4px 24px;
+  padding: 14px 8px 4px 14px;
   border-top: 1px solid #252438;
 }
 .connection-indicator {
@@ -308,7 +314,6 @@ button:disabled, input:disabled {
   white-space: nowrap;
 }
 @media (max-width:1150px) {
-  .app-shell { --sidebar-width: 205px; }
   .sidebar {
     width:var(--sidebar-width);
   }
@@ -330,9 +335,6 @@ button:disabled, input:disabled {
   .metric-grid {
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
-}
-@media (min-width:1151px) and (max-width:1600px) {
-  .app-shell { --sidebar-width: 222px; }
 }
 @media (max-width:760px) {
   .app-shell { --sidebar-width: auto; }

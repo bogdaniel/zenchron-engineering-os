@@ -33,6 +33,10 @@ wait_for() {
   pid=$2
   label=$3
   attempt=0
+  if curl -fsS "$url" >/dev/null 2>&1; then
+    echo "${label} is already responding at ${url}" >&2
+    exit 1
+  fi
   until curl -fsS "$url" >/dev/null 2>&1; do
     if ! kill -0 "$pid" 2>/dev/null || [ "$attempt" -ge 60 ]; then
       echo "${label} did not become ready at ${url}" >&2
@@ -41,6 +45,10 @@ wait_for() {
     attempt=$((attempt + 1))
     sleep 0.5
   done
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "${label} stopped while becoming ready at ${url}" >&2
+    exit 1
+  fi
 }
 
 (
@@ -51,13 +59,16 @@ api_pid=$!
 wait_for "${control_plane_url}/healthz" "$api_pid" "Control plane"
 
 (
-  unset ZENCHRON_GITHUB_TOKEN
+  unset ZENCHRON_GITHUB_TOKEN ZENCHRON_GITHUB_APP_ID ZENCHRON_GITHUB_INSTALLATION_ID
+  unset ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH
   exec go run ./cmd/zenchron-worker
 ) &
 worker_pid=$!
 wait_for "${control_plane_url}/api/v1/workers/healthz" "$worker_pid" "Local worker"
 
-(cd dashboard && unset ZENCHRON_GITHUB_TOKEN ZENCHRON_LLM_BASE_URL ZENCHRON_LLM_API_KEY && exec sh ./dev.sh) &
+(cd dashboard && unset ZENCHRON_GITHUB_TOKEN ZENCHRON_GITHUB_APP_ID ZENCHRON_GITHUB_INSTALLATION_ID
+  unset ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH ZENCHRON_LLM_BASE_URL ZENCHRON_LLM_API_KEY
+  exec sh ./dev.sh) &
 dashboard_pid=$!
 wait_for "http://127.0.0.1:${ZENCHRON_DASHBOARD_PORT}" "$dashboard_pid" "Dashboard"
 

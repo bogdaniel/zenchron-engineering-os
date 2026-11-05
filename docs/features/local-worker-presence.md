@@ -68,7 +68,8 @@ The control plane accepts only loopback listen addresses until authenticated API
 
 The worker prepares isolated worktrees through the leased command channel and can execute agent runs when
 `ZENCHRON_LLM_BASE_URL` is configured. Optional `code.write` changes stay on a per-run branch. Successful non-empty
-runs can push that branch and create or reuse a GitHub pull request when the control plane has a GitHub token and the
+runs can push that branch and create or reuse a GitHub pull request when the control plane has GitHub App auth or the
+personal-token fallback and the
 project has a supported GitHub.com origin. Dashboard-submitted comments and change requests on those pull requests link
 back to the run; eligible change requests queue a follow-up pass on the same branch. See [Agent run queue](agent-run-queue.md)
 and [GitHub issue sync and pull-request reviews](github-review-sync.md) for execution limits and remaining gaps.

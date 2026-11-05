@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { BarChart, CompositeChart, DonutChart, Sparkline } from '@mantine/charts';
+import { BarChart, CompositeChart, DonutChart, LineChart, Sparkline } from '@mantine/charts';
 import { Badge, Button, Progress, Select, Table } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { IconActivity, IconChartBar, IconCircleCheck, IconClockHour4, IconCurrencyDollar, IconFilter, IconFolders, IconRobot, IconRoute, IconSparkles } from '@tabler/icons-react';
+import {
+  IconActivity, IconChartBar, IconCircleCheck, IconCpu, IconFilter, IconFolders,
+  IconInfinity, IconMessageCircle, IconRobot, IconRocket, IconRoute, IconSparkles, IconStack, IconStopwatch,
+} from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { agentsSchema, loadAgentRuns } from './agents';
 import type { Objective } from './objectives';
 import type { Project } from './projects';
 import { loadProducts } from './productEditor';
+import { ChartLegend, RunOutcomeLegend, runStatuses, UnavailableChart, UnavailableMetricsPanel } from './ReportVisuals';
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
@@ -40,13 +44,6 @@ async function loadAgents() {
   return agentsSchema.parse(await response.json());
 }
 
-const runStatuses = [
-  { value: 'succeeded', label: 'Succeeded', color: 'teal.5' },
-  { value: 'running', label: 'Running', color: 'blue.5' },
-  { value: 'queued', label: 'Queued', color: 'violet.5' },
-  { value: 'failed', label: 'Failed', color: 'red.5' },
-  { value: 'cancelled', label: 'Cancelled', color: 'gray.5' },
-] as const;
 type TimeRange = '30d' | '90d' | '365d' | 'all';
 type ReportScope = { timeRange: TimeRange; product: string; objectiveOwner: string; workflow: string; repository: string };
 const defaultScope: ReportScope = {
@@ -55,6 +52,12 @@ const defaultScope: ReportScope = {
 const timeRanges: { value: TimeRange; label: string }[] = [
   { value: '30d', label: 'Last 30 days' }, { value: '90d', label: 'Last 90 days' },
   { value: '365d', label: 'Last 12 months' }, { value: 'all', label: 'All time' },
+];
+const insightViews = [
+  { value: 'executive', label: 'Executive summary' },
+  { value: 'delivery', label: 'Delivery' },
+  { value: 'execution', label: 'Execution' },
+  { value: 'objectives', label: 'Objectives' },
 ];
 const rangeDurations: Record<Exclude<TimeRange, 'all'>, number> = {
   '30d': 30 * 24 * 60 * 60 * 1000,
@@ -78,6 +81,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
   const products = useQuery({ queryKey: ['products'], queryFn: loadProducts });
   const [scope, setScope] = useState(defaultScope);
   const [appliedScope, setAppliedScope] = useState(defaultScope);
+  const [insightView, setInsightView] = useState('executive');
   const updateScope = (key: keyof ReportScope, value: string | null) => {
     setScope((current) => ({ ...current, [key]: value ?? 'all' }));
   };
@@ -166,11 +170,12 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
   const completeMetrics = apiOnline && objectives !== undefined && projects !== undefined && workers !== undefined &&
     workflows.isSuccess && agents.isSuccess && products.isSuccess && runs.isSuccess;
   const summaryInsights = [
-    { icon: <IconCircleCheck size={15} />, title: 'Objectives', detail: objectiveCount === undefined ? 'Objective data unavailable.' : `${completed} of ${objectiveCount} completed in this scope.` },
-    { icon: <IconSparkles size={15} />, title: 'Agent activity', detail: runs.isLoading ? 'Agent run data is loading.' : runs.isError ? 'Agent run data unavailable.' : `${scopedRuns?.length ?? 0} recorded runs in this period.` },
-    { icon: <IconRobot size={15} />, title: 'Worker availability', detail: workers === undefined ? 'Worker inventory unavailable.' : `${onlineWorkers} of ${workers.length} workers are online.` },
-    { icon: <IconFolders size={15} />, title: 'Delivery sources', detail: deliverySourceDetail },
+    { group: 'objectives', icon: <IconCircleCheck size={15} />, title: 'Objectives', detail: objectiveCount === undefined ? 'Objective data unavailable.' : `${completed} of ${objectiveCount} completed in this scope.` },
+    { group: 'execution', icon: <IconSparkles size={15} />, title: 'Agent activity', detail: runs.isLoading ? 'Agent run data is loading.' : runs.isError ? 'Agent run data unavailable.' : `${scopedRuns?.length ?? 0} recorded runs in this period.` },
+    { group: 'execution', icon: <IconRobot size={15} />, title: 'Worker availability', detail: workers === undefined ? 'Worker inventory unavailable.' : `${onlineWorkers} of ${workers.length} workers are online.` },
+    { group: 'delivery', icon: <IconFolders size={15} />, title: 'Delivery sources', detail: deliverySourceDetail },
   ];
+  const visibleInsights = summaryInsights.filter((insight) => insightView === 'executive' || insight.group === insightView);
   const objectiveOwners = [...new Set(objectives?.map((objective) => objective.owner.trim()).filter(Boolean) ?? [])]
     .sort((left, right) => left.localeCompare(right));
   const productOptions = [
@@ -222,7 +227,12 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
       download: () => downloadCSV('detailed-metrics', [['Metric', 'Value', 'Source'], ...metricRows]),
     },
     {
-      name: 'Agent spend & utilization', detail: 'Unavailable until model usage data is connected', format: 'N/A',
+      name: 'Agent spend & utilization', detail: 'Usage values unavailable until provider records connect', format: 'CSV',
+      download: () => downloadCSV('agent-spend-utilization', [
+        ['Agent', 'Project', 'Branch', 'Status', 'Spend (USD)', 'Usage', 'Source'],
+        ...(scopedRuns ?? []).map((run) => [run.agent_name, run.project_name, run.branch, run.status,
+          'Unavailable', 'Unavailable', 'Provider usage records are not connected']),
+      ]),
     },
     {
       name: 'Product & workspace report', detail: 'Product, repository, and inventory counts', format: 'CSV',
@@ -266,31 +276,32 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
 
       <div className="reports-metrics" aria-label="Workspace metrics">
         <Metric tone="velocity" label="Delivery velocity" value={pullRequests.deliveryVelocity} detail="PRs / week"
-          icon={<IconChartBar size={17} />} trend={pullRequests.complete
+          icon={<IconRocket size={17} />} trend={pullRequests.complete
             ? metricSparkline('Delivery velocity', pullRequests.trend.map((item) => item.merged), 'violet.5') : undefined} />
         <Metric tone="cycle-time" label="Cycle time" value={pullRequests.cycleTime} detail="Hours"
-          icon={<IconClockHour4 size={17} />} trend={pullRequests.complete
+          icon={<IconStopwatch size={17} />} trend={pullRequests.complete
             ? metricSparkline('Cycle time', pullRequests.trend.map((item) => item.cycle), 'teal.4') : undefined} />
         <Metric tone="ci-duration" label="CI duration" value={workflowRunMetrics.averageMinutes ?? 'Unavailable'}
-          detail="Avg. minutes" icon={<IconActivity size={17} />}
+          detail="Avg. minutes" icon={<IconStack size={17} />}
           trend={workflowRunMetrics.complete
             ? metricSparkline('CI duration', workflowRunMetrics.trend, 'teal.5') : undefined} />
-        <Metric tone="review-latency" label="Review latency" value="Unavailable" detail="Hours" icon={<IconClockHour4 size={17} />} />
-        <Metric tone="agent-spend" label="Agent spend" value="Unavailable" detail="USD" icon={<IconCurrencyDollar size={17} />} />
+        <Metric tone="review-latency" label="Review latency" value="Unavailable" detail="Hours" icon={<IconMessageCircle size={17} />} />
+        <Metric tone="agent-spend" label="Agent spend" value="Unavailable" detail="USD" icon={<IconCpu size={17} />} />
         <Metric tone="acceptance-rate" label="Acceptance rate" value={pullRequests.acceptanceRate === undefined ? undefined : `${pullRequests.acceptanceRate}%`} detail="Closed pull requests"
           icon={<IconCircleCheck size={17} />}
           trend={pullRequests.complete
             ? metricSparkline('Acceptance rate', pullRequests.trend.map((item) => item.acceptance), 'teal.5') : undefined} />
-        <Metric tone="autonomous-completion" label="Autonomous completion" value="Unavailable" detail="Completed agent runs" icon={<IconRobot size={17} />} />
+        <Metric tone="autonomous-completion" label="Autonomous completion" value="Unavailable" detail="Completed agent runs" icon={<IconInfinity size={17} />} />
       </div>
 
       <div className="reports-content-grid">
         <PanelCard className="reports-panel delivery-velocity-panel" withBorder>
           <PanelHeading className="reports-panel-heading" icon={<IconChartBar size={15} />}
             title="Delivery velocity &amp; cycle time" />
+          <ChartLegend items={[{ tone: 'violet', label: 'Merged PRs' }, { tone: 'teal', label: 'Cycle time' }]} />
           {pullRequests.complete && pullRequests.mergedCount > 0 ? <CompositeChart
             className="reports-pull-request-chart"
-            h={124}
+            h={112}
             textColor="#9691a8"
             data={pullRequests.trend}
             dataKey="date"
@@ -299,8 +310,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
               { name: 'cycle', label: 'Cycle time (h)', color: 'teal.4', type: 'line', yAxisId: 'right' },
             ]}
             withRightYAxis
-            withLegend
-            legendProps={{ verticalAlign: 'top', height: 22, iconSize: 7, wrapperStyle: { fontSize: 9 } }}
+            withLegend={false}
             xAxisProps={{ tick: { fill: '#9691a8', fontSize: 9 }, interval: 'preserveStartEnd' }}
             yAxisProps={{ tick: { fill: '#9691a8', fontSize: 9 }, width: 28 }}
             rightYAxisProps={{ tick: { fill: '#9691a8', fontSize: 9 }, width: 30 }}
@@ -315,15 +325,13 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
             ? 'GitHub pull-request history is unavailable.'
             : pullRequests.githubProjectCount ? 'Waiting for complete GitHub pull-request history.'
               : 'Connect a source to view this chart'} />}
-          {!pullRequests.complete && <p className="delivery-note">{pullRequests.githubProjectCount
-            ? 'Incomplete or unavailable provider history cannot produce delivery metrics.'
-            : 'Requires merged pull-request history.'}</p>}
         </PanelCard>
         <PanelCard className="reports-panel ci-distribution-panel" withBorder>
           <PanelHeading className="reports-panel-heading" icon={<IconActivity size={15} />} title="CI duration distribution" />
+          <ChartLegend items={[{ tone: 'teal', label: 'Completed GitHub Actions runs' }]} />
           {workflowRunMetrics.complete && workflowRunMetrics.runCount > 0 ? <BarChart
             className="reports-ci-chart"
-            h={124}
+            h={112}
             textColor="#9691a8"
             data={workflowRunMetrics.distribution}
             dataKey="duration"
@@ -340,52 +348,56 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
             ? 'GitHub Actions run history is unavailable.'
             : workflowRunMetrics.githubProjectCount ? 'Waiting for complete GitHub Actions history.'
               : 'Connect a source to view this chart'} />}
-          {!workflowRunMetrics.complete && <p className="delivery-note">{workflowRunMetrics.githubProjectCount
-            ? 'Incomplete or unavailable provider history cannot produce CI metrics.'
-            : 'Requires GitHub Actions run history.'}</p>}
         </PanelCard>
 
         <PanelCard className="reports-panel run-outcomes-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconSparkles size={15} />} title="Work outcomes"
+          <PanelHeading className="reports-panel-heading" icon={<IconRoute size={15} />} title="Work outcomes"
             description={`Recorded status · ${timeRanges.find((range) => range.value === appliedScope.timeRange)?.label.toLowerCase() ?? 'all time'}`}
             actions={runSuccessRate && <Badge className="coverage-online" variant="light">{runSuccessRate} success</Badge>} />
           {runs.isLoading ? <div className="reports-empty">Loading agent runs…</div>
             : runs.isError ? <div className="reports-empty">Agent run data unavailable.</div>
-              : runSections.length ? <div className="run-chart-layout">
-                <DonutChart
+              : <div className={`run-chart-layout${runSections.length ? '' : ' run-chart-empty'}`}>
+                {runSections.length ? <DonutChart
                   size={120}
                   thickness={15}
                   data={runSections}
                   chartLabel={`${scopedRuns?.length ?? 0}`}
                   classNames={{ label: 'report-chart-label' }}
                   aria-label={`Agent run outcomes for ${timeRanges.find((range) => range.value === appliedScope.timeRange)?.label.toLowerCase() ?? 'all time'}`}
-                />
-                <div className="run-outcome-legend">
-                  {runStatuses.map((status) => {
-                    const count = scopedRuns?.filter((run) => run.status === status.value).length ?? 0;
-                    return <div key={status.value}>
-                      <i className={`run-outcome-dot ${status.value}`} />
-                      <span>{status.label}</span><b>{count}</b>
-                    </div>;
-                  })}
-                </div>
-              </div> : <div className="reports-empty">No agent runs match this report scope.</div>}
+                /> : <div className="reports-empty">No agent runs match this report scope.</div>}
+                <RunOutcomeLegend runs={runs.isSuccess ? scopedRuns ?? [] : undefined} />
+              </div>}
         </PanelCard>
         <UnavailableMetricsPanel className="review-latency-panel" title="Review latency trend"
-          icon={<IconClockHour4 size={15} />}
+          icon={<IconMessageCircle size={15} />}
           detail="Requires provider review events." />
         <UnavailableMetricsPanel className="agent-spend-panel" title="Agent spend"
-          icon={<IconCurrencyDollar size={15} />}
+          icon={<IconCpu size={15} />}
           detail="Requires provider usage records." />
-        <UnavailableMetricsPanel className="acceptance-panel" title="Acceptance &amp; autonomous completion"
-          icon={<IconCircleCheck size={15} />}
-          detail="Requires reviewed pull requests and completed agent runs." />
+        <PanelCard className="reports-panel acceptance-panel" withBorder>
+          <PanelHeading className="reports-panel-heading" icon={<IconCircleCheck size={15} />}
+            title="Acceptance &amp; autonomous completion" />
+          <ChartLegend items={[{ tone: 'teal', label: 'Acceptance rate' },
+            { tone: 'violet', label: 'Autonomous completion · unavailable' }]} />
+          {pullRequests.complete && pullRequests.acceptanceRate !== undefined ? <LineChart
+            className="reports-acceptance-chart" h={76} textColor="#9691a8" data={pullRequests.trend}
+            dataKey="date" series={[{ name: 'acceptance', label: 'Acceptance rate', color: 'teal.5' }]}
+            yAxisProps={{ domain: [0, 100], tick: { fill: '#9691a8', fontSize: 8 }, width: 28 }}
+            xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 'preserveStartEnd' }}
+            gridAxis="xy" withDots={false} withTooltip aria-label="Pull request acceptance rate trend" />
+            : <UnavailableChart detail={pullRequests.isError
+              ? 'Pull-request history is unavailable.'
+              : pullRequests.complete ? 'No closed pull requests in this period.'
+                : 'Acceptance needs complete pull-request history; autonomous completion is not recorded yet.'} />}
+        </PanelCard>
 
         <PanelCard className="reports-panel reports-summary" withBorder>
           <PanelHeading className="reports-panel-heading" icon={<IconSparkles size={15} />} title="Insights &amp; narrative"
-            description="Findings from the selected snapshot" />
+            description="Findings from the selected snapshot"
+            actions={<Select className="reports-insight-filter" aria-label="Insights view" data={insightViews}
+              value={insightView} onChange={(value) => setInsightView(value ?? 'executive')} />} />
           <div className="reports-insights">
-            {summaryInsights.map((insight) => <div className="reports-insight" key={insight.title}>
+            {visibleInsights.map((insight) => <div className="reports-insight" key={insight.title}>
               {insight.icon}<div><b>{insight.title}</b><span>{insight.detail}</span></div>
             </div>)}
           </div>
@@ -414,11 +426,12 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
                     ))}</Table.Tbody>
                   </Table>
                 </div>
-              ) : <div className="reports-empty">No products match this report scope.</div>}
+              ) : <div className="reports-empty">No products are configured. {scopedProjects?.length ?? 0} local
+                {scopedProjects?.length === 1 ? ' checkout is' : ' checkouts are'} available to group.</div>}
         </PanelCard>
 
         <PanelCard className="reports-panel inventory-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconFolders size={15} />} title="Workspace inventory"
+          <PanelHeading className="reports-panel-heading" icon={<IconFolders size={15} />} title="Workspace summary"
             description="Current configuration records and local resources" />
           <div className="inventory-bars">
             {inventory.map((item) => (
@@ -464,28 +477,4 @@ function metricSparkline(label: string, data: (number | null)[], color: string) 
   if (!data.some((value) => value !== null)) return undefined;
   return <Sparkline className="metric-sparkline" role="img" aria-label={`${label} trend`} data={data} color={color}
     w={54} h={24} withGradient={false} strokeWidth={2} />;
-}
-
-function UnavailableMetricsPanel({ className, title, icon, detail }: {
-  className: string;
-  title: string;
-  icon: ReactNode;
-  detail: string;
-}) {
-  return (
-    <PanelCard className={`reports-panel ${className}`} withBorder>
-      <PanelHeading className="reports-panel-heading" icon={icon} title={title} />
-      <UnavailableChart detail="Connect a source to view this chart" />
-      <p className="delivery-note">{detail}</p>
-    </PanelCard>
-  );
-}
-
-function UnavailableChart({ detail }: { detail: string }) {
-  return (
-    <div className="reports-empty-chart" role="status" aria-label={detail}>
-      <div className="reports-empty-chart-grid" aria-hidden="true" />
-      <span><IconChartBar size={15} />{detail}</span>
-    </div>
-  );
 }

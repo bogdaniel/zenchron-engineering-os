@@ -227,7 +227,7 @@ func (store *agentRunStore) create(w http.ResponseWriter, r *http.Request) {
 		ProjectName: project.Name, Branch: agentRunBranch(hex.EncodeToString(id)), BaseBranch: project.Branch,
 		WorkerID: project.WorkerID, WorkerName: project.WorkerName, Prompt: input.Prompt,
 		Status: "queued", CreatedAt: now, UpdatedAt: now, Profile: &profile,
-		PullRequestEnabled: store.registry.github.token != "" && isGitHubProject(project.GitRemote)}
+		PullRequestEnabled: store.registry.github.authConfigured() && isGitHubProject(project.GitRemote)}
 	store.mu.Lock()
 	if len(store.items) >= maxAgentRuns {
 		store.mu.Unlock()

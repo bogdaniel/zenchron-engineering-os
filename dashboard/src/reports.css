@@ -77,9 +77,10 @@
 .reports-metric .metric-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 6px;
 }
+.reports-metric .metric-top > svg { order: -1; }
 .reports-metric .metric-value-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; }
 .reports-metric .metric-value-row > strong { margin-top: 0; }
 .reports-metric .metric-sparkline { flex: 0 0 54px; }
@@ -87,6 +88,8 @@
 .reports-content-grid {
   display: grid;
   grid-template-columns: repeat(15, minmax(0, 1fr));
+  grid-template-rows: 175px 168px 188px;
+  align-content: start;
   gap: 11px;
   margin-top: 14px;
 }
@@ -104,27 +107,37 @@
 .reports-panel-heading > div { display: flex; min-width: 0; align-items: flex-start; gap: 7px; }
 .reports-panel-heading > div > svg { flex: 0 0 auto; margin-top: 1px; color: #bd8aff; }
 .reports-panel-heading p { line-height: 1.2; }
+.acceptance-panel .reports-panel-heading > div { gap: 4px; }
+.acceptance-panel .reports-panel-heading h3 { letter-spacing: -.5px; white-space: nowrap; }
+.reports-insight-filter.mantine-Select-root { width: 144px; flex: 0 0 auto; }
+.reports-insight-filter .mantine-Select-input { min-height: 24px; height: 24px; border-color: #38324c; background: #1b1928; font-size: var(--metric-detail-size); }
 .product-summary-table-wrap { overflow-x: auto; }
 .product-summary-table {
-  min-width: 430px;
+  width: 100%;
+  table-layout: fixed;
   color: #c8c3d2;
-  font-size: var(--metric-label-size);
+  font-size: var(--metric-detail-size);
 }
+.product-summary-table th:first-child, .product-summary-table td:first-child { width: 36%; text-align: left; }
+.product-summary-table th:not(:first-child), .product-summary-table td:not(:first-child) { text-align: right; }
 .product-summary-table th {
   color: #8f899f;
-  font-size: var(--metric-detail-size);
   font-weight: 600;
+  line-height: 1.2;
 }
-.product-summary-table td, .product-summary-table th { padding: 7px 8px; }
+.product-summary-table td, .product-summary-table th { padding: 5px 3px; overflow-wrap: anywhere; }
 .downloadable-report-list { display: grid; gap: 1px; }
 .downloadable-report {
   display: grid;
   min-width: 0;
-  min-height: 29px;
+  min-height: 30px;
   grid-template-columns: 42px minmax(0, 1fr) 26px;
   align-items: center;
   gap: 6px;
-  border-bottom: 1px solid #282638;
+  padding: 0 4px;
+  border: 1px solid #302a40;
+  border-radius: 6px;
+  background: linear-gradient(105deg, #191724, #15141f);
 }
 .downloadable-report-format.mantine-Badge-root {
   justify-content: center;
@@ -141,14 +154,15 @@
 .downloadable-report-copy b {
   overflow: hidden;
   color: #e4deed;
-  font-size: 10px;
+  font-size: var(--metric-label-size);
   font-weight: 600;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .downloadable-report-copy span {
   overflow: hidden;
-  color: #89849a;
+  color: #a9a5b9;
   font-size: 9px;
   line-height: 1.15;
   text-overflow: ellipsis;
@@ -159,8 +173,12 @@
   height: 24px;
   min-height: 24px;
   padding: 0;
+  border: 1px solid #46375c;
+  border-radius: 5px;
   color: #d8c1fa;
+  background: #211a2c;
 }
+.downloadable-report-button.mantine-Button-root:hover { color: white; background: #3a2753; }
 .downloadable-report-button.mantine-Button-root:disabled { color: #625d6b; background: transparent; }
 .run-chart-layout {
   display: flex;
@@ -174,7 +192,7 @@
   font-size: 21px;
   font-weight: 650;
 }
-.run-outcome-legend { display: grid; gap: 9px; }
+.run-outcome-legend { display: grid; gap: 4px; }
 .run-outcome-legend > div {
   display: grid;
   grid-template-columns: 7px minmax(60px, 1fr) auto;
@@ -184,6 +202,13 @@
   font-size: var(--metric-detail-size);
 }
 .run-outcome-legend b { color: #eee9f6; font-size: var(--metric-label-size); }
+.run-chart-empty { align-items: center; }
+.run-chart-empty .reports-empty { flex: 1; min-height: 0; }
+.reports-chart-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 3px 0 4px; color: #a9a5b9; font-size: var(--metric-detail-size); }
+.reports-chart-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.reports-legend-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
+.reports-legend-dot.violet { background: #bd8aff; }
+.reports-legend-dot.teal { background: #35d6b1; }
 .run-outcome-dot { width: 7px; height: 7px; border-radius: 50%; }
 .run-outcome-dot.succeeded { background: #40d9a3; }
 .run-outcome-dot.running { background: #67a8ff; }
@@ -247,6 +272,9 @@
   font-size: var(--panel-description-size);
 }
 .reports-empty-chart > span svg { color: #bd8aff; }
+.delivery-velocity-panel .reports-empty-chart, .ci-distribution-panel .reports-empty-chart { min-height: 86px; }
+.acceptance-panel .reports-empty-chart { height: 68px; min-height: 68px; }
+.reports-acceptance-chart { height: 76px; margin-top: 2px; }
 .coverage-online {
   border: 1px solid #285343;
   color: #63dba8;
@@ -272,15 +300,16 @@
   .run-outcomes-panel { grid-column: 12 / span 4; grid-row: 1; }
   .review-latency-panel { grid-column: 1 / span 4; grid-row: 2; }
   .agent-spend-panel { grid-column: 5 / span 4; grid-row: 2; }
-  .acceptance-panel { grid-column: 9 / span 4; grid-row: 2; }
-  .reports-summary { grid-column: 13 / span 3; grid-row: 2 / span 2; }
+  .acceptance-panel { grid-column: 9 / span 3; grid-row: 2; }
+  .reports-summary { grid-column: 12 / span 4; grid-row: 2 / span 2; }
   .product-summary-panel { grid-column: 1 / span 4; grid-row: 3; }
   .inventory-panel { grid-column: 5 / span 4; grid-row: 3; }
-  .downloadable-reports-panel { grid-column: 9 / span 4; grid-row: 3; }
+  .downloadable-reports-panel { grid-column: 9 / span 3; grid-row: 3; }
 }
 @media (max-width: 1200px) {
   .reports-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .reports-content-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reports-content-grid { grid-template-rows: none; }
   .reports-content-grid > * { grid-column: auto; }
   .inventory-panel, .reports-summary, .product-summary-panel { grid-column: 1 / -1; }
 }

@@ -12,8 +12,8 @@ sequenceDiagram
     participant Worker as Local worker
     participant UI as Dashboard dev server
     Dev->>Start: Start local preview
-    Start->>API: Start API on ZENCHRON_LISTEN_ADDR
-    Start->>API: Wait for /healthz
+    Start->>API: Start API unless /healthz already responds
+    Start->>API: Wait for /healthz and confirm the child is still running
     Start->>Worker: Start with API URL and inherited model settings
     Worker->>API: Heartbeat with local project inventory
     Start->>API: Wait for worker readiness
@@ -30,10 +30,14 @@ sequenceDiagram
 The control plane and dashboard bind to loopback by default. The API remains loopback-only until authentication is
 implemented. `ZENCHRON_LISTEN_ADDR` and `ZENCHRON_DASHBOARD_PORT` select local ports; `ZENCHRON_PROJECTS_ROOT` selects
 the folder scanned by the worker. `ZENCHRON_LLM_BASE_URL` and `ZENCHRON_LLM_API_KEY` are forwarded only to the worker.
+The launcher exits with a clear message if the selected service URL is already responding, rather than mistaking an
+existing preview for the child process it just started.
 
 Run the preview from the repository root. Install frontend dependencies once with `cd dashboard && npm ci`.
 
 ## Focused verification
 
-Run `sh -n dev.sh dashboard/dev.sh`, then start the preview with isolated local ports and check `/healthz`,
-`/api/v1/workers/healthz`, and the dashboard URL before stopping it with Ctrl+C.
+Run `sh -n dev.sh dashboard/dev.sh` and `node scripts/test_dev_preview.mjs`, then start the preview with isolated
+local ports and check `/healthz`,
+`/api/v1/workers/healthz`, and the dashboard URL before stopping it with Ctrl+C. Starting a second preview against an
+already responding API URL must exit before printing the ready message.

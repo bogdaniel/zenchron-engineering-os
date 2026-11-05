@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"mime"
 	"net"
 	"net/http"
@@ -21,9 +19,10 @@ const maxGitHubResponseSize = 1 << 20
 const gitHubAPIURL = "https://api.github.com"
 
 type gitHubClient struct {
-	apiURL string
-	token  string
-	client *http.Client
+	apiURL  string
+	token   string
+	appAuth *gitHubAppAuth
+	client  *http.Client
 }
 
 type gitHubPullRequest struct {
@@ -67,7 +66,7 @@ type gitHubIssue struct {
 func newGitHubClient() gitHubClient {
 	return gitHubClient{
 		apiURL: gitHubAPIURL, token: strings.TrimSpace(os.Getenv("ZENCHRON_GITHUB_TOKEN")),
-		client: &http.Client{Timeout: 10 * time.Second},
+		appAuth: newGitHubAppAuthFromEnv(), client: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -82,56 +81,6 @@ func (client gitHubClient) request(ctx context.Context, path string, target any)
 		return err
 	}
 	return json.Unmarshal(body, target)
-}
-
-func (client gitHubClient) requestBytes(
-	ctx context.Context, method, path, accept string, query url.Values, payload []byte,
-) ([]byte, error) {
-	base, err := url.Parse(client.apiURL)
-	if err != nil || base.Host == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" ||
-		(base.Scheme != "https" && !(base.Scheme == "http" && isLoopbackHost(base.Hostname()))) {
-		return nil, fmt.Errorf("GitHub API URL must be HTTPS or loopback HTTP")
-	}
-	if strings.ContainsAny(client.token, "\r\n") || len(client.token) > 4096 {
-		return nil, fmt.Errorf("GitHub token is invalid")
-	}
-	base.Path = strings.TrimRight(base.Path, "/") + path
-	if query != nil {
-		base.RawQuery = query.Encode()
-	}
-	var body io.Reader
-	if payload != nil {
-		body = bytes.NewReader(payload)
-	}
-	request, err := http.NewRequestWithContext(ctx, method, base.String(), body)
-	if err != nil {
-		return nil, err
-	}
-	request.Header.Set("Accept", accept)
-	request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	request.Header.Set("User-Agent", "Zenchron-Engineering-Control-Plane")
-	if payload != nil {
-		request.Header.Set("Content-Type", "application/json")
-	}
-	if client.token != "" {
-		request.Header.Set("Authorization", "Bearer "+client.token)
-	}
-	response, err := client.client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("GitHub returned HTTP %d", response.StatusCode)
-	}
-	responseBody, err := io.ReadAll(io.LimitReader(response.Body, maxGitHubResponseSize+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(responseBody) > maxGitHubResponseSize {
-		return nil, fmt.Errorf("GitHub response exceeded the size limit")
-	}
-	return responseBody, nil
 }
 
 func (client gitHubClient) pullRequestDiff(ctx context.Context, owner, repository string, number int) (string, error) {
@@ -154,8 +103,8 @@ func (client gitHubClient) pullRequest(ctx context.Context, owner, repository st
 }
 
 func (client gitHubClient) submitPullRequestReview(ctx context.Context, owner, repository string, number int, body, event string) error {
-	if client.token == "" {
-		return fmt.Errorf("GitHub review token is not configured")
+	if !client.authConfigured() {
+		return fmt.Errorf("GitHub authentication is not configured")
 	}
 	payload, err := json.Marshal(struct {
 		Body  string `json:"body"`
@@ -170,8 +119,8 @@ func (client gitHubClient) submitPullRequestReview(ctx context.Context, owner, r
 }
 
 func (client gitHubClient) createIssueComment(ctx context.Context, owner, repository string, number int, body string) error {
-	if client.token == "" {
-		return fmt.Errorf("GitHub issue comment token is not configured")
+	if !client.authConfigured() {
+		return fmt.Errorf("GitHub authentication is not configured")
 	}
 	payload, err := json.Marshal(struct {
 		Body string `json:"body"`
@@ -198,8 +147,8 @@ func (client gitHubClient) issue(ctx context.Context, owner, repository string, 
 }
 
 func (client gitHubClient) updateIssueState(ctx context.Context, owner, repository string, number int, state string) error {
-	if client.token == "" {
-		return fmt.Errorf("GitHub issue update token is not configured")
+	if !client.authConfigured() {
+		return fmt.Errorf("GitHub authentication is not configured")
 	}
 	payload, err := json.Marshal(struct {
 		State string `json:"state"`
@@ -361,8 +310,8 @@ func (registry *workerRegistry) commentGitHubIssue(w http.ResponseWriter, r *htt
 		http.Error(w, "issue comment must be between 1 and 1000 bytes", http.StatusBadRequest)
 		return
 	}
-	if registry.github.token == "" {
-		http.Error(w, "GitHub issue comment token is not configured on the control plane", http.StatusServiceUnavailable)
+	if !registry.github.authConfigured() {
+		http.Error(w, "GitHub authentication is not configured on the control plane", http.StatusServiceUnavailable)
 		return
 	}
 	issue, err := registry.github.issue(r.Context(), owner, repository, number)
@@ -412,8 +361,8 @@ func (registry *workerRegistry) updateGitHubIssue(w http.ResponseWriter, r *http
 		http.Error(w, "issue state must be open or closed", http.StatusBadRequest)
 		return
 	}
-	if registry.github.token == "" {
-		http.Error(w, "GitHub issue update token is not configured on the control plane", http.StatusServiceUnavailable)
+	if !registry.github.authConfigured() {
+		http.Error(w, "GitHub authentication is not configured on the control plane", http.StatusServiceUnavailable)
 		return
 	}
 	issue, err := registry.github.issue(r.Context(), owner, repository, number)
@@ -469,8 +418,8 @@ func (registry *workerRegistry) reviewGitHubPullRequest(w http.ResponseWriter, r
 		http.Error(w, "review event must be COMMENT or REQUEST_CHANGES", http.StatusBadRequest)
 		return
 	}
-	if registry.github.token == "" {
-		http.Error(w, "GitHub review token is not configured on the control plane", http.StatusServiceUnavailable)
+	if !registry.github.authConfigured() {
+		http.Error(w, "GitHub authentication is not configured on the control plane", http.StatusServiceUnavailable)
 		return
 	}
 	pull, err := registry.github.pullRequest(r.Context(), owner, repository, number)

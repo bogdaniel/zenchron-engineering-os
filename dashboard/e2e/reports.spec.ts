@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
 test('Reports panel rows match the desktop mockup proportions', async ({ page }) => {
+  await page.route('**/api/v1/products', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
   await expect(page.locator('.reports-panel-heading > div > svg')).toHaveCount(10);
@@ -10,12 +13,24 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   ]);
   await expect(page.getByRole('heading', { name: 'Work outcomes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Insights & narrative' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Insights view' })).toBeVisible();
+  await expect(page.locator('.reports-chart-legend')).toHaveCount(3);
+  await expect(page.locator('.run-outcome-legend')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
+  await expect(page.locator('.product-summary-panel')).toContainText('No products are configured');
+  expect(await page.locator('.reports-metric .metric-top svg').first().evaluate((icon) => getComputedStyle(icon).order)).toBe('-1');
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
-  await expect(page.getByRole('button', { name: 'Agent spend & utilization unavailable' })).toBeDisabled();
+  await expect(page.locator('.downloadable-report').first()).toHaveCSS('min-height', '30px');
+  await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '12px');
+  await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '9px');
+  await expect(page.getByRole('button', { name: 'Download Agent spend & utilization CSV' })).toBeEnabled();
   await expect(page.locator('.reports-empty-chart')).toHaveCount(5);
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
   await expect(page.locator('.reports-empty-chart').first()).toHaveAccessibleName('Connect a source to view this chart');
   await expect(page.locator('.reports-empty-chart').first()).toContainText('Connect a source to view this chart');
+  const acceptanceTitle = page.locator('.acceptance-panel .reports-panel-heading h3');
+  expect(await acceptanceTitle.evaluate((title) => title.scrollWidth <= title.clientWidth),
+    'acceptance title stays on one line').toBe(true);
   const sectionBounds = await page.evaluate(() => Object.fromEntries(
     ['.reports-scope-bar', '.reports-metrics', '.reports-content-grid'].map((selector) => {
       const { y, height } = document.querySelector(selector)!.getBoundingClientRect();
@@ -43,7 +58,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   const product = panel('product-summary-panel');
   const inventory = panel('inventory-panel');
   const downloads = panel('downloadable-reports-panel');
-  expect(delivery.x).toBe(265);
+  expect(delivery.x).toBe(146);
   expect(Math.abs(delivery.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(outcomes.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(product.height - 188)).toBeLessThanOrEqual(2);
@@ -58,9 +73,24 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   expect(inventory.y).toBe(downloads.y);
   expect(delivery.width).toBeGreaterThan(ci.width);
   expect(ci.width).toBeGreaterThan(outcomes.width);
+  expect(acceptance.width).toBeLessThan(spend.width);
+  expect(coverage.width).toBeGreaterThan(acceptance.width);
+  expect(downloads.width).toBeLessThan(inventory.width);
+  expect(coverage.width).toBeGreaterThan(downloads.width);
   expect(coverage.height).toBeGreaterThan(product.y + product.height - coverage.y - 1);
+  const acceptanceChart = page.locator('.acceptance-panel .reports-empty-chart');
+  const acceptanceLayout = await acceptanceChart.evaluate((chart) => {
+    const panel = chart.closest('.acceptance-panel')!;
+    return { bottom: chart.getBoundingClientRect().bottom, panelBottom: panel.getBoundingClientRect().bottom,
+      paddingBottom: parseFloat(getComputedStyle(panel).paddingBottom) };
+  });
+  expect(acceptanceLayout.bottom).toBeLessThanOrEqual(acceptanceLayout.panelBottom - acceptanceLayout.paddingBottom);
   await expect(page.locator('.reports-summary')).toContainText('Key takeaway');
   await expect(page.locator('.reports-summary')).toContainText('Worker availability');
+  await page.getByRole('combobox', { name: 'Insights view' }).click();
+  await page.getByRole('option', { name: 'Delivery' }).click();
+  await expect(page.locator('.reports-insight')).toHaveCount(1);
+  await expect(page.locator('.reports-insight')).toContainText('Delivery sources');
 
   await page.setViewportSize({ width: 390, height: 844 });
   const mobile = await page.locator('.reports-content-grid > *').evaluateAll((panels) => panels.map((panel) => {
@@ -172,11 +202,19 @@ test('Reports derives GitHub delivery metrics from complete pull-request history
   }
   await expect(page.locator('.reports-ci-chart')).toBeVisible();
   await expect(page.locator('.reports-ci-chart .recharts-rectangle')).toHaveCount(2);
+  const acceptanceChart = page.locator('.acceptance-panel .reports-acceptance-chart');
+  const chartBounds = await acceptanceChart.evaluate((chart) => {
+    const panel = chart.closest('.acceptance-panel')!;
+    return { chart: chart.getBoundingClientRect().bottom, panel: panel.getBoundingClientRect().bottom,
+      padding: parseFloat(getComputedStyle(panel).paddingBottom) };
+  });
+  expect(chartBounds.chart).toBeLessThanOrEqual(chartBounds.panel - chartBounds.padding);
   await expect(page.locator('.reports-ci-chart .recharts-cartesian-axis-tick-value').first())
     .toHaveCSS('fill', 'rgb(150, 145, 168)');
   const trend = page.locator('.reports-pull-request-chart');
   await expect(trend).toBeVisible();
-  await expect(trend).toContainText('Merged PRs');
+  await expect(page.locator('.delivery-velocity-panel .reports-chart-legend')).toContainText('Merged PRs');
+  await expect(page.locator('.delivery-velocity-panel .reports-chart-legend')).toContainText('Cycle time');
   await expect(trend.locator('.recharts-line')).toHaveCount(2);
   await expect(trend.locator('.recharts-cartesian-axis-tick-value').first())
     .toHaveCSS('fill', 'rgb(150, 145, 168)');
@@ -294,6 +332,7 @@ test('report scope filters live snapshots by product and resets them', async ({ 
     };
   });
 
+  await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
   await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
   await expect(page.getByLabel('Workflow filter unavailable because runs are not linked to workflows')).toBeDisabled();
@@ -323,6 +362,9 @@ test('report scope filters live snapshots by product and resets them', async ({ 
     .toContainText('No Git remotes are configured for these checkouts.');
   const productRow = page.locator('.product-summary-table tbody tr').filter({ hasText: 'Nova Platform' });
   await expect(productRow.locator('td')).toHaveText(['Nova Platform', '1', '1', '1']);
+  expect(await page.locator('.product-summary-table-wrap').evaluate((table) =>
+    table.scrollWidth <= table.clientWidth,
+  ), 'product summary table fits its desktop card').toBe(true);
   const downloadCsv = async (name: string) => {
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: `Download ${name} CSV` }).click();
@@ -339,6 +381,11 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   const detailed = await downloadCsv('Detailed metrics');
   expect(detailed.filename).toMatch(/^zenchron-detailed-metrics-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(detailed.csv).toContain('"Delivery velocity","Unavailable","No Git remotes are configured for these checkouts."');
+  const spend = await downloadCsv('Agent spend & utilization');
+  expect(spend.filename).toMatch(/^zenchron-agent-spend-utilization-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect(spend.csv).toContain('"Spend (USD)","Usage","Source"');
+  expect(spend.csv).toContain('"Reviewer","Nova Platform"');
+  expect(spend.csv).toContain('"Provider usage records are not connected"');
   const workspace = await downloadCsv('Product & workspace report');
   expect(workspace.filename).toMatch(/^zenchron-product-workspace-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(workspace.csv).toContain('"Product","Nova Platform","1","1","1"');
