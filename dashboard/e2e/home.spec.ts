@@ -25,6 +25,11 @@ test('dashboard displays the connected control plane and local worker', async ({
   await expect(page.locator('.workflow-overview-status')).toContainText('Execution unavailable');
   await expect(page.locator('.activity-list')).toContainText('Control plane is responding');
   await expect(page.getByText('Running Agents', { exact: true })).toBeVisible();
+  await expect(page.getByText('Approval data unavailable', { exact: true })).toBeVisible();
+  await expect(page.locator('.evidence-health-list')).toContainText('Trusted branch');
+  await expect(page.locator('.evidence-health-list')).toContainText('Evidence source');
+  await expect(page.getByText('No pending approvals', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('No runs', { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Worker “.+” is online/)).toBeVisible();
   await expect(page.locator('.activity-list')).toContainText('zenchron-engineering-os');
   await expect(page.locator('.metric-unavailable')).toHaveCount(3);

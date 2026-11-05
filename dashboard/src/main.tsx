@@ -309,7 +309,7 @@ function App() {
               <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconHistory size={18} /></span>}
                 title="Plan Approvals" description="Human review before agent execution" />
               <div className="compact-empty"><IconHistory size={20} />
-                <span>No pending approvals</span>
+                <span>Approval data unavailable</span>
                 <small>Approval gates are not connected yet.</small>
               </div>
             </PanelCard>
@@ -334,8 +334,8 @@ function App() {
               <PanelHeading className="panel-heading" icon={<span className="section-icon green-icon"><IconShieldCheck size={18} /></span>}
                 title="Evidence Health" description="Artifacts, test results, reviews" />
               <div className="evidence-health-list">
-                <div><IconGitBranch size={16} /><span>Trusted-main<small>Branch protection status</small></span><Badge className="muted-tag" variant="light">Unavailable</Badge></div>
-                <div><IconShieldCheck size={16} /><span>Evidence<small>Artifacts · test results · traces</small></span><Badge className="muted-tag" variant="light">No runs</Badge></div>
+                <div><IconGitBranch size={16} /><span>Trusted branch<small>Branch protection status</small></span><Badge className="muted-tag" variant="light">Unavailable</Badge></div>
+                <div><IconShieldCheck size={16} /><span>Evidence source<small>Artifacts · test results · traces</small></span><Badge className="muted-tag" variant="light">Unavailable</Badge></div>
               </div>
             </PanelCard>
 
