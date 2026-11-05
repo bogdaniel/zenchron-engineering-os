@@ -69,8 +69,8 @@ flowchart LR
 
 ## Responsive behavior
 
-At desktop widths the overview uses a fixed left navigation rail, five summary cards, a workflow/activity row, four
-operational panels, and a three-panel delivery row. At the tall desktop mockup size, the first row stays 204px tall as
+At desktop widths the overview uses a fixed left navigation rail, five summary cards with leading icons, a workflow/activity
+row, four operational panels, and a three-panel delivery row. At the tall desktop mockup size, the first row stays 204px tall as
 live events arrive; compact activity rows keep project and worker updates from pushing the lower panels down. The
 operational panels show objective status, approval availability, run history, and trusted-branch/evidence availability.
 At mobile widths the navigation becomes a five-item bottom tab bar (Home, Workflows, Agents, Reviews, and Profile).

@@ -20,8 +20,10 @@
 .metric-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 6px;
 }
+.metric-card .metric-top > svg { order: -1; flex: 0 0 auto; }
 .metric-card.purple .metric-top svg { color: #c394ff; }
 .metric-card.blue .metric-top svg { color: #7db9ff; }
 .metric-card.teal .metric-top svg { color: #71d4db; }

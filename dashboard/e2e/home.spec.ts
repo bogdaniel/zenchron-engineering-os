@@ -3,6 +3,14 @@ import { expect, test } from '@playwright/test';
 test('dashboard displays the connected control plane and local worker', async ({ page }) => {
   await page.setViewportSize({ width: 1490, height: 829 });
   await page.goto('/');
+  const overviewIconsLeadLabels = await page.locator('.metric-card .metric-top').evaluateAll((headers) =>
+    headers.every((header) => {
+      const icon = header.querySelector('svg')?.getBoundingClientRect();
+      const label = header.querySelector('span')?.getBoundingClientRect();
+      return icon !== undefined && label !== undefined && icon.right <= label.left;
+    }),
+  );
+  expect(overviewIconsLeadLabels, 'Overview KPI icons sit before their labels').toBe(true);
   await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Workflow orchestration' })).toBeVisible();
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
