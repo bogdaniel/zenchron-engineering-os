@@ -40,3 +40,12 @@ test('keeps the dashboard shell visible until a failed session check can be retr
   expect(sessionChecks).toBe(2);
   expect(protectedRequests).toBeGreaterThan(0);
 });
+
+test('local preview has a direct sign-in screen preview and explains that OAuth is unconfigured', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Preview sign-in' }).click();
+  await expect(page).toHaveURL('/?preview=login');
+  await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeDisabled();
+  await expect(page.getByText('GitHub sign-in is not configured in this local preview.')).toBeVisible();
+});

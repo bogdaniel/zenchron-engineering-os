@@ -151,12 +151,16 @@ function App() {
   const openObjectives = objectives.data?.filter((objective) => objective.status !== 'completed') ?? [];
   const unauthorized = (auth.error as (Error & { status?: number }) | null)?.status === 401;
   const sessionUnavailable = auth.isError && !unauthorized;
+  const loginPreview = new URLSearchParams(window.location.search).get('preview') === 'login';
   if (auth.isLoading) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
-  if (auth.isError && unauthorized) return <div className="auth-screen">
+  if ((auth.isError && unauthorized) || loginPreview) return <div className="auth-screen">
     <div className="auth-card">
       <span className="brand-mark" aria-hidden="true" />
       <div><h1>Zenchron Engineering</h1><p>Sign in to access your engineering control plane.</p></div>
-      <a className="github-login-button" href="/auth/github"><IconBrandGithub size={19} /> Continue with GitHub</a>
+      {auth.data?.local
+        ? <><button className="github-login-button" disabled><IconBrandGithub size={19} /> Continue with GitHub</button>
+          <p>GitHub sign-in is not configured in this local preview.</p></>
+        : <a className="github-login-button" href="/auth/github"><IconBrandGithub size={19} /> Continue with GitHub</a>}
     </div>
   </div>;
   return (
@@ -180,6 +184,7 @@ function App() {
           <div className="sidebar-bottom">
             <div className="connection-indicator"><span /> {sessionUnavailable ? 'Session unavailable' : auth.data?.local ? 'Local preview' : 'Authenticated workspace'}</div>
             <p>One place to coordinate projects, agents, and delivery.</p>
+            {auth.data?.local && <a className="preview-login-link" href="/?preview=login">Preview sign-in</a>}
           </div>
         </aside>
 

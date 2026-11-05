@@ -40,7 +40,9 @@ sequenceDiagram
 ```
 
 The control plane and dashboard bind to loopback by default. Without OAuth settings, the local dashboard signs in as
-`Local workspace`; exercise GitHub sign-in by setting the OAuth, session, allowlist, and public-origin variables from
+`Local workspace`; use **Preview sign-in** at the bottom of the sidebar to inspect the login screen. The GitHub button is
+disabled in local mode because OAuth is not configured. Exercise real GitHub sign-in by setting the OAuth, session,
+allowlist, and public-origin variables from
 [GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md) before starting the preview.
 The API can bind to a remote interface only when the GitHub OAuth and worker authentication settings described in
 [GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md) are configured.

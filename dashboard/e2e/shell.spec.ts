@@ -51,9 +51,9 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     expect(styles.navigationFontFamily).toBe(styles.bodyFont);
     expect(styles.titleFontFamily).toBe(styles.bodyFont);
     expect(styles.panelFontFamily).toBe(styles.bodyFont);
-    expect(styles.navigationFont).toBe('15px');
+    expect(styles.navigationFont).toBe('16px');
     expect(styles.navigationWeight).toBe('400');
-    expect((await page.locator('.nav-link').first().boundingBox())?.height).toBe(44);
+    expect((await page.locator('.nav-link').first().boundingBox())?.height).toBe(46);
     const workspaceLink = page.locator('.nav-link').filter({ hasText: 'Product Workspace' });
     await expect(workspaceLink, 'long navigation label remains readable').toHaveCSS('white-space', 'normal');
     expect(await workspaceLink.evaluate((link) => link.scrollWidth <= link.clientWidth),
