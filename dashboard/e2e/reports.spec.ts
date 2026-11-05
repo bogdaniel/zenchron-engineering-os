@@ -14,8 +14,12 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
       created_at: new Date().toISOString(), closed_at: null, merged_at: null,
     })) }),
   }));
+  const runFinished = Date.now();
   await page.route('**/api/v1/projects/*/workflow-run-history*', (route) => route.fulfill({ status: 200,
-    contentType: 'application/json', body: JSON.stringify({ complete: true, items: [] }),
+    contentType: 'application/json', body: JSON.stringify({ complete: true, items: [{
+      created_at: new Date(runFinished - 126_000).toISOString(), status: 'completed', conclusion: 'success',
+      run_started_at: new Date(runFinished - 126_000).toISOString(), updated_at: new Date(runFinished).toISOString(),
+    }] }),
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
@@ -31,14 +35,16 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.locator('.report-outcome-legend')).toBeVisible();
   await expect(page.locator('.reports-outcomes-layout .report-chart-label')).toHaveText('4');
   await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
-  await expect(page.locator('.product-summary-panel')).toContainText('No products are configured');
+  await expect(page.locator('.product-summary-panel .report-summary-table tbody tr td')).toHaveText([
+    'Unassigned repositories', '0 / wk', 'Unavailable', '2.1 min', 'Unavailable', 'Unavailable',
+  ]);
   expect(await page.locator('.reports-metric .metric-top svg').first().evaluate((icon) => getComputedStyle(icon).order)).toBe('-1');
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
   await expect(page.locator('.downloadable-report').first()).toHaveCSS('min-height', '32px');
   await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '11px');
   await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '10px');
   await expect(page.getByRole('button', { name: 'Download Agent spend & utilization CSV' })).toBeEnabled();
-  await expect(page.locator('.reports-empty-chart')).toHaveCount(5);
+  await expect(page.locator('.reports-empty-chart')).toHaveCount(4);
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
   await expect(page.locator('.reports-empty-chart').first())
     .toHaveAccessibleName('No merged pull requests in this period.');
@@ -73,7 +79,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   const product = panel('product-summary-panel');
   const inventory = panel('inventory-panel');
   const downloads = panel('downloadable-reports-panel');
-  expect(delivery.x).toBe(130);
+  expect(delivery.x).toBe(226);
   expect(Math.abs(delivery.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(outcomes.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(product.height - 188)).toBeLessThanOrEqual(2);
@@ -88,8 +94,8 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   expect(inventory.y).toBe(downloads.y);
   expect(delivery.width).toBeGreaterThan(ci.width);
   expect(ci.width).toBeGreaterThan(outcomes.width);
-  expect(acceptance.width).toBeLessThan(spend.width);
-  expect(coverage.width).toBeGreaterThan(acceptance.width);
+  expect(acceptance.width).toBeGreaterThan(spend.width);
+  expect(coverage.width).toBeCloseTo(acceptance.width, 0);
   expect(downloads.width).toBeLessThan(inventory.width);
   expect(coverage.width).toBeGreaterThan(downloads.width);
   expect(coverage.height).toBeGreaterThan(product.y + product.height - coverage.y - 1);

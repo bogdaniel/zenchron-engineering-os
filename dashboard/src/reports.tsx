@@ -19,6 +19,7 @@ import { workflowsSchema } from './workflows';
 import { useReportPullRequestMetrics } from './reportPullRequests';
 import { useReportWorkflowRunMetrics } from './reportWorkflowRuns';
 import { summarizeProductDelivery } from './reportSummaryMetrics';
+import type { ProductDeliverySummary } from './ReportSummaries';
 import { ProductSummaryPanel, WorkspaceSummaryPanel } from './ReportSummaries';
 import { DownloadableReports } from './DownloadableReports';
 import './reports.css';
@@ -130,11 +131,12 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
   const scopedProducts = products.data?.filter((product) =>
     appliedScope.product === 'all' || product.id === appliedScope.product,
   ) ?? [];
-  const productSummaries = scopedProducts.map((product) => {
+  const productSummaries: ProductDeliverySummary[] = scopedProducts.map((product) => {
     const repositoryIDs = new Set(product.repository_ids);
     return {
       id: product.id,
       name: product.name,
+      recordType: 'Product' as const,
       autonomousCompletion: undefined,
       ...summarizeProductDelivery(
         (projects ?? []).filter((project) => repositoryIDs.has(project.id) &&
@@ -149,6 +151,19 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
       runs: scopedRuns?.filter((run) => repositoryIDs.has(run.project_id)).length,
     };
   });
+  if (products.isSuccess && scopedProducts.length === 0 && scopedProjects?.length) {
+    productSummaries.push({
+      id: 'unassigned-repositories',
+      name: 'Unassigned repositories',
+      recordType: 'Unassigned repositories',
+      autonomousCompletion: undefined,
+      ...summarizeProductDelivery(scopedProjects, pullRequests.repositories,
+        workflowRunMetrics.repositories, appliedScope.timeRange),
+      repositories: scopedProjects.length,
+      objectives: scopedObjectives?.length,
+      runs: scopedRuns?.length,
+    });
+  }
   const objectiveCount = scopedObjectives?.length;
   const completed = scopedObjectives ? countStatus(scopedObjectives, 'completed') : undefined;
   const activeWorkflows = workflows.data?.filter((workflow) => workflow.status === 'active').length;
@@ -249,7 +264,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
         ['Record', 'Name', 'Repositories', 'Objectives', 'Agent runs', 'Velocity (PRs/week)', 'Cycle time (hours)',
           'CI duration (minutes)', 'Acceptance rate (%)', 'Autonomous completion (%)', 'Worker', 'Status'],
         ...productSummaries.map((product) => [
-          'Product', product.name, product.repositories, product.objectives, product.runs,
+          product.recordType, product.name, product.repositories, product.objectives, product.runs,
           product.deliveryVelocity ?? 'Unavailable', product.cycleTime ?? 'Unavailable',
           product.ciDuration ?? 'Unavailable', product.acceptanceRate ?? 'Unavailable',
           product.autonomousCompletion ?? 'Unavailable', '', '',
@@ -428,7 +443,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers }: Report
             {keyTakeaway}</span></div>
         </PanelCard>
 
-        <ProductSummaryPanel rows={productSummaries} loading={products.isLoading} error={products.isError}
+        <ProductSummaryPanel rows={productSummaries} loading={products.isLoading || projects === undefined} error={products.isError}
           checkoutCount={scopedProjects?.length} />
 
         <WorkspaceSummaryPanel workItems={objectiveCount} metrics={{

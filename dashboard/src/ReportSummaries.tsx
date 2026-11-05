@@ -14,6 +14,10 @@ export interface DeliveryMetrics {
 export interface ProductDeliverySummary extends DeliveryMetrics {
   id: string;
   name: string;
+  recordType: 'Product' | 'Unassigned repositories';
+  repositories: number | undefined;
+  objectives: number | undefined;
+  runs: number | undefined;
 }
 
 function show(value: number | undefined, unit = '') {

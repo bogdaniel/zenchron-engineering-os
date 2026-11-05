@@ -159,13 +159,11 @@
 .downloadable-report-format.unavailable.mantine-Badge-root { color: #a19bab; background: #292733; }
 .downloadable-report-copy { display: grid; min-width: 0; gap: 1px; }
 .downloadable-report-copy b {
-  overflow: hidden;
   color: #e4deed;
   font-size: var(--metric-detail-size);
   font-weight: 600;
   line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .downloadable-report-copy span {
   color: #a9a5b9;
@@ -287,8 +285,8 @@
   .ci-distribution-panel { grid-column: 7 / span 5; grid-row: 1; }
   .work-outcomes-panel { grid-column: 12 / span 4; grid-row: 1; }
   .review-latency-panel { grid-column: 1 / span 4; grid-row: 2; }
-  .agent-spend-panel { grid-column: 5 / span 4; grid-row: 2; }
-  .acceptance-panel { grid-column: 9 / span 3; grid-row: 2; }
+  .agent-spend-panel { grid-column: 5 / span 3; grid-row: 2; }
+  .acceptance-panel { grid-column: 8 / span 4; grid-row: 2; }
   .reports-summary { grid-column: 12 / span 4; grid-row: 2 / span 2; }
   .product-summary-panel { grid-column: 1 / span 4; grid-row: 3; }
   .inventory-panel { grid-column: 5 / span 4; grid-row: 3; }
