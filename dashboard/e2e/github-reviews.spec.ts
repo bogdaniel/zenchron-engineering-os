@@ -85,9 +85,11 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   expect(workspace?.height).toBe(635);
   expect((workspace?.y ?? 0) + (workspace?.height ?? 0)).toBeLessThanOrEqual(874);
   const paneWidths = await page.locator('.reviews-pane').evaluateAll((panes) => panes.map((pane) => pane.getBoundingClientRect().width));
-  expect(paneWidths[0]! / workspace!.width).toBeGreaterThan(0.25);
-  expect(paneWidths[0]! / workspace!.width).toBeLessThan(0.29);
+  expect(paneWidths[0]! / workspace!.width).toBeGreaterThan(0.22);
+  expect(paneWidths[0]! / workspace!.width).toBeLessThan(0.26);
   expect(await page.locator('.reviews-resize-handle').first().evaluate((handle) => getComputedStyle(handle, '::before').width)).toBe('2px');
+  await expect(page.locator('.reviews-metric').nth(1).locator('svg')).toHaveCSS('color', 'rgb(121, 185, 255)');
+  await expect(page.locator('.reviews-metric').nth(3)).toHaveCSS('border-top-color', 'rgb(40, 102, 78)');
   await expect(page.getByText('GitHub · Nova Platform')).toBeVisible();
   await expect(page.locator('.reviews-summary .reviews-panel-heading p')).toHaveText('GitHub pull request context');
   await expect(page.locator('.reviews-summary-copy details summary')).toHaveText('Release notes');

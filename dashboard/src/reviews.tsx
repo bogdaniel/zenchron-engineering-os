@@ -294,7 +294,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
         style={{ height: stacked ? '1090px' : 'calc(100vh - 239px)' }}
         defaultLayout={stacked
           ? { queue: 33, detail: 39, summary: 28 }
-          : { queue: 27, detail: 49, summary: 24 }}
+          : { queue: 24, detail: 52, summary: 24 }}
       >
         <Panel id="queue" className="reviews-pane" minSize={stacked ? '340px' : '220px'}>
           <PanelCard className="reviews-queue" withBorder>
