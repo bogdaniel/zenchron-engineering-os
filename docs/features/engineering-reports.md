@@ -28,6 +28,7 @@ flowchart LR
     PRs --> Acceptance[Acceptance rate]
     WorkflowRunHistory --> Actions[GitHub Actions workflow runs]
     Actions --> Duration[CI duration distribution]
+    Actions --> CIHealth[CI success rate from completed conclusions]
     Scope[Time · product · owner · repository] --> Objectives
     Products --> Scope
     Scope --> Projects
@@ -77,7 +78,8 @@ flowchart LR
   of a blank chart. Duplicate checkouts for one GitHub remote are fetched once.
 - CI duration uses completed GitHub Actions workflow runs created in the selected window from configured GitHub
   checkouts. It measures `updated_at - run_started_at`, excludes missing or invalid timestamps and non-completed runs,
-  and only reports metrics when provider history is complete. Histories are capped at 1,000 runs per repository; larger
+  and only reports metrics when provider history is complete. The same history exposes conclusion values so the Overview
+  can report the last-30-day completed-run success rate. Histories are capped at 1,000 runs per repository; larger
   histories are marked incomplete. The average is shown in the KPI and runs are grouped into minute ranges in the
   distribution chart. Complete history with no qualifying events shows an explicit empty state instead of a blank chart.
 - Provider chart labels use the dashboard's light text palette so axes remain readable against the dark chart surface.

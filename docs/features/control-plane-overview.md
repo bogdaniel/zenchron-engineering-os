@@ -3,8 +3,9 @@
 The overview dashboard is the live entry point for the local control plane. It follows the supplied Zenchron overview
 mockup: workspace navigation, status metrics, workflow visualization, recent activity, plan approvals, run status,
 evidence health, local branch reviews, timeline, and analytics. Control-plane health, workers, discovered projects,
-objectives, workflow definitions, and agent-run history are backed by the Go API. CI, budget, evidence, timeline, and
-analytics values remain unavailable until their services exist.
+objectives, workflow definitions, agent-run history, GitHub pull-request counts, and GitHub Actions health are backed
+by current API/provider records. Budget, approvals, evidence, timeline, and analytics remain unavailable until their
+sources exist.
 
 ## Feature diagram
 
@@ -25,13 +26,17 @@ flowchart LR
     Dashboard -->|GET /api/v1/workflows| Workflows[Workflow API]
     Workflows -->|Saved definition| Graph[React Flow + ELK graph]
     Dashboard -->|GET /api/v1/agent-runs<br/>every 3s| Runs[Agent run API]
+    Dashboard -->|GET /api/v1/projects/{id}/pull-request-history| PRHistory[GitHub PR history]
+    Dashboard -->|GET /api/v1/projects/{id}/workflow-run-history<br/>last 30 days| ActionRuns[GitHub Actions history]
+    PRHistory --> PRQueue[Open PR queue count<br/>all history · complete only]
+    ActionRuns --> CIHealth[Completed-run success rate<br/>last 30 days · complete only]
     Worker[Local Go worker] -->|Heartbeat + checkout names/opaque IDs| Registry[(Transient worker registry)]
     Registry --> Workers
     Registry --> Projects
     Objectives --> ObjectiveState[(Versioned JSON snapshot)]
     Workflows --> WorkflowState[(Versioned JSON snapshot)]
     Runs --> RunState[(Versioned JSON snapshot)]
-    Dashboard --> Empty[Aggregate PR counts, CI, budgets,<br/>approvals, evidence, timeline,<br/>analytics: not wired yet]
+    Dashboard --> Empty[Budgets, approvals, evidence,<br/>timeline, analytics: not wired yet]
 ```
 
 ## Live data and empty states
@@ -41,6 +46,10 @@ flowchart LR
 - Project inventory comes from `GET /api/v1/projects`; worker status and the sanitized Git `origin` locator are shown with each project. Local paths and remote credentials stay on the worker.
 - Objective status is loaded from `GET /api/v1/objectives`.
 - Running-agent count and the Agents/Overview run history come from `GET /api/v1/agent-runs`, polled every 3 seconds.
+- The Overview PR queue count uses complete GitHub pull-request history across supported checkouts; incomplete or
+  missing provider history stays unavailable. The CI health KPI is the share of completed GitHub Actions runs with a
+  `success` conclusion in the last 30 days; its detail shows the passed and completed counts. Both reuse the Reports
+  history endpoints and their completeness limits.
 - Objectives and workflow definitions persist as versioned JSON snapshots; worker presence remains transient.
 - Workflow definitions can be edited and saved on the Workflows page; workflow execution is not connected.
 - The overview workflow panel renders the saved workflow definition with React Flow and ELK. It labels the graph as a
@@ -52,12 +61,11 @@ flowchart LR
 - Reviews can inspect actual diffs from completed or partially completed agent runs, read open GitHub issues and pull
   requests, and load a bounded diff for a selected pull request. It can submit top-level PR comments and request changes
   using the configured control-plane token; provider approvals, checks, and merge remain unavailable.
-- CI health, budget usage, approval records, evidence artifacts, delivery timeline, and analytics do not have backend
+- Budget usage, approval records, evidence artifacts, delivery timeline, and overview analytics do not have backend
   sources yet. The UI uses unavailable or empty states instead of sample values.
 - The overview Reviews card lists only agent runs with captured local diffs and links to the Reviews page for comments
   and request-changes; provider-sourced pull requests and issues appear in their own Reviews queues.
-- The Overview PR metric remains unavailable until aggregate provider data is wired. Local branch runs and their
-  diffs/comments are available in Reviews alongside provider-sourced open items.
+- Local branch runs and their diffs/comments are available in Reviews alongside provider-sourced open items.
 
 ## Responsive behavior
 

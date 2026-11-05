@@ -6,7 +6,8 @@ import type { Project } from './projects';
 const workflowRunHistorySchema = z.object({
   complete: z.boolean(),
   items: z.array(z.object({
-    created_at: z.string(), status: z.string(), run_started_at: z.string().nullable(), updated_at: z.string(),
+    created_at: z.string(), status: z.string(), conclusion: z.string().nullable().optional(),
+    run_started_at: z.string().nullable(), updated_at: z.string(),
   })),
 });
 export type WorkflowRunHistoryItem = z.infer<typeof workflowRunHistorySchema>['items'][number];
@@ -54,6 +55,12 @@ export function useReportWorkflowRunMetrics(projects: Project[] | undefined, ran
   const complete = githubProjects.length > 0 && history.isSuccess && history.data.complete;
   const now = Date.now();
   const samples = summarizeWorkflowRunSamples(history.data?.items ?? [], range, now);
+  const concludedRuns = (history.data?.items ?? []).filter((run) => {
+    const created = Date.parse(run.created_at);
+    return run.status === 'completed' && run.conclusion !== null && run.conclusion !== undefined &&
+      Number.isFinite(created) && created <= now && (range === 'all' || created >= now - rangeDurations[range]);
+  });
+  const successfulRuns = concludedRuns.filter((run) => run.conclusion === 'success').length;
   const durations = samples.map((sample) => sample.duration);
   const averageMinutes = complete && durations.length
     ? Math.round(durations.reduce((sum, duration) => sum + duration, 0) / durations.length * 10) / 10
@@ -80,6 +87,11 @@ export function useReportWorkflowRunMetrics(projects: Project[] | undefined, ran
     githubProjectCount: githubProjects.length,
     complete,
     averageMinutes,
+    completedRunCount: concludedRuns.length,
+    successfulRuns,
+    successRate: complete && concludedRuns.length
+      ? Math.round(successfulRuns / concludedRuns.length * 100)
+      : undefined,
     distribution,
     runCount: durations.length,
     trend,

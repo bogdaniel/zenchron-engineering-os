@@ -22,7 +22,10 @@ func TestGitHubWorkflowRunHistoryFiltersByDateAndPaginates(t *testing.T) {
 		if r.URL.Query().Get("page") == "1" {
 			runs.WorkflowRuns = make([]gitHubWorkflowRunHistoryItem, 100)
 		} else {
-			runs.WorkflowRuns = []gitHubWorkflowRunHistoryItem{{CreatedAt: createdAt, Status: "completed"}}
+			conclusion := "success"
+			runs.WorkflowRuns = []gitHubWorkflowRunHistoryItem{{
+				CreatedAt: createdAt, Status: "completed", Conclusion: &conclusion,
+			}}
 		}
 		_ = json.NewEncoder(w).Encode(runs)
 	}))
@@ -43,6 +46,7 @@ func TestGitHubWorkflowRunHistoryFiltersByDateAndPaginates(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !history.Complete || len(history.Items) != 101 || history.Items[100].Status != "completed" ||
+		history.Items[100].Conclusion == nil || *history.Items[100].Conclusion != "success" ||
 		!history.Items[100].CreatedAt.Equal(createdAt) {
 		t.Fatalf("history result = complete:%t items:%d", history.Complete, len(history.Items))
 	}

@@ -29,6 +29,39 @@ test('dashboard displays the connected control plane and local worker', async ({
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
 });
 
+test('Overview PR queue and CI health use complete GitHub history', async ({ page }) => {
+  const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+  const projectID = 'a'.repeat(32);
+  await page.route('**/api/v1/projects', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([{
+      id: projectID, name: 'Platform', branch: 'main', git_remote: 'github.com/acme/platform',
+      worker_id: 'b'.repeat(32), worker_name: 'Mac', worker_status: 'online', last_seen: ago(0),
+    }]),
+  }));
+  await page.route('**/api/v1/projects/*/pull-request-history*', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ complete: true, items: [
+      { created_at: ago(120), closed_at: null, merged_at: null },
+      { created_at: ago(60), closed_at: null, merged_at: null },
+      { created_at: ago(180), closed_at: ago(30), merged_at: ago(30) },
+    ] }),
+  }));
+  await page.route('**/api/v1/projects/*/workflow-run-history*', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ complete: true, items: [
+      { created_at: ago(60), status: 'completed', conclusion: 'success', run_started_at: ago(12), updated_at: ago(2) },
+      { created_at: ago(60), status: 'completed', conclusion: 'failure', run_started_at: ago(12), updated_at: ago(2) },
+      { created_at: ago(60), status: 'completed', conclusion: 'success', run_started_at: ago(12), updated_at: ago(2) },
+    ] }),
+  }));
+
+  await page.goto('/');
+  const queue = page.locator('.metric-card.pr-queue-metric');
+  await expect(queue.locator('strong')).toHaveText('2');
+  await expect(queue.locator('small')).toHaveText('2 open GitHub pull requests');
+  const ci = page.locator('.metric-card.green');
+  await expect(ci.locator('strong')).toHaveText('67%');
+  await expect(ci.locator('small')).toHaveText('2 of 3 completed runs passed');
+});
+
 test('Overview matches the supplied tall desktop mockup proportions', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/');

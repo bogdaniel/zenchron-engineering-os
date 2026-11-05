@@ -11,10 +11,11 @@ import (
 )
 
 type gitHubWorkflowRunHistoryItem struct {
-	CreatedAt time.Time  `json:"created_at"`
-	Status    string     `json:"status"`
-	StartedAt *time.Time `json:"run_started_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+	Status     string     `json:"status"`
+	Conclusion *string    `json:"conclusion"`
+	StartedAt  *time.Time `json:"run_started_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
 type gitHubWorkflowRunHistory struct {

@@ -31,6 +31,7 @@ import '@mantine/core/styles.css';
 import '@mantine/charts/styles.css';
 import { objectivesSchema, ObjectivesPage } from './objectives';
 import { projectsSchema, ProjectsPage } from './projects';
+import type { Project } from './projects';
 import { WorkflowOverview, WorkflowsPage } from './workflows';
 import { ReviewsPage } from './reviews';
 import { AgentsPage, loadAgentRuns } from './agents';
@@ -38,6 +39,8 @@ import { SystemPage } from './system';
 import { ReportsPage } from './reports';
 import { WorkspacePage } from './workspace';
 import { PageHeading } from './PageHeading';
+import { useReportPullRequestMetrics } from './reportPullRequests';
+import { useReportWorkflowRunMetrics } from './reportWorkflowRuns';
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
@@ -248,22 +251,11 @@ function App() {
               workers={workers.data}
             />
           ) : <>
-          <section className="metric-grid" aria-label="Workspace status">
-            <MetricCard className="metric-card purple" label="Active objectives" value={openObjectives.length}
-              detail="Open objectives" icon={<IconTarget size={19} />} />
-            <MetricCard className="metric-card blue" label="Running agents"
-              value={agentRuns.isLoading ? '…' : agentRuns.isError ? 'Unavailable' : agentRuns.data?.filter((run) => run.status === 'running').length ?? 0}
-              detail={`${onlineWorkers.length} local workers online`} icon={<IconRobot size={19} />} />
-            <MetricCard className="metric-card purple pr-queue-metric" label="PR queue"
-              value="Unavailable" valueClassName="metric-unavailable"
-              detail="Open GitHub items are in Reviews" icon={<IconGitPullRequest size={19} />} />
-            <MetricCard className="metric-card green" label="CI health"
-              value="Unavailable" valueClassName="metric-unavailable"
-              detail="CI integration not connected" icon={<IconActivity size={19} />} />
-            <MetricCard className="metric-card cyan" label="Budget usage"
-              value="Unavailable" valueClassName="metric-unavailable"
-              detail="Budgets are not configured" icon={<IconCurrencyDollar size={19} />} />
-          </section>
+          <OverviewMetrics projects={projects.data} projectsLoading={projects.isLoading} projectsError={projects.isError}
+            openObjectives={openObjectives.length}
+            runningAgents={agentRuns.isLoading ? '…' : agentRuns.isError ? 'Unavailable'
+              : agentRuns.data?.filter((run) => run.status === 'running').length ?? 0}
+            onlineWorkers={onlineWorkers.length} />
 
           <div className="content-grid">
             <WorkflowOverview />
@@ -369,6 +361,58 @@ function App() {
       </div>
     </MantineProvider>
   );
+}
+
+function OverviewMetrics({ projects, projectsLoading, projectsError, openObjectives, runningAgents, onlineWorkers }: {
+  projects: Project[] | undefined;
+  projectsLoading: boolean;
+  projectsError: boolean;
+  openObjectives: number;
+  runningAgents: number | string;
+  onlineWorkers: number;
+}) {
+  const pullRequests = useReportPullRequestMetrics(projects, 'all');
+  const workflows = useReportWorkflowRunMetrics(projects, '30d');
+  const openPullRequests = pullRequests.outcomes.find((outcome) => outcome.name === 'Open')?.value ?? 0;
+  const pullRequestReady = !projectsLoading && !projectsError && pullRequests.complete;
+  const workflowReady = !projectsLoading && !projectsError && workflows.complete;
+  const pullRequestValue = projectsLoading || (pullRequests.isLoading && pullRequests.githubProjectCount > 0)
+    ? 'Loading…'
+    : pullRequestReady ? openPullRequests : 'Unavailable';
+  const workflowValue = projectsLoading || (workflows.isLoading && workflows.githubProjectCount > 0)
+    ? 'Loading…'
+    : workflowReady && workflows.successRate !== undefined ? `${workflows.successRate}%` : 'Unavailable';
+  const pullRequestDetail = projectsLoading ? 'Loading repositories'
+    : projectsError ? 'Repository inventory unavailable'
+      : pullRequests.githubProjectCount === 0 ? 'Connect a GitHub repository'
+        : pullRequests.isLoading ? 'Loading GitHub pull-request history'
+          : pullRequests.isError ? 'GitHub pull-request history unavailable'
+        : !pullRequests.complete ? 'History incomplete; narrow the Reports range' : 'Open GitHub pull requests';
+  const workflowDetail = projectsLoading ? 'Loading repositories'
+    : projectsError ? 'Repository inventory unavailable'
+      : workflows.githubProjectCount === 0 ? 'Connect a GitHub repository'
+        : workflows.isLoading ? 'Loading GitHub Actions history'
+          : workflows.isError ? 'GitHub Actions history unavailable'
+        : !workflows.complete ? 'History incomplete; narrow the Reports range'
+          : workflows.completedRunCount ? `${workflows.successfulRuns} of ${workflows.completedRunCount} completed runs passed`
+                : workflows.runCount ? 'Completed-run conclusions unavailable'
+                  : 'No completed GitHub Actions runs in the last 30 days';
+  return <section className="metric-grid" aria-label="Workspace status">
+    <MetricCard className="metric-card purple" label="Active objectives" value={openObjectives}
+      detail="Open objectives" icon={<IconTarget size={19} />} />
+    <MetricCard className="metric-card blue" label="Running agents" value={runningAgents}
+      detail={`${onlineWorkers} local workers online`} icon={<IconRobot size={19} />} />
+    <MetricCard className="metric-card purple pr-queue-metric" label="PR queue"
+      value={pullRequestValue}
+      detail={pullRequestReady ? `${openPullRequests} open GitHub pull requests` : pullRequestDetail}
+      icon={<IconGitPullRequest size={19} />} />
+    <MetricCard className="metric-card green" label="CI health"
+      value={workflowValue}
+      detail={workflowDetail}
+      icon={<IconActivity size={19} />} />
+    <MetricCard className="metric-card cyan" label="Budget usage" value="Unavailable"
+      detail="Budgets are not configured" icon={<IconCurrencyDollar size={19} />} />
+  </section>;
 }
 
 createRoot(document.getElementById('root')!).render(
