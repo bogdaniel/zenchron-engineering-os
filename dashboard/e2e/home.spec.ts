@@ -86,9 +86,9 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
       brandMark: bounds('.brand-mark'), overviewLink: bounds('.nav-link[href="#overview"]'),
     };
   });
-  expect(layout.metrics?.x).toBe(226);
+  expect(layout.metrics?.x).toBe(263);
   expect(layout.metrics?.y).toBe(84);
-  expect(layout.metrics?.width).toBe(1432);
+  expect(layout.metrics?.width).toBe(1395);
   expect(layout.metrics?.height).toBe(100);
   expect(layout.workflow?.y).toBe(198);
   expect(layout.workflow?.height).toBeGreaterThanOrEqual(203);
@@ -110,13 +110,13 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
     return parseFloat(getComputedStyle(node.querySelector('b')!).fontSize) * zoom;
   });
   expect(overviewGraphLabelSize).toBeGreaterThanOrEqual(8);
-  expect(layout.activity?.x).toBeCloseTo(1236.8, 1);
+  expect(layout.activity?.x).toBeCloseTo(1247.9, 1);
   expect(layout.objectives?.y).toBeCloseTo(416, 0);
   expect(layout.review?.y).toBeCloseTo(590, 0);
   expect(layout.review?.height).toBe(280);
   expect(layout.footerDisplay).toBe('none');
-  expect(layout.brandMark?.x).toBe(10);
-  expect(layout.overviewLink?.x).toBe(10);
+  expect(layout.brandMark?.x).toBe(39);
+  expect(layout.overviewLink?.x).toBe(14);
   expect(layout.overviewLink?.y).toBeCloseTo(92, 0);
 });
 
@@ -132,16 +132,28 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
       footerDisplay: getComputedStyle(document.querySelector('.page-footer')!).display,
     };
   });
-  expect(layout.metrics?.x).toBe(226);
+  expect(layout.metrics?.x).toBe(263);
   expect(layout.metrics?.y).toBe(84);
   expect(layout.workflow?.y).toBe(189);
   expect(layout.workflow?.height).toBe(202);
-  expect(layout.activity?.x).toBeCloseTo(1131.8, 1);
+  expect(layout.activity?.x).toBeCloseTo(1142.9, 1);
   expect(layout.objectives?.y).toBe(403);
   expect(layout.review?.y).toBe(573);
   expect(layout.review?.height).toBe(220);
   expect(layout.timeline?.y).toBe(573);
   expect(layout.footerDisplay).toBe('none');
+});
+
+test('mobile Overview keeps to the supplied phone summary', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.locator('.metric-grid .metric-card:visible')).toHaveCount(4);
+  await expect(page.locator('.activity-panel')).toBeVisible();
+  for (const selector of [
+    '.workflow-panel', '.objective-panel', '.plan-panel', '.agents-panel', '.evidence-panel',
+    '.review-panel', '.timeline-panel', '.analytics-panel',
+  ]) await expect(page.locator(selector)).toBeHidden();
+  await expect(page.locator('.sidebar nav')).toHaveCSS('position', 'fixed');
 });
 
 test('Reviews matches the supplied desktop workspace frame', async ({ page }) => {
@@ -160,12 +172,12 @@ test('Reviews matches the supplied desktop workspace frame', async ({ page }) =>
       })(),
     };
   });
-  expect(layout.sidebar?.width).toBe(208);
-  expect(layout.metrics?.x).toBe(226);
+  expect(layout.sidebar?.width).toBe(250);
+  expect(layout.metrics?.x).toBe(263);
   expect(layout.metrics?.y).toBe(92);
   expect(layout.metricIconGap).toBeCloseTo(6, 0);
-  expect(layout.titleIcon?.x).toBe(226);
-  expect(layout.title?.x).toBe(254);
+  expect(layout.titleIcon?.x).toBe(263);
+  expect(layout.title?.x).toBe(291);
   expect(layout.tabs?.y).toBeCloseTo(205, 0);
   expect(layout.workspace?.y).toBeCloseTo(238, 0);
   expect(layout.workspace?.height).toBe(635);
@@ -296,8 +308,8 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
       table: bounds('.objective-table-panel'), detail: bounds('.objective-detail-panel'), capacity: bounds('.objective-capacity'),
     };
   });
-  expect(layout.sidebar?.width).toBe(208);
-  expect(layout.metrics?.x).toBe(226);
+  expect(layout.sidebar?.width).toBe(250);
+  expect(layout.metrics?.x).toBe(263);
   expect(layout.metrics?.y).toBeCloseTo(157.5, 0);
   expect(layout.content?.y).toBeCloseTo(263.5, 0);
   expect(layout.content?.height).toBe(603);

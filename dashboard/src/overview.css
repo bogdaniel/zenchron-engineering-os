@@ -175,6 +175,9 @@
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .metric-card.pr-queue-metric { display: none; }
   .overview-shell .workflow-panel { display: none; }
+  .overview-shell .objective-panel, .overview-shell .plan-panel, .overview-shell .agents-panel,
+  .overview-shell .evidence-panel, .overview-shell .review-panel, .overview-shell .timeline-panel,
+  .overview-shell .analytics-panel { display: none; }
   .metric-card { min-height: 100px; padding: 11px; }
   .content-grid { grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
   .workflow-panel, .activity-panel, .objective-panel, .plan-panel, .agents-panel,

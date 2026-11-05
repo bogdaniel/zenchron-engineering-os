@@ -74,12 +74,12 @@ row, four operational panels, and a three-panel delivery row. At the tall deskto
 live events arrive; compact activity rows keep project and worker updates from pushing the lower panels down. The
 operational panels show objective status, approval availability in the empty-state copy, run history, and trusted-branch/evidence availability.
 At mobile widths the navigation becomes a five-item bottom tab bar (Home, Workflows, Agents, Reviews, and Profile).
-The overview keeps the four cards shown in the phone mock (objectives, agents, CI, and budget) in two columns, and
-Recent Activity follows those cards without the desktop workflow canvas; the Workflows tab opens the full workflow view.
-The compact header keeps notifications and hides disabled search/workspace placeholders. Other content panels stack
-vertically. Profile opens the existing Settings route.
+The overview keeps the four cards shown in the phone mock (objectives, agents, CI, and budget) in two columns, followed
+by Recent Activity. Desktop-only operational panels stay off the mobile Overview; their full pages remain available from
+the tabs. The compact header keeps notifications and hides disabled search/workspace placeholders. Profile opens the
+existing Settings route.
 
-The React app shell owns the navigation markup, 208px desktop rail matching the supplied mockups, and top bar; desktop navigation uses 15px medium-weight labels that stay on one line, and mobile switches the rail to a bottom tab bar. Mantine's shared theme uses a dark color scheme and violet primary actions. Page routes share `PageHeading` for the eyebrow, title, and description; `MetricCard` is reused for summary metrics and automatically compacts `Unavailable` values; `PanelHeading` supplies recurring panel and selected-detail headings, including the workspace directory and workflow editor sections, with shared title typography, descriptions, icons, and actions. Shared CSS tokens set page titles to 22px/650 on desktop and 20px on mobile; panel titles use 14px/600 on desktop and 13px/600 on mobile. Metric cards use 12px labels, 26px values, and 11px detail text on desktop, adjusting to 11px/21px/10px on mobile. Page components retain their own content layouts.
+The React app shell owns the navigation markup, 250px desktop rail matching the supplied mockups, and top bar; desktop navigation uses 16px medium-weight labels that stay on one line, and mobile switches the rail to a bottom tab bar. Mantine's shared theme uses a dark color scheme and violet primary actions. Page routes share `PageHeading` for the eyebrow, title, and description; `MetricCard` is reused for summary metrics and automatically compacts `Unavailable` values; `PanelHeading` supplies recurring panel and selected-detail headings, including the workspace directory and workflow editor sections, with shared title typography, descriptions, icons, and actions. Shared CSS tokens set page titles to 22px/650 on desktop and 20px on mobile; panel titles use 14px/600 on desktop and 13px/600 on mobile. Metric cards use 12px labels, 26px values, and 11px detail text on desktop, adjusting to 11px/21px/10px on mobile. Page components retain their own content layouts.
 
 ## Verification
 

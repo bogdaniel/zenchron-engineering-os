@@ -85,8 +85,8 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   const metrics = await page.locator('.agents-metrics').boundingBox();
   const noteCount = await page.locator('.agents-runtime-note').count();
   expect(list && detail && runs && sidebar && metrics).toBeTruthy();
-  expect(sidebar!.width).toBe(208);
-  expect(metrics!.x).toBe(226);
+  expect(sidebar!.width).toBe(250);
+  expect(metrics!.x).toBe(263);
   expect(Math.abs(metrics!.y - 136.5)).toBeLessThanOrEqual(1);
   expect(Math.abs(metrics!.height - 65)).toBeLessThanOrEqual(1);
   expect(Math.abs(list!.y - 213.5)).toBeLessThanOrEqual(1);
