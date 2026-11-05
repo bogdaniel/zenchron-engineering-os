@@ -39,6 +39,10 @@ const createSchema = z.object({
 });
 export type Objective = z.infer<typeof objectiveSchema>;
 type NewObjective = z.infer<typeof createSchema>;
+function productName(item: Objective) {
+  return item.product || 'Unassigned';
+}
+
 const objectiveTheme = themeQuartz.withPart(colorSchemeDark).withParams({
   accentColor: '#a36bff',
   backgroundColor: '#11121b',
@@ -111,10 +115,6 @@ export function ObjectivesPage() {
   const objectives = useQuery({ queryKey: ['objectives'], queryFn: loadObjectives });
   const products = useQuery({ queryKey: ['products'], queryFn: loadProducts });
   const items = objectives.data ?? [];
-  const productByID = new Map(products.data?.map((product) => [product.id, product]) ?? []);
-  const productName = (item: Objective) => item.product_id
-    ? productByID.get(item.product_id)?.name ?? 'Unavailable product'
-    : item.product || 'Unassigned';
   const selected = items.find((item) => item.id === selectedID) ?? items[0];
   useEffect(() => {
     if (!selected) return;
@@ -189,7 +189,7 @@ export function ObjectivesPage() {
       valueGetter: ({ data }) => data ? productName(data) : 'Unassigned',
     },
     { field: 'due_date', headerName: 'Due date', flex: 1, minWidth: 85 },
-  ], [products.data]);
+  ], []);
   const legacyProducts = Array.from(new Set(items.filter((item) => !item.product_id).map((item) => item.product)
     .filter((product) => product && !products.data?.some((known) => known.name === product))));
   const productOptions = [

@@ -48,6 +48,6 @@ flowchart LR
 
 `go test ./cmd/zenchron -run 'TestObjective|TestPersistentMuxRestoresObjectivesAndWorkflows'` covers the objective API,
 product linking, and restart persistence. Focused dashboard E2E flows cover creating/updating objectives, product names
-while the catalog loads, fitting the planning view at the reference viewport, and assigning an objective to a Product
-Workspace record:
+while the catalog loads, and the six-record planning view with a selected objective at the reference viewport. They
+also cover assigning an objective to a Product Workspace record:
 `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Objectives dashboard|Objectives grid|objectives can be created'`.

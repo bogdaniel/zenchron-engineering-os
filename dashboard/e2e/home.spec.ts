@@ -169,17 +169,46 @@ test('objectives can be created and updated from the dashboard', async ({ page }
 });
 
 test('Objectives dashboard matches the planning mock at the reference viewport', async ({ page }) => {
+  const productID = 'f'.repeat(32);
+  const now = new Date();
+  const createdAt = now.toISOString();
+  const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+  const dueDate = (offset: number) => new Date(quarterStart.getFullYear(), quarterStart.getMonth(), offset + 8)
+    .toISOString().slice(0, 10);
   await page.route('**/api/v1/objectives', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: '[]',
+    status: 200, contentType: 'application/json', body: JSON.stringify([
+      ['Launch AI code review v2', 'Alex Chen', 'on_track', 78],
+      ['Improve review velocity', 'Priya Shah', 'on_track', 62],
+      ['Reduce CI cycle time', 'Marco Rossi', 'at_risk', 34],
+      ['Expand test coverage', 'Elena Rossi', 'on_track', 71],
+      ['Ship agent orchestration', 'Ravi Kumar', 'in_progress', 46],
+      ['Migrate to unified pipeline', 'Dana Lee', 'blocked', 19],
+    ].map(([title, owner, status, progress], index) => ({
+      id: String(index + 1).repeat(32), title, description: `${title} delivery plan`, owner,
+      product: 'Core Product', product_id: productID, status, progress, due_date: dueDate(index),
+      created_at: createdAt, updated_at: createdAt,
+    }))),
   }));
   await page.route('**/api/v1/products', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: '[]',
+    status: 200, contentType: 'application/json', body: JSON.stringify([{
+      id: productID, name: 'Core Product', description: '', repository_ids: [],
+      created_at: createdAt, updated_at: createdAt,
+    }]),
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#objectives');
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
-  await expect(page.locator('.objective-detail-empty').getByRole('button', { name: 'Create objective' }))
-    .toHaveCSS('border-color', 'rgb(128, 80, 204)');
+  await expect(page.locator('.ag-row')).toHaveCount(6);
+  await expect(page.locator('.ag-row').first()).toContainText('Launch AI code review v2');
+  await expect(page.locator('.ag-row').last()).toContainText('Migrate to unified pipeline');
+  const linkedProductCell = page.locator('.ag-row').first().locator('.ag-cell[col-id="product"]');
+  await expect(linkedProductCell).toHaveText('Core Product');
+  expect(await linkedProductCell.evaluate((cell) => cell.scrollWidth <= cell.clientWidth)).toBe(true);
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Launch AI code review v2');
+  await expect(page.locator('.detail-meta-grid')).toContainText('Alex Chen');
+  await expect(page.locator('.detail-meta-grid')).toContainText('Core Product');
+  await expect(page.locator('.detail-summary')).toContainText('78% complete');
+  await expect(page.locator('.capacity-bars > div')).toHaveCount(6);
   await expect(page.getByRole('region', { name: 'Objective metrics' }).locator('.objective-metric')).toHaveCount(6);
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
