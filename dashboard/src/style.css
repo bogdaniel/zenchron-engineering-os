@@ -211,7 +211,7 @@ button:disabled, input:disabled {
 .app-shell .main-content .reports-greeting .page-heading p {
   overflow: hidden;
   margin-top: 2px;
-  font-size: 10.5px;
+  font-size: var(--page-description-size);
   letter-spacing: -.1px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -222,6 +222,9 @@ button:disabled, input:disabled {
 }
 @media (min-width: 1201px) {
   .reports-greeting + .search-box { width: 300px; flex: 0 0 300px; }
+}
+@media (min-width: 1201px) and (max-width: 1600px) {
+  .reports-greeting + .search-box { width: 260px; flex-basis: 260px; }
 }
 .search-box input {
   color: #eee;
