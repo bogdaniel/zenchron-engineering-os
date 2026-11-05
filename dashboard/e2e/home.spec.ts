@@ -83,6 +83,8 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
       metrics: bounds('.metric-grid'), workflow: bounds('.workflow-panel'), activity: bounds('.activity-panel'),
       objectives: bounds('.objective-panel'), review: bounds('.review-panel'), footerDisplay:
         getComputedStyle(document.querySelector('.page-footer')!).display,
+      timelineChart: bounds('.timeline-empty'), analyticsChart: bounds('.chart-empty'),
+      reviewEmpty: bounds('.review-panel .wide-empty'),
       brandMark: bounds('.brand-mark'), overviewLink: bounds('.nav-link[href="#overview"]'),
       search: bounds('.search-box'),
     };
@@ -115,6 +117,9 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
   expect(layout.objectives?.y).toBeCloseTo(416, 0);
   expect(layout.review?.y).toBeCloseTo(590, 0);
   expect(layout.review?.height).toBe(280);
+  expect(layout.timelineChart?.height).toBeGreaterThanOrEqual(170);
+  expect(layout.analyticsChart?.height).toBeGreaterThanOrEqual(170);
+  expect(layout.reviewEmpty?.height).toBeGreaterThanOrEqual(170);
   expect(layout.footerDisplay).toBe('none');
   expect(layout.brandMark?.x).toBe(39);
   expect(layout.overviewLink?.x).toBe(14);
