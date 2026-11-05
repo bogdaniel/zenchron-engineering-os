@@ -115,6 +115,7 @@ function groupObjectivesByQuarter(items: Objective[]) {
 export function ObjectivesPage() {
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [progressValue, setProgressValue] = useState<number>(0);
   const [statusValue, setStatusValue] = useState<Objective['status']>('in_progress');
@@ -158,6 +159,7 @@ export function ObjectivesPage() {
     onSuccess: async (item) => {
       await queryClient.invalidateQueries({ queryKey: ['objectives'] });
       setSelectedID(item.id);
+      setEditing(false);
       setProgressValue(item.progress);
       setStatusValue(item.status);
       setProductIDValue(item.product_id);
@@ -231,6 +233,7 @@ export function ObjectivesPage() {
 
   function selectObjective(item: Objective) {
     setSelectedID(item.id);
+    setEditing(false);
     setProgressValue(item.progress);
     setStatusValue(item.status);
     setProductIDValue(item.product_id);
@@ -350,25 +353,42 @@ export function ObjectivesPage() {
               <PanelHeading className="objective-detail-head entity-detail-heading" title={selected.title}
                 description={<small>{selected.id.slice(0, 8).toUpperCase()}</small>}
                 icon={<span className="detail-objective-icon"><IconTarget size={19} /></span>}
-                actions={<button aria-label="Objective options" disabled>•••</button>} />
+                actions={<Button className="edit-objective-button" onClick={() => {
+                  if (editing) {
+                    setProgressValue(selected.progress);
+                    setStatusValue(selected.status);
+                    setProductIDValue(selected.product_id);
+                    updateMutation.reset();
+                  }
+                  setEditing(!editing);
+                }}>{editing ? 'Cancel edit' : 'Edit objective'}</Button>} />
               <div className="detail-summary">{statusBadge(statusValue)}<span>{progressValue}% complete</span><Progress value={progressValue} size="sm" /></div>
               <div className="detail-meta-grid"><div><small>Owner</small><b>{selected.owner || 'Unassigned'}</b></div><div><small>Product</small><b>{productName(selected)}</b></div><div><small>Due date</small><b>{selected.due_date || 'No date'}</b></div><div><small>Created</small><b>{new Date(selected.created_at).toLocaleDateString()}</b></div></div>
-              <div className="detail-description"><b>Description</b><p>{selected.description || 'Add a description to make the outcome clear to your team.'}</p></div>
-              <div className="detail-edit-grid">
-                <Select label="Status" value={statusValue} data={statusOptions}
-                  onChange={(value) => { if (value) setStatusValue(value as Objective['status']); }} />
-                <NumberInput label="Progress" min={0} max={100} decimalScale={0} suffix="%"
-                  value={progressValue} onChange={(value) => setProgressValue(Number(value) || 0)} />
-                <Select label="Product" data={products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []}
-                  value={productIDValue || null} onChange={(value) => setProductIDValue(value ?? '')} clearable />
-              </div>
-              <Button className="save-objective-button" loading={updateMutation.isPending} onClick={() => updateMutation.mutate({
-                id: selected.id,
-                status: statusValue,
-                progress: progressValue,
-                ...(productIDValue !== selected.product_id ? { product_id: productIDValue } : {}),
-              })}>Save updates</Button>
-              {updateMutation.isError && <Text className="form-error">{updateMutation.error.message}</Text>}
+              {!editing ? <>
+                <div className="objective-overview-grid">
+                  <section className="objective-overview-card"><b>Description</b><p>{selected.description || 'No description provided.'}</p></section>
+                  <section className="objective-overview-card"><b>Blockers</b><p>Not included in the available objective data.</p></section>
+                  <section className="objective-overview-card"><b>Acceptance criteria</b><p>Not included in the available objective data.</p></section>
+                  <section className="objective-overview-card"><b>Related pull requests</b><p>Not included in the available objective data.</p></section>
+                  <section className="objective-overview-card objective-overview-wide"><b>Plan and activity</b><p>Milestones and activity are not included in the available objective data.</p></section>
+                </div>
+              </> : <>
+                <div className="detail-edit-grid">
+                  <Select label="Status" value={statusValue} data={statusOptions}
+                    onChange={(value) => { if (value) setStatusValue(value as Objective['status']); }} />
+                  <NumberInput label="Progress" min={0} max={100} decimalScale={0} suffix="%"
+                    value={progressValue} onChange={(value) => setProgressValue(Number(value) || 0)} />
+                  <Select label="Product" data={products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []}
+                    value={productIDValue || null} onChange={(value) => setProductIDValue(value ?? '')} clearable />
+                </div>
+                <Button className="save-objective-button" loading={updateMutation.isPending} onClick={() => updateMutation.mutate({
+                  id: selected.id,
+                  status: statusValue,
+                  progress: progressValue,
+                  ...(productIDValue !== selected.product_id ? { product_id: productIDValue } : {}),
+                }, { onSuccess: () => setEditing(false) })}>Save updates</Button>
+                {updateMutation.isError && <Text className="form-error">{updateMutation.error.message}</Text>}
+              </>}
             </>
           ) : (
             <div className="objective-detail-empty"><span className="detail-objective-icon"><IconTarget size={19} /></span><h3>Objective details</h3><p>Select an objective to see its plan and progress, or create the first objective for this workspace.</p><Button className="new-objective-button" onClick={() => setCreateOpen(true)}>Create objective</Button></div>

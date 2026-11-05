@@ -212,6 +212,13 @@ test('objectives can be created and updated from the dashboard', async ({ page }
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   await expect(page.locator('.objective-detail-head h3')).toHaveCSS('font-size', '18px');
   await expect(page.locator('.objective-detail-head h3')).toHaveCSS('font-weight', '650');
+  await expect(page.locator('.objective-overview-grid')).toContainText('Acceptance criteria');
+  await expect(page.getByLabel('Progress')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edit objective' }).click();
+  await page.getByLabel('Progress').fill('30');
+  await page.getByRole('button', { name: 'Cancel edit' }).click();
+  await expect(page.getByText('0% complete')).toBeVisible();
+  await page.getByRole('button', { name: 'Edit objective' }).click();
   await page.getByLabel('Progress').fill('45');
   await page.getByRole('button', { name: 'Save updates' }).click();
   await expect(page.getByText('45% complete')).toBeVisible();
@@ -257,6 +264,8 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   await expect(page.locator('.detail-meta-grid')).toContainText('Alex Chen');
   await expect(page.locator('.detail-meta-grid')).toContainText('Core Product');
   await expect(page.locator('.detail-summary')).toContainText('78% complete');
+  await expect(page.locator('.objective-overview-grid')).toContainText('Related pull requests');
+  await expect(page.getByLabel('Progress')).toHaveCount(0);
   await expect(page.locator('.capacity-bars > div')).toHaveCount(6);
   await expect(page.getByRole('region', { name: 'Objective metrics' }).locator('.objective-metric')).toHaveCount(6);
   const objectiveMetric = page.locator('.objective-metric').first();
