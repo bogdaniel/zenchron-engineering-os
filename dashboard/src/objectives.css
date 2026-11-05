@@ -34,6 +34,7 @@
 .objectives-tabs span { flex: 1; }
 .objectives-tabs .view-active { border: 1px solid #594079; color: #e8d7ff; background: #2d2140; }
 .objectives-tabs button[aria-pressed="true"] { border: 1px solid #594079; color: #e8d7ff; background: #2d2140; }
+.objectives-tabs button[aria-selected="true"] { border: 1px solid #594079; color: #e8d7ff; background: #2d2140; }
 .objective-card-grid, .objective-kanban { display: grid; height: 100%; gap: 8px; overflow: auto; padding: 8px; align-content: start; }
 .objective-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .objective-planning-view { display: grid; height: 100%; gap: 8px; overflow: auto; padding: 8px; align-content: start; }

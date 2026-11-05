@@ -63,13 +63,17 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await expect(page.locator('.objective-kanban-column[aria-label="On Track"] .objective-item-card')).toHaveCount(1);
 
   await page.getByRole('textbox', { name: 'Search objectives' }).fill('');
-  await page.getByRole('button', { name: 'Planning' }).click();
+  await page.getByRole('combobox', { name: 'Filter by due quarter' }).click();
+  await page.getByRole('option', { name: 'All due dates' }).click();
+  await page.getByRole('tab', { name: 'Planning' }).click();
   await expect(page.locator('.objective-planning-view .objective-item-card-title')).toHaveText([
     /Complete migration/, /Ship API v2/, /Reduce CI time/, /Document ownership/,
   ]);
-  await expect(page.getByRole('button', { name: 'Planning' })).toHaveAttribute('aria-selected', 'true');
+  const planningTab = page.getByRole('tab', { name: 'Planning' });
+  await expect(planningTab).toHaveAttribute('aria-selected', 'true');
+  await expect(planningTab).toHaveCSS('background-color', 'rgb(45, 33, 64)');
 
-  await page.getByRole('button', { name: 'Roadmap' }).click();
+  await page.getByRole('tab', { name: 'Roadmap' }).click();
   await expect(page.getByRole('region', { name: '2026 Q3' })).toContainText('Complete migration');
   await expect(page.getByRole('region', { name: '2026 Q4' })).toContainText('Ship API v2');
   await expect(page.getByRole('region', { name: 'Unscheduled' })).toContainText('Document ownership');
