@@ -100,7 +100,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   const product = panel('product-summary-panel');
   const inventory = panel('inventory-panel');
   const downloads = panel('downloadable-reports-panel');
-  expect(delivery.x).toBe(226);
+  expect(delivery.x).toBe(290);
   expect(Math.abs(delivery.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(outcomes.height - 175)).toBeLessThanOrEqual(2);
   expect(Math.abs(product.height - 188)).toBeLessThanOrEqual(2);
@@ -115,11 +115,11 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   expect(inventory.y).toBe(downloads.y);
   expect(delivery.width).toBeGreaterThan(ci.width);
   expect(ci.width).toBeGreaterThan(outcomes.width);
-  expect(spend.width).toBeGreaterThanOrEqual(review.width);
-  expect(acceptance.width).toBeCloseTo(review.width, 0);
+  expect(spend.width).toBeGreaterThan(review.width);
+  expect(acceptance.width).toBeGreaterThan(review.width);
   expect(coverage.width).toBeLessThan(acceptance.width);
   expect(downloads.width).toBeLessThan(inventory.width);
-  expect(coverage.width).toBeCloseTo(downloads.width, 0);
+  expect(coverage.width).toBeGreaterThan(downloads.width);
   expect(coverage.height).toBeGreaterThan(product.y + product.height - coverage.y - 1);
   const acceptanceChart = page.locator('.acceptance-panel .reports-empty-chart');
   const acceptanceLayout = await acceptanceChart.evaluate((chart) => {

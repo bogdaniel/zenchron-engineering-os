@@ -5,7 +5,7 @@
   background: #0a0b13;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --sidebar-width: 208px;
+  --sidebar-width: 272px;
   --page-title-size: 22px;
   --page-title-size-mobile: 20px;
   --page-title-weight: 650;
@@ -223,7 +223,7 @@ button:disabled, input:disabled {
   .reports-greeting + .search-box { width: 300px; flex: 0 0 300px; }
 }
 @media (min-width: 1201px) and (max-width: 1600px) {
-  .reports-greeting + .search-box { width: 260px; flex-basis: 260px; }
+  .reports-greeting + .search-box { width: 180px; flex-basis: 180px; }
 }
 .search-box input {
   color: #eee;
