@@ -84,6 +84,7 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
       objectives: bounds('.objective-panel'), review: bounds('.review-panel'), footerDisplay:
         getComputedStyle(document.querySelector('.page-footer')!).display,
       brandMark: bounds('.brand-mark'), overviewLink: bounds('.nav-link[href="#overview"]'),
+      search: bounds('.search-box'),
     };
   });
   expect(layout.metrics?.x).toBe(263);
@@ -118,6 +119,9 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
   expect(layout.brandMark?.x).toBe(39);
   expect(layout.overviewLink?.x).toBe(14);
   expect(layout.overviewLink?.y).toBeCloseTo(92, 0);
+  expect(layout.search?.width).toBe(400);
+  await expect(page.locator('.greeting h1')).toHaveText(/Good morning, .+ 👋/);
+  await expect(page.locator('.greeting-desktop-copy')).toBeVisible();
 });
 
 test('Overview matches the supplied desktop display crop', async ({ page }) => {
@@ -149,11 +153,21 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
   await page.goto('/');
   await expect(page.locator('.metric-grid .metric-card:visible')).toHaveCount(4);
   await expect(page.locator('.activity-panel')).toBeVisible();
+  await expect(page.locator('.greeting-mobile-copy')).toHaveText('Your engineering mission at a glance.');
+  await expect(page.locator('.greeting-desktop-copy')).toBeHidden();
+  await expect(page.getByRole('navigation', { name: 'Overview shortcuts' }).getByRole('link'))
+    .toHaveText(['Overview', 'My Work', 'Alerts']);
   for (const selector of [
     '.workflow-panel', '.objective-panel', '.plan-panel', '.agents-panel', '.evidence-panel',
     '.review-panel', '.timeline-panel', '.analytics-panel',
   ]) await expect(page.locator(selector)).toBeHidden();
   await expect(page.locator('.sidebar nav')).toHaveCSS('position', 'fixed');
+  await page.getByRole('navigation', { name: 'Overview shortcuts' }).getByRole('link', { name: 'My Work' }).click();
+  await expect(page).toHaveURL(/#objectives$/);
+  await page.getByRole('link', { name: 'Overview' }).first().click();
+  await page.getByRole('navigation', { name: 'Overview shortcuts' }).getByRole('link', { name: 'Alerts' }).click();
+  await expect(page).toHaveURL(/#activity$/);
+  await expect(page.locator('.activity-panel')).toBeVisible();
 });
 
 test('Reviews matches the supplied desktop workspace frame', async ({ page }) => {

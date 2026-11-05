@@ -195,8 +195,11 @@ function App() {
                   title="Reports" titleAdornment={<span>Engineering Operations Analytics</span>}
                   description="Executive analytics for delivery, quality, productivity, and agent operations across products and workspaces." />
               </div> : <PageHeading className="greeting" titleLevel={1}
-                title={<>Good morning <span aria-hidden="true">👋</span></>}
-                description="Your engineering control center for objectives, agents, code, and delivery." />}
+                title={<>Good morning{auth.data?.login ? `, ${auth.data.login}` : ''} <span aria-hidden="true">👋</span></>}
+                description={activePage === 'overview' ? <>
+                  <span className="greeting-desktop-copy">Your AI-native engineering operating system for objectives, agents, code, and delivery.</span>
+                  <span className="greeting-mobile-copy">Your engineering mission at a glance.</span>
+                </> : 'Your engineering control center for objectives, agents, code, and delivery.'} />}
             <TextInput
               className="search-box"
               leftSection={<IconSearch size={17} />}
@@ -220,6 +223,12 @@ function App() {
               </div>
             </div>
           </header>
+
+          {activePage === 'overview' && <nav className="overview-mobile-tabs" aria-label="Overview shortcuts">
+            <a href="#overview" aria-current="page" onClick={(event) => navigatePage(event, '#overview')}>Overview</a>
+            <a href="#objectives" onClick={(event) => navigatePage(event, '#objectives')}>My Work</a>
+            <a href="#activity">Alerts</a>
+          </nav>}
 
           {sessionUnavailable ? <section className="session-preview-region" aria-labelledby="session-preview-title"><PanelCard className="session-preview-card" withBorder>
             <IconActivity size={24} aria-hidden="true" />

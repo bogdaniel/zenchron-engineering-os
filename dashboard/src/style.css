@@ -217,9 +217,10 @@ button:disabled, input:disabled {
   white-space: nowrap;
 }
 .search-box {
-  width: min(360px,30vw);
+  width: min(400px,30vw);
   margin: 0 auto;
 }
+.greeting-mobile-copy { display: none; }
 @media (min-width: 1201px) {
   .reports-greeting + .search-box { width: 300px; flex: 0 0 300px; }
 }
@@ -455,6 +456,8 @@ button:disabled, input:disabled {
     font-size:var(--page-title-size-mobile);
   }
   .greeting p { max-width:185px; font-size:8px; line-height:1.35; }
+  .greeting-desktop-copy { display: none; }
+  .greeting-mobile-copy { display: inline; }
   .search-box {
     display:none;
   }
