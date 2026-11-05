@@ -113,16 +113,19 @@
 .reports-insight-filter .mantine-Select-input { min-height: 24px; height: 24px; border-color: #38324c; background: #1b1928; font-size: var(--metric-detail-size); }
 .product-summary-table-wrap { overflow-x: auto; }
 .product-summary-table {
-  min-width: 430px;
+  width: 100%;
+  table-layout: fixed;
   color: #c8c3d2;
-  font-size: var(--metric-label-size);
+  font-size: var(--metric-detail-size);
 }
+.product-summary-table th:first-child, .product-summary-table td:first-child { width: 36%; text-align: left; }
+.product-summary-table th:not(:first-child), .product-summary-table td:not(:first-child) { text-align: right; }
 .product-summary-table th {
   color: #8f899f;
-  font-size: var(--metric-detail-size);
   font-weight: 600;
+  line-height: 1.2;
 }
-.product-summary-table td, .product-summary-table th { padding: 7px 8px; }
+.product-summary-table td, .product-summary-table th { padding: 5px 3px; overflow-wrap: anywhere; }
 .downloadable-report-list { display: grid; gap: 1px; }
 .downloadable-report {
   display: grid;

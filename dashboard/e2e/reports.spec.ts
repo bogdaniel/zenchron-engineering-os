@@ -332,6 +332,7 @@ test('report scope filters live snapshots by product and resets them', async ({ 
     };
   });
 
+  await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
   await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
   await expect(page.getByLabel('Workflow filter unavailable because runs are not linked to workflows')).toBeDisabled();
@@ -361,6 +362,9 @@ test('report scope filters live snapshots by product and resets them', async ({ 
     .toContainText('No Git remotes are configured for these checkouts.');
   const productRow = page.locator('.product-summary-table tbody tr').filter({ hasText: 'Nova Platform' });
   await expect(productRow.locator('td')).toHaveText(['Nova Platform', '1', '1', '1']);
+  expect(await page.locator('.product-summary-table-wrap').evaluate((table) =>
+    table.scrollWidth <= table.clientWidth,
+  ), 'product summary table fits its desktop card').toBe(true);
   const downloadCsv = async (name: string) => {
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: `Download ${name} CSV` }).click();
