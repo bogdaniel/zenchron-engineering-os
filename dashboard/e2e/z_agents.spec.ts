@@ -48,6 +48,12 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   ]);
   expect(metricIcon && metricLabel).toBeTruthy();
   expect(metricIcon!.x + metricIcon!.width).toBeLessThan(metricLabel!.x);
+  for (const metric of await page.locator('.agents-metric').all()) {
+    const icon = await metric.locator('.metric-top > svg').boundingBox();
+    const value = await metric.locator('strong').boundingBox();
+    expect(icon && value).toBeTruthy();
+    expect(icon!.y + icon!.height).toBeLessThanOrEqual(value!.y);
+  }
   const profileRow = page.locator('.agent-row').filter({ hasText: 'Code Reviewer' });
   await expect(profileRow).toContainText('Last run 5m ago');
   await expect(profileRow).toContainText('1 completed · 100% success');
