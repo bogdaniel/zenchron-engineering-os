@@ -42,6 +42,11 @@ type NewObjective = z.infer<typeof createSchema>;
 function productName(item: Objective) {
   return item.product || 'Unassigned';
 }
+const objectiveDateFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+function formatObjectiveDate(value: string) {
+  const date = new Date(value.length === 10 ? `${value}T00:00:00` : value);
+  return Number.isNaN(date.getTime()) ? value : objectiveDateFormat.format(date);
+}
 
 const objectiveTheme = themeQuartz.withPart(colorSchemeDark).withParams({
   accentColor: '#a36bff',
@@ -83,7 +88,7 @@ function ObjectiveItemCard({ item, selected, productName, onSelect }: {
     <span className="objective-item-card-title">{item.title}{statusBadge(item.status)}</span>
     <span className="objective-item-card-meta"><span>{item.owner || 'Unassigned'}</span><span>{productName}</span></span>
     <span className="objective-item-card-progress"><Progress value={item.progress} size="xs" /><b>{item.progress}%</b></span>
-    {item.due_date && <small>Due {item.due_date}</small>}
+    {item.due_date && <small>Due {formatObjectiveDate(item.due_date)}</small>}
   </button>;
 }
 
@@ -207,7 +212,7 @@ export function ObjectivesPage() {
       field: 'product', headerName: 'Product', flex: 1, minWidth: 108,
       valueGetter: ({ data }) => data ? productName(data) : 'Unassigned',
     },
-    { field: 'due_date', headerName: 'Due date', flex: 1, minWidth: 85 },
+    { field: 'due_date', headerName: 'Due date', flex: 1, minWidth: 85, valueFormatter: ({ value }) => value ? formatObjectiveDate(value) : '' },
   ], []);
   const legacyProducts = Array.from(new Set(items.filter((item) => !item.product_id).map((item) => item.product)
     .filter((product) => product && !products.data?.some((known) => known.name === product))));
@@ -370,7 +375,7 @@ export function ObjectivesPage() {
                   else { setDetailTab('overview'); setEditing(true); }
                 }}>{editing ? 'Cancel edit' : 'Edit objective'}</Button>} />
               <div className="detail-summary">{statusBadge(statusValue)}<span>{progressValue}% complete</span><Progress value={progressValue} size="sm" /></div>
-              <div className="detail-meta-grid"><div><small>Owner</small><b>{selected.owner || 'Unassigned'}</b></div><div><small>Product</small><b>{productName(selected)}</b></div><div><small>Due date</small><b>{selected.due_date || 'No date'}</b></div><div><small>Created</small><b>{new Date(selected.created_at).toLocaleDateString()}</b></div></div>
+              <div className="detail-meta-grid"><div><small>Owner</small><b>{selected.owner || 'Unassigned'}</b></div><div><small>Product</small><b>{productName(selected)}</b></div><div><small>Due date</small><b>{selected.due_date ? formatObjectiveDate(selected.due_date) : 'No date'}</b></div><div><small>Created</small><b>{formatObjectiveDate(selected.created_at)}</b></div></div>
               <div className="objective-detail-tabs" role="tablist" aria-label="Objective details">
                 {([
                   ['overview', 'Overview'], ['milestones', 'Milestones'],
@@ -385,7 +390,7 @@ export function ObjectivesPage() {
                   <section className="objective-overview-card"><b>Blockers</b><p>Not included in the available objective data.</p></section>
                   <section className="objective-overview-card"><b>Acceptance criteria</b><p>Not included in the available objective data.</p></section>
                   <section className="objective-overview-card"><b>Related pull requests</b><p>Not included in the available objective data.</p></section>
-                  <section className="objective-overview-card"><b>Plan summary</b><p>{selected.due_date ? `Target date: ${selected.due_date}` : 'No target date provided.'}</p></section>
+                  <section className="objective-overview-card"><b>Plan summary</b><p>{selected.due_date ? `Target date: ${formatObjectiveDate(selected.due_date)}` : 'No target date provided.'}</p></section>
                   <section className="objective-overview-card"><b>Activity feed</b><p>Not included in the available objective data.</p></section>
                   <section className="objective-overview-card objective-overview-wide objective-progress-card"><b>Objective progress</b><Progress value={selected.progress} /><span>{selected.progress}%</span></section>
                 </div>

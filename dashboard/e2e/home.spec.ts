@@ -257,12 +257,14 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   await expect(page.locator('.ag-row')).toHaveCount(6);
   await expect(page.locator('.ag-row').first()).toContainText('Launch AI code review v2');
   await expect(page.locator('.ag-row').last()).toContainText('Migrate to unified pipeline');
+  await expect(page.locator('.ag-row').first().locator('.ag-cell[col-id="due_date"]')).toHaveText(/^[A-Z][a-z]{2} \d{1,2}, 2026$/);
   const linkedProductCell = page.locator('.ag-row').first().locator('.ag-cell[col-id="product"]');
   await expect(linkedProductCell).toHaveText('Core Product');
   expect(await linkedProductCell.evaluate((cell) => cell.scrollWidth <= cell.clientWidth)).toBe(true);
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Launch AI code review v2');
   await expect(page.locator('.detail-meta-grid')).toContainText('Alex Chen');
   await expect(page.locator('.detail-meta-grid')).toContainText('Core Product');
+  expect(await page.locator('.detail-meta-grid').evaluate((grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').length)).toBe(4);
   await expect(page.locator('.detail-summary')).toContainText('78% complete');
   await expect(page.locator('.objective-overview-grid')).toContainText('Related pull requests');
   await expect(page.getByLabel('Progress')).toHaveCount(0);
@@ -273,6 +275,11 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.locator('.capacity-bars > div')).toHaveCount(6);
   await expect(page.getByRole('region', { name: 'Objective metrics' }).locator('.objective-metric')).toHaveCount(6);
+  const capacityBounds = await Promise.all([
+    page.locator('.capacity-bars > div').last().boundingBox(),
+    page.locator('.objective-capacity').boundingBox(),
+  ]);
+  expect(capacityBounds[0]!.y + capacityBounds[0]!.height).toBeLessThanOrEqual(capacityBounds[1]!.y + capacityBounds[1]!.height - 6);
   const objectiveMetric = page.locator('.objective-metric').first();
   const [metricIcon, metricLabel] = await Promise.all([
     objectiveMetric.locator('.metric-top > svg').boundingBox(),
