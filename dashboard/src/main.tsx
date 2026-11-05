@@ -6,6 +6,7 @@ import { z } from 'zod';
 import {
   IconActivity,
   IconBell,
+  IconBrandGithub,
   IconChartBar,
   IconChevronDown,
   IconCircleCheck,
@@ -17,6 +18,7 @@ import {
   IconHistory,
   IconLayoutDashboard,
   IconLayersIntersect,
+  IconLogout,
   IconPlugConnected,
   IconRobot,
   IconRoute,
@@ -66,6 +68,7 @@ function pageFromHash() {
 
 const queryClient = new QueryClient();
 const healthResponse = z.object({ status: z.literal('ok') });
+const authResponse = z.object({ authenticated: z.boolean(), local: z.boolean(), login: z.string(), avatar_url: z.string().optional() });
 const workersResponse = z.array(
   z.object({
     id: z.string(),
@@ -86,6 +89,15 @@ function App() {
       window.removeEventListener('hashchange', syncPage);
     };
   }, []);
+  const auth = useQuery({
+    queryKey: ['auth-session'],
+    queryFn: async () => {
+      const response = await fetch('/api/v1/auth/session');
+      if (!response.ok) throw Object.assign(new Error(`Session check failed: ${response.status}`), { status: response.status });
+      return authResponse.parse(await response.json());
+    },
+    retry: false,
+  });
   const navigatePage = (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (!pageIDs.includes(href.slice(1))) return;
     event.preventDefault();
@@ -109,6 +121,7 @@ function App() {
       return workersResponse.parse(await response.json());
     },
     refetchInterval: 5_000,
+    enabled: auth.data?.authenticated === true,
   });
   const onlineWorkers = workers.data?.filter((worker) => worker.status === 'online') ?? [];
   const projects = useQuery({
@@ -119,8 +132,9 @@ function App() {
       return projectsSchema.parse(await response.json());
     },
     refetchInterval: 5_000,
+    enabled: auth.data?.authenticated === true,
   });
-  const agentRuns = useQuery({ queryKey: ['agent-runs'], queryFn: loadAgentRuns, refetchInterval: 3_000 });
+  const agentRuns = useQuery({ queryKey: ['agent-runs'], queryFn: loadAgentRuns, refetchInterval: 3_000, enabled: auth.data?.authenticated === true });
   const reviewableRuns = agentRuns.data?.filter((run) => run.diff_available) ?? [];
   const objectives = useQuery({
     queryKey: ['objectives'],
@@ -129,8 +143,22 @@ function App() {
       if (!response.ok) throw new Error(`Objective list failed: ${response.status}`);
       return objectivesSchema.parse(await response.json());
     },
+    enabled: auth.data?.authenticated === true,
   });
   const openObjectives = objectives.data?.filter((objective) => objective.status !== 'completed') ?? [];
+  if (auth.isLoading) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
+  if (auth.isError) {
+    const unauthorized = (auth.error as Error & { status?: number }).status === 401;
+    return <div className="auth-screen">
+      <div className="auth-card">
+        <span className="brand-mark" aria-hidden="true" />
+        <div><h1>Zenchron Engineering</h1><p>{unauthorized ? 'Sign in to access your engineering control plane.' : 'Zenchron could not verify your session.'}</p></div>
+        {unauthorized
+          ? <a className="github-login-button" href="/auth/github"><IconBrandGithub size={19} /> Continue with GitHub</a>
+          : <button className="github-login-button" onClick={() => void auth.refetch()}>Retry session check</button>}
+      </div>
+    </div>;
+  }
   return (
     <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
       <div className={`app-shell ${activePage}-shell`} id="overview">
@@ -175,12 +203,16 @@ function App() {
             />
             <div className="top-actions">
               <button className="icon-button" aria-label="Notifications" disabled><IconBell size={19} /></button>
+              {!auth.data?.local && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
+                await fetch('/api/v1/auth/logout', { method: 'POST' });
+                await auth.refetch();
+              }}><IconLogout size={17} /></button>}
               <button className="workspace-button" disabled>
                 <span className="workspace-glyph">Z</span> Workspace <IconChevronDown size={15} />
               </button>
               <div className="user-chip">
-                <span className="avatar">Z</span>
-                <span>Local workspace<small>Administrator</small></span>
+                {auth.data?.avatar_url ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" /> : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login.slice(0, 1).toUpperCase()}</span>}
+                <span>{auth.data?.local ? 'Local workspace' : auth.data?.login}<small>{auth.data?.local ? 'Administrator' : 'GitHub account'}</small></span>
               </div>
             </div>
           </header>

@@ -14,6 +14,8 @@ and execution contracts may change after the product and agent model are agreed.
   development.
 - Use OpenAI-compatible Chat Completions for the first model-call integration. This selects a request protocol only; it
   does not settle the agent, tool, or workflow model.
+- Use GitHub OAuth for dashboard user sign-in. User OAuth identity stays separate from GitHub App credentials used by
+  the control plane for repository operations.
 
 ## Bootstrap milestone accepted
 
@@ -30,7 +32,8 @@ useful while later architecture decisions remain open.
 - Work tracking: whether objectives, workflows, tasks, sessions, runs, and attempts are needed and how they relate.
 - Project identity and ownership: organization, workspace, product, project, repository, and checkout boundaries.
 - Review lineage: how a local change, branch, pull request, review thread, and follow-up work are connected.
-- Identity, authorization, secrets, persistence, and audit requirements for a hosted control plane.
+- Organization/team authorization, per-worker enrollment, durable sessions, secret rotation, and audit requirements for
+  a hosted control plane. The first remote-worker prototype uses a username allowlist and shared worker bearer secret.
 
 ## Contracts in the prototype today
 

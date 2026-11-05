@@ -51,6 +51,54 @@ func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
 	}
 }
 
+func TestWorkerHTTPClientAddsBearerCredential(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer worker-secret-for-auth-tests-1234567890" {
+			t.Errorf("Authorization = %q", r.Header.Get("Authorization"))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	request, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := newWorkerHTTPClient("worker-secret-for-auth-tests-1234567890").Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("response status = %d", response.StatusCode)
+	}
+}
+
+func TestWorkerHTTPClientDoesNotForwardCredentialOnRedirect(t *testing.T) {
+	targetAuthorization := make(chan string, 1)
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetAuthorization <- r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+	redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusFound)
+	}))
+	defer redirect.Close()
+	response, err := newWorkerHTTPClient("worker-secret-for-auth-tests-1234567890").Get(redirect.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusFound {
+		t.Fatalf("redirect status = %d", response.StatusCode)
+	}
+	select {
+	case authorization := <-targetAuthorization:
+		t.Fatalf("redirect target received Authorization %q", authorization)
+	default:
+	}
+}
+
 func TestDiscoverProjectsFindsGitCheckoutsWithoutExposingPaths(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{"alpha", "beta", "plain"} {
