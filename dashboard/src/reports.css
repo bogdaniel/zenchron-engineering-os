@@ -148,26 +148,27 @@
   display: grid;
   min-width: 0;
   min-height: 34px;
-  grid-template-columns: 36px minmax(0, 1fr) 24px;
+  grid-template-columns: 30px minmax(0, 1fr) 24px;
   align-items: center;
-  gap: 6px;
-  padding: 0 5px;
+  gap: 8px;
+  padding: 1px 6px;
   border: 1px solid #302a40;
   border-radius: 6px;
   background: linear-gradient(105deg, #191724, #15141f);
 }
 .downloadable-reports-panel { padding-block: 6px; }
-.downloadable-report-format.mantine-Badge-root {
-  justify-content: center;
-  min-width: 30px;
-  height: 19px;
-  padding-inline: 4px;
+.downloadable-report-format {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid #275269;
+  border-radius: 5px;
   color: #82c9f4;
-  background: #1b3040;
-  font-size: 9px;
-  font-weight: 700;
+  background: linear-gradient(145deg, #1a3847, #142633);
 }
-.downloadable-report-format.unavailable.mantine-Badge-root { color: #a19bab; background: #292733; }
+.downloadable-report-format.unavailable { border-color: #403b4b; color: #8f899f; background: #24222d; }
+.downloadable-report-format svg { display: block; }
 .downloadable-report-copy { display: grid; min-width: 0; gap: 1px; }
 .downloadable-report-copy b {
   color: #e4deed;

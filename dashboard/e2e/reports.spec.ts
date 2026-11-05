@@ -49,7 +49,12 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   );
   expect(await page.locator('.reports-metric .metric-top svg').first().evaluate((icon) => getComputedStyle(icon).order)).toBe('-1');
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
-  await expect(page.locator('.downloadable-report-format')).toHaveText(['CSV', 'CSV', 'CSV', 'CSV']);
+  const downloadableFormats = await page.locator('.downloadable-report-format').evaluateAll((formats) =>
+    formats.map((format) => format.getAttribute('aria-label')),
+  );
+  expect(downloadableFormats).toEqual(['CSV file', 'CSV file', 'CSV file', 'CSV file']);
+  await expect(page.locator('.downloadable-report-format').first()).toHaveCSS('width', '30px');
+  await expect(page.locator('.downloadable-report-format').first()).toHaveCSS('height', '30px');
   await expect(page.locator('.downloadable-reports-panel .shared-panel-heading p')).toHaveCount(0);
   await expect(page.locator('.downloadable-report-list')).toHaveCSS('row-gap', '4px');
   await expect(page.locator('.downloadable-report').first()).toHaveCSS('min-height', '34px');
