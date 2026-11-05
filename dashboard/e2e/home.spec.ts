@@ -12,7 +12,7 @@ test('dashboard displays the connected control plane and local worker', async ({
   );
   expect(overviewIconsLeadLabels, 'Overview KPI icons sit before their labels').toBe(true);
   await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Workflow orchestration' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workflow Orchestration' })).toBeVisible();
   await expect(page.locator('.plan-panel .panel-actions')).toHaveCount(0);
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
   await expect(page.locator('.workflow-overview-canvas .react-flow__edge')).toHaveCount(6);
@@ -24,7 +24,7 @@ test('dashboard displays the connected control plane and local worker', async ({
   await expect(workflowSummary).toContainText('Gated release');
   await expect(page.locator('.workflow-overview-status')).toContainText('Execution unavailable');
   await expect(page.locator('.activity-list')).toContainText('Control plane is responding');
-  await expect(page.getByText('Running agents', { exact: true })).toBeVisible();
+  await expect(page.getByText('Running Agents', { exact: true })).toBeVisible();
   await expect(page.getByText(/Worker “.+” is online/)).toBeVisible();
   await expect(page.locator('.activity-list')).toContainText('zenchron-engineering-os');
   await expect(page.locator('.metric-unavailable')).toHaveCount(3);
@@ -120,6 +120,8 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
   expect(layout.overviewLink?.x).toBe(14);
   expect(layout.overviewLink?.y).toBeCloseTo(92, 0);
   expect(layout.search?.width).toBe(400);
+  const topActions = await page.locator('.top-actions').boundingBox();
+  expect(topActions?.x).toBeGreaterThanOrEqual(layout.search!.x! + layout.search!.width!);
   await expect(page.locator('.greeting h1')).toHaveText(/Good morning, .+ 👋/);
   await expect(page.locator('.greeting-desktop-copy')).toBeVisible();
 });

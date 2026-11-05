@@ -42,7 +42,7 @@ type WorkflowNode = Node<WorkflowData & { kind: ComponentType }>;
 type Workflow = z.infer<typeof workflowSchema>;
 const workflowNodeWidth = 190;
 const workflowNodeHeight = 110;
-const overviewNodeLayout = { width: 164, height: 50, spacing: 8 };
+const overviewNodeLayout = { width: 190, height: 54, spacing: 8 };
 const mobileOverviewStages: {
   id: string; label: string; description: string; kind: ComponentType; types: ComponentType[];
   position: { x: number; y: number };
@@ -250,7 +250,7 @@ export function WorkflowOverview({ mobile = false, workflowID }: { mobile?: bool
 
   return <PanelCard className="panel workflow-panel" id="workflow" withBorder>
     <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconRoute size={18} /></span>}
-      title="Workflow orchestration" description={workflow?.name ?? 'Saved workflow definition'}
+      title="Workflow Orchestration" description={workflow?.name ?? 'Saved workflow definition'}
       actions={<div className="panel-actions">
         <Badge className="muted-tag" variant="light">{workflow?.status ?? 'Unavailable'}</Badge>
         <a className="subtle-button" href="#workflows">View workflow <IconChevronRight size={13} /></a>

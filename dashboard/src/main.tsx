@@ -277,7 +277,7 @@ function App() {
 
             <PanelCard className="panel activity-panel" id="activity" withBorder>
               <PanelHeading className="panel-heading" icon={<span className="section-icon blue-icon"><IconHistory size={18} /></span>}
-                title="Recent activity"
+                title="Recent Activity"
                 actions={<a className="text-link" href="#activity">All activity <span>⌄</span></a>} />
               <div className="activity-list">
                 <div><IconCircleCheck className={health.isError ? 'activity-violet' : 'activity-green'} size={17} /><span>Control plane {health.isSuccess ? 'is responding' : health.isError ? 'is unavailable' : 'is connecting'}<small>Go health check · live</small></span><time>{health.isSuccess ? 'Now' : 'Live'}</time></div>
@@ -292,7 +292,7 @@ function App() {
 
             <PanelCard className="panel objective-panel" id="objectives" withBorder>
               <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconTarget size={18} /></span>}
-                title="Objective status" description="Engineering goals"
+                title="Objective Status" description="Engineering goals"
                 actions={<a className="text-link" href="#objectives" onClick={(event) => navigatePage(event, '#objectives')}>View all →</a>} />
               {openObjectives.length ? (
                 <div className="overview-objectives">
@@ -307,7 +307,7 @@ function App() {
 
             <PanelCard className="panel plan-panel" id="approvals" withBorder>
               <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconHistory size={18} /></span>}
-                title="Plan approvals" description="Human review before agent execution" />
+                title="Plan Approvals" description="Human review before agent execution" />
               <div className="compact-empty"><IconHistory size={20} />
                 <span>No pending approvals</span>
                 <small>Approval gates are not connected yet.</small>
@@ -316,7 +316,7 @@ function App() {
 
             <PanelCard className="panel agents-panel" id="agents" withBorder>
               <PanelHeading className="panel-heading" icon={<span className="section-icon blue-icon"><IconRobot size={18} /></span>}
-                title="Agent runs" description="Run history · live"
+                title="Agent Runs" description="Run history · live"
                 actions={<a className="text-link" href="#agents" onClick={(event) => navigatePage(event, '#agents')}>View →</a>} />
               {agentRuns.data?.length ? <div className="overview-run-list">
                 {agentRuns.data.slice(0, 3).map((run) => <div key={run.id}>
@@ -332,7 +332,7 @@ function App() {
 
             <PanelCard className="panel evidence-panel" id="evidence" withBorder>
               <PanelHeading className="panel-heading" icon={<span className="section-icon green-icon"><IconShieldCheck size={18} /></span>}
-                title="Evidence health" description="Artifacts, test results, reviews" />
+                title="Evidence Health" description="Artifacts, test results, reviews" />
               <div className="evidence-health-list">
                 <div><IconGitBranch size={16} /><span>Trusted-main<small>Branch protection status</small></span><Badge className="muted-tag" variant="light">Unavailable</Badge></div>
                 <div><IconShieldCheck size={16} /><span>Evidence<small>Artifacts · test results · traces</small></span><Badge className="muted-tag" variant="light">No runs</Badge></div>
@@ -341,7 +341,7 @@ function App() {
 
             <PanelCard className="panel review-panel" id="reviews" withBorder>
               <PanelHeading className="panel-heading" icon={<span className="section-icon violet-icon"><IconGitPullRequest size={18} /></span>}
-                title="Code review" description="Local branch diffs and feedback"
+                title="Code Review" description="Local branch diffs and feedback"
                 actions={<a className="text-link" href="#reviews" onClick={(event) => navigatePage(event, '#reviews')}>Reviews →</a>} />
               {reviewableRuns.length ? <div className="overview-review-list">
                 {reviewableRuns.slice(0, 3).map((run) => <div key={run.id}>
@@ -358,7 +358,7 @@ function App() {
 
             <PanelCard className="panel timeline-panel" id="timeline" withBorder>
               <PanelHeading className="panel-heading" icon={<span className="section-icon blue-icon"><IconHistory size={18} /></span>}
-                title="Delivery timeline" description="Work will be tracked as it progresses" />
+                title="Sprint Timeline" description="Work will be tracked as it progresses" />
               <div className="timeline-empty"><span /><p>Create an objective to start a delivery timeline.</p></div>
             </PanelCard>
 
@@ -412,19 +412,19 @@ function OverviewMetrics({ projects, projectsLoading, projectsError, openObjecti
                 : workflows.runCount ? 'Completed-run conclusions unavailable'
                   : 'No completed GitHub Actions runs in the last 30 days';
   return <section className="metric-grid" aria-label="Workspace status">
-    <MetricCard className="metric-card purple" label="Active objectives" value={openObjectives}
+    <MetricCard className="metric-card purple" label="Active Objectives" value={openObjectives}
       detail="Open objectives" icon={<IconTarget size={19} />} />
-    <MetricCard className="metric-card blue" label="Running agents" value={runningAgents}
+    <MetricCard className="metric-card blue" label="Running Agents" value={runningAgents}
       detail={`${onlineWorkers} local workers online`} icon={<IconRobot size={19} />} />
-    <MetricCard className="metric-card purple pr-queue-metric" label="PR queue"
+    <MetricCard className="metric-card purple pr-queue-metric" label="PR Queue"
       value={pullRequestValue}
       detail={pullRequestReady ? `${openPullRequests} open GitHub pull requests` : pullRequestDetail}
       icon={<IconGitPullRequest size={19} />} />
-    <MetricCard className="metric-card green" label="CI health"
+    <MetricCard className="metric-card green" label="CI Health"
       value={workflowValue}
       detail={workflowDetail}
       icon={<IconActivity size={19} />} />
-    <MetricCard className="metric-card cyan" label="Budget usage" value="Unavailable"
+    <MetricCard className="metric-card cyan" label="Budget Usage" value="Unavailable"
       detail="Budgets are not configured" icon={<IconCurrencyDollar size={19} />} />
   </section>;
 }
