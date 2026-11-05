@@ -120,6 +120,17 @@ test('Reports headings fit the mock display viewport', async ({ page }) => {
   expect(titleBounds && filterBounds).toBeTruthy();
   expect(Math.abs(titleBounds!.y - filterBounds!.y)).toBeLessThanOrEqual(1);
   await expect(filter).toHaveCSS('width', '144px');
+
+  const reportTitlesFit = await page.locator('.downloadable-report-copy b').evaluateAll((titles) =>
+    titles.every((title) => title.scrollWidth <= title.clientWidth),
+  );
+  expect(reportTitlesFit, 'download report names remain fully readable').toBe(true);
+  const lastReportBounds = await page.locator('.downloadable-report').last().boundingBox();
+  const reportsPanelBounds = await page.locator('.downloadable-reports-panel').boundingBox();
+  expect(lastReportBounds && reportsPanelBounds).toBeTruthy();
+  expect(lastReportBounds!.y + lastReportBounds!.height).toBeLessThanOrEqual(
+    reportsPanelBounds!.y + reportsPanelBounds!.height - 6,
+  );
 });
 
 test('30-day run metrics exclude future and invalid timestamps', async ({ page }) => {
