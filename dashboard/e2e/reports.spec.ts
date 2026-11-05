@@ -140,6 +140,10 @@ test('Reports headings fit the mock display viewport', async ({ page }) => {
     titles.every((title) => title.scrollWidth <= title.clientWidth),
   );
   expect(reportTitlesFit, 'download report names remain fully readable').toBe(true);
+  const reportDetailsFit = await page.locator('.downloadable-report-copy span').evaluateAll((details) =>
+    details.every((detail) => detail.scrollHeight <= detail.clientHeight),
+  );
+  expect(reportDetailsFit, 'download report source details remain fully readable').toBe(true);
   const lastReportBounds = await page.locator('.downloadable-report').last().boundingBox();
   const reportsPanelBounds = await page.locator('.downloadable-reports-panel').boundingBox();
   expect(lastReportBounds && reportsPanelBounds).toBeTruthy();
