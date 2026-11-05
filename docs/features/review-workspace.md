@@ -56,7 +56,8 @@ The summary rail keeps evidence export and approval actions beside the checks; u
 At desktop widths the provider queue, diff detail, and summary panes start at 24/52/24 percent to match the supplied
 layout, then resize independently with drag handles or arrow keys; the panel group fills the remaining viewport below the
 review toolbar so its bottom actions stay visible. At narrower
-widths they stack vertically and retain the same keyboard-accessible separators. Each run stores up
+widths they stack vertically and retain the same keyboard-accessible separators. On phone widths the detail tabs scroll
+horizontally to preserve a single row. Each run stores up
 to ten comments of 1,000 bytes. Local comments and request-changes are available on terminal runs with diffs; the latter
 requires an online worker with model runtime and `code.write` permission. Provider-backed PR metrics remain unavailable while
 local branch rows show the actual run status and project. File, added-line, and removed-line counts are derived from the

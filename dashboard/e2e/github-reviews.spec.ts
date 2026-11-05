@@ -181,4 +181,12 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
     { body: 'Please add retry coverage before merging.', event: 'REQUEST_CHANGES' },
     { body: 'Keep this feedback until the worker is available.', event: 'REQUEST_CHANGES' },
   ]);
+  await detailTabs.getByRole('button', { name: 'Code changes' }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.reviews-workspace')).toHaveCSS('flex-direction', 'column');
+  await expect(detailTabs).toHaveCSS('flex-wrap', 'nowrap');
+  expect(await page.locator('.reviews-context-panels').evaluate((panels) =>
+    getComputedStyle(panels).gridTemplateColumns.trim().split(/\s+/).length,
+  )).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

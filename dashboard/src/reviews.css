@@ -697,6 +697,8 @@
   .reviews-tabs {
     overflow-x: auto;
   }
+  .reviews-detail-tabs { flex-wrap: nowrap; overflow-x: auto; }
+  .reviews-detail-tabs button { flex: 0 0 auto; white-space: nowrap; }
   .reviews-tab-spacer,
   .reviews-filter,
   .reviews-filter-select {
