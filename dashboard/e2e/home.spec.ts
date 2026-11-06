@@ -300,7 +300,7 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.firstRow.y).toBeCloseTo(689, 0);
   expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(791, 0);
   expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(828, 0);
-  expect(timelineMockAlignment.labelX.x).toBeCloseTo(818, 0);
+  expect(timelineMockAlignment.labelX.x).toBeCloseTo(812, 0);
   expect(timelineMockAlignment.labelX.height).toBeLessThan(18);
   expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeGreaterThanOrEqual(1079);
   expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeLessThanOrEqual(1087);

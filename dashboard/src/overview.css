@@ -393,8 +393,8 @@
 .preview-timeline { position: relative; width: calc(100% + 8px); margin-top: 30px; }
 .preview-timeline-dates { display: grid; grid-template-columns: repeat(8, 1fr); margin: 0 0 9px 150px; color: #a19ab0; font-size: 12px; }
 .preview-timeline-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-height: 31px; align-items: center; gap: 0; color: #dcd7e5; font-size: 14px; letter-spacing: -.2px; }
-.preview-timeline-row > span { display: flex; align-items: center; gap: 15px; }
-.preview-timeline-row svg { flex: 0 0 14px; }
+.preview-timeline-row > span { display: flex; align-items: center; gap: 5px; }
+.preview-timeline-row svg { width: 18px; height: 18px; flex: 0 0 18px; }
 .preview-timeline-done { color: #39dda0; }
 .preview-timeline-pending { color: #88839a; }
 /* ponytail: offsets match the static mock; derive bar positions from dates if this preview becomes data-driven */
