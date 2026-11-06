@@ -450,7 +450,8 @@
   .review-panel, .timeline-panel, .analytics-panel { grid-column: span 6; }
 }
 @media (max-width: 760px) {
-  .overview-shell .sidebar { padding-top: 68px; }
+  .overview-shell .sidebar { padding-top: 57px; }
+  .overview-shell .topbar { transform: translateY(-13px); }
   .overview-shell .sidebar nav .nav-label[data-mobile-label]::after { font-size: 12px; }
   .overview-shell .brand { margin-bottom: 28px; }
   .overview-shell .greeting p { max-width: none; }
@@ -487,6 +488,7 @@
   .overview-shell .objective-panel, .overview-shell .plan-panel, .overview-shell .agents-panel,
   .overview-shell .evidence-panel, .overview-shell .review-panel, .overview-shell .timeline-panel,
   .overview-shell .analytics-panel { display: none; }
+  .overview-shell.overview-layout .metric-card { min-height: 100px; }
   .metric-card { min-height: 100px; padding: 11px; }
   .overview-shell.overview-layout .metric-card .metric-top { gap: 8px; }
   .overview-shell.overview-layout .metric-card .metric-top > span { font-size: 13px; white-space: nowrap; }

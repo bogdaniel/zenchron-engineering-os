@@ -517,11 +517,21 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
   expect(await page.locator('.activity-list span').evaluateAll(labels =>
     labels.every(label => label.scrollWidth <= label.clientWidth))).toBe(true);
   const mobileOverviewLayout = await page.evaluate(() => {
+    const brand = document.querySelector('.brand')!.getBoundingClientRect();
+    const greeting = document.querySelector('.greeting')!.getBoundingClientRect();
     const metrics = document.querySelector('.metric-grid')!.getBoundingClientRect();
     const activity = document.querySelector('.activity-panel')!.getBoundingClientRect();
-    return { metricTop: metrics.top, activityGap: activity.top - metrics.bottom, activityHeight: activity.height };
+    const metricCard = document.querySelector('.metric-grid .metric-card:not(.pr-queue-metric)')!.getBoundingClientRect();
+    return {
+      brandTop: brand.top, greetingTop: greeting.top, metricTop: metrics.top, activityTop: activity.top,
+      activityGap: activity.top - metrics.bottom, activityHeight: activity.height, metricCardHeight: metricCard.height,
+    };
   });
-  expect(mobileOverviewLayout.metricTop).toBeCloseTo(283, 0);
+  expect(mobileOverviewLayout.brandTop).toBeCloseTo(57, 0);
+  expect(mobileOverviewLayout.greetingTop).toBeCloseTo(127, 0);
+  expect(mobileOverviewLayout.metricTop).toBeCloseTo(272, 0);
+  expect(mobileOverviewLayout.metricCardHeight).toBe(100);
+  expect(mobileOverviewLayout.activityTop).toBeCloseTo(502, 0);
   expect(mobileOverviewLayout.activityGap).toBeCloseTo(18, 0);
   expect(mobileOverviewLayout.activityHeight).toBeGreaterThanOrEqual(245);
   await expect(page.locator('.greeting-mobile-copy')).toHaveText('Your engineering mission at a glance.');
