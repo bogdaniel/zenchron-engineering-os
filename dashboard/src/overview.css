@@ -259,22 +259,22 @@
 .design-preview .metric-grid > .metric-card:nth-child(1),
 .design-preview .metric-grid > .metric-card:nth-child(3) {
   border-color: #754ca8;
-  background: linear-gradient(145deg, #3a245f, #1a142f 82%);
+  background: linear-gradient(145deg, #3a245f, #0e0e20 82%);
   box-shadow: 0 8px 30px #00000030, 0 0 24px #a456ff28;
 }
 .design-preview .metric-grid > .metric-card:nth-child(2) {
   border-color: #426a9e;
-  background: linear-gradient(145deg, #1b3355, #151a2c 82%);
+  background: linear-gradient(145deg, #1b3355, #071723 82%);
   box-shadow: 0 8px 30px #00000030, 0 0 24px #459dff24;
 }
 .design-preview .metric-grid > .metric-card:nth-child(4) {
   border-color: #348b69;
-  background: linear-gradient(145deg, #0d4937, #091f1f 82%);
+  background: linear-gradient(145deg, #0d4937, #021513 82%);
   box-shadow: 0 8px 30px #00000030, 0 0 24px #28d8942a;
 }
 .design-preview .metric-grid > .metric-card:nth-child(5) {
   border-color: #4b426b;
-  background: linear-gradient(145deg, #26233a, #171625 82%);
+  background: linear-gradient(145deg, #26233a, #1e1637 82%);
 }
 .design-preview .metric-card .metric-top > svg { filter: drop-shadow(0 0 5px currentColor); }
 .app-shell.design-preview .main-content .shared-metric-card .metric-top { color: #f4efff; font-size: 15px; font-weight: 600; }
