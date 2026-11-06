@@ -153,6 +153,17 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.preview-timeline-row')).toHaveCount(5);
   await expect(page.locator('.preview-timeline-done')).toHaveCount(2);
   await expect(page.locator('.preview-today-marker')).toBeVisible();
+  const timelineMockAlignment = await page.evaluate(() => {
+    const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    return {
+      today: bounds('.preview-today-marker b'),
+      firstRow: bounds('.preview-timeline-row'),
+    };
+  });
+  expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeGreaterThanOrEqual(1079);
+  expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeLessThanOrEqual(1087);
+  expect(timelineMockAlignment.today.y - timelineMockAlignment.firstRow.y).toBeGreaterThanOrEqual(-14);
+  expect(timelineMockAlignment.today.y - timelineMockAlignment.firstRow.y).toBeLessThanOrEqual(-8);
   await expect(page.locator('.preview-analytics-summary')).toContainText('42');
   await expect(page.locator('.mock-analytics-filter')).toHaveText('Delivery Velocity');
   await expect(page.locator('.preview-analytics-panel .recharts-area-curve')).toHaveCount(1);
