@@ -134,6 +134,9 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.workflow-panel')).toHaveCSS('background-image', /radial-gradient/);
   await expect(page.locator('.workflow-overview-canvas')).toHaveCSS('border-top-width', '0px');
   await expect(page.locator('.workflow-overview-canvas .react-flow__background')).toHaveCSS('display', 'none');
+  await expect(page.locator('.workflow-overview-actions')).toHaveCSS('gap', '8px');
+  await expect(page.locator('.preview-running-badge')).toHaveCSS('height', '32px');
+  await expect(page.locator('.workflow-overview-actions .subtle-button')).toHaveCSS('height', '32px');
   await expect(page.locator('.evidence-panel .overview-heading-info')).toBeVisible();
   await expect(page.locator('.user-chip img')).toHaveJSProperty('naturalWidth', 128);
   await expect(page.locator('.nav-link.active')).toHaveCSS('height', '46px');

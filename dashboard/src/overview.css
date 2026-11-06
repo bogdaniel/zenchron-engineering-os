@@ -164,6 +164,12 @@
 }
 .overview-layout.sample-data .workflow-overview-canvas { border: 0; border-radius: 0; background: transparent; }
 .overview-layout.sample-data .workflow-overview-canvas .react-flow__background { display: none; }
+.overview-layout.sample-data .workflow-panel .workflow-overview-actions { gap: 8px; }
+.overview-layout.sample-data .workflow-overview-actions .preview-running-badge,
+.overview-layout.sample-data .workflow-overview-actions .subtle-button,
+.overview-layout.sample-data .workflow-overview-actions .workflow-icon-link { height: 32px; }
+.overview-layout.sample-data .workflow-overview-actions .preview-running-badge { padding: 0 14px; font-size: 12px; }
+.overview-layout.sample-data .workflow-overview-actions .subtle-button { padding: 0 16px; font-size: 12px; }
 .overview-layout .workflow-overview-canvas .react-flow__viewport { translate: 1px 5px; }
 .overview-layout .workflow-overview-canvas .react-flow__handle { opacity: 0; }
 .overview-layout .workflow-overview-canvas .react-flow__edge-path { stroke: #c4d8ff; stroke-width: 2; filter: drop-shadow(0 0 3px #91bfff88); }
