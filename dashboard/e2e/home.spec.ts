@@ -115,6 +115,10 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.metric-grid .metric-card').nth(4)).toContainText('68%');
   await expect(page.locator('.metric-grid .metric-card').nth(4)).toHaveClass(/purple/);
   await expect(page.locator('.metric-grid .metric-card').first().locator('.metric-top span')).toHaveCSS('font-weight', '600');
+  await expect(page.locator('.activity-list > div').nth(2).locator('svg')).toHaveClass(/tabler-icon-file-text/);
+  await expect(page.locator('.preview-agent-list > div svg').nth(0)).toHaveClass(/tabler-icon-stack-2/);
+  await expect(page.locator('.preview-agent-list > div svg').nth(1)).toHaveClass(/tabler-icon-stack-2/);
+  await expect(page.locator('.preview-agent-list > div svg').nth(2)).toHaveClass(/tabler-icon-shield-check/);
   await expect(page.locator('.metric-grid .metric-card').nth(0).locator('small')).toHaveCount(0);
   const metricCards = await page.locator('.metric-grid .metric-card').evaluateAll((cards) => cards.map((card) => {
     const bounds = (selector: string) => card.querySelector(selector)!.getBoundingClientRect().toJSON();

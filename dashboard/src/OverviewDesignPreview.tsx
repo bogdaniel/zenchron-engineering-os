@@ -3,7 +3,7 @@ import { AreaChart, Sparkline } from '@mantine/charts';
 import {
   IconActivity, IconCalendar, IconChartBar, IconChevronDown, IconCircle,
   IconCircleCheck, IconCode, IconDatabase, IconFileText, IconGitBranch, IconGitPullRequest,
-  IconExternalLink, IconHistory, IconInfinity, IconRobot, IconShieldCheck, IconTarget,
+  IconExternalLink, IconHistory, IconInfinity, IconRobot, IconShieldCheck, IconStack2, IconTarget,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
@@ -48,7 +48,7 @@ export function OverviewDesignPreview() {
           <div className="activity-list">
             <div><IconCircleCheck className="activity-green" size={17} /><span>PR #41827 merged to trusted-main</span><time>2m ago</time></div>
             <div><IconRobot className="activity-blue" size={17} /><span>Agent “Code Reviewer” completed run</span><time>6m ago</time></div>
-            <div><IconCode className="activity-blue" size={17} /><span>Plan approved: Add usage analytics (v1.3)</span><time>12m ago</time></div>
+            <div><IconFileText className="activity-blue" size={17} /><span>Plan approved: Add usage analytics (v1.3)</span><time>12m ago</time></div>
             <div><IconCircleCheck className="activity-green" size={17} /><span>CI passed (99.4%)</span><time>16m ago</time></div>
             <div><IconTarget className="activity-violet" size={17} /><span>Objective “Improve review velocity” updated</span><time>26m ago</time></div>
           </div>
@@ -80,9 +80,9 @@ export function OverviewDesignPreview() {
         <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconRobot size={18} /></span>}
           title="Agent Runs" actions={<a className="text-link" href="#agents">View →</a>} />
         <div className="preview-agent-list">
-          <div><IconCode /><span>Code Reviewer</span><Badge>Success</Badge><time>2m ago</time></div>
-          <div><IconRobot /><span>Test Generator</span><Badge>Success</Badge><time>4m ago</time></div>
-          <div><IconActivity /><span>Coverage Analyzer</span><Badge>Success</Badge><time>7m ago</time></div>
+          <div><IconStack2 /><span>Code Reviewer</span><Badge>Success</Badge><time>2m ago</time></div>
+          <div><IconStack2 /><span>Test Generator</span><Badge>Success</Badge><time>4m ago</time></div>
+          <div><IconShieldCheck /><span>Coverage Analyzer</span><Badge>Success</Badge><time>7m ago</time></div>
         </div>
         </PanelCard>
 
