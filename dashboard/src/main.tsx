@@ -223,6 +223,7 @@ function App() {
                   : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?'}</span>}
                 <span>{designPreview ? 'Alex Chen' : auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}
                   <small>{designPreview ? 'Engineering Lead' : auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Preview only'}</small></span>
+                {designPreview && <IconChevronDown className="user-profile-chevron" size={15} aria-hidden="true" />}
               </div>
             </div>
           </header>
