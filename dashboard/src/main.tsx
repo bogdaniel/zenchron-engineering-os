@@ -12,7 +12,7 @@ import {
   IconCode,
   IconHome,
   IconHierarchy,
-  IconLayersIntersect,
+  IconStack2,
   IconLogout,
   IconPuzzle,
   IconRobot,
@@ -42,7 +42,7 @@ const navigation = [
   { label: 'Objectives', href: '#objectives', icon: IconTarget },
   { label: 'Workflows', href: '#workflows', icon: IconHierarchy },
   { label: 'Agents', href: '#agents', icon: IconRobot },
-  { label: 'Product Workspace', href: '#workspace', icon: IconLayersIntersect },
+  { label: 'Product Workspace', href: '#workspace', icon: IconStack2 },
   { label: 'Reviews', href: '#reviews', icon: IconCode },
   { label: 'Integrations', href: '#integrations', icon: IconPuzzle },
   { label: 'Reports', href: '#reports', icon: IconChartBar },
@@ -214,7 +214,7 @@ function App() {
                 await auth.refetch();
               }}><IconLogout size={17} /></button>}
               <button className="workspace-button" disabled>
-                <span className="workspace-glyph">{designPreview ? <IconLayersIntersect size={15} /> : 'Z'}</span>
+                <span className="workspace-glyph">{designPreview ? <IconStack2 size={15} /> : 'Z'}</span>
                 {designPreview ? 'Core Product' : 'Workspace'} <IconChevronDown size={15} />
               </button>
               <div className="user-chip">
