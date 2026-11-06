@@ -228,7 +228,8 @@
 .preview-approval-list > div > span, .preview-agent-list > div > span { min-width: 0; flex: 1; overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .preview-approval-list small, .preview-agent-list small { display: block; margin-top: 2px; color: #9791a7; font-size: 8px; }
 .preview-approval-list .mantine-Badge-root[data-pending="true"] { border-color: #73551f; color: #f1c75f; background: #3b2d12; }
-.preview-health-tag, .mock-analytics-filter { padding: 3px 7px; border-radius: 10px; }
+.preview-health-tag { padding: 3px 7px; border-radius: 10px; }
+.mock-analytics-filter { display: flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid #3a3453; border-radius: 9px; color: #d9d3e5; background: #171625; font-size: 9px; font-weight: 500; text-transform: none; white-space: nowrap; }
 .preview-running-badge { border: 1px solid #276a50; color: #5be0ad; background: #12392e; font-size: 10px; }
 .preview-review-panel h4 { margin: 8px 0 5px; overflow: hidden; color: #f1edf7; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .preview-review-meta { display: flex; align-items: center; gap: 5px; margin-top: 7px; }

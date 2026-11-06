@@ -1,8 +1,9 @@
 import { Badge, Progress } from '@mantine/core';
 import { LineChart, Sparkline } from '@mantine/charts';
 import {
-  IconActivity, IconCalendar, IconCheck, IconChevronRight, IconCircle, IconCircleCheck, IconCode,
-  IconCurrencyDollar, IconGitBranch, IconGitPullRequest, IconHistory, IconRobot, IconShieldCheck, IconTarget,
+  IconActivity, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconChevronRight, IconCircle,
+  IconCircleCheck, IconCode, IconCurrencyDollar, IconFileText, IconGitBranch, IconGitPullRequest,
+  IconHistory, IconRobot, IconShieldCheck, IconTarget,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
@@ -41,7 +42,7 @@ export function OverviewDesignPreview() {
       <WorkflowOverview designPreview />
 
       <PanelCard className="panel activity-panel" withBorder>
-        <PanelHeading className="panel-heading" icon={<span className="section-icon blue-icon"><IconHistory size={18} /></span>}
+        <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconActivity size={18} /></span>}
           title="Recent Activity" actions={<a className="text-link" href="#activity">All activity ⌄</a>} />
         <div className="activity-list">
           <div><IconCircleCheck className="activity-green" size={17} /><span>PR #41827 merged to trusted-main</span><time>2m ago</time></div>
@@ -63,7 +64,7 @@ export function OverviewDesignPreview() {
       </PanelCard>
 
       <PanelCard className="panel plan-panel" withBorder>
-        <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconHistory size={18} /></span>}
+        <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconFileText size={18} /></span>}
           title="Plan Approvals" actions={<a className="text-link" href="#objectives">View →</a>} />
         <div className="preview-approval-list">
           <div><IconCheck /><span>Add usage analytics (v1.3)</span><Badge>Approved</Badge></div>
@@ -92,7 +93,7 @@ export function OverviewDesignPreview() {
       </PanelCard>
 
       <PanelCard className="panel review-panel preview-review-panel" withBorder>
-        <PanelHeading className="panel-heading" icon={<span className="section-icon violet-icon"><IconGitPullRequest size={18} /></span>}
+        <PanelHeading className="panel-heading" icon={<span className="section-icon violet-icon"><IconCode size={18} /></span>}
           title="Code Review" actions={<Badge className="mock-approved-badge">Approved</Badge>} />
         <div className="preview-review-meta"><b>PR #41827</b><span>Changes 8</span><span>Comments 6</span><span>Checks ✓</span></div>
         <h4>feat(review): add AI feedback signals and evidence capture</h4>
@@ -119,8 +120,8 @@ export function OverviewDesignPreview() {
       </PanelCard>
 
       <PanelCard className="panel analytics-panel preview-analytics-panel" withBorder>
-        <PanelHeading className="panel-heading" icon={<span className="section-icon teal-icon"><IconActivity size={18} /></span>}
-          title="Analytics" actions={<Badge className="mock-analytics-filter">Delivery Velocity⌄</Badge>} />
+        <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconChartBar size={18} /></span>}
+          title="Analytics" actions={<span className="mock-analytics-filter">Delivery Velocity<IconChevronDown size={13} /></span>} />
         <div className="preview-analytics-summary"><strong>42</strong><span>PRs merged (7d)</span><b>↑ +27% vs. prior 7d</b></div>
         <LineChart h={160} data={analytics} dataKey="day" series={[{ name: 'merged', color: 'violet.5', label: 'Merged PRs' }]}
           curveType="monotone" withDots withTooltip gridAxis="xy" tickLine="xy" />

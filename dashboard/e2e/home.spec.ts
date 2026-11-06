@@ -114,6 +114,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.preview-timeline-done')).toHaveCount(2);
   await expect(page.locator('.preview-today-marker')).toBeVisible();
   await expect(page.locator('.preview-analytics-summary')).toContainText('42');
+  await expect(page.locator('.mock-analytics-filter')).toHaveText('Delivery Velocity');
   await expect(page.locator('.preview-analytics-panel .recharts-line-curve')).toHaveCount(1);
   const metrics = await page.locator('.metric-grid').boundingBox();
   const workflow = await page.locator('.workflow-panel').boundingBox();
