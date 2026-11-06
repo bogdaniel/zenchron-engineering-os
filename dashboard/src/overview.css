@@ -409,7 +409,7 @@
 .preview-diff i { color: #a4f0c2; font-style: normal; }
 .preview-timeline { position: relative; width: calc(100% + 8px); margin-top: 27px; }
 .preview-timeline-dates { display: grid; grid-template-columns: repeat(8, 1fr); margin: 0 0 9px 150px; color: #a19ab0; font-size: 12px; }
-.preview-timeline-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-height: 31px; align-items: center; gap: 0; color: #dcd7e5; font-size: 12px; letter-spacing: -.2px; }
+.preview-timeline-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-height: 31px; align-items: center; gap: 0; color: #dcd7e5; font-size: 12.5px; letter-spacing: -.4px; }
 .preview-timeline-row > span { display: flex; align-items: center; gap: 6px; }
 .preview-timeline-row svg { width: 22px; height: 22px; flex: 0 0 22px; margin-left: -5px; }
 .preview-timeline-done { color: #39dda0; }
