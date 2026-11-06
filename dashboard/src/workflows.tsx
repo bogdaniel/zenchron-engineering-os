@@ -6,7 +6,7 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  addEdge, Background, Controls, Handle, MiniMap, Position, ReactFlow, useEdgesState, useNodesState,
+  addEdge, Background, Controls, Handle, MarkerType, MiniMap, Position, ReactFlow, useEdgesState, useNodesState,
 } from '@xyflow/react';
 import type { Connection, Edge, Node, NodeProps, ReactFlowInstance } from '@xyflow/react';
 import ELK from 'elkjs/lib/elk.bundled.js';
@@ -235,7 +235,8 @@ function mobileWorkflowGraph(workflow: Workflow, designPreview = false) {
     const id = `${source}-${target}`;
     if (edgeIDs.has(id)) return [];
     edgeIDs.add(id);
-    return [{ id, source, target, type: 'smoothstep' as const, animated: false }];
+    return [{ id, source, target, type: 'smoothstep' as const, animated: false,
+      ...(designPreview ? { markerEnd: { type: MarkerType.ArrowClosed, color: '#c4d8ff' } } : {}) }];
   });
   return { nodes, edges };
 }

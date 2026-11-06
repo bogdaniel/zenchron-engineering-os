@@ -1,7 +1,7 @@
 import { Badge, Progress } from '@mantine/core';
 import { AreaChart, Sparkline } from '@mantine/charts';
 import {
-  IconActivity, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconChevronRight, IconCircle,
+  IconActivity, IconCalendar, IconChartBar, IconChevronDown, IconCircle,
   IconCircleCheck, IconCode, IconCoins, IconFileText, IconGitBranch, IconGitPullRequest,
   IconExternalLink, IconHistory, IconRobot, IconShieldCheck, IconTarget,
 } from '@tabler/icons-react';
@@ -60,9 +60,9 @@ export function OverviewDesignPreview() {
         <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconTarget size={18} /></span>}
           title="Objective Status" actions={<a className="text-link" href="#objectives">View All →</a>} />
         <div className="preview-objective-list">{objectives.map((objective) => <div key={objective.title}>
-          <span>{objective.title}<b>{objective.progress}%</b></span>
+          <span>{objective.title}<small data-risk={objective.status === 'At Risk' || undefined}>{objective.status}</small></span>
           <Progress value={objective.progress} color={objective.status === 'At Risk' ? 'yellow' : 'teal'} />
-          <small>{objective.status}</small>
+          <b>{objective.progress}%</b>
         </div>)}</div>
         </PanelCard>
 
@@ -70,8 +70,8 @@ export function OverviewDesignPreview() {
         <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconFileText size={18} /></span>}
           title="Plan Approvals" actions={<a className="text-link" href="#objectives">View →</a>} />
         <div className="preview-approval-list">
-          <div><IconCheck /><span>Add usage analytics (v1.3)</span><Badge>Approved</Badge></div>
-          <div><IconCheck /><span>Refactor agent runtime</span><Badge>Approved</Badge></div>
+          <div><IconFileText /><span>Add usage analytics (v1.3)</span><Badge>Approved</Badge></div>
+          <div><IconFileText /><span>Refactor agent runtime</span><Badge>Approved</Badge></div>
           <div><IconHistory /><span>Expand test coverage (v1.1)</span><Badge data-pending="true">Pending</Badge></div>
         </div>
         </PanelCard>
@@ -130,9 +130,12 @@ export function OverviewDesignPreview() {
           <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconChartBar size={18} /></span>}
             title="Analytics" actions={<span className="mock-analytics-filter">Delivery Velocity<IconChevronDown size={13} /></span>} />
           <div className="preview-analytics-summary"><strong>42</strong><span>PRs merged (7d)</span><b>↑ +27% vs. prior 7d</b></div>
-          <AreaChart h={160} data={analytics} dataKey="day" series={[{ name: 'merged', color: 'violet.5', label: 'Merged PRs' }]}
-            curveType="monotone" withDots withTooltip withGradient fillOpacity={0.3} gridAxis="xy" tickLine="xy"
-            yAxisProps={{ domain: [0, 50], ticks: [0, 10, 20, 30, 40, 50] }} />
+          <AreaChart h={188} data={analytics} dataKey="day" series={[{ name: 'merged', color: '#ad55ff', label: 'Merged PRs' }]}
+            curveType="monotone" withDots withTooltip withGradient fillOpacity={0.4} dotProps={{ r: 3, stroke: '#f2edfa', strokeWidth: 1 }}
+            gridAxis="x" tickLine="none"
+            areaChartProps={{ margin: { top: 45, right: 5, bottom: 0, left: 5 } }}
+            xAxisProps={{ height: 21, interval: 0, tickMargin: 0, padding: { left: 10, right: 0 } }}
+            yAxisProps={{ width: 25, domain: [0, 50], ticks: [0, 10, 20, 30, 40, 50], interval: 0 }} />
         </PanelCard>
       </div>
     </div>

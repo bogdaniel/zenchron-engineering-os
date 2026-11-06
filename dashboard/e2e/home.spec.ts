@@ -93,7 +93,8 @@ test('Overview PR queue and CI health use complete GitHub history', async ({ pag
 test('Overview design preview renders the supplied mock content without replacing live data', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/?preview=mock');
-  await expect(page.getByText('DESIGN PREVIEW · SAMPLE DATA', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('.design-preview-label')).toHaveCount(0);
+  await expect(page.locator('.sidebar-bottom')).toContainText('The AI-native engineering operating system.');
   await expect(page.getByRole('link', { name: 'Preview sign-in' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Core Product' })).toBeVisible();
@@ -111,6 +112,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.pr-queue-metric .mock-bars i')).toHaveCount(5);
   await expect(page.locator('.workflow-overview-status')).toHaveCount(0);
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
+  await expect(page.locator('.workflow-overview-canvas .react-flow__edge-path').first()).toHaveAttribute('marker-end', /url/);
   await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeHidden();
   await expect(page.getByRole('link', { name: 'View Runs' })).toHaveAttribute('href', '#workflows');
   await page.getByRole('button', { name: 'Workflow options' }).click();
@@ -149,6 +151,9 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(graphStages['merge-gate'].x).toBeGreaterThanOrEqual(1053);
   expect(graphStages['merge-gate'].x).toBeLessThanOrEqual(1073);
   await expect(page.locator('.preview-objective-list')).toContainText('Ship AI code review v2');
+  await expect(page.locator('.preview-objective-list > div').first()).toContainText('On Track');
+  await expect(page.locator('.preview-objective-list > div').first().locator('b')).toHaveText('78%');
+  await expect(page.locator('.preview-approval-list .mantine-Badge-root').first()).toHaveText('Approved');
   await expect(page.getByText('PR #41827', { exact: true })).toBeVisible();
   await expect(page.locator('.preview-timeline-row')).toHaveCount(5);
   await expect(page.locator('.preview-timeline-done')).toHaveCount(2);
@@ -167,6 +172,9 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.preview-analytics-summary')).toContainText('42');
   await expect(page.locator('.mock-analytics-filter')).toHaveText('Delivery Velocity');
   await expect(page.locator('.preview-analytics-panel .recharts-area-curve')).toHaveCount(1);
+  const analyticsTicks = await page.locator('.preview-analytics-panel .recharts-cartesian-axis-tick-value').allTextContents();
+  expect(analyticsTicks).toContain('Jan 25');
+  expect(analyticsTicks).toContain('40');
   const overviewTypography = await page.evaluate(() => ({
     metricLabel: getComputedStyle(document.querySelector('.metric-card .metric-top')!).fontSize,
     metricValue: getComputedStyle(document.querySelector('.metric-card strong')!).fontSize,
