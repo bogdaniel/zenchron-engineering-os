@@ -371,8 +371,9 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.dates.y).toBeCloseTo(659, 0);
   expect(timelineMockAlignment.today.y).toBeCloseTo(678, 0);
   expect(timelineMockAlignment.firstRow.y).toBeCloseTo(686, 0);
-  expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(787, 0);
-  expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(817, 0);
+  expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(789, 0);
+  expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(830, 0);
+  expect(timelineMockAlignment.headingTitle.x - timelineMockAlignment.headingIcon.right).toBeCloseTo(13, 0);
   expect(timelineMockAlignment.headingDescriptionGap).toBeCloseTo(4, 0);
   await expect(page.locator('.preview-timeline-dates')).toHaveCSS('color', 'rgb(228, 223, 237)');
   expect(timelineMockAlignment.headingIconCenterY).toBeCloseTo(timelineMockAlignment.headingTitleCenterY, 0);
