@@ -198,7 +198,7 @@ async function layoutNodes(
   });
 }
 
-function mobileWorkflowGraph(workflow: Workflow) {
+function mobileWorkflowGraph(workflow: Workflow, designPreview = false) {
   const stageByType = new Map<ComponentType, string>();
   for (const stage of mobileOverviewStages) {
     for (const type of stage.types) stageByType.set(type, stage.id);
@@ -213,7 +213,11 @@ function mobileWorkflowGraph(workflow: Workflow) {
   const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id));
   const nodes: WorkflowNode[] = stages.map(({ id, label, description, kind, position }) => ({
     id, type: 'workflow', position,
-    data: { kind, label, description },
+    data: {
+      kind, label,
+      description: designPreview && id === 'trigger' ? 'PR opened / updated'
+        : designPreview && id === 'merge' ? 'To trusted-main' : description,
+    },
   }));
   const stageIDs = new Set(stages.map(({ id }) => id));
   const edgeIDs = new Set<string>();
@@ -254,14 +258,14 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
   useEffect(() => {
     if (!workflow) return;
     if (mobile) {
-      const graph = mobileWorkflowGraph(workflow);
+      const graph = mobileWorkflowGraph(workflow, designPreview);
       setLayoutError(false);
       setNodes(graph.nodes);
       setEdges(graph.edges);
       return;
     }
     let isCurrent = true;
-    const graph = mobileWorkflowGraph(workflow);
+    const graph = mobileWorkflowGraph(workflow, designPreview);
     setLayoutError(false);
     void layoutNodes(graph.nodes, graph.edges, overviewNodeLayout).then((laidOut) => {
       if (!isCurrent) return;

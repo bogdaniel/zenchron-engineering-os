@@ -17,12 +17,12 @@ import {
   IconGitBranch,
   IconGitPullRequest,
   IconHistory,
-  IconLayoutDashboard,
+  IconHome,
+  IconHierarchy,
   IconLayersIntersect,
   IconLogout,
-  IconPlugConnected,
+  IconPuzzle,
   IconRobot,
-  IconRoute,
   IconSearch,
   IconShieldCheck,
   IconSettings,
@@ -51,13 +51,13 @@ import './overview.css';
 import './monaco.css';
 
 const navigation = [
-  { label: 'Overview', href: '#overview', icon: IconLayoutDashboard },
+  { label: 'Overview', href: '#overview', icon: IconHome },
   { label: 'Objectives', href: '#objectives', icon: IconTarget },
-  { label: 'Workflows', href: '#workflows', icon: IconRoute },
+  { label: 'Workflows', href: '#workflows', icon: IconHierarchy },
   { label: 'Agents', href: '#agents', icon: IconRobot },
   { label: 'Product Workspace', href: '#workspace', icon: IconLayersIntersect },
-  { label: 'Reviews', href: '#reviews', icon: IconGitPullRequest },
-  { label: 'Integrations', href: '#integrations', icon: IconPlugConnected },
+  { label: 'Reviews', href: '#reviews', icon: IconCode },
+  { label: 'Integrations', href: '#integrations', icon: IconPuzzle },
   { label: 'Reports', href: '#reports', icon: IconChartBar },
   { label: 'Settings', href: '#settings', icon: IconSettings },
 ];
@@ -187,7 +187,7 @@ function App() {
             <strong>Zenchron Engineering</strong>
             <p>Autonomous, verifiable, and aligned engineering.</p>
             {designPreview && activePage === 'overview' && <small className="design-preview-label">DESIGN PREVIEW · SAMPLE DATA</small>}
-            {auth.data?.local && <a className="preview-login-link" href="/?preview=login">Preview sign-in</a>}
+            {auth.data?.local && !designPreview && <a className="preview-login-link" href="/?preview=login">Preview sign-in</a>}
           </div>
         </aside>
 

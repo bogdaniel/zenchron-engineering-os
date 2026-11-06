@@ -5,7 +5,7 @@
   background: #0a0b13;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --sidebar-width: 250px;
+  --sidebar-width: 247px;
   --page-title-size: 22px;
   --page-title-size-mobile: 20px;
   --page-title-weight: 650;
@@ -174,7 +174,7 @@ button:disabled, input:disabled {
 .main-content {
   max-width: 1700px;
   margin-left: var(--sidebar-width);
-  padding: 0 14px 24px 13px;
+  padding: 0 14px 24px 16px;
 }
 .topbar {
   display: flex;
