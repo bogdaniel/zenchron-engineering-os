@@ -210,9 +210,19 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.preview-objective-list > div').first()).toContainText('On Track');
   await expect(page.locator('.preview-objective-list > div').first().locator('b')).toHaveText('78%');
   await expect(page.locator('.preview-approval-list .mantine-Badge-root').first()).toHaveText('Approved');
+  await expect(page.locator('.preview-approval-list .mantine-Badge-root').first()).toHaveCSS('flex-shrink', '0');
+  await expect(page.locator('.preview-approval-list > div:last-child > svg')).toHaveClass(/tabler-icon-file-time/);
   await expect(page.locator('.preview-agent-list')).toContainText('2m ago');
   await expect(page.locator('.preview-agent-list')).toContainText('4m ago');
   await expect(page.locator('.preview-agent-list')).toContainText('7m ago');
+  const objectiveMarkers = await page.evaluate(() => [
+    getComputedStyle(document.querySelector('.preview-objective-list small')!, '::before').content,
+    getComputedStyle(document.querySelector('.preview-objective-list small[data-risk="true"]')!, '::before').content,
+  ]);
+  expect(objectiveMarkers).toEqual(['"●"', '"▲"']);
+  await expect(page.locator('.preview-approval-list .mantine-Badge-root').first().locator('svg')).toHaveClass(/tabler-icon-circle-check/);
+  await expect(page.locator('.preview-approval-list [data-pending="true"] svg')).toHaveClass(/tabler-icon-clock-hour-4/);
+  await expect(page.locator('.preview-agent-list .preview-chip-dot')).toHaveCount(3);
   await expect(page.getByText('PR #41827', { exact: true })).toBeVisible();
   await expect(page.locator('.preview-review-meta a')).toHaveCSS('width', '16px');
   await expect(page.locator('.preview-review-meta a')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');

@@ -2,7 +2,7 @@ import { Badge, Progress } from '@mantine/core';
 import { AreaChart, Sparkline } from '@mantine/charts';
 import {
   IconActivity, IconCalendar, IconChartBar, IconChevronDown, IconCircle,
-  IconCircleCheck, IconCode, IconDatabase, IconFileText, IconGitBranch, IconGitPullRequest,
+  IconCircleCheck, IconClockHour4, IconCode, IconDatabase, IconFileText, IconFileTime, IconGitBranch, IconGitPullRequest,
   IconExternalLink, IconHistory, IconInfinity, IconRobot, IconShieldCheck, IconStack2, IconTarget,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
@@ -70,9 +70,9 @@ export function OverviewDesignPreview() {
         <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconFileText size={18} /></span>}
           title="Plan Approvals" actions={<a className="text-link" href="#objectives">View →</a>} />
         <div className="preview-approval-list">
-          <div><IconFileText /><span>Add usage analytics (v1.3)</span><Badge>Approved</Badge></div>
-          <div><IconFileText /><span>Refactor agent runtime</span><Badge>Approved</Badge></div>
-          <div><IconHistory /><span>Expand test coverage (v1.1)</span><Badge data-pending="true">Pending</Badge></div>
+          <div><IconFileText /><span>Add usage analytics (v1.3)</span><Badge><IconCircleCheck size={12} />Approved</Badge></div>
+          <div><IconFileText /><span>Refactor agent runtime</span><Badge><IconCircleCheck size={12} />Approved</Badge></div>
+          <div><IconFileTime /><span>Expand test coverage (v1.1)</span><Badge data-pending="true"><IconClockHour4 size={10} />Pending</Badge></div>
         </div>
         </PanelCard>
 
@@ -80,9 +80,9 @@ export function OverviewDesignPreview() {
         <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconRobot size={18} /></span>}
           title="Agent Runs" actions={<a className="text-link" href="#agents">View →</a>} />
         <div className="preview-agent-list">
-          <div><IconStack2 /><span>Code Reviewer</span><Badge>Success</Badge><time>2m ago</time></div>
-          <div><IconStack2 /><span>Test Generator</span><Badge>Success</Badge><time>4m ago</time></div>
-          <div><IconShieldCheck /><span>Coverage Analyzer</span><Badge>Success</Badge><time>7m ago</time></div>
+          <div><IconStack2 /><span>Code Reviewer</span><Badge><span className="preview-chip-dot" />Success</Badge><time>2m ago</time></div>
+          <div><IconStack2 /><span>Test Generator</span><Badge><span className="preview-chip-dot" />Success</Badge><time>4m ago</time></div>
+          <div><IconShieldCheck /><span>Coverage Analyzer</span><Badge><span className="preview-chip-dot" />Success</Badge><time>7m ago</time></div>
         </div>
         </PanelCard>
 
