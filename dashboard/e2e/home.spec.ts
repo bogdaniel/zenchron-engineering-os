@@ -122,6 +122,12 @@ test('Overview design preview renders the supplied mock content without replacin
   [263, 549, 831, 1113, 1399].forEach((x, index) => expect(metricCards[index].card.x).toBeCloseTo(x, 0));
   expect(metricCards[0].icon.width).toBe(28);
   expect(metricCards[0].value.y).toBe(135);
+  const middlePanels = await page.locator('.overview-middle-grid > .panel').evaluateAll((panels) => panels.map((panel) => {
+    const { x, width } = panel.getBoundingClientRect();
+    return { x, width };
+  }));
+  [263, 619, 945, 1287].forEach((x, index) => expect(middlePanels[index].x).toBe(x));
+  [342, 312, 328, 371].forEach((width, index) => expect(middlePanels[index].width).toBe(width));
   await expect(page.locator('.metric-card').nth(0).locator('.mock-trend .mantine-Badge-root')).toHaveText('↑ +3');
   await expect(page.locator('.metric-card').nth(1).locator('.mock-trend .mantine-Badge-root')).toHaveText('● Live');
   await expect(page.locator('.metric-card').nth(2).locator('.mock-trend .mantine-Badge-root')).toHaveText('↑ +4');

@@ -556,8 +556,8 @@
   .design-preview .overview-middle-grid {
     display: grid;
     grid-column: span 100;
-    grid-template-columns: 343fr 336fr 334fr 346fr;
-    gap: 12px;
+    grid-template-columns: 342fr 312fr 328fr 371fr;
+    gap: 14px;
   }
   .design-preview .overview-middle-grid > .panel { grid-column: auto; height: 158px; min-height: 158px; overflow: hidden; }
   .design-preview .overview-bottom-grid {
