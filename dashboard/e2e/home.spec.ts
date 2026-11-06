@@ -92,9 +92,17 @@ test('Overview PR queue and CI health use complete GitHub history', async ({ pag
 
 test('anonymous users can open the Overview design preview from sign-in', async ({ page }) => {
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
-  await page.goto('/');
+  await page.goto('/?preview=login');
   await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
   await page.getByRole('link', { name: 'Open dashboard preview' }).click();
+  await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
+  await expect(page.locator('.overview-design-preview')).toBeVisible();
+});
+
+test('local root opens the latest Overview design by default without an auth session', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
+  await page.goto('/');
+  await expect(page).toHaveURL('/');
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.locator('.overview-design-preview')).toBeVisible();
 });

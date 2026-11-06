@@ -152,8 +152,10 @@ function App() {
   const openObjectives = objectives.data?.filter((objective) => objective.status !== 'completed') ?? [];
   const unauthorized = (auth.error as (Error & { status?: number }) | null)?.status === 401;
   const sessionUnavailable = auth.isError && !unauthorized;
-  const loginPreview = new URLSearchParams(window.location.search).get('preview') === 'login';
-  const designPreview = new URLSearchParams(window.location.search).get('preview') === 'mock';
+  const previewMode = new URLSearchParams(window.location.search).get('preview');
+  const loginPreview = previewMode === 'login';
+  const localReviewHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+  const designPreview = previewMode === 'mock' || (localReviewHost && !loginPreview && previewMode !== 'live' && auth.data?.authenticated !== true);
   if (auth.isLoading && !designPreview) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
   if (!designPreview && ((auth.isError && unauthorized) || loginPreview)) return <div className="auth-screen">
     <div className="auth-card">
