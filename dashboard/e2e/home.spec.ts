@@ -99,6 +99,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.sidebar-bottom-brand .brand-mark')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Preview sign-in' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
+  expect((await page.locator('.greeting h1').boundingBox())?.x).toBe(266);
   await expect(page.getByRole('button', { name: 'Core Product' })).toBeVisible();
   await expect(page.locator('.user-chip')).toContainText('Alex Chen');
   await expect(page.locator('.sidebar > .brand')).toHaveCSS('font-size', '18px');

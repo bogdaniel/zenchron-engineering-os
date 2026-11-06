@@ -23,7 +23,7 @@
 }
 .design-preview .sidebar { padding-top: 14px; }
 .design-preview .brand { gap: 24px; margin-bottom: 33px; }
-.design-preview .greeting { margin-left: 0; }
+.design-preview .greeting { margin-left: 3px; transform: translateY(-1px); }
 @media (min-width: 1260px) {
   .design-preview .sidebar { padding-right: 11px; }
   .design-preview .sidebar .nav-link { gap: 18px; padding-left: 27px; }
