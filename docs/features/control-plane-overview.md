@@ -70,8 +70,8 @@ flowchart LR
   the available history. It shows an empty state when there are no merged records or the history is incomplete.
 - Budget usage, approval records, evidence artifacts, and delivery timeline do not have backend sources yet. The live
   Overview uses unavailable or empty states instead of sample values.
-- The authenticated `?preview=mock` view renders the supplied Overview mock's sample content in the existing UI for
-  visual review. It is frontend-only, labeled as sample data, and does not change live API records.
+- The authenticated `?preview=mock` view renders the supplied Overview mock's sample content and local sample avatar
+  in the existing UI for visual review. It is frontend-only, labeled as sample data, and does not change live API records.
 - The overview Reviews card lists only agent runs with captured local diffs and links to the Reviews page for comments
   and request-changes; provider-sourced pull requests and issues appear in their own Reviews queues.
 - Local branch runs and their diffs/comments are available in Reviews alongside provider-sourced open items.

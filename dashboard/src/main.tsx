@@ -224,7 +224,7 @@ function App() {
                 {designPreview ? 'Core Product' : 'Workspace'} <IconChevronDown size={15} />
               </button>
               <div className="user-chip">
-                {designPreview ? <span className="avatar">AC</span> : auth.data?.avatar_url
+                {designPreview ? <img className="avatar avatar-image" src="/alex-chen-avatar.jpg" alt="" /> : auth.data?.avatar_url
                   ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" />
                   : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?'}</span>}
                 <span>{designPreview ? 'Alex Chen' : auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}

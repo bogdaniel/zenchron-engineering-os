@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Badge, Button, Card, Modal, Select, TextInput, Textarea } from '@mantine/core';
+import { Badge, Button, Card, Menu, Modal, Select, TextInput, Textarea } from '@mantine/core';
 import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { Group, Panel, Separator } from 'react-resizable-panels';
@@ -12,9 +12,9 @@ import type { Connection, Edge, Node, NodeProps, ReactFlowInstance } from '@xyfl
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { z } from 'zod';
 import {
-  IconBolt, IconCheck, IconChecklist, IconChevronRight, IconCirclePlus, IconCode, IconDeviceFloppy, IconFileText,
-  IconGitBranch, IconGitMerge, IconGripVertical, IconHierarchy, IconLayoutBoard, IconPlayerPlay, IconRepeat,
-  IconRobot, IconRoute, IconSearch, IconTestPipe, IconChartBar, IconUserCheck,
+  IconBolt, IconCheck, IconChecklist, IconChevronRight, IconCirclePlus, IconCode, IconDeviceFloppy, IconDots,
+  IconFileText, IconGitBranch, IconGitMerge, IconGripVertical, IconHierarchy, IconLayoutBoard, IconMaximize,
+  IconPlayerPlay, IconRepeat, IconRobot, IconRoute, IconSearch, IconTestPipe, IconChartBar, IconUserCheck,
 } from '@tabler/icons-react';
 import '@xyflow/react/dist/style.css';
 import { PageHeading } from './PageHeading';
@@ -276,11 +276,21 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
   return <PanelCard className="panel workflow-panel" id="workflow" withBorder>
     <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconRoute size={18} /></span>}
       title="Workflow Orchestration" description={designPreview ? 'Objective: Ship AI code review v2' : workflow?.name ?? 'Saved workflow definition'}
-      actions={<div className="panel-actions">
+      actions={<div className={`panel-actions${designPreview ? ' workflow-overview-actions' : ''}`}>
         <Badge className={designPreview ? 'preview-running-badge' : 'muted-tag'} variant="light">
           {designPreview ? '● Running' : workflow?.status ?? 'Unavailable'}
         </Badge>
-        <a className="subtle-button" href="#workflows">View workflow <IconChevronRight size={13} /></a>
+        {designPreview ? <>
+          <a className="subtle-button" href="#workflows">View Runs</a>
+          <a className="workflow-icon-link" href="#workflows" aria-label="Open workflow editor"><IconMaximize size={14} /></a>
+          <Menu position="bottom-end" withinPortal>
+            <Menu.Target><button className="workflow-icon-link" aria-label="Workflow options"><IconDots size={16} /></button></Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item component="a" href="#workflows">Open workflow editor</Menu.Item>
+              <Menu.Item component="a" href="#agents">View agent runs</Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        </> : <a className="subtle-button" href="#workflows">View workflow <IconChevronRight size={13} /></a>}
       </div>} />
     {!designPreview && query.isLoading ? <div className="workflow-overview-message">Loading saved workflow…</div>
       : !workflow || (!designPreview && query.isError) ? <div className="workflow-overview-message" role="status">Workflow definition unavailable</div>

@@ -2,6 +2,7 @@
 
 mkdir -p dist
 cp index.html dist/index.html
+cp -R public/. dist/
 esbuild src/main.tsx --bundle --splitting --format=esm --sourcemap --outdir=dist --loader:.css=css --watch=forever &
 watcher=$!
 http-server dist -a 127.0.0.1 -p "${ZENCHRON_DASHBOARD_PORT:-4173}" -c-1 \

@@ -124,6 +124,9 @@
 .workflow-overview-canvas .react-flow__edge-path { stroke: #ac77f2; stroke-width: 1.7; }
 .workflow-overview-canvas { --xy-attribution-background-color: rgba(13, 12, 21, .85); }
 .workflow-overview-canvas .react-flow__attribution a { color: #77738d; }
+.workflow-overview-actions { gap: 8px; }
+.workflow-icon-link { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid #353149; border-radius: 8px; color: #d4cfe1; background: #1b1a29; }
+.workflow-icon-link:hover { border-color: #8061ad; color: #f2e9ff; }
 .workflow-overview-status { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; color: #a49cb5; font-size: 9px; }
 .workflow-overview-message { display: grid; min-height: 144px; place-items: center; color: #a49cb5; font-size: 11px; }
 .text-link { color: #c7a1ff; font-size: 10px; white-space: nowrap; }

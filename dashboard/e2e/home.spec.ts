@@ -97,6 +97,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Core Product' })).toBeVisible();
   await expect(page.locator('.user-chip')).toContainText('Alex Chen');
+  await expect(page.locator('.user-chip img')).toHaveJSProperty('naturalWidth', 128);
   await expect(page.locator('.metric-grid .metric-card')).toHaveCount(5);
   await expect(page.locator('.metric-grid .metric-card').nth(0)).toContainText('12');
   await expect(page.locator('.metric-grid .metric-card').nth(1)).toContainText('7');
@@ -107,6 +108,10 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.mock-budget-summary')).toContainText('$13.6K / $20K');
   await expect(page.locator('.workflow-overview-status')).toHaveCount(0);
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
+  await expect(page.getByRole('link', { name: 'View Runs' })).toHaveAttribute('href', '#workflows');
+  await page.getByRole('button', { name: 'Workflow options' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Open workflow editor' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.locator('.workflow-overview-canvas')).toHaveAttribute('aria-label', /6 stages summarize 9 components/);
   await expect(page.locator('.preview-objective-list')).toContainText('Ship AI code review v2');
   await expect(page.getByText('PR #41827', { exact: true })).toBeVisible();
