@@ -6,6 +6,11 @@
 }
 .overview-mobile-tabs { display: none; }
 @media (min-width: 1260px) {
+  .overview-shell {
+    --panel-heading-size: 16px;
+    --metric-label-size: 14px;
+    --metric-value-size: 30px;
+  }
   .overview-shell .topbar { position: relative; }
   .overview-shell .top-actions { margin-left: auto; }
   .overview-shell .search-box {

@@ -155,6 +155,12 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.preview-analytics-summary')).toContainText('42');
   await expect(page.locator('.mock-analytics-filter')).toHaveText('Delivery Velocity');
   await expect(page.locator('.preview-analytics-panel .recharts-area-curve')).toHaveCount(1);
+  const overviewTypography = await page.evaluate(() => ({
+    metricLabel: getComputedStyle(document.querySelector('.metric-card .metric-top')!).fontSize,
+    metricValue: getComputedStyle(document.querySelector('.metric-card strong')!).fontSize,
+    panelHeading: getComputedStyle(document.querySelector('.workflow-panel h3')!).fontSize,
+  }));
+  expect(overviewTypography).toEqual({ metricLabel: '14px', metricValue: '30px', panelHeading: '16px' });
   const metrics = await page.locator('.metric-grid').boundingBox();
   const sidebar = await page.locator('.sidebar').boundingBox();
   const workflow = await page.locator('.workflow-panel').boundingBox();
