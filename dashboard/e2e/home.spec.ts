@@ -120,6 +120,9 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.getByRole('button', { name: 'Core Product' })).toBeVisible();
   await expect(page.locator('.user-chip')).toContainText('Alex Chen');
   await expect(page.locator('.user-profile-chevron')).toBeVisible();
+  await expect(page.locator('.workspace-glyph')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(page.locator('.user-chip')).toHaveCSS('font-size', '13px');
+  await expect(page.locator('.user-chip .avatar')).toHaveCSS('width', '38px');
   await expect(page.locator('.workspace-glyph .tabler-icon-stack-2')).toBeVisible();
   await expect(page.locator('.nav-link[href="#workspace"] .tabler-icon-stack-2')).toBeVisible();
   await expect(page.locator('.sidebar > .brand')).toHaveCSS('font-size', '18px');
