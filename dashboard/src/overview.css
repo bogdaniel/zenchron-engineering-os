@@ -331,9 +331,9 @@
 .mock-budget-summary small { font-size: 12px; }
 .mock-budget-progress { width: 124px; }
 .preview-objective-list { display: grid; gap: 6px; margin-top: 8px; margin-left: 8px; }
-.preview-objective-list > div { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1px 8px; color: #e7e2ef; font-size: 13px; line-height: 1; }
+.preview-objective-list > div { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1px 8px; color: #e7e2ef; font-size: 14px; font-weight: 500; line-height: 1; }
 .preview-objective-list > div > span { display: flex; width: calc(100% - 58px); grid-column: 1 / -1; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; }
-.preview-objective-list b { grid-column: 2; grid-row: 2; color: #f4effb; font-size: 12px; }
+.preview-objective-list b { grid-column: 2; grid-row: 2; color: #f4effb; font-size: 13px; }
 .preview-objective-list .mantine-Progress-root { grid-column: 1; grid-row: 2; height: 6px; margin-right: 5px; }
 .preview-objective-list .mantine-Progress-section { background: linear-gradient(90deg, #08c58a, #35dda5); }
 .preview-objective-list > div:last-child .mantine-Progress-section { background: linear-gradient(90deg, #e8a719, #f5c34a); }
@@ -345,7 +345,8 @@
 .preview-approval-list > div, .preview-agent-list > div { display: flex; min-width: 0; min-height: 35px; align-items: center; gap: 7px; border-bottom: 1px solid #292737; color: #e4dfef; }
 .preview-approval-list > div > svg, .preview-agent-list > div > svg { width: 15px; flex: 0 0 15px; color: #c49aff; }
 .preview-agent-list > div > svg { width: 18px; flex-basis: 18px; }
-.preview-approval-list > div > span:not(.mantine-Badge-root), .preview-agent-list > div > span:not(.mantine-Badge-root) { min-width: 0; flex: 1; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.preview-approval-list > div > span:not(.mantine-Badge-root), .preview-agent-list > div > span:not(.mantine-Badge-root) { min-width: 0; flex: 1; overflow: hidden; font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.design-preview .overview-middle-grid .text-link { font-size: 11px; }
 .preview-agent-list time { color: #a19ab0; font-size: 10px; white-space: nowrap; }
 .preview-approval-list .mantine-Badge-label svg { width: 10px; height: 10px; margin-right: 2px; vertical-align: -2px; }
 .preview-chip-dot { display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: #39dda0; box-shadow: 0 0 6px #39dda088; vertical-align: 1px; }
