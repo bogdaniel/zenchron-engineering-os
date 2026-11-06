@@ -425,27 +425,20 @@
   .review-panel, .timeline-panel, .analytics-panel { min-height: 175px; }
 }
 @media (min-width: 1260px) and (min-height: 900px) {
-  .design-preview .workflow-overview-canvas { height: 137px; }
   .panel-heading { line-height: 1.15; }
   .metric-grid { gap: 16px; }
   .metric-card { min-height: 100px; }
   .workflow-panel { min-height: 204px; }
   .content-grid { grid-template-columns: repeat(100, minmax(0, 1fr)); margin-top: 14px; row-gap: 14px; }
-  .design-preview .overview-top-grid { display: grid; grid-column: span 100; grid-template-columns: 967fr 414fr; gap: 14px; }
-  .design-preview .overview-top-grid > .panel { grid-column: auto; }
   .workflow-panel { grid-column: span 70; }
   .activity-panel { grid-column: span 30; }
   .workflow-overview-canvas { height: 117px; }
-  .design-preview .overview-middle-grid { display: grid; grid-column: span 100; grid-template-columns: 343fr 336fr 334fr 355fr; gap: 9px; }
-  .design-preview .overview-middle-grid > .panel { grid-column: auto; min-height: 158px; }
   .objective-panel { grid-column: span 25; min-height: 158px; }
   .plan-panel { grid-column: span 24; min-height: 158px; }
   .agents-panel { grid-column: span 24; min-height: 158px; }
   .evidence-panel { grid-column: span 27; min-height: 158px; }
   .review-panel, .timeline-panel { grid-column: span 36; min-height: 280px; margin-top: 2px; }
   .analytics-panel { grid-column: span 28; min-height: 280px; margin-top: 2px; }
-  .design-preview .overview-bottom-grid { display: grid; grid-column: span 100; grid-template-columns: 495fr 498fr 374fr; gap: 14px; }
-  .design-preview .overview-bottom-grid > .panel { grid-column: auto; min-height: 280px; margin-top: 2px; }
   .page-footer { display: none; }
   .compact-empty small { font-size: 10px; }
   .evidence-health-list > div > span { font-size: 10px; }
@@ -474,4 +467,30 @@
   .wide-empty { min-height: 120px; }
   .timeline-empty, .chart-empty { min-height: 120px; }
   .page-footer { display: none; }
+}
+@media (min-width: 1260px) {
+  .design-preview .workflow-overview-canvas { height: 137px; }
+  .design-preview .content-grid { grid-template-columns: repeat(100, minmax(0, 1fr)); margin-top: 14px; row-gap: 14px; }
+  .design-preview .overview-top-grid {
+    display: grid;
+    grid-column: span 100;
+    grid-template-columns: 967fr 414fr;
+    gap: 14px;
+  }
+  .design-preview .overview-top-grid > .panel { grid-column: auto; height: 204px; overflow: hidden; }
+  .design-preview .overview-middle-grid {
+    display: grid;
+    grid-column: span 100;
+    grid-template-columns: 343fr 336fr 334fr 355fr;
+    gap: 9px;
+  }
+  .design-preview .overview-middle-grid > .panel { grid-column: auto; min-height: 158px; }
+  .design-preview .overview-bottom-grid {
+    display: grid;
+    grid-column: span 100;
+    grid-template-columns: 495fr 498fr 374fr;
+    gap: 14px;
+  }
+  .design-preview .overview-bottom-grid > .panel { grid-column: auto; min-height: 280px; margin-top: 2px; }
+  .design-preview .page-footer { display: none; }
 }

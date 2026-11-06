@@ -156,6 +156,25 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.preview-review-meta')).toContainText('Approved');
   await expect(page.locator('.preview-review-meta a')).toHaveAttribute('aria-label', 'Open pull request review');
   await expect(page.locator('.preview-diff')).toContainText('+ const evidence = await captureEvidence');
+
+  await page.setViewportSize({ width: 1672, height: 749 });
+  const compactViewport = await page.evaluate(() => {
+    const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    return {
+      workflow: bounds('.workflow-panel'), activity: bounds('.activity-panel'),
+      objectives: bounds('.objective-panel'), review: bounds('.review-panel'),
+      timeline: bounds('.timeline-panel'), analytics: bounds('.analytics-panel'),
+    };
+  });
+  expect(compactViewport.workflow.y).toBe(198);
+  expect(compactViewport.workflow.height).toBe(204);
+  expect(compactViewport.activity.x).toBe(1244);
+  expect(compactViewport.objectives.y).toBe(416);
+  expect(compactViewport.review.y).toBe(590);
+  expect(compactViewport.review.height).toBe(280);
+  expect(compactViewport.timeline.x).toBe(772);
+  expect(compactViewport.analytics.x).toBe(1284);
+  expect(compactViewport.analytics.y + compactViewport.analytics.height).toBeGreaterThan(749);
 });
 
 test('Overview matches the supplied tall desktop mockup proportions', async ({ page }) => {
