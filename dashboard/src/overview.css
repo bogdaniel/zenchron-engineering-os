@@ -156,7 +156,7 @@
 .overview-layout .workflow-node.planner,
 .overview-layout .workflow-node.test-generator,
 .overview-layout .workflow-node.code-reviewer { --workflow-accent: #43dda6; --workflow-border: #318b6d; --workflow-tint: #133a2d; --workflow-icon-bg: #1e5842; --workflow-glow: #43dda066; }
-.sample-data .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 50%; right: 8px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; transform: translateY(calc(-50% - 2.2px)); }
+.sample-data .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 12px; right: 8px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
 .sample-data .workflow-overview-canvas .react-flow__attribution { display: none; }
 .overview-layout.sample-data .overview-design-preview .workflow-panel {
   background-image: radial-gradient(circle, #302b42 1px, transparent 1px), linear-gradient(140deg, #1a1928, #11121b 76%);
@@ -171,12 +171,12 @@
 .overview-layout.sample-data .workflow-overview-actions .preview-running-badge { padding: 0 14px; font-size: 12px; }
 .overview-layout.sample-data .workflow-overview-actions .subtle-button { padding: 0 16px; font-size: 12px; }
 .overview-layout.sample-data .timeline-panel .panel-heading > div { gap: 2px; }
-.overview-layout.sample-data .timeline-panel .panel-heading .section-icon svg { width: 28px; height: 28px; transform: translateX(-2px); }
+.overview-layout .timeline-panel .panel-heading .section-icon svg { width: 28px; height: 28px; transform: translate(-2px, -10px); }
 .overview-layout.sample-data .timeline-panel .panel-heading p { font-size: 12.5px; }
 .overview-layout.sample-data .timeline-panel .panel-heading .text-link { font-size: 12px; }
 .overview-layout .workflow-overview-canvas .react-flow__viewport { translate: 1px 5px; }
 .overview-layout .workflow-overview-canvas .react-flow__handle { opacity: 0; }
-.overview-layout .workflow-overview-canvas .react-flow__edge-path { stroke: #c4d8ff; stroke-width: 2; filter: drop-shadow(0 0 3px #91bfff88); }
+.overview-layout .workflow-overview-canvas .react-flow__edge-path { stroke: #c4d8ff; stroke-width: 2; filter: drop-shadow(0 0 2px #91bfff44); }
 .overview-layout .workflow-overview-canvas .workflow-node { min-height: 58px; padding: 8px 12px; column-gap: 24px; }
 .overview-layout .workflow-overview-canvas .workflow-node-icon { width: 24px; height: 24px; background: transparent; border-radius: 0; }
 .overview-layout .workflow-overview-canvas .workflow-node-icon svg { width: 28px; height: 28px; }
@@ -433,7 +433,7 @@
 .timeline-bar.empty { width: 14px; height: 14px; justify-self: end; transform: rotate(45deg); background: #d1a1ff; }
 .preview-analytics-summary { display: grid; gap: 0; margin: 9px 2px -3px; }
 .preview-analytics-summary > div { display: flex; align-items: baseline; gap: 6px; }
-.preview-analytics-summary strong { color: #f2edfa; font-size: 24px; font-weight: 650; }
+.preview-analytics-summary strong { padding-right: 6px; color: #f2edfa; font-size: 24px; font-weight: 650; }
 .preview-analytics-summary span { color: #e7e2ef; font-size: 12px; }
 .preview-analytics-summary b { color: #4cdda5; font-size: 12px; }
 .preview-analytics-panel .recharts-cartesian-axis-tick-value { font-size: 11px; }

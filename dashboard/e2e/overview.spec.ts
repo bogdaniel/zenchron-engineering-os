@@ -144,6 +144,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.notification-indicator')).toHaveCSS('top', '-4px');
   await expect(page.locator('.workflow-panel .overview-heading-info')).toBeVisible();
   await expect(page.locator('.workflow-panel')).toHaveCSS('background-image', /radial-gradient/);
+  await expect(page.locator('.workflow-overview-canvas .react-flow__edge-path').first()).toHaveCSS('filter', /0px 0px 2px/);
   await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeHidden();
   await expect(page.locator('.workflow-node.trigger .workflow-node-icon svg')).toHaveCSS('width', '28px');
   await expect(page.locator('.workflow-node.trigger .workflow-node-icon svg path').first()).toHaveCSS('fill', 'rgb(125, 185, 255)');
@@ -173,7 +174,8 @@ test('Overview design preview renders the supplied mock content without replacin
     const title = node.querySelector('b')!.getBoundingClientRect();
     const badge = getComputedStyle(node, '::after');
     const nodeBox = node.getBoundingClientRect();
-    const badgeCenterY = nodeBox.top + parseFloat(badge.top) + new DOMMatrixReadOnly(badge.transform).m42;
+    const badgeCenterY = nodeBox.top + parseFloat(badge.top)
+      + new DOMMatrixReadOnly(badge.transform).m42 + parseFloat(badge.height) / 2;
     return Math.abs(title.top + title.height / 2 - badgeCenterY);
   });
   expect(statusBadgeAlignment).toBeLessThanOrEqual(1);
@@ -343,6 +345,8 @@ test('Overview design preview renders the supplied mock content without replacin
       }),
       headingIcon: bounds('.timeline-panel .panel-heading .section-icon svg'),
       headingTitle: bounds('.timeline-panel .panel-heading h3'),
+      headingIconCenterY: (() => { const box = bounds('.timeline-panel .panel-heading .section-icon svg'); return box.y + box.height / 2; })(),
+      headingTitleCenterY: (() => { const box = bounds('.timeline-panel .panel-heading h3'); return box.y + box.height / 2; })(),
       bars: [...document.querySelectorAll('.preview-timeline-row')].map(row => {
         const grid = row.querySelector('div')!;
         const bar = row.querySelector('.timeline-bar')!;
@@ -367,6 +371,7 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.firstRow.y).toBeCloseTo(686, 0);
   expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(787, 0);
   expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(817, 0);
+  expect(timelineMockAlignment.headingIconCenterY).toBeCloseTo(timelineMockAlignment.headingTitleCenterY, 0);
   expect(timelineMockAlignment.labelX.x).toBeCloseTo(812, 0);
   const [plan, agent, tests, reviewBar, merge] = timelineMockAlignment.bars;
   expect(plan.start).toBeCloseTo(0, 0);
@@ -391,9 +396,13 @@ test('Overview design preview renders the supplied mock content without replacin
   await page.setViewportSize({ width: 1672, height: 941 });
   await expect(page.locator('.preview-analytics-summary > span')).toHaveText('PRs Merged (7d)');
   await expect(page.locator('.preview-analytics-summary strong')).toHaveText('42');
-  const analyticsValue = await page.locator('.preview-analytics-summary strong').boundingBox();
   const analyticsChange = await page.locator('.preview-analytics-summary b').boundingBox();
-  expect(analyticsChange!.x - analyticsValue!.x - analyticsValue!.width).toBeCloseTo(6, 0);
+  const analyticsTextRight = await page.locator('.preview-analytics-summary strong').evaluate((value) => {
+    const range = document.createRange();
+    range.selectNodeContents(value);
+    return range.getBoundingClientRect().right;
+  });
+  expect(analyticsChange!.x - analyticsTextRight).toBeCloseTo(12, 0);
   await expect(page.locator('.mock-analytics-filter')).toHaveText('Delivery Velocity');
   await expect(page.locator('.preview-analytics-panel .recharts-area-curve')).toHaveCount(1);
   const analyticsPlot = await page.locator('.preview-analytics-panel .recharts-cartesian-grid').boundingBox();
