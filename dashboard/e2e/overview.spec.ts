@@ -47,6 +47,7 @@ test('dashboard displays the connected control plane and local worker', async ({
   await expect(page.getByText('Approval data unavailable', { exact: true })).toBeVisible();
   await expect(page.locator('.evidence-health-list')).toContainText('Trusted-main');
   await expect(page.locator('.evidence-health-list')).toContainText('Evidence');
+  await expect(page.locator('.evidence-health-list .muted-tag .health-status-dot').first()).toHaveCSS('background-color', 'rgb(170, 160, 192)');
   await expect(page.getByText('No pending approvals', { exact: true })).toHaveCount(0);
   await expect(page.getByText('No runs', { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Worker “.+” is online/)).toBeVisible();
@@ -145,6 +146,16 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.workflow-panel')).toHaveCSS('background-image', /radial-gradient/);
   await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeHidden();
   await expect(page.locator('.workflow-node.trigger .workflow-node-icon svg path').first()).toHaveCSS('fill', 'rgb(125, 185, 255)');
+  const triggerIconAlignment = await page.locator('.workflow-node.trigger .workflow-node-icon').evaluate((icon) => {
+    const circle = icon.getBoundingClientRect();
+    const glyph = icon.querySelector('svg')!.getBoundingClientRect();
+    return {
+      x: Math.abs(circle.x + circle.width / 2 - glyph.x - glyph.width / 2),
+      y: Math.abs(circle.y + circle.height / 2 - glyph.y - glyph.height / 2),
+    };
+  });
+  expect(triggerIconAlignment.x).toBeLessThanOrEqual(1);
+  expect(triggerIconAlignment.y).toBeLessThanOrEqual(1);
   await expect(page.locator('.metric-card').nth(0).locator('.mock-trend circle')).toHaveCount(8);
   await expect(page.locator('.metric-card').nth(1).locator('.mock-trend circle')).toHaveCount(8);
   const sidebarBackground = await page.locator('.sidebar').evaluate((sidebar) => getComputedStyle(sidebar).backgroundPosition);
@@ -195,8 +206,9 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.evidence-panel .evidence-health-list > div > svg').nth(1)).toHaveClass(/tabler-icon-stack-2/);
   await expect(page.locator('.evidence-panel .evidence-health-list > div > span').first()).toHaveCSS('font-size', '13px');
   await expect(page.locator('.evidence-panel .mock-health-tag').first()).toHaveCSS('font-size', '11px');
-  await expect(page.locator('.evidence-panel .mock-health-tag svg')).toHaveCount(2);
-  await expect(page.locator('.evidence-panel .mock-health-tag svg').first()).toHaveClass(/tabler-icon-circle-check/);
+  await expect(page.locator('.evidence-panel .mock-health-tag .health-status-dot')).toHaveCount(2);
+  await expect(page.locator('.evidence-panel .mock-health-tag .health-status-dot').first()).toHaveCSS('background-color', 'rgb(84, 224, 169)');
+  await expect(page.locator('.evidence-panel .mock-health-tag .mantine-Badge-label').first()).toHaveCSS('align-items', 'center');
   await expect(page.locator('.metric-grid .metric-card').nth(0).locator('small')).toHaveCount(0);
   const metricCards = await page.locator('.metric-grid .metric-card').evaluateAll((cards) => cards.map((card) => {
     const bounds = (selector: string) => card.querySelector(selector)!.getBoundingClientRect().toJSON();

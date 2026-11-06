@@ -181,6 +181,7 @@
 .overview-layout .workflow-overview-canvas .workflow-node-icon { width: 24px; height: 24px; background: transparent; border-radius: 0; }
 .overview-layout .workflow-overview-canvas .workflow-node-icon svg { width: 28px; height: 28px; }
 .overview-layout .workflow-node.trigger .workflow-node-icon { border: 1px solid #52729b; border-radius: 50%; background: #183451; }
+.overview-layout .workflow-node.trigger .workflow-node-icon svg { transform: translate(-3px, -3px); }
 .overview-layout .workflow-overview-canvas .workflow-node b { font-size: 15px; }
 .overview-layout .workflow-overview-canvas .workflow-node small { font-size: 12px; }
 .overview-layout .workflow-node.trigger { width: 195px; }
@@ -391,6 +392,8 @@
 .overview-layout .evidence-health-list > div > span { font-size: 13px; }
 .overview-layout .evidence-health-list small { font-size: 11px; }
 .overview-layout .mock-health-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; font-size: 11px; }
+.overview-layout .mock-health-tag .mantine-Badge-label, .overview-layout .muted-tag .mantine-Badge-label { display: flex; align-items: center; gap: 5px; }
+.health-status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: currentColor; }
 .mock-analytics-filter { display: flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid #3a3453; border-radius: 9px; color: #d9d3e5; background: #171625; font-size: 12px; font-weight: 500; text-transform: none; white-space: nowrap; }
 .preview-running-badge { border: 1px solid #276a50; color: #5be0ad; background: #12392e; font-size: 10px; text-transform: none; }
 .preview-review-panel h4 { margin: 13px 0 5px; overflow: hidden; color: #f1edf7; font-size: 15px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
