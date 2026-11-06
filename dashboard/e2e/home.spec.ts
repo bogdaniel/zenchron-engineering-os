@@ -156,10 +156,10 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.metric-grid .metric-card').first().locator('.metric-top span')).toHaveCSS('font-weight', '600');
   await expect(page.locator('.activity-list > div').nth(2).locator('svg')).toHaveClass(/tabler-icon-file-text/);
   await expect(page.locator('.activity-list > div').first()).toHaveCSS('font-size', '14px');
-  expect((await page.locator('.activity-list > div').first().locator('svg').boundingBox())?.width).toBe(22);
+  expect((await page.locator('.activity-list > div').first().locator('svg').boundingBox())?.width).toBe(24);
   await expect(page.locator('.activity-list > div').first().locator('svg')).toHaveCSS('border-radius', '50%');
   await expect(page.locator('.activity-list > div').first().locator('svg')).toHaveCSS('background-color', 'rgb(20, 57, 47)');
-  expect((await page.locator('.activity-list > div').first().locator('span').boundingBox())?.x).toBe(1306);
+  expect((await page.locator('.activity-list > div').first().locator('span').boundingBox())?.x).toBe(1316);
   await page.setViewportSize({ width: 1668, height: 749 });
   const lastActivityLabel = await page.locator('.activity-list > div').last().locator('span').evaluate((span) => ({
     scrollWidth: span.scrollWidth, clientWidth: span.clientWidth,
@@ -288,6 +288,12 @@ test('Overview design preview renders the supplied mock content without replacin
       today: bounds('.preview-today-marker b'),
       dates: bounds('.preview-timeline-dates'),
       firstRow: bounds('.preview-timeline-row'),
+      labelGridGaps: [...document.querySelectorAll('.preview-timeline-row')].map(row => {
+        const label = row.querySelector('span')!;
+        const range = document.createRange();
+        range.selectNodeContents(label);
+        return row.querySelector('div')!.getBoundingClientRect().left - range.getBoundingClientRect().right;
+      }),
       headingIcon: bounds('.timeline-panel .panel-heading .section-icon svg'),
       headingTitle: bounds('.timeline-panel .panel-heading h3'),
       labelX: (() => {
@@ -307,6 +313,7 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(787, 0);
   expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(830, 0);
   expect(timelineMockAlignment.labelX.x).toBeCloseTo(812, 0);
+  expect(Math.min(...timelineMockAlignment.labelGridGaps)).toBeGreaterThanOrEqual(0);
   expect(await page.locator('.preview-timeline-row svg').first().evaluate(icon => getComputedStyle(icon).width)).toBe('22px');
   expect(timelineMockAlignment.labelX.height).toBeLessThan(18);
   expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeGreaterThanOrEqual(1079);

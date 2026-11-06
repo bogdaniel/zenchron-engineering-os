@@ -327,10 +327,11 @@
 .overview-layout .workflow-panel .section-icon { width: 28px; height: 28px; }
 .overview-layout .workflow-panel .section-icon svg { width: 28px; height: 28px; }
 .overview-layout .activity-panel .panel-heading { transform: translateY(-6px); }
-.overview-layout.sample-data .activity-panel .activity-list { margin-left: 5px; }
-.overview-layout.sample-data .activity-panel .activity-list > div { gap: 8px; }
-.overview-layout.sample-data .activity-panel .activity-list > div > svg { width: 22px; height: 22px; margin-right: 8px; padding: 3px; border-radius: 50%; }
-.overview-layout.sample-data .activity-panel .activity-list span { letter-spacing: -.05px; }
+.overview-layout.sample-data .activity-panel .activity-list { margin-left: 9px; }
+.overview-layout.sample-data .activity-panel .activity-list > div { gap: 8px; font-weight: 500; }
+.overview-layout.sample-data .activity-panel .activity-list > div > svg { width: 24px; height: 24px; margin-right: 12px; padding: 3px; border-radius: 50%; }
+.overview-layout.sample-data .activity-panel .activity-list span { flex: 1; font-size: 13px; letter-spacing: -.15px; }
+.overview-layout.sample-data .activity-panel .activity-list time { font-size: 10px; }
 .overview-layout.sample-data .activity-panel .activity-green { background: #14392f; }
 .overview-layout.sample-data .activity-panel .activity-blue { background: #172e48; }
 .overview-layout.sample-data .activity-panel .activity-violet { background: #28203a; }
@@ -408,7 +409,7 @@
 .preview-diff i { color: #a4f0c2; font-style: normal; }
 .preview-timeline { position: relative; width: calc(100% + 8px); margin-top: 27px; }
 .preview-timeline-dates { display: grid; grid-template-columns: repeat(8, 1fr); margin: 0 0 9px 150px; color: #a19ab0; font-size: 12px; }
-.preview-timeline-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-height: 31px; align-items: center; gap: 0; color: #dcd7e5; font-size: 14px; letter-spacing: -.2px; }
+.preview-timeline-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-height: 31px; align-items: center; gap: 0; color: #dcd7e5; font-size: 12px; letter-spacing: -.2px; }
 .preview-timeline-row > span { display: flex; align-items: center; gap: 6px; }
 .preview-timeline-row svg { width: 22px; height: 22px; flex: 0 0 22px; margin-left: -5px; }
 .preview-timeline-done { color: #39dda0; }
