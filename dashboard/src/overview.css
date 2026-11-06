@@ -156,7 +156,7 @@
 .overview-layout .workflow-node.planner,
 .overview-layout .workflow-node.test-generator,
 .overview-layout .workflow-node.code-reviewer { --workflow-accent: #43dda6; --workflow-border: #318b6d; --workflow-tint: #133a2d; --workflow-icon-bg: #1e5842; --workflow-glow: #43dda066; }
-.sample-data .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 4px; right: 4px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
+.sample-data .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 50%; right: 8px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; transform: translateY(calc(-50% - 2.2px)); }
 .sample-data .workflow-overview-canvas .react-flow__attribution { display: none; }
 .overview-layout.sample-data .overview-design-preview .workflow-panel {
   background-image: radial-gradient(circle, #302b42 1px, transparent 1px), linear-gradient(140deg, #1a1928, #11121b 76%);
@@ -179,9 +179,9 @@
 .overview-layout .workflow-overview-canvas .react-flow__edge-path { stroke: #c4d8ff; stroke-width: 2; filter: drop-shadow(0 0 3px #91bfff88); }
 .overview-layout .workflow-overview-canvas .workflow-node { min-height: 58px; padding: 8px 12px; column-gap: 24px; }
 .overview-layout .workflow-overview-canvas .workflow-node-icon { width: 24px; height: 24px; background: transparent; border-radius: 0; }
-.overview-layout .workflow-overview-canvas .workflow-node-icon svg { width: 28px; height: 28px; }
+.overview-layout .workflow-overview-canvas .workflow-node-icon svg { width: 18px; height: 18px; }
 .overview-layout .workflow-node.trigger .workflow-node-icon { border: 1px solid #52729b; border-radius: 50%; background: #183451; }
-.overview-layout .workflow-node.trigger .workflow-node-icon svg { transform: translate(-4.75px, -3px); }
+.overview-layout .workflow-node.trigger .workflow-node-icon svg { transform: translate(-1px, 0); }
 .overview-layout .workflow-overview-canvas .workflow-node b { font-size: 15px; }
 .overview-layout .workflow-overview-canvas .workflow-node small { font-size: 12px; }
 .overview-layout .workflow-node.trigger { width: 195px; }

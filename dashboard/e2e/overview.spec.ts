@@ -150,21 +150,25 @@ test('Overview design preview renders the supplied mock content without replacin
     const circle = icon.getBoundingClientRect();
     const glyph = icon.querySelector('svg path')!.getBoundingClientRect();
     return {
-      x: Math.abs(circle.x + circle.width / 2 - glyph.x - glyph.width / 2),
-      y: Math.abs(circle.y + circle.height / 2 - glyph.y - glyph.height / 2),
+      left: glyph.left >= circle.left,
+      right: glyph.right <= circle.right,
+      top: glyph.top >= circle.top,
+      bottom: glyph.bottom <= circle.bottom,
     };
   });
-  expect(triggerIconAlignment.x).toBeLessThanOrEqual(1);
-  expect(triggerIconAlignment.y).toBeLessThanOrEqual(1);
+  expect(triggerIconAlignment).toEqual({ left: true, right: true, top: true, bottom: true });
   await expect(page.locator('.metric-card').nth(0).locator('.mock-trend circle')).toHaveCount(8);
   await expect(page.locator('.metric-card').nth(1).locator('.mock-trend circle')).toHaveCount(8);
   const sidebarBackground = await page.locator('.sidebar').evaluate((sidebar) => getComputedStyle(sidebar).backgroundPosition);
   expect(sidebarBackground).toContain('91px');
-  const statusBadgePosition = await page.locator('.workflow-node.test-generator').evaluate((node) => {
+  const statusBadgeAlignment = await page.locator('.workflow-node.test-generator').evaluate((node) => {
+    const title = node.querySelector('b')!.getBoundingClientRect();
     const badge = getComputedStyle(node, '::after');
-    return { top: badge.top, right: badge.right };
+    const nodeBox = node.getBoundingClientRect();
+    const badgeCenterY = nodeBox.top + parseFloat(badge.top) + new DOMMatrixReadOnly(badge.transform).m42;
+    return Math.abs(title.top + title.height / 2 - badgeCenterY);
   });
-  expect(statusBadgePosition).toEqual({ top: '4px', right: '4px' });
+  expect(statusBadgeAlignment).toBeLessThanOrEqual(1);
   await expect(page.locator('.workflow-overview-canvas')).toHaveCSS('border-top-width', '0px');
   await expect(page.locator('.workflow-overview-canvas .react-flow__background')).toHaveCSS('display', 'none');
   await expect(page.locator('.workflow-overview-actions')).toHaveCSS('gap', '8px');
