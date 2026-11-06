@@ -145,6 +145,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.workflow-panel .overview-heading-info')).toBeVisible();
   await expect(page.locator('.workflow-panel')).toHaveCSS('background-image', /radial-gradient/);
   await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeHidden();
+  await expect(page.locator('.workflow-node.trigger .workflow-node-icon svg')).toHaveCSS('width', '28px');
   await expect(page.locator('.workflow-node.trigger .workflow-node-icon svg path').first()).toHaveCSS('fill', 'rgb(125, 185, 255)');
   const triggerIconAlignment = await page.locator('.workflow-node.trigger .workflow-node-icon').evaluate((icon) => {
     const circle = icon.getBoundingClientRect();
@@ -154,9 +155,16 @@ test('Overview design preview renders the supplied mock content without replacin
       right: glyph.right <= circle.right,
       top: glyph.top >= circle.top,
       bottom: glyph.bottom <= circle.bottom,
+      centerX: Math.abs(circle.x + circle.width / 2 - glyph.x - glyph.width / 2),
+      centerY: Math.abs(circle.y + circle.height / 2 - glyph.y - glyph.height / 2),
     };
   });
-  expect(triggerIconAlignment).toEqual({ left: true, right: true, top: true, bottom: true });
+  expect(triggerIconAlignment.left).toBe(true);
+  expect(triggerIconAlignment.right).toBe(true);
+  expect(triggerIconAlignment.top).toBe(true);
+  expect(triggerIconAlignment.bottom).toBe(true);
+  expect(triggerIconAlignment.centerX).toBeLessThanOrEqual(1);
+  expect(triggerIconAlignment.centerY).toBeLessThanOrEqual(1);
   await expect(page.locator('.metric-card').nth(0).locator('.mock-trend circle')).toHaveCount(8);
   await expect(page.locator('.metric-card').nth(1).locator('.mock-trend circle')).toHaveCount(8);
   const sidebarBackground = await page.locator('.sidebar').evaluate((sidebar) => getComputedStyle(sidebar).backgroundPosition);

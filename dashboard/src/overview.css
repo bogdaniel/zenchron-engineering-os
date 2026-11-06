@@ -179,9 +179,9 @@
 .overview-layout .workflow-overview-canvas .react-flow__edge-path { stroke: #c4d8ff; stroke-width: 2; filter: drop-shadow(0 0 3px #91bfff88); }
 .overview-layout .workflow-overview-canvas .workflow-node { min-height: 58px; padding: 8px 12px; column-gap: 24px; }
 .overview-layout .workflow-overview-canvas .workflow-node-icon { width: 24px; height: 24px; background: transparent; border-radius: 0; }
-.overview-layout .workflow-overview-canvas .workflow-node-icon svg { width: 18px; height: 18px; }
+.overview-layout .workflow-overview-canvas .workflow-node-icon svg { width: 28px; height: 28px; }
 .overview-layout .workflow-node.trigger .workflow-node-icon { border: 1px solid #52729b; border-radius: 50%; background: #183451; }
-.overview-layout .workflow-node.trigger .workflow-node-icon svg { transform: translate(-1px, 0); }
+.overview-layout .workflow-node.trigger .workflow-node-icon svg { transform: translate(-4.75px, -3px); }
 .overview-layout .workflow-overview-canvas .workflow-node b { font-size: 15px; }
 .overview-layout .workflow-overview-canvas .workflow-node small { font-size: 12px; }
 .overview-layout .workflow-node.trigger { width: 195px; }
