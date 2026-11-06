@@ -39,6 +39,7 @@ import { AgentsPage, loadAgentRuns } from './agents';
 import { SystemPage } from './system';
 import { ReportsPage } from './reports';
 import { WorkspacePage } from './workspace';
+import { OverviewDesignPreview } from './OverviewDesignPreview';
 import { PageHeading } from './PageHeading';
 import { useReportPullRequestMetrics } from './reportPullRequests';
 import { useReportWorkflowRunMetrics } from './reportWorkflowRuns';
@@ -152,6 +153,7 @@ function App() {
   const unauthorized = (auth.error as (Error & { status?: number }) | null)?.status === 401;
   const sessionUnavailable = auth.isError && !unauthorized;
   const loginPreview = new URLSearchParams(window.location.search).get('preview') === 'login';
+  const designPreview = new URLSearchParams(window.location.search).get('preview') === 'mock';
   if (auth.isLoading) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
   if ((auth.isError && unauthorized) || loginPreview) return <div className="auth-screen">
     <div className="auth-card">
@@ -165,7 +167,7 @@ function App() {
   </div>;
   return (
     <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
-      <div className={`app-shell ${activePage}-shell`} id="overview">
+      <div className={`app-shell ${activePage}-shell${designPreview && activePage === 'overview' ? ' design-preview' : ''}`} id="overview">
         <aside className="sidebar">
           <a className="brand" href="#overview" aria-label="Zenchron Engineering home">
             <span className="brand-mark" aria-hidden="true" />
@@ -184,6 +186,7 @@ function App() {
           <div className="sidebar-bottom">
             <strong>Zenchron Engineering</strong>
             <p>Autonomous, verifiable, and aligned engineering.</p>
+            {designPreview && activePage === 'overview' && <small className="design-preview-label">DESIGN PREVIEW · SAMPLE DATA</small>}
             {auth.data?.local && <a className="preview-login-link" href="/?preview=login">Preview sign-in</a>}
           </div>
         </aside>
@@ -196,7 +199,8 @@ function App() {
                   title="Reports" titleAdornment={<span>Engineering Operations Analytics</span>}
                   description="Executive analytics for delivery, quality, productivity, and agent operations across products and workspaces." />
               </div> : <PageHeading className="greeting" titleLevel={1}
-                title={<>Good morning{auth.data?.login ? `, ${auth.data.login}` : ''} <span aria-hidden="true">👋</span></>}
+                title={designPreview && activePage === 'overview' ? <>Good morning, Alex <span aria-hidden="true">👋</span></>
+                  : <>Good morning{auth.data?.login ? `, ${auth.data.login}` : ''} <span aria-hidden="true">👋</span></>}
                 description={activePage === 'overview' ? <>
                   <span className="greeting-desktop-copy">Your AI-native engineering operating system for objectives, agents, code, and delivery.</span>
                   <span className="greeting-mobile-copy">Your engineering mission at a glance.</span>
@@ -211,16 +215,20 @@ function App() {
             />
             <div className="top-actions">
               <button className="icon-button" aria-label="Notifications" disabled><IconBell size={19} /></button>
-              {auth.data?.authenticated && auth.data.local === false && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
+              {!designPreview && auth.data?.authenticated && auth.data.local === false && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
                 await fetch('/api/v1/auth/logout', { method: 'POST' });
                 await auth.refetch();
               }}><IconLogout size={17} /></button>}
               <button className="workspace-button" disabled>
-                <span className="workspace-glyph">Z</span> Workspace <IconChevronDown size={15} />
+                <span className="workspace-glyph">{designPreview ? <IconLayersIntersect size={15} /> : 'Z'}</span>
+                {designPreview ? 'Core Product' : 'Workspace'} <IconChevronDown size={15} />
               </button>
               <div className="user-chip">
-                {auth.data?.avatar_url ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" /> : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?'}</span>}
-                <span>{auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}<small>{auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Preview only'}</small></span>
+                {designPreview ? <span className="avatar">AC</span> : auth.data?.avatar_url
+                  ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" />
+                  : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?'}</span>}
+                <span>{designPreview ? 'Alex Chen' : auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}
+                  <small>{designPreview ? 'Engineering Lead' : auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Preview only'}</small></span>
               </div>
             </div>
           </header>
@@ -236,7 +244,7 @@ function App() {
             <h2 id="session-preview-title">Session check unavailable</h2>
             <p>The dashboard shell is available, but page data stays hidden until your session can be verified.</p>
             <button className="github-login-button" onClick={() => void auth.refetch()}>Retry session check</button>
-          </PanelCard></section> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} /> : activePage === 'workflows' ? <WorkflowsPage /> : activePage === 'projects' ? (
+          </PanelCard></section> : designPreview && activePage === 'overview' ? <OverviewDesignPreview /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} /> : activePage === 'workflows' ? <WorkflowsPage /> : activePage === 'projects' ? (
             <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} />
           ) : activePage === 'workspace' ? (
             <WorkspacePage

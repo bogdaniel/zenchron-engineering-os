@@ -4,8 +4,8 @@ The overview dashboard is the live entry point for the local control plane. It f
 mockup: workspace navigation, status metrics, workflow visualization, recent activity, plan approvals, run status,
 evidence health, local branch reviews, timeline, and analytics. Control-plane health, workers, discovered projects,
 objectives, workflow definitions, agent-run history, GitHub pull-request counts, and GitHub Actions health are backed
-by current API/provider records. Budget, approvals, evidence, timeline, and analytics remain unavailable until their
-sources exist.
+by current API/provider records. Budget, approvals, evidence, and timeline remain unavailable until their sources
+exist. An authenticated `?preview=mock` URL shows the supplied Overview mock content as clearly labeled sample data.
 
 ## Feature diagram
 
@@ -19,6 +19,7 @@ flowchart LR
     Pages --> Metrics[Shared MetricCard<br/>Summary values and labels]
     Pages --> PanelHeading[Shared PanelHeading<br/>Panel + detail titles · descriptions · actions]
     Shell --> TypeScale[Shared CSS type scale<br/>Page title + panel heading tokens]
+    Browser -->|Authenticated ?preview=mock| DesignPreview[Overview design preview<br/>frontend sample data only]
     Dashboard -->|GET /healthz| Health[Go health endpoint]
     Dashboard --> MobileShortcuts[Mobile shortcuts<br/>Overview · My Work · Alerts]
     MobileShortcuts -->|My Work| Objectives
@@ -67,8 +68,10 @@ flowchart LR
   using the configured control-plane token; provider approvals, checks, and merge remain unavailable.
 - Overview delivery analytics uses the same complete GitHub pull-request history as Reports and charts merged PRs over
   the available history. It shows an empty state when there are no merged records or the history is incomplete.
-- Budget usage, approval records, evidence artifacts, and delivery timeline do not have backend sources yet. The UI
-  uses unavailable or empty states instead of sample values.
+- Budget usage, approval records, evidence artifacts, and delivery timeline do not have backend sources yet. The live
+  Overview uses unavailable or empty states instead of sample values.
+- The authenticated `?preview=mock` view renders the supplied Overview mock's sample content in the existing UI for
+  visual review. It is frontend-only, labeled as sample data, and does not change live API records.
 - The overview Reviews card lists only agent runs with captured local diffs and links to the Reviews page for comments
   and request-changes; provider-sourced pull requests and issues appear in their own Reviews queues.
 - Local branch runs and their diffs/comments are available in Reviews alongside provider-sourced open items.

@@ -69,6 +69,27 @@ const mobileOverviewStages: {
     types: ['human-approval', 'merge-gate', 'publish-report'], position: { x: 216, y: 36 },
   },
 ];
+const designPreviewWorkflow: Workflow = {
+  id: 'overview-design-preview', name: 'PR Review & Release Orchestration', description: '', status: 'active', version: 1,
+  updated_at: '',
+  nodes: [
+    ['trigger', 'trigger', 'Trigger', 'PR or objective update'],
+    ['plan', 'planner', 'Plan', 'Generate plan'],
+    ['build', 'agent-router', 'Build', 'Run agents'],
+    ['tests', 'test-generator', 'Test', 'Run test suite'],
+    ['coverage', 'coverage-analyzer', 'Coverage', 'Analyze coverage'],
+    ['review', 'code-reviewer', 'Review', 'AI + human review'],
+    ['approval', 'human-approval', 'Approval', 'Require manual review'],
+    ['merge', 'merge-gate', 'Merge', 'Apply merge gate'],
+    ['publish', 'publish-report', 'Publish', 'Release report'],
+  ].map(([id, type, label, description]) => ({
+    id, type: type as ComponentType, position: { x: 0, y: 0 }, data: { label, description },
+  })),
+  edges: [
+    ['trigger', 'plan'], ['plan', 'build'], ['build', 'tests'], ['build', 'coverage'], ['build', 'review'],
+    ['tests', 'approval'], ['coverage', 'approval'], ['review', 'approval'], ['approval', 'merge'], ['merge', 'publish'],
+  ].map(([source, target]) => ({ id: `${source}-${target}`, source, target, label: '' })),
+};
 
 const components = [
   ['Core', 'trigger', 'Trigger'], ['Core', 'planner', 'Planner'],
@@ -217,9 +238,13 @@ function workflowGraph(workflow: Workflow) {
   };
 }
 
-export function WorkflowOverview({ mobile = false, workflowID }: { mobile?: boolean; workflowID?: string }) {
-  const query = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows });
-  const workflow = workflowID
+export function WorkflowOverview({ mobile = false, workflowID, designPreview = false }: {
+  mobile?: boolean;
+  workflowID?: string;
+  designPreview?: boolean;
+}) {
+  const query = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows, enabled: !designPreview });
+  const workflow = designPreview ? designPreviewWorkflow : workflowID
     ? query.data?.find((item) => item.id === workflowID)
     : query.data?.[0];
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
@@ -250,13 +275,15 @@ export function WorkflowOverview({ mobile = false, workflowID }: { mobile?: bool
 
   return <PanelCard className="panel workflow-panel" id="workflow" withBorder>
     <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconRoute size={18} /></span>}
-      title="Workflow Orchestration" description={workflow?.name ?? 'Saved workflow definition'}
+      title="Workflow Orchestration" description={designPreview ? 'Objective: Ship AI code review v2' : workflow?.name ?? 'Saved workflow definition'}
       actions={<div className="panel-actions">
-        <Badge className="muted-tag" variant="light">{workflow?.status ?? 'Unavailable'}</Badge>
+        <Badge className={designPreview ? 'preview-running-badge' : 'muted-tag'} variant="light">
+          {designPreview ? '● Running' : workflow?.status ?? 'Unavailable'}
+        </Badge>
         <a className="subtle-button" href="#workflows">View workflow <IconChevronRight size={13} /></a>
       </div>} />
-    {query.isLoading ? <div className="workflow-overview-message">Loading saved workflow…</div>
-      : query.isError || !workflow ? <div className="workflow-overview-message" role="status">Workflow definition unavailable</div>
+    {!designPreview && query.isLoading ? <div className="workflow-overview-message">Loading saved workflow…</div>
+      : !workflow || (!designPreview && query.isError) ? <div className="workflow-overview-message" role="status">Workflow definition unavailable</div>
         : layoutError ? <div className="workflow-overview-message" role="status">Could not arrange workflow graph</div>
           : <>
             <div className="workflow-overview-canvas" role="img"
@@ -276,7 +303,7 @@ export function WorkflowOverview({ mobile = false, workflowID }: { mobile?: bool
             </div>
             <div className="workflow-overview-status" aria-label="Workflow execution status">
               <span>{workflow.nodes.length} components · {workflow.edges.length} connections</span>
-              <span>Execution unavailable · runner not connected</span>
+              <span>{designPreview ? 'Workflow run #8821 · 78% complete' : 'Execution unavailable · runner not connected'}</span>
             </div>
           </>}
   </PanelCard>;

@@ -90,6 +90,49 @@ test('Overview PR queue and CI health use complete GitHub history', async ({ pag
   await expect(page.locator('.overview-delivery-summary')).toContainText('1');
 });
 
+test('Overview design preview renders the supplied mock content without replacing live data', async ({ page }) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/?preview=mock');
+  await expect(page.getByText('DESIGN PREVIEW · SAMPLE DATA', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Core Product' })).toBeVisible();
+  await expect(page.locator('.user-chip')).toContainText('Alex Chen');
+  await expect(page.locator('.metric-grid .metric-card')).toHaveCount(5);
+  await expect(page.locator('.metric-grid .metric-card').nth(0)).toContainText('12');
+  await expect(page.locator('.metric-grid .metric-card').nth(1)).toContainText('7');
+  await expect(page.locator('.metric-grid .metric-card').nth(2)).toContainText('18');
+  await expect(page.locator('.metric-grid .metric-card').nth(3)).toContainText('99.4%');
+  await expect(page.locator('.metric-grid .metric-card').nth(4)).toContainText('68%');
+  await expect(page.locator('.metric-grid .metric-card').nth(0).locator('small')).toHaveCount(0);
+  await expect(page.locator('.mock-budget-summary')).toContainText('$13.6K / $20K');
+  await expect(page.getByText('Workflow run #8821 · 78% complete')).toBeVisible();
+  await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
+  await expect(page.locator('.workflow-overview-canvas')).toHaveAttribute('aria-label', /6 stages summarize 9 components/);
+  await expect(page.locator('.workflow-overview-status')).toContainText('9 components · 10 connections');
+  await expect(page.locator('.preview-objective-list')).toContainText('Ship AI code review v2');
+  await expect(page.getByText('PR #41827', { exact: true })).toBeVisible();
+  await expect(page.locator('.preview-timeline-row')).toHaveCount(5);
+  await expect(page.locator('.preview-analytics-summary')).toContainText('42');
+  await expect(page.locator('.preview-analytics-panel .recharts-line-curve')).toHaveCount(1);
+  const metrics = await page.locator('.metric-grid').boundingBox();
+  const workflow = await page.locator('.workflow-panel').boundingBox();
+  const activity = await page.locator('.activity-panel').boundingBox();
+  const objectives = await page.locator('.objective-panel').boundingBox();
+  const search = await page.locator('.search-box').boundingBox();
+  const topActions = await page.locator('.top-actions').boundingBox();
+  expect(search?.x).toBe(778.5);
+  expect(search?.width).toBe(410);
+  expect(topActions?.x).toBe(1216);
+  expect(metrics?.x).toBe(263);
+  expect(metrics?.y).toBe(84);
+  expect(metrics?.width).toBe(1395);
+  expect(metrics?.height).toBe(100);
+  expect(workflow?.y).toBe(198);
+  expect(workflow?.height).toBe(204);
+  expect(activity?.height).toBe(204);
+  expect(objectives?.height).toBe(158);
+});
+
 test('Overview matches the supplied tall desktop mockup proportions', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/');
