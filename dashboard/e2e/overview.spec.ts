@@ -349,6 +349,9 @@ test('Overview design preview renders the supplied mock content without replacin
   await page.setViewportSize({ width: 1672, height: 941 });
   await expect(page.locator('.preview-analytics-summary > span')).toHaveText('PRs Merged (7d)');
   await expect(page.locator('.preview-analytics-summary strong')).toHaveText('42');
+  const analyticsValue = await page.locator('.preview-analytics-summary strong').boundingBox();
+  const analyticsChange = await page.locator('.preview-analytics-summary b').boundingBox();
+  expect(analyticsChange!.x - analyticsValue!.x - analyticsValue!.width).toBeCloseTo(6, 0);
   await expect(page.locator('.mock-analytics-filter')).toHaveText('Delivery Velocity');
   await expect(page.locator('.preview-analytics-panel .recharts-area-curve')).toHaveCount(1);
   const analyticsPlot = await page.locator('.preview-analytics-panel .recharts-cartesian-grid').boundingBox();

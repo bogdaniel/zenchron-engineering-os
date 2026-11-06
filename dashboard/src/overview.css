@@ -432,7 +432,7 @@
 .preview-analytics-summary > div { display: flex; align-items: baseline; gap: 6px; }
 .preview-analytics-summary strong { color: #f2edfa; font-size: 24px; font-weight: 650; }
 .preview-analytics-summary span { color: #e7e2ef; font-size: 12px; }
-.preview-analytics-summary b { margin-left: auto; color: #4cdda5; font-size: 12px; }
+.preview-analytics-summary b { color: #4cdda5; font-size: 12px; }
 .preview-analytics-panel .recharts-cartesian-axis-tick-value { font-size: 11px; }
 .preview-analytics-panel .recharts-cartesian-grid line { stroke: #302d3c; stroke-dasharray: none; }
 .page-footer { display: flex; justify-content: space-between; margin-top: 13px; color: #77738d; font-size: 9px; letter-spacing: .7px; }
