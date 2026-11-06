@@ -14,7 +14,7 @@ import { z } from 'zod';
 import {
   IconBolt, IconCheck, IconChecklist, IconChevronRight, IconCirclePlus, IconCode, IconDeviceFloppy, IconDots,
   IconFileText, IconFlask, IconGitBranch, IconGitMerge, IconGripVertical, IconHierarchy, IconInfoCircle, IconLayoutBoard, IconMaximize, IconMessage2, IconStack2,
-  IconPlayerPlay, IconRepeat, IconRobot, IconRoute, IconSearch, IconTestPipe, IconChartBar, IconUserCheck,
+  IconPlayerPlay, IconPlayerPlayFilled, IconRepeat, IconRobot, IconRoute, IconSearch, IconTestPipe, IconChartBar, IconUserCheck,
 } from '@tabler/icons-react';
 import '@xyflow/react/dist/style.css';
 import { PageHeading } from './PageHeading';
@@ -53,7 +53,7 @@ const mobileOverviewStages: {
 }[] = [
   {
     id: 'trigger', label: 'Trigger', description: 'PR or objective update', kind: 'trigger', types: ['trigger'],
-    position: { x: 0, y: 36 }, previewIcon: IconPlayerPlay,
+    position: { x: 0, y: 36 }, previewIcon: IconPlayerPlayFilled,
   },
   { id: 'plan', label: 'Plan', description: 'Generate plan', kind: 'planner', types: ['planner'],
     position: { x: 54, y: 36 }, previewIcon: IconStack2 },

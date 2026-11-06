@@ -209,7 +209,8 @@ export function OverviewPage({ sampleData, projects, projectsLoading, projectsEr
 
 function MockTrend({ value, data, teal = false }: { value: string; data: number[]; teal?: boolean }) {
   return <span className="mock-trend"><Badge data-teal={teal || undefined}>{value}</Badge>
-    <Sparkline data={data} color={teal ? 'teal.4' : 'violet.5'} w={98} h={32} curveType="monotone" /></span>;
+    <Sparkline data={data} color={teal ? 'teal.4' : 'violet.5'} w={98} h={32} curveType="monotone"
+      areaProps={{ dot: { r: 2.5, fill: '#f2edfa', stroke: teal ? '#5eead4' : '#c394ff', strokeWidth: 1 } }} /></span>;
 }
 
 function MockBars({ sampleData }: { sampleData: boolean }) {

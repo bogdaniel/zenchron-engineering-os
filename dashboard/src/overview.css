@@ -156,7 +156,7 @@
 .overview-layout .workflow-node.planner,
 .overview-layout .workflow-node.test-generator,
 .overview-layout .workflow-node.code-reviewer { --workflow-accent: #43dda6; --workflow-border: #318b6d; --workflow-tint: #133a2d; --workflow-icon-bg: #1e5842; --workflow-glow: #43dda066; }
-.sample-data .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 2px; right: 3px; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
+.sample-data .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 4px; right: 4px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
 .sample-data .workflow-overview-canvas .react-flow__attribution { display: none; }
 .overview-layout.sample-data .overview-design-preview .workflow-panel {
   background-image: radial-gradient(circle, #302b42 1px, transparent 1px), linear-gradient(140deg, #1a1928, #11121b 76%);
@@ -339,7 +339,7 @@
   .overview-layout .overview-middle-grid .panel-heading { transform: none; }
 }
 .mock-trend { display: flex; align-items: center; gap: 7px; }
-.mock-trend svg { transform: scaleY(1.4); transform-origin: center; filter: drop-shadow(0 0 3px #a454ff70); }
+.mock-trend svg { filter: drop-shadow(0 0 3px #a454ff70); }
 .metric-card.blue .mock-trend svg { filter: drop-shadow(0 0 3px #20d7c070); }
 .mock-bars { display: flex; width: 58px; height: 30px; align-items: end; justify-content: end; gap: 5px; }
 .pr-queue-metric .mock-bars { margin-right: 10px; }

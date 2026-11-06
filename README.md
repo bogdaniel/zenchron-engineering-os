@@ -87,7 +87,7 @@ go test ./cmd/zenchron-worker \
   -run 'TestSendHeartbeatUsesWorkerEndpoint|TestDiscoverProjects|TestRepositoryLocator|TestGitRemoteScrubsCredentials|TestPrepareWorktree|TestWorkerClaimsAgentRun|TestAgentRuntimeConfiguration|TestSafeRepositoryPath|TestLongCommandKeepsWorkerPresenceAlive' \
   -count=1
 cd dashboard && npm run typecheck
-cd dashboard && npm run test:e2e -- e2e/home.spec.ts \
+cd dashboard && npm run test:e2e -- e2e/overview.spec.ts e2e/home.spec.ts \
   --grep 'dashboard displays|mobile overview|overview lists only agent runs|Projects page shows|worker prepares|Reviews page|workflow graph can be edited|Objectives dashboard fits|objectives can be created|agent profiles'
 ```
 
