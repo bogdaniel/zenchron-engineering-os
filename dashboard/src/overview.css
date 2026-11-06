@@ -170,6 +170,10 @@
 .overview-layout.sample-data .workflow-overview-actions .workflow-icon-link { height: 32px; }
 .overview-layout.sample-data .workflow-overview-actions .preview-running-badge { padding: 0 14px; font-size: 12px; }
 .overview-layout.sample-data .workflow-overview-actions .subtle-button { padding: 0 16px; font-size: 12px; }
+.overview-layout.sample-data .timeline-panel .panel-heading > div { gap: 15px; }
+.overview-layout.sample-data .timeline-panel .panel-heading .section-icon svg { width: 28px; height: 28px; transform: translateX(-2px); }
+.overview-layout.sample-data .timeline-panel .panel-heading p { font-size: 12.5px; }
+.overview-layout.sample-data .timeline-panel .panel-heading .text-link { font-size: 12px; }
 .overview-layout .workflow-overview-canvas .react-flow__viewport { translate: 1px 5px; }
 .overview-layout .workflow-overview-canvas .react-flow__handle { opacity: 0; }
 .overview-layout .workflow-overview-canvas .react-flow__edge-path { stroke: #c4d8ff; stroke-width: 2; filter: drop-shadow(0 0 3px #91bfff88); }
@@ -402,11 +406,11 @@
 .preview-diff { margin: 11px 0 0; padding: 7px 8px; overflow: hidden; border: 1px solid #15553d; border-radius: 8px; color: #c5f8da; background: #06291d; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
 .preview-diff > span { color: #8e9b94; }
 .preview-diff i { color: #a4f0c2; font-style: normal; }
-.preview-timeline { position: relative; width: calc(100% + 8px); margin-top: 30px; }
+.preview-timeline { position: relative; width: calc(100% + 8px); margin-top: 27px; }
 .preview-timeline-dates { display: grid; grid-template-columns: repeat(8, 1fr); margin: 0 0 9px 150px; color: #a19ab0; font-size: 12px; }
 .preview-timeline-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-height: 31px; align-items: center; gap: 0; color: #dcd7e5; font-size: 14px; letter-spacing: -.2px; }
-.preview-timeline-row > span { display: flex; align-items: center; gap: 5px; }
-.preview-timeline-row svg { width: 18px; height: 18px; flex: 0 0 18px; }
+.preview-timeline-row > span { display: flex; align-items: center; gap: 6px; }
+.preview-timeline-row svg { width: 22px; height: 22px; flex: 0 0 22px; margin-left: -5px; }
 .preview-timeline-done { color: #39dda0; }
 .preview-timeline-pending { color: #88839a; }
 /* ponytail: offsets match the static mock; derive bar positions from dates if this preview becomes data-driven */
@@ -435,7 +439,7 @@
 .overview-top-grid, .overview-middle-grid, .overview-bottom-grid { display: contents; }
 @media (min-width: 1260px) and (max-height: 839px) {
   .overview-layout .metric-card { min-height: 100px; }
-  .overview-layout.sample-data .preview-timeline { margin-top: 19px; }
+  .overview-layout.sample-data .preview-timeline { margin-top: 16px; }
   .page-footer { margin-top: 6px; }
 }
 @media (max-width: 1250px) {

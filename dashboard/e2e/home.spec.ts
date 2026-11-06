@@ -301,12 +301,13 @@ test('Overview design preview renders the supplied mock content without replacin
       })(),
     };
   });
-  expect(timelineMockAlignment.dates.y).toBeCloseTo(661, 0);
-  expect(timelineMockAlignment.today.y).toBeCloseTo(680, 0);
-  expect(timelineMockAlignment.firstRow.y).toBeCloseTo(689, 0);
-  expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(791, 0);
-  expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(828, 0);
+  expect(timelineMockAlignment.dates.y).toBeCloseTo(659, 0);
+  expect(timelineMockAlignment.today.y).toBeCloseTo(678, 0);
+  expect(timelineMockAlignment.firstRow.y).toBeCloseTo(686, 0);
+  expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(787, 0);
+  expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(830, 0);
   expect(timelineMockAlignment.labelX.x).toBeCloseTo(812, 0);
+  expect(await page.locator('.preview-timeline-row svg').first().evaluate(icon => getComputedStyle(icon).width)).toBe('22px');
   expect(timelineMockAlignment.labelX.height).toBeLessThan(18);
   expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeGreaterThanOrEqual(1079);
   expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeLessThanOrEqual(1087);
@@ -314,7 +315,7 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.today.y - timelineMockAlignment.firstRow.y).toBeLessThanOrEqual(-8);
   await page.setViewportSize({ width: 1672, height: 749 });
   const compactTimelineDates = await page.locator('.preview-timeline-dates').boundingBox();
-  expect(compactTimelineDates?.y).toBeCloseTo(661, 0);
+  expect(compactTimelineDates?.y).toBeCloseTo(659, 0);
   await page.setViewportSize({ width: 1672, height: 941 });
   await expect(page.locator('.preview-analytics-summary > span')).toHaveText('PRs Merged (7d)');
   await expect(page.locator('.preview-analytics-summary strong')).toHaveText('42');
@@ -351,7 +352,7 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(mockDetails.reviewMeta.height).toBeCloseTo(27, 0);
   expect(mockDetails.reviewDiff.y).toBeCloseTo(742, 0);
   expect(mockDetails.reviewDiff.height).toBe(106);
-  expect(mockDetails.timelineSubtitleFont).toBe('11.5px');
+  expect(mockDetails.timelineSubtitleFont).toBe('12.5px');
   const metrics = await page.locator('.metric-grid').boundingBox();
   const sidebar = await page.locator('.sidebar').boundingBox();
   const workflow = await page.locator('.workflow-panel').boundingBox();
