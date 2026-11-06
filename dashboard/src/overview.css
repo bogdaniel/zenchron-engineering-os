@@ -245,7 +245,7 @@
 .design-preview .metric-card { min-height: 100px; padding-right: 14px; padding-left: 21px; border-radius: 16px; }
 .design-preview .metric-card .metric-top { gap: 22px; }
 .design-preview .metric-card .metric-top > svg { width: 28px; height: 28px; }
-.app-shell.design-preview .main-content .shared-metric-card .metric-top { color: #f4efff; font-size: 15px; }
+.app-shell.design-preview .main-content .shared-metric-card .metric-top { color: #f4efff; font-size: 15px; font-weight: 600; }
 .design-preview .nav-link { min-height: 38px; }
 .design-preview .nav-link.active { min-height: 46px; }
 .design-preview .metric-value-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
@@ -274,7 +274,9 @@
 .design-preview .workflow-panel .section-icon svg { width: 28px; height: 28px; }
 .design-preview .activity-panel .panel-heading { transform: translateY(-6px); }
 .mock-trend { display: flex; align-items: center; gap: 7px; }
-.mock-bars { display: flex; width: 58px; height: 24px; align-items: end; justify-content: end; gap: 5px; }
+.mock-trend svg { transform: scaleY(1.4); transform-origin: center; filter: drop-shadow(0 0 3px #a454ff70); }
+.metric-card.blue .mock-trend svg { filter: drop-shadow(0 0 3px #20d7c070); }
+.mock-bars { display: flex; width: 58px; height: 30px; align-items: end; justify-content: end; gap: 5px; }
 .pr-queue-metric .mock-bars { margin-right: 10px; }
 .mock-bars i { width: 8px; background: linear-gradient(180deg, #b25cff, #722bea); box-shadow: 0 0 9px #9e4bff42; }
 .pr-queue-metric .mock-trend .mantine-Badge-root { border-color: #53367a; color: #d2a3ff; background: #2d1d43; }
@@ -406,10 +408,12 @@
   .metric-card { min-height: 100px; padding: 11px; }
   .overview-shell.design-preview .metric-card .metric-top { gap: 8px; }
   .overview-shell.design-preview .metric-card .metric-top > span { font-size: 13px; white-space: nowrap; }
-  .overview-shell.design-preview .metric-value-row > .mock-trend .mantine-Badge-root { padding: 1px 5px; font-size: 10px; }
+  .overview-shell.design-preview .metric-value-row > .mock-trend .mantine-Badge-root { flex: 0 0 auto; padding: 1px 3px; font-size: 10px; }
+  .overview-shell.design-preview .mock-healthy-badge { flex: 0 0 auto; padding: 2px 8px; font-size: 10px; white-space: nowrap; }
   .overview-shell.design-preview .activity-list > div { gap: 6px; font-size: 12px; }
   .overview-shell.design-preview .metric-value-row > .mock-trend { gap: 4px; margin-left: 4px; }
-  .overview-shell.design-preview .mock-trend > svg { width: 58px; }
+  .overview-shell.design-preview .mock-trend > .mantine-Sparkline-root { width: 58px; flex: 0 0 58px; }
+  .overview-shell.design-preview .mock-trend svg { transform: none; }
   .overview-shell.design-preview .mock-budget-summary { width: 95px; margin-right: 0; }
   .overview-shell.design-preview .mock-budget-summary small { font-size: 10px; white-space: nowrap; }
   .overview-shell.design-preview .mock-budget-progress { width: 95px; }

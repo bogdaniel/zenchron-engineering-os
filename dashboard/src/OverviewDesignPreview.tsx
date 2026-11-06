@@ -26,9 +26,9 @@ export function OverviewDesignPreview() {
   return <>
     <section className="metric-grid" aria-label="Overview mock metrics">
       <MetricCard className="metric-card purple" label="Active Objectives" value="12"
-        icon={<IconTarget size={19} />} trend={<MockTrend value="↑ +3" data={[3, 4, 3, 6, 5, 7, 9]} />} />
+        icon={<IconTarget size={19} />} trend={<MockTrend value="↑ +3" data={[1, 8, 4, 10, 7, 11, 9, 15, 17]} />} />
       <MetricCard className="metric-card blue" label="Running Agents" value="7"
-        icon={<IconRobot size={19} />} trend={<MockTrend value="● Live" data={[3, 4, 4, 6, 5, 7, 8]} teal />} />
+        icon={<IconRobot size={19} />} trend={<MockTrend value="● Live" data={[1, 6, 3, 9, 7, 12, 10, 14, 13]} teal />} />
       <MetricCard className="metric-card purple pr-queue-metric" label="PR Queue" value="18"
         icon={<IconGitPullRequest size={19} />} trend={<span className="mock-trend"><Badge>↑ +4</Badge><MockBars /></span>} />
       <MetricCard className="metric-card green" label="CI Health" value="99.4%"
@@ -145,9 +145,9 @@ export function OverviewDesignPreview() {
 
 function MockTrend({ value, data, teal = false }: { value: string; data: number[]; teal?: boolean }) {
   return <span className="mock-trend"><Badge data-teal={teal || undefined}>{value}</Badge>
-    <Sparkline data={data} color={teal ? 'teal.4' : 'violet.5'} w={98} h={24} /></span>;
+    <Sparkline data={data} color={teal ? 'teal.4' : 'violet.5'} w={98} h={32} curveType="monotone" /></span>;
 }
 
 function MockBars() {
-  return <span className="mock-bars" aria-hidden="true">{[8, 13, 11, 18, 24].map((height) => <i key={height} style={{ height }} />)}</span>;
+  return <span className="mock-bars" aria-hidden="true">{[8, 14, 11, 20, 27].map((height) => <i key={height} style={{ height }} />)}</span>;
 }

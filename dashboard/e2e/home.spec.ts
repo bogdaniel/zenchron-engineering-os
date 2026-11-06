@@ -114,6 +114,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.metric-grid .metric-card').nth(3)).toContainText('99.4%');
   await expect(page.locator('.metric-grid .metric-card').nth(4)).toContainText('68%');
   await expect(page.locator('.metric-grid .metric-card').nth(4)).toHaveClass(/purple/);
+  await expect(page.locator('.metric-grid .metric-card').first().locator('.metric-top span')).toHaveCSS('font-weight', '600');
   await expect(page.locator('.metric-grid .metric-card').nth(0).locator('small')).toHaveCount(0);
   const metricCards = await page.locator('.metric-grid .metric-card').evaluateAll((cards) => cards.map((card) => {
     const bounds = (selector: string) => card.querySelector(selector)!.getBoundingClientRect().toJSON();
@@ -378,6 +379,8 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
   await expect(page.locator('.mock-budget-summary small')).toBeVisible();
   await expect(page.locator('.metric-card:visible .mock-trend .mantine-Badge-root').nth(0)).toHaveText('↑ +3');
   await expect(page.locator('.metric-card:visible .mock-trend .mantine-Badge-root').nth(1)).toHaveText('● Live');
+  expect(await page.locator('.metric-grid .metric-card:not(.pr-queue-metric) .mantine-Badge-label').evaluateAll((labels) =>
+    labels.every((label) => label.scrollWidth <= label.clientWidth))).toBe(true);
   await expect(page.locator('.activity-list')).toContainText('Objective “Improve review velocity” updated');
   await expect(page.locator('.activity-panel')).toBeVisible();
   const mobileOverviewLayout = await page.evaluate(() => {
