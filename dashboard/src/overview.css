@@ -24,6 +24,10 @@
 .design-preview .sidebar { padding-top: 14px; }
 .design-preview .brand { gap: 24px; margin-bottom: 33px; }
 .design-preview .greeting { margin-left: 3px; }
+@media (min-width: 1260px) {
+  .design-preview .sidebar { padding-right: 11px; }
+  .design-preview .sidebar .nav-link { gap: 18px; padding-left: 27px; }
+}
 .design-preview .search-box input:disabled { opacity: 1; border-color: #37304d; background: linear-gradient(135deg, #211e34, #171626); box-shadow: inset 0 1px #ffffff0a, 0 4px 18px #0004; }
 .design-preview .search-box input:disabled::placeholder { color: #d0c8df; opacity: 1; }
 @media (min-width: 1260px) and (max-width: 1621px) {

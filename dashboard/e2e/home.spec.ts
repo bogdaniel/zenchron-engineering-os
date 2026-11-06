@@ -103,6 +103,8 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.user-chip img')).toHaveJSProperty('naturalWidth', 128);
   await expect(page.locator('.nav-link.active')).toHaveCSS('height', '46px');
   await expect(page.locator('.nav-link[href="#objectives"]')).toHaveCSS('height', '38px');
+  expect((await page.locator('.nav-link.active').boundingBox())?.width).toBe(221);
+  expect((await page.locator('.nav-link.active .nav-label').boundingBox())?.x).toBe(80);
   expect((await page.locator('.sidebar-bottom strong').boundingBox())?.y).toBeGreaterThanOrEqual(790);
   expect((await page.locator('.sidebar-bottom strong').boundingBox())?.y).toBeLessThanOrEqual(804);
   await expect(page.locator('.metric-grid .metric-card')).toHaveCount(5);
