@@ -137,6 +137,10 @@
 .design-preview .workflow-node.code-reviewer { --workflow-accent: #43dda6; --workflow-border: #318b6d; --workflow-tint: #133a2d; --workflow-icon-bg: #1e5842; --workflow-glow: #43dda066; }
 .design-preview .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 4px; right: 6px; color: #22d99b; content: '✓'; font-size: 11px; font-weight: 700; }
 .design-preview .workflow-overview-canvas .react-flow__attribution { display: none; }
+.design-preview .workflow-node.planner { width: 160px; }
+.design-preview .workflow-node.agent-router { width: 170px; }
+.design-preview .workflow-node.test-generator, .design-preview .workflow-node.code-reviewer { width: 180px; }
+.design-preview .workflow-node.merge-gate { width: 170px; }
 .workflow-overview-status { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; color: #a49cb5; font-size: 9px; }
 .workflow-overview-message { display: grid; min-height: 144px; place-items: center; color: #a49cb5; font-size: 11px; }
 .text-link { color: #c7a1ff; font-size: 10px; white-space: nowrap; }

@@ -43,6 +43,10 @@ type Workflow = z.infer<typeof workflowSchema>;
 const workflowNodeWidth = 190;
 const workflowNodeHeight = 110;
 const overviewNodeLayout = { width: 190, height: 54, spacing: 8 };
+const designPreviewPositions: Record<string, { x: number; y: number }> = {
+  trigger: { x: 0, y: 51 }, plan: { x: 239, y: 51 }, build: { x: 446, y: 51 },
+  test: { x: 659, y: 0 }, review: { x: 659, y: 90 }, merge: { x: 905, y: 51 },
+};
 const mobileOverviewStages: {
   id: string; label: string; description: string; kind: ComponentType; types: ComponentType[];
   position: { x: number; y: number };
@@ -212,7 +216,7 @@ function mobileWorkflowGraph(workflow: Workflow, designPreview = false) {
   const configuredStages = new Set(stageByNode.values());
   const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id));
   const nodes: WorkflowNode[] = stages.map(({ id, label, description, kind, position }) => ({
-    id, type: 'workflow', position,
+    id, type: 'workflow', position: designPreview ? designPreviewPositions[id] ?? position : position,
     data: {
       kind, label,
       description: designPreview && id === 'trigger' ? 'PR opened / updated'
@@ -264,6 +268,13 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
       setEdges(graph.edges);
       return;
     }
+    if (designPreview) {
+      const graph = mobileWorkflowGraph(workflow, true);
+      setLayoutError(false);
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
+      return;
+    }
     let isCurrent = true;
     const graph = mobileWorkflowGraph(workflow, designPreview);
     setLayoutError(false);
@@ -275,7 +286,7 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
       if (isCurrent) setLayoutError(true);
     });
     return () => { isCurrent = false; };
-  }, [workflow, mobile]);
+  }, [workflow, mobile, designPreview]);
 
   return <PanelCard className="panel workflow-panel" id="workflow" withBorder>
     <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconRoute size={18} /></span>}
@@ -308,7 +319,7 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
               <ReactFlow
                 nodes={nodes} edges={edges} nodeTypes={flowNodeTypes} fitView={!mobile} minZoom={mobile ? 0.9 : 0.15}
                 maxZoom={0.9} defaultViewport={mobile ? { x: 18, y: 8, zoom: 0.9 } : undefined}
-                fitViewOptions={{ padding: 0.03 }}
+                fitViewOptions={{ padding: designPreview ? 0.015 : 0.03 }}
                 nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} panOnDrag={false}
                 zoomOnScroll={false} zoomOnPinch={false} attributionPosition="bottom-left"
               >

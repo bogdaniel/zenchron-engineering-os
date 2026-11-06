@@ -116,6 +116,37 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.getByRole('menuitem', { name: 'Open workflow editor' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('.workflow-overview-canvas')).toHaveAttribute('aria-label', /6 stages summarize 9 components/);
+  const workflowNodeGaps = await page.evaluate(() => {
+    const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    return {
+      triggerPlan: bounds('.workflow-node.trigger').right - bounds('.workflow-node.planner').left,
+      testReview: bounds('.workflow-node.test-generator').bottom - bounds('.workflow-node.code-reviewer').top,
+    };
+  });
+  expect(workflowNodeGaps.triggerPlan).toBeLessThanOrEqual(-20);
+  expect(workflowNodeGaps.testReview).toBeLessThanOrEqual(-20);
+  const graphStages = await page.evaluate(() => Object.fromEntries(
+    ['trigger', 'planner', 'agent-router', 'test-generator', 'code-reviewer', 'merge-gate'].map((kind) => {
+      const rect = document.querySelector(`.workflow-node.${kind}`)!.getBoundingClientRect();
+      return [kind, { x: rect.x, y: rect.y }];
+    }),
+  ));
+  expect(graphStages.trigger.x).toBeGreaterThanOrEqual(279);
+  expect(graphStages.trigger.x).toBeLessThanOrEqual(299);
+  expect(graphStages.trigger.y).toBeGreaterThanOrEqual(292);
+  expect(graphStages.trigger.y).toBeLessThanOrEqual(310);
+  expect(graphStages.planner.x).toBeGreaterThanOrEqual(487);
+  expect(graphStages.planner.x).toBeLessThanOrEqual(507);
+  expect(graphStages['agent-router'].x).toBeGreaterThanOrEqual(662);
+  expect(graphStages['agent-router'].x).toBeLessThanOrEqual(682);
+  expect(graphStages['test-generator'].x).toBeGreaterThanOrEqual(844);
+  expect(graphStages['test-generator'].x).toBeLessThanOrEqual(864);
+  expect(graphStages['test-generator'].y).toBeGreaterThanOrEqual(247);
+  expect(graphStages['test-generator'].y).toBeLessThanOrEqual(267);
+  expect(graphStages['code-reviewer'].y).toBeGreaterThanOrEqual(327);
+  expect(graphStages['code-reviewer'].y).toBeLessThanOrEqual(347);
+  expect(graphStages['merge-gate'].x).toBeGreaterThanOrEqual(1053);
+  expect(graphStages['merge-gate'].x).toBeLessThanOrEqual(1073);
   await expect(page.locator('.preview-objective-list')).toContainText('Ship AI code review v2');
   await expect(page.getByText('PR #41827', { exact: true })).toBeVisible();
   await expect(page.locator('.preview-timeline-row')).toHaveCount(5);
