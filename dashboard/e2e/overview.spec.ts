@@ -569,6 +569,13 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
     return icon.y + icon.height / 2 - title.y - title.height / 2;
   });
   expect(timelineHeadingAlignment).toBeCloseTo(0, 0);
+  const headerIconTitleGaps = await page.evaluate(() => ['review', 'timeline'].map((panel) => {
+    const root = document.querySelector(`.${panel}-panel .panel-heading`)!;
+    const icon = root.querySelector('.section-icon svg')!.getBoundingClientRect();
+    const title = root.querySelector('h3')!.getBoundingClientRect();
+    return title.left - icon.right;
+  }));
+  expect(headerIconTitleGaps[1]).toBeCloseTo(headerIconTitleGaps[0], 0);
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {
