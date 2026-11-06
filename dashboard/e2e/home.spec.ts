@@ -154,7 +154,12 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.activity-list > div').first().locator('svg')).toHaveCSS('border-radius', '50%');
   await expect(page.locator('.activity-list > div').first().locator('svg')).toHaveCSS('background-color', 'rgb(20, 57, 47)');
   expect((await page.locator('.activity-list > div').first().locator('span').boundingBox())?.x).toBe(1306);
-  expect(await page.locator('.activity-list > div').last().locator('span').evaluate((span) => span.scrollWidth <= span.clientWidth)).toBe(true);
+  await page.setViewportSize({ width: 1668, height: 749 });
+  const lastActivityLabel = await page.locator('.activity-list > div').last().locator('span').evaluate((span) => ({
+    scrollWidth: span.scrollWidth, clientWidth: span.clientWidth,
+  }));
+  expect(lastActivityLabel.scrollWidth).toBe(lastActivityLabel.clientWidth);
+  await page.setViewportSize({ width: 1672, height: 941 });
   await expect(page.locator('.preview-agent-list > div svg').nth(0)).toHaveClass(/tabler-icon-stack-2/);
   await expect(page.locator('.preview-agent-list > div svg').nth(1)).toHaveClass(/tabler-icon-stack-2/);
   await expect(page.locator('.preview-agent-list > div svg').nth(2)).toHaveClass(/tabler-icon-shield-check/);

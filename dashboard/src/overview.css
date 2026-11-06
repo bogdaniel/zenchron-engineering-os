@@ -314,6 +314,7 @@
 .overview-layout.sample-data .activity-panel .activity-list { margin-left: 5px; }
 .overview-layout.sample-data .activity-panel .activity-list > div { gap: 8px; }
 .overview-layout.sample-data .activity-panel .activity-list > div > svg { width: 22px; height: 22px; margin-right: 8px; padding: 3px; border-radius: 50%; }
+.overview-layout.sample-data .activity-panel .activity-list span { letter-spacing: -.05px; }
 .overview-layout.sample-data .activity-panel .activity-green { background: #14392f; }
 .overview-layout.sample-data .activity-panel .activity-blue { background: #172e48; }
 .overview-layout.sample-data .activity-panel .activity-violet { background: #28203a; }
