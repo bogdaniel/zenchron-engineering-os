@@ -393,6 +393,12 @@ test('Overview design preview renders the supplied mock content without replacin
   await page.setViewportSize({ width: 1672, height: 749 });
   const compactTimelineDates = await page.locator('.preview-timeline-dates').boundingBox();
   expect(compactTimelineDates?.y).toBeCloseTo(659, 0);
+  const compactHeadingAlignment = await page.evaluate(() => {
+    const icon = document.querySelector('.timeline-panel .section-icon svg')!.getBoundingClientRect();
+    const title = document.querySelector('.timeline-panel h3')!.getBoundingClientRect();
+    return icon.y + icon.height / 2 - title.y - title.height / 2;
+  });
+  expect(compactHeadingAlignment).toBeCloseTo(0, 0);
   await page.setViewportSize({ width: 1672, height: 941 });
   await expect(page.locator('.preview-analytics-summary > span')).toHaveText('PRs Merged (7d)');
   await expect(page.locator('.preview-analytics-summary strong')).toHaveText('42');
@@ -552,6 +558,12 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
   await expect(page.locator('.metric-grid')).toBeVisible();
   const sidebarBackground = await page.locator('.sidebar').evaluate((sidebar) => getComputedStyle(sidebar).backgroundPosition);
   expect(sidebarBackground).toContain('91px');
+  const timelineHeadingAlignment = await page.evaluate(() => {
+    const icon = document.querySelector('.timeline-panel .section-icon svg')!.getBoundingClientRect();
+    const title = document.querySelector('.timeline-panel h3')!.getBoundingClientRect();
+    return icon.y + icon.height / 2 - title.y - title.height / 2;
+  });
+  expect(timelineHeadingAlignment).toBeCloseTo(0, 0);
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {
