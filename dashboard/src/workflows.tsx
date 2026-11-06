@@ -293,7 +293,8 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
   }, [workflow, mobile, designPreview]);
 
   return <PanelCard className="panel workflow-panel" id="workflow" withBorder>
-    <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconRoute size={18} /></span>}
+    <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon">
+      {designPreview ? <IconHierarchy size={22} /> : <IconRoute size={18} />}</span>}
       title="Workflow Orchestration" description={designPreview ? 'Objective: Ship AI code review v2' : workflow?.name ?? 'Saved workflow definition'}
       actions={<div className={`panel-actions${designPreview ? ' workflow-overview-actions' : ''}`}>
         <Badge className={designPreview ? 'preview-running-badge' : 'muted-tag'} variant="light">

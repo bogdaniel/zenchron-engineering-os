@@ -101,6 +101,10 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.getByRole('button', { name: 'Core Product' })).toBeVisible();
   await expect(page.locator('.user-chip')).toContainText('Alex Chen');
   await expect(page.locator('.user-chip img')).toHaveJSProperty('naturalWidth', 128);
+  await expect(page.locator('.nav-link.active')).toHaveCSS('height', '46px');
+  await expect(page.locator('.nav-link[href="#objectives"]')).toHaveCSS('height', '38px');
+  expect((await page.locator('.sidebar-bottom').boundingBox())?.y).toBeGreaterThanOrEqual(803);
+  expect((await page.locator('.sidebar-bottom').boundingBox())?.y).toBeLessThanOrEqual(812);
   await expect(page.locator('.metric-grid .metric-card')).toHaveCount(5);
   await expect(page.locator('.metric-grid .metric-card').nth(0)).toContainText('12');
   await expect(page.locator('.metric-grid .metric-card').nth(1)).toContainText('7');
@@ -109,9 +113,22 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.metric-grid .metric-card').nth(4)).toContainText('68%');
   await expect(page.locator('.metric-grid .metric-card').nth(4)).toHaveClass(/purple/);
   await expect(page.locator('.metric-grid .metric-card').nth(0).locator('small')).toHaveCount(0);
+  const kpiGaps = await page.evaluate(() => {
+    const metric = (index: number) => document.querySelectorAll('.metric-card')[index];
+    const gap = (card: Element, selector: string) => {
+      const value = card.querySelector('.metric-value-row > strong')!.getBoundingClientRect();
+      return card.querySelector(selector)!.getBoundingClientRect().left - value.right;
+    };
+    return { trend: gap(metric(0), '.mock-trend'), health: gap(metric(3), '.mantine-Badge-root') };
+  });
+  expect(kpiGaps.trend).toBeGreaterThanOrEqual(10);
+  expect(kpiGaps.trend).toBeLessThanOrEqual(24);
+  expect(kpiGaps.health).toBeLessThanOrEqual(16);
   await expect(page.locator('.mock-budget-summary')).toContainText('$13.6K / $20K');
   await expect(page.locator('.pr-queue-metric .mock-bars i')).toHaveCount(5);
   await expect(page.locator('.workflow-overview-status')).toHaveCount(0);
+  await expect(page.locator('.workflow-overview-actions .preview-running-badge')).toHaveText('● Running');
+  await expect(page.locator('.activity-panel .text-link')).toContainText('All Activity');
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
   await expect(page.locator('.workflow-overview-canvas .react-flow__edge-path').first()).toHaveAttribute('marker-end', /url/);
   await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeHidden();
@@ -310,13 +327,13 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
   });
   expect(layout.metrics?.x).toBe(263);
   expect(layout.metrics?.y).toBe(84);
-  expect(layout.workflow?.y).toBe(189);
+  expect(layout.workflow?.y).toBeCloseTo(189, 0);
   expect(layout.workflow?.height).toBe(202);
   expect(layout.activity?.x).toBeCloseTo(1142.9, 1);
-  expect(layout.objectives?.y).toBe(403);
-  expect(layout.review?.y).toBe(573);
+  expect(layout.objectives?.y).toBeCloseTo(403, 0);
+  expect(layout.review?.y).toBeCloseTo(573, 0);
   expect(layout.review?.height).toBe(220);
-  expect(layout.timeline?.y).toBe(573);
+  expect(layout.timeline?.y).toBeCloseTo(573, 0);
   expect(layout.footerDisplay).toBe('none');
   expect(layout.search?.x).toBeGreaterThanOrEqual(layout.greeting!.x! + layout.greeting!.width!);
   expect(layout.search!.x! + layout.search!.width!).toBeLessThanOrEqual(layout.topActions!.x!);

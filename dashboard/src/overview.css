@@ -152,6 +152,7 @@
 .workflow-overview-status { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; color: #a49cb5; font-size: 9px; }
 .workflow-overview-message { display: grid; min-height: 144px; place-items: center; color: #a49cb5; font-size: 11px; }
 .text-link { color: #c7a1ff; font-size: 10px; white-space: nowrap; }
+.activity-panel .text-link { display: flex; align-items: center; gap: 2px; }
 .activity-list { display: grid; gap: 1px; margin-top: 8px; }
 .activity-list > div {
   display: flex;
@@ -221,12 +222,16 @@
   .design-preview .top-actions { gap: 28px; }
   .design-preview .workspace-button { min-width: 170px; justify-content: space-between; padding: 0 12px; }
   .design-preview .user-chip { min-width: 180px; margin-left: 0; }
-  .design-preview .sidebar-bottom { margin-bottom: 60px; border-top: 0; }
+  .design-preview .sidebar-bottom { margin-bottom: 33px; border-top: 0; }
   .design-preview .search-box { width: 410px; }
   .design-preview .search-box input { height: 42px; }
 }
-.design-preview .metric-card { min-height: 100px; }
+.design-preview .metric-card { min-height: 100px; padding-right: 9px; padding-left: 20px; }
+.design-preview .nav-link { min-height: 38px; }
+.design-preview .nav-link.active { min-height: 46px; }
 .design-preview .metric-value-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.design-preview .metric-card:not(:last-child) .metric-value-row { justify-content: flex-start; }
+.design-preview .metric-value-row > .mock-trend { flex: 1; justify-content: space-between; margin-left: 12px; }
 .design-preview .metric-value-row > strong { margin-top: 0; }
 .design-preview .activity-list > div { padding-top: 4px; padding-bottom: 4px; font-size: 13px; }
 .design-preview .panel { padding-left: 16px; padding-right: 16px; }
@@ -257,8 +262,8 @@
 }
 .mock-trend .mantine-Badge-root[data-teal="true"] { border-color: #18685d; color: #51e5cd; background: #103b37; }
 .mock-healthy-badge { padding: 4px 7px; border-radius: 20px; }
-.mock-budget-summary { display: grid; justify-items: end; gap: 4px; width: 112px; }
-.mock-budget-progress { width: 94px; }
+.mock-budget-summary { display: grid; justify-items: start; gap: 4px; width: 136px; }
+.mock-budget-progress { width: 128px; }
 .preview-objective-list { display: grid; gap: 10px; margin-top: 8px; }
 .preview-objective-list > div { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1px 8px; color: #e7e2ef; font-size: 12px; line-height: 1; }
 .preview-objective-list > div > span { display: flex; grid-column: 1 / -1; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; }
@@ -276,7 +281,7 @@
 .design-preview .evidence-health-list > div > span { font-size: 12px; }
 .design-preview .evidence-health-list small { font-size: 10px; }
 .mock-analytics-filter { display: flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid #3a3453; border-radius: 9px; color: #d9d3e5; background: #171625; font-size: 10px; font-weight: 500; text-transform: none; white-space: nowrap; }
-.preview-running-badge { border: 1px solid #276a50; color: #5be0ad; background: #12392e; font-size: 10px; }
+.preview-running-badge { border: 1px solid #276a50; color: #5be0ad; background: #12392e; font-size: 10px; text-transform: none; }
 .preview-review-panel h4 { margin: 10px 0 5px; overflow: hidden; color: #f1edf7; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .preview-review-meta { display: flex; align-items: center; gap: 5px; margin-top: 10px; }
 .preview-review-meta > * { padding: 4px 7px; border: 1px solid #3d3558; border-radius: 7px; color: #d8d1e5; background: #1c1928; font-size: 11px; }
@@ -482,7 +487,7 @@
 }
 @media (min-width: 1260px) and (min-height: 840px) and (max-height: 899px) {
   .design-preview .workflow-overview-canvas { height: 120px; }
-  .content-grid { grid-template-columns: repeat(100, minmax(0, 1fr)); margin-top: 15px; row-gap: 12px; }
+  .content-grid { grid-template-columns: repeat(100, minmax(0, 1fr)); margin-top: 14px; row-gap: 12px; }
   .workflow-panel { grid-column: span 70; }
   .activity-panel { grid-column: span 30; }
   .workflow-panel, .activity-panel { height: 202px; overflow: hidden; }

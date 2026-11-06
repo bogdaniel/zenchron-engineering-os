@@ -44,7 +44,7 @@ export function OverviewDesignPreview() {
 
         <PanelCard className="panel activity-panel" withBorder>
           <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconActivity size={18} /></span>}
-            title="Recent Activity" actions={<a className="text-link" href="#activity">All activity ⌄</a>} />
+            title="Recent Activity" actions={<a className="text-link" href="#activity">All Activity <IconChevronDown size={12} /></a>} />
           <div className="activity-list">
             <div><IconCircleCheck className="activity-green" size={17} /><span>PR #41827 merged to trusted-main</span><time>2m ago</time></div>
             <div><IconRobot className="activity-blue" size={17} /><span>Agent “Code Reviewer” completed run</span><time>6m ago</time></div>
@@ -145,7 +145,7 @@ export function OverviewDesignPreview() {
 
 function MockTrend({ value, data, teal = false }: { value: string; data: number[]; teal?: boolean }) {
   return <span className="mock-trend"><Badge data-teal={teal || undefined}>{value}</Badge>
-    <Sparkline data={data} color={teal ? 'teal.4' : 'violet.5'} w={58} h={24} /></span>;
+    <Sparkline data={data} color={teal ? 'teal.4' : 'violet.5'} w={100} h={24} /></span>;
 }
 
 function MockBars() {
