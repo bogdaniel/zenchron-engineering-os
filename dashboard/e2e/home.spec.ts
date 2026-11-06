@@ -105,6 +105,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.metric-grid .metric-card').nth(2)).toContainText('18');
   await expect(page.locator('.metric-grid .metric-card').nth(3)).toContainText('99.4%');
   await expect(page.locator('.metric-grid .metric-card').nth(4)).toContainText('68%');
+  await expect(page.locator('.metric-grid .metric-card').nth(4)).toHaveClass(/purple/);
   await expect(page.locator('.metric-grid .metric-card').nth(0).locator('small')).toHaveCount(0);
   await expect(page.locator('.mock-budget-summary')).toContainText('$13.6K / $20K');
   await expect(page.locator('.pr-queue-metric .mock-bars i')).toHaveCount(5);

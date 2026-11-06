@@ -14,7 +14,7 @@ import { z } from 'zod';
 import {
   IconBolt, IconCheck, IconChecklist, IconChevronRight, IconCirclePlus, IconCode, IconDeviceFloppy, IconDots,
   IconFileText, IconGitBranch, IconGitMerge, IconGripVertical, IconHierarchy, IconLayoutBoard, IconMaximize,
-  IconPlayerPlay, IconRepeat, IconRobot, IconRoute, IconSearch, IconTestPipe, IconChartBar, IconUserCheck,
+  IconMessageCircle, IconPlayerPlay, IconRepeat, IconRobot, IconRoute, IconSearch, IconTestPipe, IconChartBar, IconUserCheck,
 } from '@tabler/icons-react';
 import '@xyflow/react/dist/style.css';
 import { PageHeading } from './PageHeading';
@@ -38,7 +38,7 @@ const workflowSchema = z.object({
 });
 export const workflowsSchema = z.array(workflowSchema);
 type WorkflowData = z.infer<typeof nodeDataSchema>;
-type WorkflowNode = Node<WorkflowData & { kind: ComponentType }>;
+type WorkflowNode = Node<WorkflowData & { kind: ComponentType; previewIcon?: typeof IconRoute }>;
 type Workflow = z.infer<typeof workflowSchema>;
 const workflowNodeWidth = 190;
 const workflowNodeHeight = 110;
@@ -49,28 +49,31 @@ const designPreviewPositions: Record<string, { x: number; y: number }> = {
 };
 const mobileOverviewStages: {
   id: string; label: string; description: string; kind: ComponentType; types: ComponentType[];
-  position: { x: number; y: number };
+  position: { x: number; y: number }; previewIcon?: typeof IconRoute;
 }[] = [
   {
     id: 'trigger', label: 'Trigger', description: 'PR or objective update', kind: 'trigger', types: ['trigger'],
-    position: { x: 0, y: 36 },
+    position: { x: 0, y: 36 }, previewIcon: IconPlayerPlay,
   },
-  { id: 'plan', label: 'Plan', description: 'Generate plan', kind: 'planner', types: ['planner'], position: { x: 54, y: 36 } },
+  { id: 'plan', label: 'Plan', description: 'Generate plan', kind: 'planner', types: ['planner'],
+    position: { x: 54, y: 36 }, previewIcon: IconFileText },
   {
     id: 'build', label: 'Build', description: 'Run agents', kind: 'agent-router', types: ['agent-router', 'agent-task'],
-    position: { x: 108, y: 36 },
+    position: { x: 108, y: 36 }, previewIcon: IconCode,
   },
   {
     id: 'test', label: 'Test', description: 'Run test suite', kind: 'test-generator',
     types: ['test-generator', 'coverage-analyzer', 'condition', 'loop'], position: { x: 162, y: 10 },
+    previewIcon: IconTestPipe,
   },
   {
     id: 'review', label: 'Review', description: 'AI + human review', kind: 'code-reviewer', types: ['code-reviewer'],
-    position: { x: 162, y: 62 },
+    position: { x: 162, y: 62 }, previewIcon: IconMessageCircle,
   },
   {
     id: 'merge', label: 'Merge', description: 'Gated release', kind: 'merge-gate',
     types: ['human-approval', 'merge-gate', 'publish-report'], position: { x: 216, y: 36 },
+    previewIcon: IconGitBranch,
   },
 ];
 const designPreviewWorkflow: Workflow = {
@@ -139,7 +142,7 @@ async function loadWorkflows(): Promise<Workflow[]> {
 }
 
 function WorkflowBlock({ data }: NodeProps<WorkflowNode>) {
-  const Icon = workflowNodeIcons[data.kind];
+  const Icon = data.previewIcon ?? workflowNodeIcons[data.kind];
   return <div className={`workflow-node ${data.kind}`}>
     <Handle type="target" position={Position.Left} />
     <span className="workflow-node-icon"><Icon size={17} /></span>
@@ -215,10 +218,10 @@ function mobileWorkflowGraph(workflow: Workflow, designPreview = false) {
   }
   const configuredStages = new Set(stageByNode.values());
   const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id));
-  const nodes: WorkflowNode[] = stages.map(({ id, label, description, kind, position }) => ({
+  const nodes: WorkflowNode[] = stages.map(({ id, label, description, kind, previewIcon, position }) => ({
     id, type: 'workflow', position: designPreview ? designPreviewPositions[id] ?? position : position,
     data: {
-      kind, label,
+      kind, label, ...(designPreview ? { previewIcon } : {}),
       description: designPreview && id === 'trigger' ? 'PR opened / updated'
         : designPreview && id === 'merge' ? 'To trusted-main' : description,
     },

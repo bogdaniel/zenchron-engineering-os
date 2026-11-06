@@ -2,7 +2,7 @@ import { Badge, Progress } from '@mantine/core';
 import { AreaChart, Sparkline } from '@mantine/charts';
 import {
   IconActivity, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconChevronRight, IconCircle,
-  IconCircleCheck, IconCode, IconCurrencyDollar, IconFileText, IconGitBranch, IconGitPullRequest,
+  IconCircleCheck, IconCode, IconCoins, IconFileText, IconGitBranch, IconGitPullRequest,
   IconExternalLink, IconHistory, IconRobot, IconShieldCheck, IconTarget,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
@@ -33,8 +33,8 @@ export function OverviewDesignPreview() {
         icon={<IconGitPullRequest size={19} />} trend={<span className="mock-trend"><Badge>+4</Badge><MockBars /></span>} />
       <MetricCard className="metric-card green" label="CI Health" value="99.4%"
         icon={<IconActivity size={19} />} trend={<Badge className="mock-healthy-badge">✓ Healthy</Badge>} />
-      <MetricCard className="metric-card cyan" label="Budget Usage" value="68%"
-        icon={<IconCurrencyDollar size={19} />} trend={<span className="mock-budget-summary"><small>$13.6K / $20K</small>
+      <MetricCard className="metric-card purple" label="Budget Usage" value="68%"
+        icon={<IconCoins size={19} />} trend={<span className="mock-budget-summary"><small>$13.6K / $20K</small>
           <Progress className="mock-budget-progress" value={68} /></span>} />
     </section>
 
