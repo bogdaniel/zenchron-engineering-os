@@ -254,6 +254,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.preview-review-meta')).toContainText('Approved');
   await expect(page.locator('.preview-review-meta a')).toHaveAttribute('aria-label', 'Open pull request review');
   await expect(page.locator('.preview-diff')).toContainText('+ const evidence = await captureEvidence');
+  await expect(page.locator('.preview-diff')).toContainText('+   artifactRefs: run.artifacts,');
 
   await page.setViewportSize({ width: 1672, height: 749 });
   const compactViewport = await page.evaluate(() => {

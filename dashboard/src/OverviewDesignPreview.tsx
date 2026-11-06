@@ -105,7 +105,7 @@ export function OverviewDesignPreview() {
           </div>
           <h4>feat(review): add AI feedback signals and evidence capture</h4>
           <div className="preview-branches"><span>feature/ai-review-v2</span> → <span>trusted-main</span><b>+427 −68</b></div>
-          <pre className="preview-diff"><span>128  </span><i>+ const evidence = await captureEvidence({'{'}</i>{'\n'}<span>129  </span><i>+   prNumber,</i>{'\n'}<span>130  </span><i>+   signals: feedback.signals,</i>{'\n'}<span>131  </span><i>+   artifacts: run.artifacts,</i>{'\n'}<span>132  </span><i>+ {'}' });</i></pre>
+          <pre className="preview-diff"><span>128  </span><i>+ const evidence = await captureEvidence({'{'}</i>{'\n'}<span>129  </span><i>+   prNumber,</i>{'\n'}<span>130  </span><i>+   signals: feedback.signals,</i>{'\n'}<span>131  </span><i>+   artifactRefs: run.artifacts,</i>{'\n'}<span>132  </span><i>+ {'}' });</i></pre>
         </PanelCard>
 
         <PanelCard className="panel timeline-panel preview-timeline-panel" withBorder>
