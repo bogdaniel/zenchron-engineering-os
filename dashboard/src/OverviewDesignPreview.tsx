@@ -91,7 +91,7 @@ export function OverviewDesignPreview() {
           title="Trusted-main & Evidence Health" />
         <div className="evidence-health-list">
           <div><IconGitBranch size={16} /><span>Trusted-main<small>Protected · Verified · Up to date</small></span><Badge className="mock-health-tag">Healthy</Badge></div>
-          <div><IconShieldCheck size={16} /><span>Evidence<small>Artifacts · Test results · Reviews · Traces</small></span><Badge className="mock-health-tag">Healthy</Badge></div>
+          <div><IconStack2 size={16} /><span>Evidence<small>Artifacts · Test results · Reviews · Traces</small></span><Badge className="mock-health-tag">Healthy</Badge></div>
         </div>
         </PanelCard>
       </div>
