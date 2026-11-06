@@ -90,6 +90,15 @@ test('Overview PR queue and CI health use complete GitHub history', async ({ pag
   await expect(page.locator('.overview-delivery-summary')).toContainText('1');
 });
 
+test('anonymous users can open the Overview design preview from sign-in', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
+  await page.getByRole('link', { name: 'Open dashboard preview' }).click();
+  await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
+  await expect(page.locator('.overview-design-preview')).toBeVisible();
+});
+
 test('Overview design preview renders the supplied mock content without replacing live data', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));

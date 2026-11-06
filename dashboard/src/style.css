@@ -342,6 +342,7 @@ button:disabled, input:disabled {
   cursor: pointer;
 }
 .github-login-button:disabled { opacity: .65; cursor: not-allowed; }
+.auth-preview-link { color: #c7a4f6; font-size: 12px; }
 .preview-login-link { display: inline-block; margin-top: 10px; color: #c7a4f6; font-size: 11px; white-space: nowrap; }
 .welcome-row {
   display: flex;

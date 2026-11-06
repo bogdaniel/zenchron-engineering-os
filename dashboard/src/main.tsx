@@ -163,6 +163,7 @@ function App() {
         ? <><button className="github-login-button" disabled><IconBrandGithub size={19} /> Continue with GitHub</button>
           <p>GitHub sign-in is not configured in this local preview.</p></>
         : <a className="github-login-button" href="/auth/github"><IconBrandGithub size={19} /> Continue with GitHub</a>}
+      <a className="auth-preview-link" href="/?preview=mock#overview">Open dashboard preview</a>
     </div>
   </div>;
   return (
