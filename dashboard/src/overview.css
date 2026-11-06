@@ -170,7 +170,7 @@
 .overview-layout.sample-data .workflow-overview-actions .workflow-icon-link { height: 32px; }
 .overview-layout.sample-data .workflow-overview-actions .preview-running-badge { padding: 0 14px; font-size: 12px; }
 .overview-layout.sample-data .workflow-overview-actions .subtle-button { padding: 0 16px; font-size: 12px; }
-.overview-layout.sample-data .timeline-panel .panel-heading > div { gap: 15px; }
+.overview-layout.sample-data .timeline-panel .panel-heading > div { gap: 2px; }
 .overview-layout.sample-data .timeline-panel .panel-heading .section-icon svg { width: 28px; height: 28px; transform: translateX(-2px); }
 .overview-layout.sample-data .timeline-panel .panel-heading p { font-size: 12.5px; }
 .overview-layout.sample-data .timeline-panel .panel-heading .text-link { font-size: 12px; }
@@ -270,7 +270,7 @@
   .overview-layout .search-box { width: 410px; }
   .overview-layout .search-box input { height: 42px; }
   .overview-layout .review-panel .panel-heading > div { transform: translateY(-2px); }
-  .overview-layout .timeline-panel .panel-heading > div { gap: 13px; transform: translate(0, 3px); }
+  .overview-layout .timeline-panel .panel-heading > div { gap: 2px; transform: translate(0, 3px); }
 .overview-layout .timeline-panel .panel-heading p { transform: translateY(4px); font-size: 11.5px; }
   .overview-layout .analytics-panel .panel-heading > div { transform: translate(-4px, -4px); }
 }

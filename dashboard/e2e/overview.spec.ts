@@ -358,7 +358,7 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.today.y).toBeCloseTo(678, 0);
   expect(timelineMockAlignment.firstRow.y).toBeCloseTo(686, 0);
   expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(787, 0);
-  expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(830, 0);
+  expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(817, 0);
   expect(timelineMockAlignment.labelX.x).toBeCloseTo(812, 0);
   expect(Math.min(...timelineMockAlignment.labelGridGaps)).toBeGreaterThanOrEqual(0);
   expect(await page.locator('.preview-timeline-row svg').first().evaluate(icon => getComputedStyle(icon).width)).toBe('22px');
