@@ -215,6 +215,15 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.preview-agent-list')).toContainText('2m ago');
   await expect(page.locator('.preview-agent-list')).toContainText('4m ago');
   await expect(page.locator('.preview-agent-list')).toContainText('7m ago');
+  const middleRowOffsets = await page.evaluate(() => {
+    const rows = (selector: string) => [...document.querySelectorAll(selector)].map(row => row.getBoundingClientRect().y);
+    return { approvals: rows('.preview-approval-list > div'), agents: rows('.preview-agent-list > div') };
+  });
+  for (const rows of [middleRowOffsets.approvals, middleRowOffsets.agents]) {
+    expect(rows).toHaveLength(3);
+    expect(rows[1] - rows[0]).toBe(36);
+    expect(rows[2] - rows[1]).toBe(36);
+  }
   const objectiveMarkers = await page.evaluate(() => [
     getComputedStyle(document.querySelector('.preview-objective-list small')!, '::before').content,
     getComputedStyle(document.querySelector('.preview-objective-list small[data-risk="true"]')!, '::before').content,
