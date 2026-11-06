@@ -301,10 +301,10 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
                 <Background color="#37324c" gap={18} size={1} />
               </ReactFlow>
             </div>
-            <div className="workflow-overview-status" aria-label="Workflow execution status">
+            {!designPreview && <div className="workflow-overview-status" aria-label="Workflow execution status">
               <span>{workflow.nodes.length} components · {workflow.edges.length} connections</span>
-              <span>{designPreview ? 'Workflow run #8821 · 78% complete' : 'Execution unavailable · runner not connected'}</span>
-            </div>
+              <span>Execution unavailable · runner not connected</span>
+            </div>}
           </>}
   </PanelCard>;
 }

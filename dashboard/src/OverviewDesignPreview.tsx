@@ -1,7 +1,7 @@
 import { Badge, Progress } from '@mantine/core';
 import { LineChart, Sparkline } from '@mantine/charts';
 import {
-  IconActivity, IconCalendar, IconCheck, IconChevronRight, IconCircleCheck, IconCode,
+  IconActivity, IconCalendar, IconCheck, IconChevronRight, IconCircle, IconCircleCheck, IconCode,
   IconCurrencyDollar, IconGitBranch, IconGitPullRequest, IconHistory, IconRobot, IconShieldCheck, IconTarget,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
@@ -106,12 +106,14 @@ export function OverviewDesignPreview() {
           actions={<a className="text-link" href="#objectives">View Full Timeline →</a>} />
         <div className="preview-timeline">
           <div className="preview-timeline-dates"><span>Jan 20</span><span>Jan 21</span><span>Jan 22</span><span>Jan 23</span><span>Jan 24</span><span>Jan 25</span><span>Jan 26</span><span>Jan 27</span></div>
+          <span className="preview-today-marker" aria-label="Today"><b>Today</b></span>
           {[
-            ['Plan & Approve', 1, 2, 'green'], ['Agent Implementation', 2, 4, 'purple'],
-            ['Tests & Validation', 4, 5, 'blue'], ['Review & Updates', 5, 7, 'lilac'],
-            ['Merge to Trusted-main', 7, 8, 'empty'],
-          ].map(([label, start, end, color]) => <div className="preview-timeline-row" key={label as string}>
-            <span>{label}</span><div><i className={`timeline-bar ${color}`} style={{ gridColumn: `${start} / ${end}` }} /></div>
+            ['Plan & Approve', 1, 2, 'green', 'done'], ['Agent Implementation', 2, 4, 'purple', 'done'],
+            ['Tests & Validation', 4, 5, 'blue', 'pending'], ['Review & Updates', 5, 7, 'lilac', 'pending'],
+            ['Merge to Trusted-main', 7, 8, 'empty', 'pending'],
+          ].map(([label, start, end, color, state]) => <div className="preview-timeline-row" key={label as string}>
+            <span>{state === 'done' ? <IconCircleCheck className="preview-timeline-done" /> : <IconCircle className="preview-timeline-pending" />}{label}</span>
+            <div><i className={`timeline-bar ${color}`} style={{ gridColumn: `${start} / ${end}` }} /></div>
           </div>)}
         </div>
       </PanelCard>

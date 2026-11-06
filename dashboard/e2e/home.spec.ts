@@ -105,13 +105,14 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.metric-grid .metric-card').nth(4)).toContainText('68%');
   await expect(page.locator('.metric-grid .metric-card').nth(0).locator('small')).toHaveCount(0);
   await expect(page.locator('.mock-budget-summary')).toContainText('$13.6K / $20K');
-  await expect(page.getByText('Workflow run #8821 · 78% complete')).toBeVisible();
+  await expect(page.locator('.workflow-overview-status')).toHaveCount(0);
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
   await expect(page.locator('.workflow-overview-canvas')).toHaveAttribute('aria-label', /6 stages summarize 9 components/);
-  await expect(page.locator('.workflow-overview-status')).toContainText('9 components · 10 connections');
   await expect(page.locator('.preview-objective-list')).toContainText('Ship AI code review v2');
   await expect(page.getByText('PR #41827', { exact: true })).toBeVisible();
   await expect(page.locator('.preview-timeline-row')).toHaveCount(5);
+  await expect(page.locator('.preview-timeline-done')).toHaveCount(2);
+  await expect(page.locator('.preview-today-marker')).toBeVisible();
   await expect(page.locator('.preview-analytics-summary')).toContainText('42');
   await expect(page.locator('.preview-analytics-panel .recharts-line-curve')).toHaveCount(1);
   const metrics = await page.locator('.metric-grid').boundingBox();
