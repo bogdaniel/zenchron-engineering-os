@@ -243,6 +243,26 @@ test('Overview design preview renders the supplied mock content without replacin
     panelHeading: getComputedStyle(document.querySelector('.workflow-panel h3')!).fontSize,
   }));
   expect(overviewTypography).toEqual({ metricLabel: '15px', metricValue: '30px', panelHeading: '16px' });
+  const mockDetails = await page.evaluate(() => {
+    const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    const icon = document.querySelector('.objective-panel .section-icon')!;
+    return {
+      middleHeadingY: bounds('.objective-panel .panel-heading h3').y,
+      iconBorder: getComputedStyle(icon).borderTopWidth,
+      iconBackground: getComputedStyle(icon).backgroundColor,
+      reviewMeta: bounds('.preview-review-meta').toJSON(),
+      reviewDiff: bounds('.preview-diff').toJSON(),
+      timelineSubtitleFont: getComputedStyle(document.querySelector('.timeline-panel .panel-heading p')!).fontSize,
+    };
+  });
+  expect(mockDetails.middleHeadingY).toBeCloseTo(426, 0);
+  expect(mockDetails.iconBorder).toBe('0px');
+  expect(mockDetails.iconBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(mockDetails.reviewMeta.y).toBe(637);
+  expect(mockDetails.reviewMeta.height).toBeCloseTo(27, 0);
+  expect(mockDetails.reviewDiff.y).toBeCloseTo(742, 0);
+  expect(mockDetails.reviewDiff.height).toBe(106);
+  expect(mockDetails.timelineSubtitleFont).toBe('11.5px');
   const metrics = await page.locator('.metric-grid').boundingBox();
   const sidebar = await page.locator('.sidebar').boundingBox();
   const workflow = await page.locator('.workflow-panel').boundingBox();
