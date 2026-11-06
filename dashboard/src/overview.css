@@ -337,7 +337,7 @@
 .preview-review-panel h4 { margin: 13px 0 5px; overflow: hidden; color: #f1edf7; font-size: 15px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .preview-review-meta { display: flex; align-items: center; gap: 5px; margin-top: 6px; }
 .preview-review-meta > * { padding: 3px 8px; border: 1px solid #3d3558; border-radius: 7px; color: #d8d1e5; background: #1c1928; font-size: 12px; }
-.preview-review-meta a { display: grid; color: #d8d1e5; place-items: center; }
+.preview-review-meta a { display: grid; width: 16px; height: 16px; flex: 0 0 16px; padding: 0; border: 0; border-radius: 0; color: #d8d1e5; background: transparent; place-items: center; }
 .preview-review-meta > b { color: #e3c6ff; background: #432661; }
 .preview-review-meta .mock-approved-badge { border-color: #276a50; color: #54e0a9; background: #12392e; }
 .preview-review-meta .mock-approved-badge { margin-left: auto; }

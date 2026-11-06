@@ -214,6 +214,8 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.preview-agent-list')).toContainText('4m ago');
   await expect(page.locator('.preview-agent-list')).toContainText('7m ago');
   await expect(page.getByText('PR #41827', { exact: true })).toBeVisible();
+  await expect(page.locator('.preview-review-meta a')).toHaveCSS('width', '16px');
+  await expect(page.locator('.preview-review-meta a')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(page.locator('.preview-timeline-row')).toHaveCount(5);
   await expect(page.locator('.preview-timeline-done')).toHaveCount(2);
   await expect(page.locator('.preview-today-marker')).toBeVisible();
