@@ -311,6 +311,12 @@
 .overview-layout .workflow-panel .section-icon { width: 28px; height: 28px; }
 .overview-layout .workflow-panel .section-icon svg { width: 28px; height: 28px; }
 .overview-layout .activity-panel .panel-heading { transform: translateY(-6px); }
+.overview-layout.sample-data .activity-panel .activity-list { margin-left: 5px; }
+.overview-layout.sample-data .activity-panel .activity-list > div { gap: 8px; }
+.overview-layout.sample-data .activity-panel .activity-list > div > svg { width: 22px; height: 22px; margin-right: 8px; padding: 3px; border-radius: 50%; }
+.overview-layout.sample-data .activity-panel .activity-green { background: #14392f; }
+.overview-layout.sample-data .activity-panel .activity-blue { background: #172e48; }
+.overview-layout.sample-data .activity-panel .activity-violet { background: #28203a; }
 @media (min-width: 1622px) {
   .overview-layout .overview-middle-grid .panel-heading { transform: none; }
 }
@@ -417,6 +423,7 @@
 .overview-top-grid, .overview-middle-grid, .overview-bottom-grid { display: contents; }
 @media (min-width: 1260px) and (max-height: 839px) {
   .overview-layout .metric-card { min-height: 100px; }
+  .overview-layout.sample-data .preview-timeline { margin-top: 19px; }
   .page-footer { margin-top: 6px; }
 }
 @media (max-width: 1250px) {

@@ -150,7 +150,11 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.metric-grid .metric-card').first().locator('.metric-top span')).toHaveCSS('font-weight', '600');
   await expect(page.locator('.activity-list > div').nth(2).locator('svg')).toHaveClass(/tabler-icon-file-text/);
   await expect(page.locator('.activity-list > div').first()).toHaveCSS('font-size', '14px');
-  expect((await page.locator('.activity-list > div').first().locator('svg').boundingBox())?.width).toBe(18);
+  expect((await page.locator('.activity-list > div').first().locator('svg').boundingBox())?.width).toBe(22);
+  await expect(page.locator('.activity-list > div').first().locator('svg')).toHaveCSS('border-radius', '50%');
+  await expect(page.locator('.activity-list > div').first().locator('svg')).toHaveCSS('background-color', 'rgb(20, 57, 47)');
+  expect((await page.locator('.activity-list > div').first().locator('span').boundingBox())?.x).toBe(1306);
+  expect(await page.locator('.activity-list > div').last().locator('span').evaluate((span) => span.scrollWidth <= span.clientWidth)).toBe(true);
   await expect(page.locator('.preview-agent-list > div svg').nth(0)).toHaveClass(/tabler-icon-stack-2/);
   await expect(page.locator('.preview-agent-list > div svg').nth(1)).toHaveClass(/tabler-icon-stack-2/);
   await expect(page.locator('.preview-agent-list > div svg').nth(2)).toHaveClass(/tabler-icon-shield-check/);
@@ -296,6 +300,10 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeLessThanOrEqual(1087);
   expect(timelineMockAlignment.today.y - timelineMockAlignment.firstRow.y).toBeGreaterThanOrEqual(-14);
   expect(timelineMockAlignment.today.y - timelineMockAlignment.firstRow.y).toBeLessThanOrEqual(-8);
+  await page.setViewportSize({ width: 1672, height: 749 });
+  const compactTimelineDates = await page.locator('.preview-timeline-dates').boundingBox();
+  expect(compactTimelineDates?.y).toBeCloseTo(661, 0);
+  await page.setViewportSize({ width: 1672, height: 941 });
   await expect(page.locator('.preview-analytics-summary > span')).toHaveText('PRs Merged (7d)');
   await expect(page.locator('.preview-analytics-summary strong')).toHaveText('42');
   await expect(page.locator('.mock-analytics-filter')).toHaveText('Delivery Velocity');
