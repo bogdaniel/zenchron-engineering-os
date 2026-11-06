@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('settings and integrations routes show live runtime and honest provider states', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/');
+  await page.goto('/?preview=live');
   const runtimeHeartbeat = await page.evaluate(async () => {
     const response = await fetch('/api/v1/workers/ffffffffffffffffffffffffffffffff/heartbeat', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -97,7 +97,7 @@ test('Settings reflects an authenticated GitHub session', async ({ page }) => {
     contentType: 'application/json',
     body: JSON.stringify({ authenticated: true, local: false, login: 'engineer' }),
   }));
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await page.getByRole('link', { name: 'Settings' }).click();
   await expect(page.getByText('GitHub OAuth', { exact: true })).toBeVisible();
   await expect(page.getByText('Allowlisted GitHub users')).toBeVisible();

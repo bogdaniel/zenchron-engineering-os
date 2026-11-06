@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('workflow graph can be edited and saved to the control plane', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await page.getByRole('link', { name: 'Workflows' }).click();
   await expect(page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ })).toBeVisible();
   await expect(page.locator('.workflow-mobile-details')).toBeHidden();

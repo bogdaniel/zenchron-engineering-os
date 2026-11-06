@@ -13,14 +13,15 @@ not fetch protected dashboard data or require a GitHub session.
 ```mermaid
 flowchart LR
     Browser[Desktop or mobile browser] --> Shell[Shared React app shell<br/>Navigation + type scale]
-    Shell --> Dashboard[React overview<br/>Mantine + Tabler]
+    Shell --> Dashboard[Single OverviewPage layout<br/>Mantine + Tabler]
     Shell --> Theme[Shared Mantine theme<br/>Dark scheme · violet primary]
     Shell --> Pages[Objectives · Agents · Workflows<br/>Projects · Workspace · Reviews · Reports · Settings]
     Pages --> Heading[Shared PageHeading<br/>Eyebrow · title · description]
     Pages --> Metrics[Shared MetricCard<br/>Summary values and labels]
     Pages --> PanelHeading[Shared PanelHeading<br/>Panel + detail titles · descriptions · actions]
     Shell --> TypeScale[Shared CSS type scale<br/>Page title + panel heading tokens]
-    Browser -->|Local ?preview=mock| DesignPreview[Overview design preview<br/>frontend sample data only]
+    Sample[Local ?preview=mock<br/>frontend sample data only] --> Dashboard
+    LiveSources[Existing API and provider queries] -->|Live mode| Dashboard
     Dashboard -->|GET /healthz| Health[Go health endpoint]
     Dashboard --> MobileShortcuts[Mobile shortcuts<br/>Overview · My Work · Alerts]
     MobileShortcuts -->|My Work| Objectives
@@ -71,8 +72,8 @@ flowchart LR
   the available history. It shows an empty state when there are no merged records or the history is incomplete.
 - Budget usage, approval records, evidence artifacts, and delivery timeline do not have backend sources yet. The live
   Overview uses unavailable or empty states instead of sample values.
-- The local `?preview=mock` view renders the supplied Overview mock's sample content and local sample avatar
-  in the existing UI for visual review. It is frontend-only, labeled as sample data, and does not change live API records.
+- The local `?preview=mock` view uses the same OverviewPage layout as live mode, populated with labeled frontend sample
+  content and the sample avatar. It does not query protected project, objective, agent-run, PR, or CI records.
 - The overview Reviews card lists only agent runs with captured local diffs and links to the Reviews page for comments
   and request-changes; provider-sourced pull requests and issues appear in their own Reviews queues.
 - Local branch runs and their diffs/comments are available in Reviews alongside provider-sourced open items.
@@ -93,7 +94,7 @@ placeholders. Profile opens the existing Settings route.
 
 The React app shell owns the navigation markup, 247px desktop rail matching the supplied mockups, and top bar; desktop navigation uses 16px medium-weight labels that stay on one line, and mobile switches the rail to a bottom tab bar. Mantine's shared theme uses a dark color scheme and violet primary actions. Page routes share `PageHeading` for the eyebrow, title, and description; `MetricCard` is reused for summary metrics and automatically compacts `Unavailable` values; `PanelHeading` supplies recurring panel and selected-detail headings, including the workspace directory and workflow editor sections, with shared title typography, descriptions, icons, and actions. Shared CSS tokens set page titles to 22px/650 on desktop and 20px on mobile; regular panel titles use 14px/600 on desktop and 13px/600 on mobile. Regular metric cards use 12px labels, 26px values, and 11px detail text on desktop, adjusting to 11px/21px/10px on mobile. The wide desktop Overview follows the supplied mock with 16px panel titles, 14px metric labels, and 30px metric values. Page components retain their own content layouts.
 
-The design preview preserves the desktop mock's panel widths and vertical spacing at all wide viewport heights. Shorter windows scroll through the same layout instead of rearranging panels.
+The one OverviewPage preserves the desktop mock's panel widths and vertical spacing at wide viewport heights. Sample and live modes change the card data only; they do not select separate page markup. Shorter windows scroll through the same layout instead of rearranging panels.
 
 ## Verification
 

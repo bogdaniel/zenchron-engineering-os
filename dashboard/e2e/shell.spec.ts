@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('shared shell, headings, and metric cards keep their visual scale across routes', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/');
+  await page.goto('/?preview=live');
   const referenceWidth = await page.locator('.sidebar').evaluate((sidebar) =>
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
@@ -241,7 +241,7 @@ test('desktop sidebar matches mock width at reference and regular monitor sizes'
 
 test('mobile overview matches the phone shell and keeps workflow/reviews accessible', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await expect(page.getByRole('link', { name: 'Overview' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();

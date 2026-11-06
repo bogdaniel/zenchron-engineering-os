@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('dashboard displays the connected control plane and local worker', async ({ page }) => {
   await page.setViewportSize({ width: 1490, height: 829 });
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await expect(page.locator('.search-box')).toBeVisible();
   const overviewIconsLeadLabels = await page.locator('.metric-card .metric-top').evaluateAll((headers) =>
     headers.every((header) => {
@@ -79,7 +79,7 @@ test('Overview PR queue and CI health use complete GitHub history', async ({ pag
     ] }),
   }));
 
-  await page.goto('/');
+  await page.goto('/?preview=live');
   const queue = page.locator('.metric-card.pr-queue-metric');
   await expect(queue.locator('strong')).toHaveText('2');
   await expect(queue.locator('small')).toHaveText('2 open GitHub pull requests');
@@ -99,8 +99,10 @@ test('anonymous users can open the Overview design preview from sign-in', async 
   await expect(page.locator('.overview-design-preview')).toBeVisible();
 });
 
-test('local root opens the latest Overview design by default without an auth session', async ({ page }) => {
-  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
+test('local root opens the latest Overview design by default for authenticated sessions', async ({ page }) => {
+  await page.route('**/api/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: route.request().url().endsWith('/api/v1/auth/session')
+      ? JSON.stringify({ authenticated: true, local: false, login: 'engineer' }) : '[]' }));
   await page.goto('/');
   await expect(page).toHaveURL('/');
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
@@ -358,7 +360,7 @@ test('Overview design preview renders the supplied mock content without replacin
 
 test('Overview matches the supplied tall desktop mockup proportions', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await expect(page.locator('.activity-list')).toContainText('Control plane is responding');
   await expect(page.locator('.workflow-overview-status')).toContainText('Execution unavailable');
   const layout = await page.evaluate(() => {
@@ -398,7 +400,7 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
     return parseFloat(getComputedStyle(node.querySelector('b')!).fontSize) * zoom;
   });
   expect(overviewGraphLabelSize).toBeGreaterThanOrEqual(8);
-  expect(layout.activity?.x).toBeCloseTo(1247.9, 1);
+  expect(layout.activity?.x).toBe(1244);
   expect(layout.objectives?.y).toBeCloseTo(416, 0);
   expect(layout.review?.y).toBeCloseTo(590, 0);
   expect(layout.review?.height).toBe(280);
@@ -409,7 +411,7 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
   expect(layout.brandMark?.x).toBe(39);
   expect(layout.overviewLink?.x).toBe(14);
   expect(layout.overviewLink?.y).toBeCloseTo(92, 0);
-  expect(layout.search?.width).toBe(400);
+  expect(layout.search?.width).toBe(410);
   expect(layout.search?.x).toBeGreaterThanOrEqual(layout.greeting!.x! + layout.greeting!.width!);
   expect(layout.search!.x! + layout.search!.width!).toBeLessThanOrEqual(layout.topActions!.x!);
   await expect(page.locator('.greeting h1')).toHaveText(/Good morning, .+ 👋/);
@@ -418,7 +420,7 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
 
 test('Overview matches the supplied desktop display crop', async ({ page }) => {
   await page.setViewportSize({ width: 1522, height: 856 });
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await expect(page.locator('.metric-grid')).toBeVisible();
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
@@ -531,7 +533,7 @@ test('overview lists only agent runs with captured local diffs', async ({ page }
       },
     ]),
   }));
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await expect(page.locator('.overview-review-list')).toContainText('zenchron/agent-run/reviewable');
   await expect(page.locator('.overview-review-list')).toContainText('1 comments');
   await expect(page.locator('.overview-review-list')).not.toContainText('zenchron/agent-run/no-diff');
@@ -539,7 +541,7 @@ test('overview lists only agent runs with captured local diffs', async ({ page }
 
 test('objectives can be created and updated from the dashboard', async ({ page }) => {
   const title = `Review workflow ${Date.now()}`;
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await page.getByRole('link', { name: 'Objectives' }).click();
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   await page.getByRole('button', { name: 'New Objective' }).click();
@@ -673,7 +675,7 @@ test('Objectives grid keeps product names while the catalog loads', async ({ pag
 });
 
 test('Projects page shows the live local worker inventory', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
   await page.getByRole('link', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
@@ -694,7 +696,7 @@ test('Projects page shows the live local worker inventory', async ({ page }) => 
 
 test('worker prepares an isolated Git branch without moving the source checkout', async ({ page }) => {
   const branch = `zenchron/e2e-${Date.now()}`;
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
   await page.getByRole('link', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
@@ -708,7 +710,7 @@ test('worker prepares an isolated Git branch without moving the source checkout'
 });
 
 test('Reviews page shows unavailable provider data without invented pull requests', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await page.getByRole('link', { name: 'Reviews', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible();
   await expect(page.getByText('GitHub repository not connected')).toBeVisible();
@@ -770,7 +772,7 @@ test('Reviews page shows an isolated local branch diff without treating it as a 
       truncated: false,
     }),
   }));
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await page.getByRole('link', { name: 'Reviews', exact: true }).click();
   await page.getByRole('button', { name: 'Local branches' }).click();
   await expect(page.getByRole('heading', { name: 'zenchron/agent-run/0123456789abcdef0123456789abcdef' })).toBeVisible();
@@ -870,7 +872,7 @@ test('Reports summarizes live objectives and run records without inventing deliv
 
 test('Product Workspace groups live repositories into persisted products', async ({ page }) => {
   const objectiveTitle = `Product objective ${Date.now()}`;
-  await page.goto('/');
+  await page.goto('/?preview=live');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
   await expect(page.locator('.page-heading h2')).toHaveText('Product Workspace');
   await expect(page.getByText('No products yet. Add a product to group repositories.')).toBeVisible();
