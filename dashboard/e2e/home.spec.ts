@@ -103,8 +103,8 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.user-chip img')).toHaveJSProperty('naturalWidth', 128);
   await expect(page.locator('.nav-link.active')).toHaveCSS('height', '46px');
   await expect(page.locator('.nav-link[href="#objectives"]')).toHaveCSS('height', '38px');
-  expect((await page.locator('.sidebar-bottom').boundingBox())?.y).toBeGreaterThanOrEqual(803);
-  expect((await page.locator('.sidebar-bottom').boundingBox())?.y).toBeLessThanOrEqual(812);
+  expect((await page.locator('.sidebar-bottom strong').boundingBox())?.y).toBeGreaterThanOrEqual(790);
+  expect((await page.locator('.sidebar-bottom strong').boundingBox())?.y).toBeLessThanOrEqual(804);
   await expect(page.locator('.metric-grid .metric-card')).toHaveCount(5);
   await expect(page.locator('.metric-grid .metric-card').nth(0)).toContainText('12');
   await expect(page.locator('.metric-grid .metric-card').nth(1)).toContainText('7');
@@ -142,6 +142,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.activity-panel .text-link')).toContainText('All Activity');
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
   await expect(page.locator('.workflow-overview-canvas .react-flow__edge-path').first()).toHaveAttribute('marker-end', /url/);
+  expect(await page.locator('.workflow-overview-canvas .react-flow__edge-path').first().boundingBox()).not.toBeNull();
   await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeHidden();
   await expect(page.getByRole('link', { name: 'View Runs' })).toHaveAttribute('href', '#workflows');
   await page.getByRole('button', { name: 'Workflow options' }).click();
@@ -163,26 +164,31 @@ test('Overview design preview renders the supplied mock content without replacin
       return [kind, { x: rect.x, y: rect.y }];
     }),
   ));
-  expect(graphStages.trigger.x).toBeGreaterThanOrEqual(279);
-  expect(graphStages.trigger.x).toBeLessThanOrEqual(299);
-  expect(graphStages.trigger.y).toBeGreaterThanOrEqual(292);
-  expect(graphStages.trigger.y).toBeLessThanOrEqual(310);
-  expect(graphStages.planner.x).toBeGreaterThanOrEqual(487);
-  expect(graphStages.planner.x).toBeLessThanOrEqual(507);
-  expect(graphStages['agent-router'].x).toBeGreaterThanOrEqual(662);
-  expect(graphStages['agent-router'].x).toBeLessThanOrEqual(682);
-  expect(graphStages['test-generator'].x).toBeGreaterThanOrEqual(844);
-  expect(graphStages['test-generator'].x).toBeLessThanOrEqual(864);
-  expect(graphStages['test-generator'].y).toBeGreaterThanOrEqual(247);
-  expect(graphStages['test-generator'].y).toBeLessThanOrEqual(267);
-  expect(graphStages['code-reviewer'].y).toBeGreaterThanOrEqual(327);
-  expect(graphStages['code-reviewer'].y).toBeLessThanOrEqual(347);
-  expect(graphStages['merge-gate'].x).toBeGreaterThanOrEqual(1053);
-  expect(graphStages['merge-gate'].x).toBeLessThanOrEqual(1073);
+  expect(graphStages.trigger.x).toBeGreaterThanOrEqual(288);
+  expect(graphStages.trigger.x).toBeLessThanOrEqual(290);
+  expect(graphStages.trigger.y).toBeGreaterThanOrEqual(298.5);
+  expect(graphStages.trigger.y).toBeLessThanOrEqual(301);
+  expect(graphStages.planner.x).toBeGreaterThanOrEqual(496);
+  expect(graphStages.planner.x).toBeLessThanOrEqual(498);
+  expect(graphStages['agent-router'].x).toBeGreaterThanOrEqual(676);
+  expect(graphStages['agent-router'].x).toBeLessThanOrEqual(678);
+  expect(graphStages['test-generator'].x).toBeGreaterThanOrEqual(851);
+  expect(graphStages['test-generator'].x).toBeLessThanOrEqual(853.5);
+  expect(graphStages['test-generator'].y).toBeGreaterThanOrEqual(257);
+  expect(graphStages['test-generator'].y).toBeLessThanOrEqual(259);
+  expect(graphStages['code-reviewer'].x).toBeGreaterThanOrEqual(851);
+  expect(graphStages['code-reviewer'].x).toBeLessThanOrEqual(853.5);
+  expect(graphStages['code-reviewer'].y).toBeGreaterThanOrEqual(333);
+  expect(graphStages['code-reviewer'].y).toBeLessThanOrEqual(335);
+  expect(graphStages['merge-gate'].x).toBeGreaterThanOrEqual(1062);
+  expect(graphStages['merge-gate'].x).toBeLessThanOrEqual(1064.5);
   await expect(page.locator('.preview-objective-list')).toContainText('Ship AI code review v2');
   await expect(page.locator('.preview-objective-list > div').first()).toContainText('On Track');
   await expect(page.locator('.preview-objective-list > div').first().locator('b')).toHaveText('78%');
   await expect(page.locator('.preview-approval-list .mantine-Badge-root').first()).toHaveText('Approved');
+  await expect(page.locator('.preview-agent-list')).toContainText('2m ago');
+  await expect(page.locator('.preview-agent-list')).toContainText('4m ago');
+  await expect(page.locator('.preview-agent-list')).toContainText('7m ago');
   await expect(page.getByText('PR #41827', { exact: true })).toBeVisible();
   await expect(page.locator('.preview-timeline-row')).toHaveCount(5);
   await expect(page.locator('.preview-timeline-done')).toHaveCount(2);
@@ -198,9 +204,13 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeLessThanOrEqual(1087);
   expect(timelineMockAlignment.today.y - timelineMockAlignment.firstRow.y).toBeGreaterThanOrEqual(-14);
   expect(timelineMockAlignment.today.y - timelineMockAlignment.firstRow.y).toBeLessThanOrEqual(-8);
-  await expect(page.locator('.preview-analytics-summary')).toContainText('42');
+  await expect(page.locator('.preview-analytics-summary > span')).toHaveText('PRs Merged (7d)');
+  await expect(page.locator('.preview-analytics-summary strong')).toHaveText('42');
   await expect(page.locator('.mock-analytics-filter')).toHaveText('Delivery Velocity');
   await expect(page.locator('.preview-analytics-panel .recharts-area-curve')).toHaveCount(1);
+  const analyticsPlot = await page.locator('.preview-analytics-panel .recharts-cartesian-grid').boundingBox();
+  expect(analyticsPlot?.y).toBeGreaterThanOrEqual(703);
+  expect(analyticsPlot?.y).toBeLessThanOrEqual(710);
   const analyticsTicks = await page.locator('.preview-analytics-panel .recharts-cartesian-axis-tick-value').allTextContents();
   expect(analyticsTicks).toContain('Jan 25');
   expect(analyticsTicks).toContain('40');
@@ -352,8 +362,14 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
 
 test('mobile Overview keeps to the supplied phone summary', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/?preview=mock');
   await expect(page.locator('.metric-grid .metric-card:visible')).toHaveCount(4);
+  expect(await page.locator('.metric-card:visible .metric-top > span').evaluateAll((labels) =>
+    labels.every((label) => getComputedStyle(label).whiteSpace === 'nowrap'))).toBe(true);
+  await expect(page.locator('.mock-budget-summary small')).toBeVisible();
+  await expect(page.locator('.metric-card:visible .mock-trend .mantine-Badge-root').nth(0)).toHaveText('↑ +3');
+  await expect(page.locator('.metric-card:visible .mock-trend .mantine-Badge-root').nth(1)).toHaveText('● Live');
+  await expect(page.locator('.activity-list')).toContainText('Objective “Improve review velocity” updated');
   await expect(page.locator('.activity-panel')).toBeVisible();
   const mobileOverviewLayout = await page.evaluate(() => {
     const metrics = document.querySelector('.metric-grid')!.getBoundingClientRect();

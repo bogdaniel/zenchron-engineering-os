@@ -142,12 +142,15 @@
 .design-preview .workflow-node.planner,
 .design-preview .workflow-node.test-generator,
 .design-preview .workflow-node.code-reviewer { --workflow-accent: #43dda6; --workflow-border: #318b6d; --workflow-tint: #133a2d; --workflow-icon-bg: #1e5842; --workflow-glow: #43dda066; }
-.design-preview .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 4px; right: 6px; color: #22d99b; content: '✓'; font-size: 11px; font-weight: 700; }
+.design-preview .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 2px; right: 3px; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
 .design-preview .workflow-overview-canvas .react-flow__attribution { display: none; }
-.design-preview .workflow-overview-canvas .react-flow__viewport { translate: 0 6px; }
+.design-preview .workflow-overview-canvas .react-flow__viewport { translate: 1px 5px; }
+.design-preview .workflow-overview-canvas .react-flow__handle { opacity: 0; }
 .design-preview .workflow-overview-canvas .react-flow__edge-path { stroke: #c4d8ff; stroke-width: 2; filter: drop-shadow(0 0 3px #91bfff88); }
-.design-preview .workflow-overview-canvas .workflow-node { min-height: 58px; padding: 8px 12px; column-gap: 9px; }
-.design-preview .workflow-overview-canvas .workflow-node-icon { width: 24px; height: 24px; }
+.design-preview .workflow-overview-canvas .workflow-node { min-height: 58px; padding: 8px 12px; column-gap: 24px; }
+.design-preview .workflow-overview-canvas .workflow-node-icon { width: 24px; height: 24px; background: transparent; border-radius: 0; }
+.design-preview .workflow-overview-canvas .workflow-node-icon svg { width: 28px; height: 28px; }
+.design-preview .workflow-node.trigger .workflow-node-icon { border: 1px solid #52729b; border-radius: 50%; background: #183451; }
 .design-preview .workflow-overview-canvas .workflow-node b { font-size: 15px; }
 .design-preview .workflow-overview-canvas .workflow-node small { font-size: 12px; }
 .design-preview .workflow-node.trigger { width: 195px; }
@@ -228,7 +231,9 @@
   .design-preview .top-actions { gap: 28px; }
   .design-preview .workspace-button { min-width: 170px; justify-content: space-between; padding: 0 12px; }
   .design-preview .user-chip { min-width: 180px; margin-left: 0; }
-  .design-preview .sidebar-bottom { margin-bottom: 33px; border-top: 0; }
+  .design-preview .sidebar-bottom { margin-bottom: 33px; border-top: 0; transform: translateY(-17px); }
+.design-preview .sidebar-bottom strong { display: block; width: 110px; font-size: 16px; line-height: 1.15; }
+.design-preview .sidebar-bottom p { margin-top: 0; color: #9690a8; font-size: 13px; line-height: 1.45; }
   .design-preview .metric-grid { grid-template-columns: 270fr 266fr 266fr 270fr 259fr; }
   .design-preview .search-box { width: 410px; }
   .design-preview .search-box input { height: 42px; }
@@ -245,11 +250,18 @@
 .design-preview .metric-value-row > strong { margin-top: 0; }
 .design-preview .activity-list > div { padding-top: 4px; padding-bottom: 4px; font-size: 13px; }
 .design-preview .panel { padding-left: 16px; padding-right: 16px; }
+.design-preview .overview-design-preview .panel {
+  border-color: #3d3653;
+  background: linear-gradient(140deg, #1c1a2c, #12131f 76%);
+  box-shadow: 0 8px 28px #00000032, inset 0 1px #ffffff09, 0 0 18px #9d5bff0a;
+}
 .design-preview .overview-middle-grid > .panel { padding-top: 0; }
 .design-preview .overview-bottom-grid > .panel { padding-top: 4px; }
 .design-preview .objective-panel { padding-bottom: 2px; }
 .design-preview .overview-middle-grid .panel-heading { transform: translateY(-4px); }
-.design-preview .section-icon { width: 22px; height: 22px; border: 0; border-radius: 0; background: transparent; }
+.design-preview .section-icon { width: 26px; height: 26px; border: 1px solid #3a3153; border-radius: 8px; color: #c59bff; background: #2a2139; }
+.design-preview .section-icon.blue-icon { border-color: #2c3e58; color: #92c7ff; background: #1a2939; }
+.design-preview .section-icon.green-icon { border-color: #34725d; color: #80e3b3; background: #193128; }
 .design-preview .section-icon svg { width: 22px; height: 22px; }
 .design-preview .panel-heading > div { gap: 11px; }
 .design-preview .workflow-panel .panel-heading { transform: translateY(-3px); }
@@ -287,7 +299,8 @@
 .preview-approval-list, .preview-agent-list { display: grid; gap: 1px; margin-top: 4px; }
 .preview-approval-list > div, .preview-agent-list > div { display: flex; min-width: 0; min-height: 30px; align-items: center; gap: 7px; border-bottom: 1px solid #292737; color: #e4dfef; }
 .preview-approval-list > div > svg, .preview-agent-list > div > svg { width: 15px; flex: 0 0 15px; color: #c49aff; }
-.preview-approval-list > div > span, .preview-agent-list > div > span { min-width: 0; flex: 1; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.preview-approval-list > div > span, .preview-agent-list > div > span { min-width: 0; flex: 1; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.preview-agent-list time { color: #a19ab0; font-size: 10px; white-space: nowrap; }
 .preview-approval-list small, .preview-agent-list small { display: block; margin-top: 2px; color: #9791a7; font-size: 8px; }
 .preview-approval-list .mantine-Badge-root[data-pending="true"] { border-color: #73551f; color: #f1c75f; background: #3b2d12; }
 .preview-approval-list .mantine-Badge-root, .preview-agent-list .mantine-Badge-root { padding: 4px 8px; font-size: 11px; }
@@ -311,7 +324,7 @@
 .preview-diff i { color: #a4f0c2; font-style: normal; }
 .preview-timeline { position: relative; width: calc(100% + 8px); margin-top: 20px; }
 .preview-timeline-dates { display: grid; grid-template-columns: repeat(8, 1fr); margin: 0 0 18px 150px; color: #a19ab0; font-size: 12px; }
-.preview-timeline-row { display: grid; grid-template-columns: 168px minmax(0, 1fr); min-height: 31px; align-items: center; gap: 0; color: #dcd7e5; font-size: 13px; }
+.preview-timeline-row { display: grid; grid-template-columns: 168px minmax(0, 1fr); min-height: 31px; align-items: center; gap: 0; color: #dcd7e5; font-size: 14px; letter-spacing: -.2px; }
 .preview-timeline-row > span { display: flex; align-items: center; gap: 6px; }
 .preview-timeline-row svg { flex: 0 0 14px; }
 .preview-timeline-done { color: #39dda0; }
@@ -330,8 +343,9 @@
 .timeline-bar.purple { background: linear-gradient(90deg, #a53cff, #b86aff); }
 .timeline-bar.blue { background: linear-gradient(90deg, #357df7, #5899ff); }
 .timeline-bar.lilac { background: linear-gradient(90deg, #bc70e9, #d295f4); }
-.timeline-bar.empty { width: 11px; height: 11px; justify-self: end; transform: rotate(45deg); background: #d1a1ff; }
-.preview-analytics-summary { display: flex; align-items: baseline; gap: 6px; margin: 4px 2px -3px; }
+.timeline-bar.empty { width: 14px; height: 14px; justify-self: end; transform: rotate(45deg); background: #d1a1ff; }
+.preview-analytics-summary { display: grid; gap: 0; margin: 9px 2px -3px; }
+.preview-analytics-summary > div { display: flex; align-items: baseline; gap: 6px; }
 .preview-analytics-summary strong { color: #f2edfa; font-size: 24px; font-weight: 650; }
 .preview-analytics-summary span { color: #e7e2ef; font-size: 12px; }
 .preview-analytics-summary b { margin-left: auto; color: #4cdda5; font-size: 12px; }
@@ -386,6 +400,15 @@
   .overview-shell .evidence-panel, .overview-shell .review-panel, .overview-shell .timeline-panel,
   .overview-shell .analytics-panel { display: none; }
   .metric-card { min-height: 100px; padding: 11px; }
+  .overview-shell.design-preview .metric-card .metric-top { gap: 8px; }
+  .overview-shell.design-preview .metric-card .metric-top > span { font-size: 13px; white-space: nowrap; }
+  .overview-shell.design-preview .metric-value-row > .mock-trend .mantine-Badge-root { padding: 1px 5px; font-size: 10px; }
+  .overview-shell.design-preview .activity-list > div { gap: 6px; font-size: 12px; }
+  .overview-shell.design-preview .metric-value-row > .mock-trend { gap: 4px; margin-left: 4px; }
+  .overview-shell.design-preview .mock-trend > svg { width: 58px; }
+  .overview-shell.design-preview .mock-budget-summary { width: 95px; margin-right: 0; }
+  .overview-shell.design-preview .mock-budget-summary small { font-size: 10px; white-space: nowrap; }
+  .overview-shell.design-preview .mock-budget-progress { width: 95px; }
   .content-grid { grid-template-columns: 1fr; gap: 10px; margin-top: 18px; }
   .workflow-panel, .activity-panel, .objective-panel, .plan-panel, .agents-panel,
   .evidence-panel, .review-panel, .timeline-panel, .analytics-panel { grid-column: 1; }

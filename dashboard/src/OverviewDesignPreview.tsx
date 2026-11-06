@@ -2,7 +2,7 @@ import { Badge, Progress } from '@mantine/core';
 import { AreaChart, Sparkline } from '@mantine/charts';
 import {
   IconActivity, IconCalendar, IconChartBar, IconChevronDown, IconCircle,
-  IconCircleCheck, IconCode, IconCoins, IconFileText, IconGitBranch, IconGitPullRequest,
+  IconCircleCheck, IconCode, IconDatabase, IconFileText, IconGitBranch, IconGitPullRequest,
   IconExternalLink, IconHistory, IconInfinity, IconRobot, IconShieldCheck, IconTarget,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
@@ -34,7 +34,7 @@ export function OverviewDesignPreview() {
       <MetricCard className="metric-card green" label="CI Health" value="99.4%"
         icon={<IconInfinity size={19} />} trend={<Badge className="mock-healthy-badge">✓ Healthy</Badge>} />
       <MetricCard className="metric-card purple" label="Budget Usage" value="68%"
-        icon={<IconCoins size={19} />} trend={<span className="mock-budget-summary"><small>$13.6K / $20K</small>
+        icon={<IconDatabase size={19} />} trend={<span className="mock-budget-summary"><small>$13.6K / $20K</small>
           <Progress className="mock-budget-progress" value={68} /></span>} />
     </section>
 
@@ -77,12 +77,12 @@ export function OverviewDesignPreview() {
         </PanelCard>
 
         <PanelCard className="panel agents-panel" withBorder>
-        <PanelHeading className="panel-heading" icon={<span className="section-icon blue-icon"><IconRobot size={18} /></span>}
+        <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconRobot size={18} /></span>}
           title="Agent Runs" actions={<a className="text-link" href="#agents">View →</a>} />
         <div className="preview-agent-list">
-          <div><IconCode /><span>Code Reviewer</span><Badge>Success</Badge></div>
-          <div><IconRobot /><span>Test Generator</span><Badge>Success</Badge></div>
-          <div><IconActivity /><span>Coverage Analyzer</span><Badge>Success</Badge></div>
+          <div><IconCode /><span>Code Reviewer</span><Badge>Success</Badge><time>2m ago</time></div>
+          <div><IconRobot /><span>Test Generator</span><Badge>Success</Badge><time>4m ago</time></div>
+          <div><IconActivity /><span>Coverage Analyzer</span><Badge>Success</Badge><time>7m ago</time></div>
         </div>
         </PanelCard>
 
@@ -109,7 +109,7 @@ export function OverviewDesignPreview() {
         </PanelCard>
 
         <PanelCard className="panel timeline-panel preview-timeline-panel" withBorder>
-          <PanelHeading className="panel-heading" icon={<span className="section-icon blue-icon"><IconCalendar size={18} /></span>}
+          <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconCalendar size={18} /></span>}
             title="Sprint Timeline" description="This Sprint (Jan 20 – Jan 27)"
             actions={<a className="text-link" href="#objectives">View Full Timeline →</a>} />
           <div className="preview-timeline">
@@ -129,11 +129,11 @@ export function OverviewDesignPreview() {
         <PanelCard className="panel analytics-panel preview-analytics-panel" withBorder>
           <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconChartBar size={18} /></span>}
             title="Analytics" actions={<span className="mock-analytics-filter">Delivery Velocity<IconChevronDown size={13} /></span>} />
-          <div className="preview-analytics-summary"><strong>42</strong><span>PRs merged (7d)</span><b>↑ +27% vs. prior 7d</b></div>
+          <div className="preview-analytics-summary"><span>PRs Merged (7d)</span><div><strong>42</strong><b>↑ +27% vs. prior 7d</b></div></div>
           <AreaChart h={188} data={analytics} dataKey="day" series={[{ name: 'merged', color: '#ad55ff', label: 'Merged PRs' }]}
             curveType="monotone" withDots withTooltip withGradient fillOpacity={0.4} dotProps={{ r: 3, stroke: '#f2edfa', strokeWidth: 1 }}
             gridAxis="x" tickLine="none"
-            areaChartProps={{ margin: { top: 45, right: 5, bottom: 0, left: 5 } }}
+            areaChartProps={{ margin: { top: 13, right: 5, bottom: 0, left: 5 } }}
             xAxisProps={{ height: 21, interval: 0, tickMargin: 0, padding: { left: 10, right: 0 } }}
             yAxisProps={{ width: 25, domain: [0, 50], ticks: [0, 10, 20, 30, 40, 50], interval: 0 }} />
         </PanelCard>

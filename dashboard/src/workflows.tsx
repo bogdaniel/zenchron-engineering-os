@@ -13,8 +13,8 @@ import ELK from 'elkjs/lib/elk.bundled.js';
 import { z } from 'zod';
 import {
   IconBolt, IconCheck, IconChecklist, IconChevronRight, IconCirclePlus, IconCode, IconDeviceFloppy, IconDots,
-  IconFileText, IconGitBranch, IconGitMerge, IconGripVertical, IconHierarchy, IconLayoutBoard, IconMaximize,
-  IconMessageCircle, IconPlayerPlay, IconRepeat, IconRobot, IconRoute, IconSearch, IconTestPipe, IconChartBar, IconUserCheck,
+  IconFileText, IconFlask, IconGitBranch, IconGitMerge, IconGripVertical, IconHierarchy, IconLayoutBoard, IconMaximize, IconMessage2, IconStack2,
+  IconPlayerPlay, IconRepeat, IconRobot, IconRoute, IconSearch, IconTestPipe, IconChartBar, IconUserCheck,
 } from '@tabler/icons-react';
 import '@xyflow/react/dist/style.css';
 import { PageHeading } from './PageHeading';
@@ -44,8 +44,8 @@ const workflowNodeWidth = 190;
 const workflowNodeHeight = 110;
 const overviewNodeLayout = { width: 190, height: 54, spacing: 8 };
 const designPreviewPositions: Record<string, { x: number; y: number }> = {
-  trigger: { x: 10, y: 72 }, plan: { x: 252, y: 72 }, build: { x: 460, y: 72 },
-  test: { x: 666, y: 23 }, review: { x: 666, y: 112 }, merge: { x: 912, y: 72 },
+  trigger: { x: 10, y: 72 }, plan: { x: 252, y: 72 }, build: { x: 461, y: 72 },
+  test: { x: 666, y: 24 }, review: { x: 666, y: 112 }, merge: { x: 911, y: 72 },
 };
 const mobileOverviewStages: {
   id: string; label: string; description: string; kind: ComponentType; types: ComponentType[];
@@ -56,7 +56,7 @@ const mobileOverviewStages: {
     position: { x: 0, y: 36 }, previewIcon: IconPlayerPlay,
   },
   { id: 'plan', label: 'Plan', description: 'Generate plan', kind: 'planner', types: ['planner'],
-    position: { x: 54, y: 36 }, previewIcon: IconFileText },
+    position: { x: 54, y: 36 }, previewIcon: IconStack2 },
   {
     id: 'build', label: 'Build', description: 'Run agents', kind: 'agent-router', types: ['agent-router', 'agent-task'],
     position: { x: 108, y: 36 }, previewIcon: IconCode,
@@ -64,11 +64,11 @@ const mobileOverviewStages: {
   {
     id: 'test', label: 'Test', description: 'Run test suite', kind: 'test-generator',
     types: ['test-generator', 'coverage-analyzer', 'condition', 'loop'], position: { x: 162, y: 10 },
-    previewIcon: IconTestPipe,
+    previewIcon: IconFlask,
   },
   {
     id: 'review', label: 'Review', description: 'AI + human review', kind: 'code-reviewer', types: ['code-reviewer'],
-    position: { x: 162, y: 62 }, previewIcon: IconMessageCircle,
+    position: { x: 162, y: 62 }, previewIcon: IconMessage2,
   },
   {
     id: 'merge', label: 'Merge', description: 'Gated release', kind: 'merge-gate',
@@ -328,7 +328,7 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
                 nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} panOnDrag={false}
                 zoomOnScroll={false} zoomOnPinch={false} attributionPosition="bottom-left"
               >
-                <Background color="#37324c" gap={18} size={1} />
+                <Background color={designPreview ? "#504665" : "#37324c"} gap={designPreview ? 12 : 18} size={1.2} />
               </ReactFlow>
             </div>
             {!designPreview && <div className="workflow-overview-status" aria-label="Workflow execution status">
