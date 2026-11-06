@@ -514,6 +514,8 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
     labels.every((label) => label.scrollWidth <= label.clientWidth))).toBe(true);
   await expect(page.locator('.activity-list')).toContainText('Objective “Improve review velocity” updated');
   await expect(page.locator('.activity-panel')).toBeVisible();
+  expect(await page.locator('.activity-list span').evaluateAll(labels =>
+    labels.every(label => label.scrollWidth <= label.clientWidth))).toBe(true);
   const mobileOverviewLayout = await page.evaluate(() => {
     const metrics = document.querySelector('.metric-grid')!.getBoundingClientRect();
     const activity = document.querySelector('.activity-panel')!.getBoundingClientRect();
@@ -526,6 +528,8 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
   await expect(page.locator('.greeting-desktop-copy')).toBeHidden();
   await expect(page.getByRole('navigation', { name: 'Overview shortcuts' }).getByRole('link'))
     .toHaveText(['Overview', 'My Work', 'Alerts']);
+  expect(await page.locator('.sidebar nav .nav-label[data-mobile-label]').first().evaluate(label =>
+    getComputedStyle(label, '::after').fontSize)).toBe('12px');
   for (const selector of [
     '.workflow-panel', '.objective-panel', '.plan-panel', '.agents-panel', '.evidence-panel',
     '.review-panel', '.timeline-panel', '.analytics-panel',

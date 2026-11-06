@@ -451,6 +451,7 @@
 }
 @media (max-width: 760px) {
   .overview-shell .sidebar { padding-top: 68px; }
+  .overview-shell .sidebar nav .nav-label[data-mobile-label]::after { font-size: 12px; }
   .overview-shell .brand { margin-bottom: 28px; }
   .overview-shell .greeting p { max-width: none; }
   .overview-shell .metric-grid { margin-top: 16px; }
@@ -491,7 +492,10 @@
   .overview-shell.overview-layout .metric-card .metric-top > span { font-size: 13px; white-space: nowrap; }
   .overview-shell.overview-layout .metric-value-row > .mock-trend .mantine-Badge-root { flex: 0 0 auto; padding: 1px 3px; font-size: 10px; }
   .overview-shell.overview-layout .mock-healthy-badge { flex: 0 0 auto; padding: 2px 8px; font-size: 10px; white-space: nowrap; }
-  .overview-shell.overview-layout .activity-list > div { gap: 6px; font-size: 12px; }
+  .overview-shell.overview-layout.sample-data .activity-panel .activity-list { margin-left: 0; }
+  .overview-shell.overview-layout.sample-data .activity-panel .activity-list > div { gap: 6px; font-size: 12px; }
+  .overview-shell.overview-layout.sample-data .activity-panel .activity-list > div > svg { margin-right: 6px; }
+  .overview-shell.overview-layout.sample-data .activity-panel .activity-list span { font-size: 11.5px; letter-spacing: -.25px; }
   .overview-shell.overview-layout .metric-value-row > .mock-trend { gap: 4px; margin-left: 4px; }
   .overview-shell.overview-layout .mock-trend > .mantine-Sparkline-root { width: 58px; flex: 0 0 58px; }
   .overview-shell.overview-layout .mock-trend svg { transform: none; }
