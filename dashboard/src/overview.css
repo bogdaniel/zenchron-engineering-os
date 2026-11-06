@@ -252,7 +252,7 @@
 .design-preview .metric-card:not(:last-child):not(.green) .metric-value-row { justify-content: flex-start; }
 .design-preview .metric-value-row > .mock-trend { flex: 1; justify-content: space-between; margin-left: 12px; }
 .design-preview .metric-value-row > strong { margin-top: 0; }
-.design-preview .activity-list > div { padding-top: 4px; padding-bottom: 4px; font-size: 13px; }
+.design-preview .activity-list > div { padding-top: 4px; padding-bottom: 4px; font-size: 14px; }
 .design-preview .panel { padding-left: 16px; padding-right: 16px; }
 .design-preview .overview-design-preview .panel {
   border-color: #3d3653;

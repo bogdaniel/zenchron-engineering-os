@@ -46,11 +46,11 @@ export function OverviewDesignPreview() {
           <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconActivity size={18} /></span>}
             title="Recent Activity" actions={<a className="text-link" href="#activity">All Activity <IconChevronDown size={12} /></a>} />
           <div className="activity-list">
-            <div><IconCircleCheck className="activity-green" size={17} /><span>PR #41827 merged to trusted-main</span><time>2m ago</time></div>
-            <div><IconRobot className="activity-blue" size={17} /><span>Agent “Code Reviewer” completed run</span><time>6m ago</time></div>
-            <div><IconFileText className="activity-blue" size={17} /><span>Plan approved: Add usage analytics (v1.3)</span><time>12m ago</time></div>
-            <div><IconCircleCheck className="activity-green" size={17} /><span>CI passed (99.4%)</span><time>16m ago</time></div>
-            <div><IconTarget className="activity-violet" size={17} /><span>Objective “Improve review velocity” updated</span><time>26m ago</time></div>
+            <div><IconCircleCheck className="activity-green" size={18} /><span>PR #41827 merged to trusted-main</span><time>2m ago</time></div>
+            <div><IconRobot className="activity-blue" size={18} /><span>Agent “Code Reviewer” completed run</span><time>6m ago</time></div>
+            <div><IconFileText className="activity-blue" size={18} /><span>Plan approved: Add usage analytics (v1.3)</span><time>12m ago</time></div>
+            <div><IconCircleCheck className="activity-green" size={18} /><span>CI passed (99.4%)</span><time>16m ago</time></div>
+            <div><IconTarget className="activity-violet" size={18} /><span>Objective “Improve review velocity” updated</span><time>26m ago</time></div>
           </div>
         </PanelCard>
       </div>
