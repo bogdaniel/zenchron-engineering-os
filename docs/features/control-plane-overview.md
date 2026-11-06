@@ -5,7 +5,8 @@ mockup: workspace navigation, status metrics, workflow visualization, recent act
 evidence health, local branch reviews, timeline, and analytics. Control-plane health, workers, discovered projects,
 objectives, workflow definitions, agent-run history, GitHub pull-request counts, and GitHub Actions health are backed
 by current API/provider records. Budget, approvals, evidence, and timeline remain unavailable until their sources
-exist. An authenticated `?preview=mock` URL shows the supplied Overview mock content as clearly labeled sample data.
+exist. The local `?preview=mock` URL shows the supplied Overview mock content as clearly labeled sample data; it does
+not fetch protected dashboard data or require a GitHub session.
 
 ## Feature diagram
 
@@ -19,7 +20,7 @@ flowchart LR
     Pages --> Metrics[Shared MetricCard<br/>Summary values and labels]
     Pages --> PanelHeading[Shared PanelHeading<br/>Panel + detail titles · descriptions · actions]
     Shell --> TypeScale[Shared CSS type scale<br/>Page title + panel heading tokens]
-    Browser -->|Authenticated ?preview=mock| DesignPreview[Overview design preview<br/>frontend sample data only]
+    Browser -->|Local ?preview=mock| DesignPreview[Overview design preview<br/>frontend sample data only]
     Dashboard -->|GET /healthz| Health[Go health endpoint]
     Dashboard --> MobileShortcuts[Mobile shortcuts<br/>Overview · My Work · Alerts]
     MobileShortcuts -->|My Work| Objectives
@@ -70,7 +71,7 @@ flowchart LR
   the available history. It shows an empty state when there are no merged records or the history is incomplete.
 - Budget usage, approval records, evidence artifacts, and delivery timeline do not have backend sources yet. The live
   Overview uses unavailable or empty states instead of sample values.
-- The authenticated `?preview=mock` view renders the supplied Overview mock's sample content and local sample avatar
+- The local `?preview=mock` view renders the supplied Overview mock's sample content and local sample avatar
   in the existing UI for visual review. It is frontend-only, labeled as sample data, and does not change live API records.
 - The overview Reviews card lists only agent runs with captured local diffs and links to the Reviews page for comments
   and request-changes; provider-sourced pull requests and issues appear in their own Reviews queues.

@@ -23,7 +23,7 @@
 }
 .design-preview .sidebar { padding-top: 14px; }
 .design-preview .brand { gap: 24px; margin-bottom: 33px; }
-.design-preview .greeting { margin-left: 3px; }
+.design-preview .greeting { margin-left: 0; }
 @media (min-width: 1260px) {
   .design-preview .sidebar { padding-right: 11px; }
   .design-preview .sidebar .nav-link { gap: 18px; padding-left: 27px; }
@@ -232,12 +232,19 @@
 .design-preview .workflow-overview-status { display: none; }
 .design-preview .workflow-overview-canvas { height: 124px; }
 @media (min-width: 1622px) {
+  .design-preview .brand { gap: 19px; margin-bottom: 27px; font-size: 18px; transform: translateY(2px); }
+  .design-preview .brand small { margin-top: 0; font-size: 15px; }
+  .design-preview .brand-mark { width: 34px; height: 36px; }
+  .design-preview .brand-mark::before, .design-preview .brand-mark::after { width: 23px; height: 10px; }
+  .design-preview .brand-mark::before { top: 7px; left: 4px; }
+  .design-preview .brand-mark::after { top: 20px; left: 9px; }
   .design-preview .top-actions { gap: 28px; }
   .design-preview .workspace-button { min-width: 170px; justify-content: space-between; padding: 0 12px; }
   .design-preview .user-chip { min-width: 180px; margin-left: 0; }
-  .design-preview .sidebar-bottom { margin-bottom: 33px; border-top: 0; transform: translateY(-17px); }
-.design-preview .sidebar-bottom strong { display: block; width: 110px; font-size: 16px; line-height: 1.15; }
-.design-preview .sidebar-bottom p { margin-top: 0; color: #9690a8; font-size: 13px; line-height: 1.45; }
+  .design-preview .sidebar-bottom { margin-bottom: 33px; border-top: 0; transform: translateY(-6px); }
+.design-preview .sidebar-bottom strong { display: block; width: 110px; font-size: 17px; line-height: 1.15; }
+.design-preview .sidebar-bottom-brand { display: flex; align-items: flex-start; gap: 14px; }
+.design-preview .sidebar-bottom p { margin-top: 9px; color: #9690a8; font-size: 13px; line-height: 1.45; }
   .design-preview .metric-grid { grid-template-columns: 270fr 266fr 266fr 270fr 259fr; }
   .design-preview .search-box { width: 410px; }
   .design-preview .search-box input { height: 42px; }
@@ -246,7 +253,6 @@
 .design-preview .metric-card .metric-top { gap: 22px; }
 .design-preview .metric-card .metric-top > svg { width: 28px; height: 28px; }
 .app-shell.design-preview .main-content .shared-metric-card .metric-top { color: #f4efff; font-size: 15px; font-weight: 600; }
-.design-preview .nav-link { min-height: 38px; }
 .design-preview .nav-link.active { min-height: 46px; }
 .design-preview .metric-value-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .design-preview .metric-card:not(:last-child):not(.green) .metric-value-row { justify-content: flex-start; }

@@ -55,8 +55,8 @@ button:disabled, input:disabled {
   padding: 18px 14px 20px;
   border-right: 1px solid #252438;
   background:
+    url('/sidebar-wave.png') left calc(100% - 151px) / 100% 290px no-repeat,
     radial-gradient(ellipse at 8% 90%, #8e48d94a 0, transparent 40%),
-    linear-gradient(154deg, transparent 75%, #7440b622 78%, #a74eff65 81%, #7140bd64 83%, transparent 88%),
     radial-gradient(ellipse at 38% 82%, #713caa38 0, transparent 48%),
     rgba(10,11,19,.92);
 }
