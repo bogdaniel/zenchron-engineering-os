@@ -92,6 +92,7 @@ test('Overview PR queue and CI health use complete GitHub history', async ({ pag
 
 test('Overview design preview renders the supplied mock content without replacing live data', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
   await page.goto('/?preview=mock');
   await expect(page.locator('.design-preview-label')).toHaveCount(0);
   await expect(page.locator('.sidebar-bottom')).toContainText('The AI-native engineering operating system.');

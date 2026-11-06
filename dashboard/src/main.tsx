@@ -154,8 +154,8 @@ function App() {
   const sessionUnavailable = auth.isError && !unauthorized;
   const loginPreview = new URLSearchParams(window.location.search).get('preview') === 'login';
   const designPreview = new URLSearchParams(window.location.search).get('preview') === 'mock';
-  if (auth.isLoading) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
-  if ((auth.isError && unauthorized) || loginPreview) return <div className="auth-screen">
+  if (auth.isLoading && !designPreview) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
+  if (!designPreview && ((auth.isError && unauthorized) || loginPreview)) return <div className="auth-screen">
     <div className="auth-card">
       <span className="brand-mark" aria-hidden="true" />
       <div><h1>Zenchron Engineering</h1><p>Sign in to access your engineering control plane.</p></div>

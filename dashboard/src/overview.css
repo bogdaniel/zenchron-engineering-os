@@ -237,6 +237,11 @@
 .design-preview .section-icon { width: 22px; height: 22px; border: 0; border-radius: 0; background: transparent; }
 .design-preview .section-icon svg { width: 22px; height: 22px; }
 .design-preview .panel-heading > div { gap: 11px; }
+.design-preview .workflow-panel .panel-heading { transform: translateY(-3px); }
+.design-preview .workflow-panel .panel-heading > div { gap: 19px; margin-left: 5px; }
+.design-preview .workflow-panel .section-icon { width: 28px; height: 28px; }
+.design-preview .workflow-panel .section-icon svg { width: 28px; height: 28px; }
+.design-preview .activity-panel .panel-heading { transform: translateY(-6px); }
 .mock-trend { display: flex; align-items: center; gap: 7px; }
 .mock-bars { display: flex; width: 58px; height: 24px; align-items: end; justify-content: end; gap: 4px; }
 .mock-bars i { width: 5px; background: linear-gradient(180deg, #b25cff, #722bea); box-shadow: 0 0 9px #9e4bff42; }
