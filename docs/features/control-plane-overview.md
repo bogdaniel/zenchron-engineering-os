@@ -98,6 +98,6 @@ The one OverviewPage preserves the desktop mock's panel widths and vertical spac
 
 ## Verification
 
-`cd dashboard && npm run test:e2e -- e2e/shell.spec.ts` checks shared page and panel title sizes across desktop and mobile routes. `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'dashboard displays|Overview matches|mobile overview|overview lists only agent runs'`
+`cd dashboard && npm run test:e2e -- e2e/shell.spec.ts` checks shared page and panel title sizes across desktop and mobile routes. `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'dashboard displays the connected control plane|Overview|overview lists only agent runs'`
 verifies live control-plane health, desktop fit at the reference viewport, the connected worker and repository, the
 five-item mobile tab bar, two-column status cards, and filtering the overview to runs with captured diffs.
