@@ -148,7 +148,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.metric-card').nth(0).locator('.mock-trend circle')).toHaveCount(8);
   await expect(page.locator('.metric-card').nth(1).locator('.mock-trend circle')).toHaveCount(8);
   const sidebarBackground = await page.locator('.sidebar').evaluate((sidebar) => getComputedStyle(sidebar).backgroundPosition);
-  expect(sidebarBackground).toContain('91px');
+  expect(sidebarBackground).toContain('281px');
   const statusBadgePosition = await page.locator('.workflow-node.test-generator').evaluate((node) => {
     const badge = getComputedStyle(node, '::after');
     return { top: badge.top, right: badge.right };
@@ -495,6 +495,8 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
   await page.setViewportSize({ width: 1522, height: 856 });
   await page.goto('/?preview=mock');
   await expect(page.locator('.metric-grid')).toBeVisible();
+  const sidebarBackground = await page.locator('.sidebar').evaluate((sidebar) => getComputedStyle(sidebar).backgroundPosition);
+  expect(sidebarBackground).toContain('91px');
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {
