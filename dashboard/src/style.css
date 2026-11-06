@@ -60,9 +60,6 @@ button:disabled, input:disabled {
     radial-gradient(ellipse at 38% 82%, #713caa38 0, transparent 48%),
     rgba(10,11,19,.92);
 }
-@media (min-height: 900px) {
-  .sidebar { background-position: left calc(100% - 281px), 8% 90%, 38% 82%; }
-}
 .brand {
   display: flex;
   align-items: center;
