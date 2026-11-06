@@ -343,6 +343,14 @@ test('Overview design preview renders the supplied mock content without replacin
       }),
       headingIcon: bounds('.timeline-panel .panel-heading .section-icon svg'),
       headingTitle: bounds('.timeline-panel .panel-heading h3'),
+      bars: [...document.querySelectorAll('.preview-timeline-row')].map(row => {
+        const grid = row.querySelector('div')!;
+        const bar = row.querySelector('.timeline-bar')!;
+        const gridStart = grid.getBoundingClientRect().left + parseFloat(getComputedStyle(grid).borderLeftWidth);
+        const bounds = bar.getBoundingClientRect();
+        return { start: bounds.left - gridStart, width: bounds.width, center: bounds.x + bounds.width / 2 - gridStart,
+          track: grid.clientWidth / 8 };
+      }),
       labelX: (() => {
         const label = document.querySelector('.preview-timeline-row > span')!;
         const text = label.lastChild!;
@@ -360,6 +368,16 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(787, 0);
   expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(817, 0);
   expect(timelineMockAlignment.labelX.x).toBeCloseTo(812, 0);
+  const [plan, agent, tests, reviewBar, merge] = timelineMockAlignment.bars;
+  expect(plan.start).toBeCloseTo(0, 0);
+  expect(plan.width).toBeCloseTo(2 * plan.track - 13, 0);
+  expect(agent.start).toBeCloseTo(agent.track + 24, 0);
+  expect(agent.width).toBeCloseTo(3 * agent.track, 0);
+  expect(tests.start).toBeCloseTo(3 * tests.track + 47, 0);
+  expect(tests.width).toBeCloseTo(2 * tests.track - 13, 0);
+  expect(reviewBar.start).toBeCloseTo(4 * reviewBar.track + 70, 0);
+  expect(reviewBar.width).toBeCloseTo(2 * reviewBar.track - 14, 0);
+  expect(merge.center).toBeCloseTo(7 * merge.track + 26, 0);
   expect(Math.min(...timelineMockAlignment.labelGridGaps)).toBeGreaterThanOrEqual(0);
   expect(await page.locator('.preview-timeline-row svg').first().evaluate(icon => getComputedStyle(icon).width)).toBe('22px');
   expect(timelineMockAlignment.labelX.height).toBeLessThan(18);
