@@ -113,6 +113,16 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.metric-grid .metric-card').nth(4)).toContainText('68%');
   await expect(page.locator('.metric-grid .metric-card').nth(4)).toHaveClass(/purple/);
   await expect(page.locator('.metric-grid .metric-card').nth(0).locator('small')).toHaveCount(0);
+  const metricCards = await page.locator('.metric-grid .metric-card').evaluateAll((cards) => cards.map((card) => {
+    const bounds = (selector: string) => card.querySelector(selector)!.getBoundingClientRect().toJSON();
+    return { card: card.getBoundingClientRect().toJSON(), icon: bounds('.metric-top svg'), value: bounds('.metric-value-row > strong') };
+  }));
+  [263, 549, 831, 1113, 1399].forEach((x, index) => expect(metricCards[index].card.x).toBeCloseTo(x, 0));
+  expect(metricCards[0].icon.width).toBe(28);
+  expect(metricCards[0].value.y).toBe(135);
+  await expect(page.locator('.metric-card').nth(0).locator('.mock-trend .mantine-Badge-root')).toHaveText('↑ +3');
+  await expect(page.locator('.metric-card').nth(1).locator('.mock-trend .mantine-Badge-root')).toHaveText('● Live');
+  await expect(page.locator('.metric-card').nth(2).locator('.mock-trend .mantine-Badge-root')).toHaveText('↑ +4');
   const kpiGaps = await page.evaluate(() => {
     const metric = (index: number) => document.querySelectorAll('.metric-card')[index];
     const gap = (card: Element, selector: string) => {
@@ -123,7 +133,8 @@ test('Overview design preview renders the supplied mock content without replacin
   });
   expect(kpiGaps.trend).toBeGreaterThanOrEqual(10);
   expect(kpiGaps.trend).toBeLessThanOrEqual(24);
-  expect(kpiGaps.health).toBeLessThanOrEqual(16);
+  expect(kpiGaps.health).toBeGreaterThanOrEqual(40);
+  expect(kpiGaps.health).toBeLessThanOrEqual(55);
   await expect(page.locator('.mock-budget-summary')).toContainText('$13.6K / $20K');
   await expect(page.locator('.pr-queue-metric .mock-bars i')).toHaveCount(5);
   await expect(page.locator('.workflow-overview-status')).toHaveCount(0);
@@ -198,7 +209,7 @@ test('Overview design preview renders the supplied mock content without replacin
     metricValue: getComputedStyle(document.querySelector('.metric-card strong')!).fontSize,
     panelHeading: getComputedStyle(document.querySelector('.workflow-panel h3')!).fontSize,
   }));
-  expect(overviewTypography).toEqual({ metricLabel: '14px', metricValue: '30px', panelHeading: '16px' });
+  expect(overviewTypography).toEqual({ metricLabel: '15px', metricValue: '30px', panelHeading: '16px' });
   const metrics = await page.locator('.metric-grid').boundingBox();
   const sidebar = await page.locator('.sidebar').boundingBox();
   const workflow = await page.locator('.workflow-panel').boundingBox();

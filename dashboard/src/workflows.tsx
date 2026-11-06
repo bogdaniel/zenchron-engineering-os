@@ -44,8 +44,8 @@ const workflowNodeWidth = 190;
 const workflowNodeHeight = 110;
 const overviewNodeLayout = { width: 190, height: 54, spacing: 8 };
 const designPreviewPositions: Record<string, { x: number; y: number }> = {
-  trigger: { x: 0, y: 51 }, plan: { x: 239, y: 51 }, build: { x: 446, y: 51 },
-  test: { x: 659, y: 0 }, review: { x: 659, y: 90 }, merge: { x: 905, y: 51 },
+  trigger: { x: 10, y: 72 }, plan: { x: 252, y: 72 }, build: { x: 460, y: 72 },
+  test: { x: 666, y: 23 }, review: { x: 666, y: 112 }, merge: { x: 912, y: 72 },
 };
 const mobileOverviewStages: {
   id: string; label: string; description: string; kind: ComponentType; types: ComponentType[];
@@ -222,7 +222,7 @@ function mobileWorkflowGraph(workflow: Workflow, designPreview = false) {
     id, type: 'workflow', position: designPreview ? designPreviewPositions[id] ?? position : position,
     data: {
       kind, label, ...(designPreview ? { previewIcon } : {}),
-      description: designPreview && id === 'trigger' ? 'PR opened / updated'
+      description: designPreview && id === 'trigger' ? 'Objective updated'
         : designPreview && id === 'merge' ? 'To trusted-main' : description,
     },
   }));

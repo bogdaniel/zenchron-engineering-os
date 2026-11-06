@@ -3,7 +3,7 @@ import { AreaChart, Sparkline } from '@mantine/charts';
 import {
   IconActivity, IconCalendar, IconChartBar, IconChevronDown, IconCircle,
   IconCircleCheck, IconCode, IconCoins, IconFileText, IconGitBranch, IconGitPullRequest,
-  IconExternalLink, IconHistory, IconRobot, IconShieldCheck, IconTarget,
+  IconExternalLink, IconHistory, IconInfinity, IconRobot, IconShieldCheck, IconTarget,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
@@ -26,13 +26,13 @@ export function OverviewDesignPreview() {
   return <>
     <section className="metric-grid" aria-label="Overview mock metrics">
       <MetricCard className="metric-card purple" label="Active Objectives" value="12"
-        icon={<IconTarget size={19} />} trend={<MockTrend value="+3" data={[3, 4, 3, 6, 5, 7, 9]} />} />
+        icon={<IconTarget size={19} />} trend={<MockTrend value="↑ +3" data={[3, 4, 3, 6, 5, 7, 9]} />} />
       <MetricCard className="metric-card blue" label="Running Agents" value="7"
-        icon={<IconRobot size={19} />} trend={<MockTrend value="Live" data={[3, 4, 4, 6, 5, 7, 8]} teal />} />
+        icon={<IconRobot size={19} />} trend={<MockTrend value="● Live" data={[3, 4, 4, 6, 5, 7, 8]} teal />} />
       <MetricCard className="metric-card purple pr-queue-metric" label="PR Queue" value="18"
-        icon={<IconGitPullRequest size={19} />} trend={<span className="mock-trend"><Badge>+4</Badge><MockBars /></span>} />
+        icon={<IconGitPullRequest size={19} />} trend={<span className="mock-trend"><Badge>↑ +4</Badge><MockBars /></span>} />
       <MetricCard className="metric-card green" label="CI Health" value="99.4%"
-        icon={<IconActivity size={19} />} trend={<Badge className="mock-healthy-badge">✓ Healthy</Badge>} />
+        icon={<IconInfinity size={19} />} trend={<Badge className="mock-healthy-badge">✓ Healthy</Badge>} />
       <MetricCard className="metric-card purple" label="Budget Usage" value="68%"
         icon={<IconCoins size={19} />} trend={<span className="mock-budget-summary"><small>$13.6K / $20K</small>
           <Progress className="mock-budget-progress" value={68} /></span>} />
@@ -145,7 +145,7 @@ export function OverviewDesignPreview() {
 
 function MockTrend({ value, data, teal = false }: { value: string; data: number[]; teal?: boolean }) {
   return <span className="mock-trend"><Badge data-teal={teal || undefined}>{value}</Badge>
-    <Sparkline data={data} color={teal ? 'teal.4' : 'violet.5'} w={100} h={24} /></span>;
+    <Sparkline data={data} color={teal ? 'teal.4' : 'violet.5'} w={98} h={24} /></span>;
 }
 
 function MockBars() {
