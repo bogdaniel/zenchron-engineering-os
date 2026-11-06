@@ -148,6 +148,7 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(workflowBackground).toContain('linear-gradient');
   expect(workflowBackground.match(/radial-gradient/g)).toHaveLength(2);
   expect(workflowBackground).toContain('130% 180% at 15% 0%');
+  expect(workflowBackground).toContain('rgba(239, 232, 255, 0.04)');
   await expect(page.locator('.workflow-overview-canvas .react-flow__edge-path').first()).toHaveCSS('filter', /0px 0px 2px/);
   await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeHidden();
   await expect(page.locator('.workflow-node.trigger .workflow-node-icon svg')).toHaveCSS('width', '28px');

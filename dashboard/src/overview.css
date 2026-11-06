@@ -160,7 +160,7 @@
 .sample-data .workflow-overview-canvas .react-flow__attribution { display: none; }
 .overview-layout.sample-data .overview-design-preview .workflow-panel {
   background-color: #141321;
-  background-image: radial-gradient(circle, #302b42 1px, transparent 1px), radial-gradient(ellipse 130% 180% at 15% 0%, #efe8ff12 0, #efe8ff06 50%, transparent 83%), linear-gradient(140deg, #211e30, #11121b 76%);
+  background-image: radial-gradient(circle, #302b42 1px, transparent 1px), radial-gradient(ellipse 130% 180% at 15% 0%, #efe8ff0a 0, #efe8ff04 50%, transparent 83%), linear-gradient(140deg, #211e30, #11121b 76%);
   background-size: 18px 18px, auto, auto;
 }
 .overview-layout.sample-data .workflow-overview-canvas { border: 0; border-radius: 0; background: transparent; }
