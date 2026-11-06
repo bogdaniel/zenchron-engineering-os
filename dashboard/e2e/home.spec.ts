@@ -272,6 +272,8 @@ test('Overview design preview renders the supplied mock content without replacin
       today: bounds('.preview-today-marker b'),
       dates: bounds('.preview-timeline-dates'),
       firstRow: bounds('.preview-timeline-row'),
+      headingIcon: bounds('.timeline-panel .panel-heading .section-icon svg'),
+      headingTitle: bounds('.timeline-panel .panel-heading h3'),
       labelX: (() => {
         const label = document.querySelector('.preview-timeline-row > span')!;
         const text = label.lastChild!;
@@ -286,6 +288,8 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.dates.y).toBeCloseTo(661, 0);
   expect(timelineMockAlignment.today.y).toBeCloseTo(680, 0);
   expect(timelineMockAlignment.firstRow.y).toBeCloseTo(689, 0);
+  expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(791, 0);
+  expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(828, 0);
   expect(timelineMockAlignment.labelX.x).toBeCloseTo(818, 0);
   expect(timelineMockAlignment.labelX.height).toBeLessThan(18);
   expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeGreaterThanOrEqual(1079);

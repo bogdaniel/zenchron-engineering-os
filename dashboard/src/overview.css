@@ -254,7 +254,7 @@
   .overview-layout .search-box { width: 410px; }
   .overview-layout .search-box input { height: 42px; }
   .overview-layout .review-panel .panel-heading > div { transform: translateY(-2px); }
-  .overview-layout .timeline-panel .panel-heading > div { transform: translate(4px, 3px); }
+  .overview-layout .timeline-panel .panel-heading > div { gap: 13px; transform: translate(0, 3px); }
 .overview-layout .timeline-panel .panel-heading p { transform: translateY(4px); font-size: 11.5px; }
   .overview-layout .analytics-panel .panel-heading > div { transform: translate(-4px, -4px); }
 }
