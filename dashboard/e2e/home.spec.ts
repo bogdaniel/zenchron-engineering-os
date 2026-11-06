@@ -270,9 +270,24 @@ test('Overview design preview renders the supplied mock content without replacin
     const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
     return {
       today: bounds('.preview-today-marker b'),
+      dates: bounds('.preview-timeline-dates'),
       firstRow: bounds('.preview-timeline-row'),
+      labelX: (() => {
+        const label = document.querySelector('.preview-timeline-row > span')!;
+        const text = label.lastChild!;
+        const range = document.createRange();
+        range.setStart(text, 0);
+        range.setEnd(text, text.textContent!.length);
+        const bounds = range.getBoundingClientRect();
+        return { x: bounds.x, height: bounds.height };
+      })(),
     };
   });
+  expect(timelineMockAlignment.dates.y).toBeCloseTo(661, 0);
+  expect(timelineMockAlignment.today.y).toBeCloseTo(680, 0);
+  expect(timelineMockAlignment.firstRow.y).toBeCloseTo(689, 0);
+  expect(timelineMockAlignment.labelX.x).toBeCloseTo(818, 0);
+  expect(timelineMockAlignment.labelX.height).toBeLessThan(18);
   expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeGreaterThanOrEqual(1079);
   expect(timelineMockAlignment.today.x + timelineMockAlignment.today.width / 2).toBeLessThanOrEqual(1087);
   expect(timelineMockAlignment.today.y - timelineMockAlignment.firstRow.y).toBeGreaterThanOrEqual(-14);
