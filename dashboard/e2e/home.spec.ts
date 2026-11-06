@@ -163,10 +163,11 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.preview-agent-list > div svg').nth(0)).toHaveClass(/tabler-icon-stack-2/);
   await expect(page.locator('.preview-agent-list > div svg').nth(1)).toHaveClass(/tabler-icon-stack-2/);
   await expect(page.locator('.preview-agent-list > div svg').nth(2)).toHaveClass(/tabler-icon-shield-check/);
-  await expect(page.locator('.evidence-panel .evidence-health-list > div svg').nth(1)).toHaveClass(/tabler-icon-stack-2/);
+  await expect(page.locator('.evidence-panel .evidence-health-list > div > svg').nth(1)).toHaveClass(/tabler-icon-stack-2/);
   await expect(page.locator('.evidence-panel .evidence-health-list > div > span').first()).toHaveCSS('font-size', '13px');
   await expect(page.locator('.evidence-panel .mock-health-tag').first()).toHaveCSS('font-size', '11px');
-  expect(await page.locator('.evidence-panel .mock-health-tag').first().evaluate((tag) => getComputedStyle(tag, '::before').content)).toBe('""');
+  await expect(page.locator('.evidence-panel .mock-health-tag svg')).toHaveCount(2);
+  await expect(page.locator('.evidence-panel .mock-health-tag svg').first()).toHaveClass(/tabler-icon-circle-check/);
   await expect(page.locator('.metric-grid .metric-card').nth(0).locator('small')).toHaveCount(0);
   const metricCards = await page.locator('.metric-grid .metric-card').evaluateAll((cards) => cards.map((card) => {
     const bounds = (selector: string) => card.querySelector(selector)!.getBoundingClientRect().toJSON();

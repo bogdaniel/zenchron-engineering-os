@@ -148,8 +148,8 @@ export function OverviewPage({ sampleData, projects, projectsLoading, projectsEr
         <PanelHeading className="panel-heading" icon={<span className="section-icon green-icon"><IconShieldCheck size={18} /></span>}
           title={<span className="overview-heading-with-info">Trusted-main & Evidence Health{sampleData && <IconInfoCircle className="overview-heading-info" size={14} aria-hidden="true" />}</span>} />
         <div className="evidence-health-list">
-          <div><IconGitBranch size={16} /><span>Trusted-main<small>Protected · Verified · Up to date</small></span><Badge className={sampleData ? 'mock-health-tag' : 'muted-tag'}>{sampleData ? 'Healthy' : 'Unavailable'}</Badge></div>
-          <div><IconStack2 size={16} /><span>Evidence<small>Artifacts · Test results · Reviews · Traces</small></span><Badge className={sampleData ? 'mock-health-tag' : 'muted-tag'}>{sampleData ? 'Healthy' : 'Unavailable'}</Badge></div>
+          <div><IconGitBranch size={16} /><span>Trusted-main<small>Protected · Verified · Up to date</small></span><Badge className={sampleData ? 'mock-health-tag' : 'muted-tag'}>{sampleData && <IconCircleCheck size={12} aria-hidden="true" />}{sampleData ? 'Healthy' : 'Unavailable'}</Badge></div>
+          <div><IconStack2 size={16} /><span>Evidence<small>Artifacts · Test results · Reviews · Traces</small></span><Badge className={sampleData ? 'mock-health-tag' : 'muted-tag'}>{sampleData && <IconCircleCheck size={12} aria-hidden="true" />}{sampleData ? 'Healthy' : 'Unavailable'}</Badge></div>
         </div>
         </PanelCard>
       </div>
