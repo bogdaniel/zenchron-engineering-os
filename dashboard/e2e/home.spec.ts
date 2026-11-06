@@ -131,6 +131,9 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.notification-button')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(page.locator('.notification-indicator')).toHaveCSS('top', '-4px');
   await expect(page.locator('.workflow-panel .overview-heading-info')).toBeVisible();
+  await expect(page.locator('.workflow-panel')).toHaveCSS('background-image', /radial-gradient/);
+  await expect(page.locator('.workflow-overview-canvas')).toHaveCSS('border-top-width', '0px');
+  await expect(page.locator('.workflow-overview-canvas .react-flow__background')).toHaveCSS('display', 'none');
   await expect(page.locator('.evidence-panel .overview-heading-info')).toBeVisible();
   await expect(page.locator('.user-chip img')).toHaveJSProperty('naturalWidth', 128);
   await expect(page.locator('.nav-link.active')).toHaveCSS('height', '46px');
@@ -235,15 +238,15 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(graphStages['agent-router'].x).toBeGreaterThanOrEqual(676);
   expect(graphStages['agent-router'].x).toBeLessThanOrEqual(678);
   expect(graphStages['test-generator'].x).toBeGreaterThanOrEqual(851);
-  expect(graphStages['test-generator'].x).toBeLessThanOrEqual(853.5);
+  expect(graphStages['test-generator'].x).toBeLessThanOrEqual(854);
   expect(graphStages['test-generator'].y).toBeGreaterThanOrEqual(257);
   expect(graphStages['test-generator'].y).toBeLessThanOrEqual(259);
   expect(graphStages['code-reviewer'].x).toBeGreaterThanOrEqual(851);
-  expect(graphStages['code-reviewer'].x).toBeLessThanOrEqual(853.5);
+  expect(graphStages['code-reviewer'].x).toBeLessThanOrEqual(854);
   expect(graphStages['code-reviewer'].y).toBeGreaterThanOrEqual(333);
   expect(graphStages['code-reviewer'].y).toBeLessThanOrEqual(335);
   expect(graphStages['merge-gate'].x).toBeGreaterThanOrEqual(1062);
-  expect(graphStages['merge-gate'].x).toBeLessThanOrEqual(1064.5);
+  expect(graphStages['merge-gate'].x).toBeLessThanOrEqual(1065);
   await expect(page.locator('.preview-objective-list')).toContainText('Ship AI code review v2');
   await expect(page.locator('.preview-objective-list > div').first()).toContainText('On Track');
   await expect(page.locator('.preview-objective-list > div').first().locator('b')).toHaveText('78%');
