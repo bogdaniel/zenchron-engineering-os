@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   globalTeardown: './e2e/teardown.mjs',
-  use: { baseURL: 'http://127.0.0.1:4174' },
+  use: { baseURL: 'http://127.0.0.1:4173' },
   webServer: [
     {
       command: 'node ./dashboard/e2e/mock-llm.mjs',
@@ -32,12 +32,6 @@ export default defineConfig({
         ZENCHRON_LLM_BASE_URL: 'http://127.0.0.1:8082/v1',
         ZENCHRON_LLM_API_KEY: 'e2e-test-key',
       },
-      reuseExistingServer: false,
-      timeout: 120_000,
-    },
-    {
-      command: 'npm run build && ZENCHRON_DASHBOARD_PORT=4174 ZENCHRON_API_PROXY=http://127.0.0.1:8083 npm run dev',
-      url: 'http://127.0.0.1:4174',
       reuseExistingServer: false,
       timeout: 120_000,
     },

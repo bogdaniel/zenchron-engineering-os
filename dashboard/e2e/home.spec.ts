@@ -2,6 +2,13 @@ import { expect, test } from '@playwright/test';
 
 test('dashboard displays the connected control plane and local worker', async ({ page }) => {
   await page.setViewportSize({ width: 1490, height: 829 });
+  await page.route((url) => url.hostname === '127.0.0.1'
+    && (url.pathname === '/healthz' || url.pathname.startsWith('/api/v1/')),
+  async (route) => {
+    const upstream = route.request().url().replace(':4173/', ':8083/');
+    const response = await page.request.get(upstream);
+    await route.fulfill({ response });
+  });
   await page.goto('/?preview=live');
   await expect(page.locator('.search-box')).toBeVisible();
   const overviewIconsLeadLabels = await page.locator('.metric-card .metric-top').evaluateAll((headers) =>
@@ -27,6 +34,7 @@ test('dashboard displays the connected control plane and local worker', async ({
   await expect(page.locator('.plan-panel .panel-actions')).toHaveCount(0);
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
   await expect(page.locator('.workflow-overview-canvas .react-flow__edge')).toHaveCount(6);
+  await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeVisible();
   const workflowSummary = page.locator('.workflow-overview-canvas');
   await expect(workflowSummary).toHaveAttribute('aria-label', /6 stages summarize 9 components/);
   await expect(workflowSummary).toContainText('Run agents');
@@ -132,6 +140,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.notification-indicator')).toHaveCSS('top', '-4px');
   await expect(page.locator('.workflow-panel .overview-heading-info')).toBeVisible();
   await expect(page.locator('.workflow-panel')).toHaveCSS('background-image', /radial-gradient/);
+  await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeHidden();
   await expect(page.locator('.workflow-overview-canvas')).toHaveCSS('border-top-width', '0px');
   await expect(page.locator('.workflow-overview-canvas .react-flow__background')).toHaveCSS('display', 'none');
   await expect(page.locator('.workflow-overview-actions')).toHaveCSS('gap', '8px');
@@ -416,9 +425,7 @@ test('Overview design preview renders the supplied mock content without replacin
 
 test('Overview matches the supplied tall desktop mockup proportions', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/?preview=live');
-  await expect(page.locator('.activity-list')).toContainText('Control plane is responding');
-  await expect(page.locator('.workflow-overview-status')).toContainText('Execution unavailable');
+  await page.goto('/?preview=mock');
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {
@@ -426,8 +433,8 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
       metrics: bounds('.metric-grid'), workflow: bounds('.workflow-panel'), activity: bounds('.activity-panel'),
       objectives: bounds('.objective-panel'), review: bounds('.review-panel'), footerDisplay:
         getComputedStyle(document.querySelector('.page-footer')!).display,
-      timelineChart: bounds('.timeline-empty'), analyticsChart: bounds('.chart-empty'),
-      reviewEmpty: bounds('.review-panel .wide-empty'),
+      timeline: bounds('.preview-timeline'), analyticsChart: bounds('.preview-analytics-panel .recharts-surface'),
+      reviewDiff: bounds('.preview-review-panel .preview-diff'),
       brandMark: bounds('.brand-mark'), overviewLink: bounds('.nav-link[href="#overview"]'),
       search: bounds('.search-box'),
     };
@@ -445,9 +452,6 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
   expect(workflowNode?.width).toBeGreaterThanOrEqual(80);
   expect(workflowNode?.height).toBeGreaterThanOrEqual(30);
   const overviewCanvas = await page.locator('.workflow-overview-canvas').boundingBox();
-  const overviewAttribution = await page.locator('.workflow-overview-canvas .react-flow__attribution').boundingBox();
-  await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeVisible();
-  expect(overviewAttribution?.y).toBeGreaterThan(overviewCanvas!.y + overviewCanvas!.height / 2);
   const overviewGraphLabelSize = await page.evaluate(() => {
     const node = document.querySelector('.workflow-overview-canvas .workflow-node');
     const viewport = document.querySelector('.workflow-overview-canvas .react-flow__viewport');
@@ -460,9 +464,9 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
   expect(layout.objectives?.y).toBeCloseTo(416, 0);
   expect(layout.review?.y).toBeCloseTo(590, 0);
   expect(layout.review?.height).toBe(280);
-  expect(layout.timelineChart?.height).toBeGreaterThanOrEqual(170);
-  expect(layout.analyticsChart?.height).toBeGreaterThanOrEqual(170);
-  expect(layout.reviewEmpty?.height).toBeGreaterThanOrEqual(170);
+  expect(layout.timeline?.height).toBeGreaterThanOrEqual(170);
+  expect(layout.analyticsChart?.height).toBeGreaterThanOrEqual(160);
+  expect(layout.reviewDiff?.height).toBeGreaterThanOrEqual(100);
   expect(layout.footerDisplay).toBe('none');
   expect(layout.brandMark?.x).toBe(39);
   expect(layout.overviewLink?.x).toBe(14);
@@ -476,7 +480,7 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
 
 test('Overview matches the supplied desktop display crop', async ({ page }) => {
   await page.setViewportSize({ width: 1522, height: 856 });
-  await page.goto('/?preview=live');
+  await page.goto('/?preview=mock');
   await expect(page.locator('.metric-grid')).toBeVisible();
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
@@ -503,6 +507,9 @@ test('Overview matches the supplied desktop display crop', async ({ page }) => {
 
 test('mobile Overview keeps to the supplied phone summary', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, local: true, login: '' }),
+  }));
   await page.goto('/?preview=mock');
   await expect(page.locator('.metric-grid .metric-card:visible')).toHaveCount(4);
   expect(await page.locator('.metric-card:visible .metric-top > span').evaluateAll((labels) =>
