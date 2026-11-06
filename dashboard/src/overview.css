@@ -263,8 +263,7 @@
   .overview-layout .workspace-button { min-width: 170px; justify-content: space-between; padding: 0 12px; }
   .overview-layout .user-chip { min-width: 180px; margin-left: 0; }
   .overview-layout .sidebar-bottom { margin-bottom: 33px; border-top: 0; transform: translateY(-6px); }
-.overview-layout .sidebar-bottom strong { display: block; width: 110px; font-size: 17px; line-height: 1.15; }
-.overview-layout .sidebar-bottom-brand { display: flex; align-items: flex-start; gap: 14px; }
+.overview-layout .sidebar-bottom strong { display: block; width: max-content; font-size: 13px; line-height: 1.15; }
 .overview-layout .sidebar-bottom p { margin-top: 9px; color: #9690a8; font-size: 13px; line-height: 1.45; }
   .overview-layout .metric-grid { grid-template-columns: 270fr 266fr 266fr 270fr 259fr; }
   .overview-layout .search-box { width: 410px; }

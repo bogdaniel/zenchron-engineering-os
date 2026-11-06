@@ -173,11 +173,7 @@ function App() {
             ))}
           </nav>
           <div className="sidebar-bottom">
-            {designPreview && activePage === 'overview' && <div className="sidebar-bottom-brand">
-              <span className="brand-mark" aria-hidden="true" />
-              <strong>Zenchron Engineering</strong>
-            </div>}
-            {!(designPreview && activePage === 'overview') && <strong>Zenchron Engineering</strong>}
+            <strong>Zenchron Engineering</strong>
             <p>{designPreview && activePage === 'overview' ? 'The AI-native engineering operating system.'
               : 'Autonomous, verifiable, and aligned engineering.'}</p>
             {auth.data?.local && !designPreview && <a className="preview-login-link" href="/?preview=login">Preview sign-in</a>}

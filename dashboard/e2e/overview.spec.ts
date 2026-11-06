@@ -124,7 +124,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await page.goto('/?preview=mock');
   await expect(page.locator('.design-preview-label')).toHaveCount(0);
   await expect(page.locator('.sidebar-bottom')).toContainText('The AI-native engineering operating system.');
-  await expect(page.locator('.sidebar-bottom-brand .brand-mark')).toBeVisible();
+  await expect(page.locator('.sidebar-bottom .brand-mark')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Preview sign-in' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   expect((await page.locator('.greeting h1').boundingBox())?.x).toBe(266);
@@ -166,8 +166,9 @@ test('Overview design preview renders the supplied mock content without replacin
   expect((await page.locator('.nav-link.active').boundingBox())?.width).toBe(221);
   expect((await page.locator('.nav-link.active .nav-label').boundingBox())?.x).toBe(80);
   expect((await page.locator('.nav-link[href="#settings"]').boundingBox())?.y).toBeCloseTo(456, 0);
-  expect((await page.locator('.sidebar-bottom strong').boundingBox())?.y).toBeGreaterThanOrEqual(790);
-  expect((await page.locator('.sidebar-bottom strong').boundingBox())?.y).toBeLessThanOrEqual(804);
+  const sidebarFooterBrand = await page.locator('.sidebar-bottom strong').boundingBox();
+  expect(sidebarFooterBrand?.x).toBe(39);
+  expect(sidebarFooterBrand?.y).toBeCloseTo(816, 0);
   await expect(page.locator('.metric-grid .metric-card')).toHaveCount(5);
   await expect(page.locator('.metric-grid .metric-card').nth(0)).toContainText('12');
   await expect(page.locator('.metric-grid .metric-card').nth(1)).toContainText('7');
