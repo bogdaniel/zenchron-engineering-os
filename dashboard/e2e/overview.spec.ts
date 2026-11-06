@@ -346,6 +346,7 @@ test('Overview design preview renders the supplied mock content without replacin
       }),
       headingIcon: bounds('.timeline-panel .panel-heading .section-icon svg'),
       headingTitle: bounds('.timeline-panel .panel-heading h3'),
+      headingDescriptionGap: bounds('.timeline-panel .panel-heading p').y - bounds('.timeline-panel .panel-heading h3').bottom,
       headingIconCenterY: (() => { const box = bounds('.timeline-panel .panel-heading .section-icon svg'); return box.y + box.height / 2; })(),
       headingTitleCenterY: (() => { const box = bounds('.timeline-panel .panel-heading h3'); return box.y + box.height / 2; })(),
       bars: [...document.querySelectorAll('.preview-timeline-row')].map(row => {
@@ -372,6 +373,8 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.firstRow.y).toBeCloseTo(686, 0);
   expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(787, 0);
   expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(817, 0);
+  expect(timelineMockAlignment.headingDescriptionGap).toBeCloseTo(4, 0);
+  await expect(page.locator('.preview-timeline-dates')).toHaveCSS('color', 'rgb(228, 223, 237)');
   expect(timelineMockAlignment.headingIconCenterY).toBeCloseTo(timelineMockAlignment.headingTitleCenterY, 0);
   expect(timelineMockAlignment.labelX.x).toBeCloseTo(812, 0);
   const [plan, agent, tests, reviewBar, merge] = timelineMockAlignment.bars;

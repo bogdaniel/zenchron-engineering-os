@@ -274,6 +274,7 @@
   .overview-layout .review-panel .panel-heading > div { transform: translateY(-2px); }
   .overview-layout .timeline-panel .panel-heading > div { gap: 2px; transform: translate(0, 3px); }
 .overview-layout .timeline-panel .panel-heading p { transform: translateY(4px); font-size: 11.5px; }
+  .overview-layout.sample-data .timeline-panel .panel-heading p { transform: none; }
   .overview-layout .analytics-panel .panel-heading > div { transform: translate(-4px, -4px); }
 }
 .overview-layout .metric-card { min-height: 90px; padding-right: 14px; padding-left: 21px; border-radius: 16px; }
@@ -413,6 +414,7 @@
 .preview-diff i { color: #a4f0c2; font-style: normal; }
 .preview-timeline { position: relative; width: calc(100% + 8px); margin-top: 27px; }
 .preview-timeline-dates { display: grid; grid-template-columns: repeat(8, 1fr); margin: 0 0 9px 150px; color: #a19ab0; font-size: 12px; }
+.overview-layout.sample-data .preview-timeline-dates { color: #e4dfed; }
 .preview-timeline-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-height: 31px; align-items: center; gap: 0; color: #dcd7e5; font-size: 12.5px; letter-spacing: -.4px; }
 .preview-timeline-row > span { display: flex; align-items: center; gap: 6px; }
 .preview-timeline-row svg { width: 22px; height: 22px; flex: 0 0 22px; margin-left: -5px; }
