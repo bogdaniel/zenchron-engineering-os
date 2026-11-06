@@ -159,8 +159,9 @@
 .sample-data .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 12px; right: 8px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
 .sample-data .workflow-overview-canvas .react-flow__attribution { display: none; }
 .overview-layout.sample-data .overview-design-preview .workflow-panel {
-  background-image: radial-gradient(circle, #302b42 1px, transparent 1px), linear-gradient(140deg, #1a1928, #11121b 76%);
-  background-size: 18px 18px, auto;
+  background-color: #141321;
+  background-image: radial-gradient(circle, #302b42 1px, transparent 1px);
+  background-size: 18px 18px;
 }
 .overview-layout.sample-data .workflow-overview-canvas { border: 0; border-radius: 0; background: transparent; }
 .overview-layout.sample-data .workflow-overview-canvas .react-flow__background { display: none; }

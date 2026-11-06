@@ -144,6 +144,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.notification-indicator')).toHaveCSS('top', '-4px');
   await expect(page.locator('.workflow-panel .overview-heading-info')).toBeVisible();
   await expect(page.locator('.workflow-panel')).toHaveCSS('background-image', /radial-gradient/);
+  expect(await page.locator('.workflow-panel').evaluate((panel) => getComputedStyle(panel).backgroundImage)).not.toContain('linear-gradient');
   await expect(page.locator('.workflow-overview-canvas .react-flow__edge-path').first()).toHaveCSS('filter', /0px 0px 2px/);
   await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeHidden();
   await expect(page.locator('.workflow-node.trigger .workflow-node-icon svg')).toHaveCSS('width', '28px');
