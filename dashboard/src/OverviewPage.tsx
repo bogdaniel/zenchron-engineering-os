@@ -39,11 +39,12 @@ type OverviewProps = {
   agentRunsLoading: boolean;
   agentRunsError: boolean;
   onlineWorkers: number;
+  onlineWorkerNames: string[];
   controlPlaneOnline: boolean;
 };
 
 export function OverviewPage({ sampleData, projects, projectsLoading, projectsError, objectives,
-  objectivesLoading, objectivesError, agentRuns, agentRunsLoading, agentRunsError, onlineWorkers,
+  objectivesLoading, objectivesError, agentRuns, agentRunsLoading, agentRunsError, onlineWorkers, onlineWorkerNames,
   controlPlaneOnline }: OverviewProps) {
   const pullRequests = useReportPullRequestMetrics(sampleData ? undefined : projects, 'all');
   const workflows = useReportWorkflowRunMetrics(sampleData ? undefined : projects, '30d');
@@ -99,6 +100,7 @@ export function OverviewPage({ sampleData, projects, projectsLoading, projectsEr
             </> : <>
               <div><IconCircleCheck className={controlPlaneOnline ? 'activity-green' : 'activity-violet'} size={18} /><span>Control plane {controlPlaneOnline ? 'is responding' : 'is unavailable'}</span><time>Live</time></div>
               {(agentRuns ?? []).slice(0, 2).map((run) => <div key={run.id}><IconRobot className="activity-blue" size={18} /><span>Agent “{run.agent_name}” {run.status}</span><time>{run.updated_at}</time></div>)}
+              {onlineWorkerNames.slice(0, 2).map((name) => <div key={name}><IconRobot className="activity-blue" size={18} /><span>Worker “{name}” is online<small>Local worker heartbeat</small></span><time>Live</time></div>)}
               {(projects ?? []).slice(0, 2).map((project) => <div key={project.id}><IconGitBranch className="activity-violet" size={18} /><span>Project “{project.name}” on {project.worker_name}</span><time>Live</time></div>)}
             </>}
           </div>
