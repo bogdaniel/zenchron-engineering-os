@@ -207,7 +207,8 @@ function App() {
               aria-label="Search"
             />
             <div className="top-actions">
-              <button className="icon-button" aria-label="Notifications" disabled><IconBell size={19} /></button>
+              <button className="icon-button notification-button" aria-label="Notifications" disabled><IconBell size={19} />
+                {designPreview && <span className="notification-indicator" aria-hidden="true" />}</button>
               {!designPreview && auth.data?.authenticated && auth.data.local === false && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
                 await fetch('/api/v1/auth/logout', { method: 'POST' });
                 await auth.refetch();

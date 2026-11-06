@@ -121,6 +121,11 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.user-chip')).toContainText('Alex Chen');
   await expect(page.locator('.sidebar > .brand')).toHaveCSS('font-size', '18px');
   expect((await page.locator('.sidebar > .brand .brand-mark').boundingBox())?.width).toBe(34);
+  await expect(page.locator('.notification-indicator')).toBeVisible();
+  await expect(page.locator('.notification-button')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(page.locator('.notification-indicator')).toHaveCSS('top', '-4px');
+  await expect(page.locator('.workflow-panel .overview-heading-info')).toBeVisible();
+  await expect(page.locator('.evidence-panel .overview-heading-info')).toBeVisible();
   await expect(page.locator('.user-chip img')).toHaveJSProperty('naturalWidth', 128);
   await expect(page.locator('.nav-link.active')).toHaveCSS('height', '46px');
   await expect(page.locator('.nav-link[href="#objectives"]')).toHaveCSS('height', '42px');

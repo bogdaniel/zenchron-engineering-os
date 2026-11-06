@@ -13,7 +13,7 @@ import ELK from 'elkjs/lib/elk.bundled.js';
 import { z } from 'zod';
 import {
   IconBolt, IconCheck, IconChecklist, IconChevronRight, IconCirclePlus, IconCode, IconDeviceFloppy, IconDots,
-  IconFileText, IconFlask, IconGitBranch, IconGitMerge, IconGripVertical, IconHierarchy, IconLayoutBoard, IconMaximize, IconMessage2, IconStack2,
+  IconFileText, IconFlask, IconGitBranch, IconGitMerge, IconGripVertical, IconHierarchy, IconInfoCircle, IconLayoutBoard, IconMaximize, IconMessage2, IconStack2,
   IconPlayerPlay, IconRepeat, IconRobot, IconRoute, IconSearch, IconTestPipe, IconChartBar, IconUserCheck,
 } from '@tabler/icons-react';
 import '@xyflow/react/dist/style.css';
@@ -295,7 +295,8 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
   return <PanelCard className="panel workflow-panel" id="workflow" withBorder>
     <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon">
       {designPreview ? <IconHierarchy size={22} /> : <IconRoute size={18} />}</span>}
-      title="Workflow Orchestration" description={designPreview ? 'Objective: Ship AI code review v2' : workflow?.name ?? 'Saved workflow definition'}
+      title={<span className="overview-heading-with-info">Workflow Orchestration{designPreview && <IconInfoCircle className="overview-heading-info" size={14} aria-hidden="true" />}</span>}
+      description={designPreview ? 'Objective: Ship AI code review v2' : workflow?.name ?? 'Saved workflow definition'}
       actions={<div className={`panel-actions${designPreview ? ' workflow-overview-actions' : ''}`}>
         <Badge className={designPreview ? 'preview-running-badge' : 'muted-tag'} variant="light">
           {designPreview ? '● Running' : workflow?.status ?? 'Unavailable'}

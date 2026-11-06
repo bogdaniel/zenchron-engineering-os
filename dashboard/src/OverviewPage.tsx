@@ -4,6 +4,7 @@ import {
   IconActivity, IconCalendar, IconChartBar, IconChevronDown, IconCircle,
   IconCircleCheck, IconClockHour4, IconCode, IconDatabase, IconFileText, IconFileTime, IconGitBranch, IconGitPullRequest,
   IconExternalLink, IconHistory, IconInfinity, IconRobot, IconShieldCheck, IconStack2, IconTarget,
+  IconInfoCircle,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
@@ -18,7 +19,7 @@ import { useReportWorkflowRunMetrics } from './reportWorkflowRuns';
 const sampleAnalytics = [
   { day: 'Jan 20', merged: 10 }, { day: 'Jan 21', merged: 18 }, { day: 'Jan 22', merged: 19 },
   { day: 'Jan 23', merged: 26 }, { day: 'Jan 24', merged: 32 }, { day: 'Jan 25', merged: 34 },
-  { day: 'Jan 26', merged: 42 },
+  { day: 'Jan 26', merged: 45 },
 ];
 
 const sampleObjectives = [
@@ -68,13 +69,13 @@ export function OverviewPage({ sampleData, projects, projectsLoading, projectsEr
     <section className="metric-grid" aria-label="Overview metrics">
       <MetricCard className="metric-card purple" label="Active Objectives" value={sampleData ? '12' : objectivesLoading ? '…' : objectivesError ? 'Unavailable' : activeObjectives.length}
         detail={sampleData ? undefined : 'Open objectives'}
-        icon={<IconTarget size={19} />} trend={<MockTrend value={sampleData ? '↑ +3' : `${activeObjectives.length} open`} data={[1, 8, 4, 10, 7, 11, 9, 15, 17]} />} />
+        icon={<IconTarget size={19} />} trend={<MockTrend value={sampleData ? '↑ +3' : `${activeObjectives.length} open`} data={sampleData ? [0, 2, 7, 5, 8, 7, 13, 15] : [1, 8, 4, 10, 7, 11, 9, 15, 17]} />} />
       <MetricCard className="metric-card blue" label="Running Agents" value={sampleData ? '7' : agentRunsLoading ? '…' : agentRunsError ? 'Unavailable' : runningAgents}
         detail={sampleData ? undefined : `${onlineWorkers} local workers online`}
-        icon={<IconRobot size={19} />} trend={<MockTrend value={sampleData ? '● Live' : `${onlineWorkers} workers`} data={[1, 6, 3, 9, 7, 12, 10, 14, 13]} teal />} />
+        icon={<IconRobot size={19} />} trend={<MockTrend value={sampleData ? '● Live' : `${onlineWorkers} workers`} data={sampleData ? [2, 6, 4, 9, 7, 11, 9, 12] : [1, 6, 3, 9, 7, 12, 10, 14, 13]} teal />} />
       <MetricCard className="metric-card purple pr-queue-metric" label="PR Queue" value={sampleData ? '18' : projectsLoading || pullRequests.isLoading ? '…' : pullRequests.complete ? openPullRequests : 'Unavailable'}
         detail={sampleData ? undefined : pullRequestDetail}
-        icon={<IconGitPullRequest size={19} />} trend={<span className="mock-trend"><Badge>{sampleData ? '↑ +4' : pullRequests.githubProjectCount ? 'GitHub' : 'Connect GitHub'}</Badge><MockBars /></span>} />
+        icon={<IconGitPullRequest size={19} />} trend={<span className="mock-trend"><Badge>{sampleData ? '↑ +4' : pullRequests.githubProjectCount ? 'GitHub' : 'Connect GitHub'}</Badge><MockBars sampleData={sampleData} /></span>} />
       <MetricCard className="metric-card green" label="CI Health" value={sampleData ? '99.4%' : projectsLoading || workflows.isLoading ? '…' : workflowHealth === undefined ? 'Unavailable' : `${workflowHealth}%`}
         detail={sampleData ? undefined : workflowDetail}
         icon={<IconInfinity size={19} />} trend={<Badge className="mock-healthy-badge">{sampleData ? '✓ Healthy' : workflows.completedRunCount ? `${workflows.successfulRuns}/${workflows.completedRunCount} passed` : 'No CI data'}</Badge>} />
@@ -145,7 +146,7 @@ export function OverviewPage({ sampleData, projects, projectsLoading, projectsEr
 
         <PanelCard className="panel evidence-panel" id="evidence" withBorder>
         <PanelHeading className="panel-heading" icon={<span className="section-icon green-icon"><IconShieldCheck size={18} /></span>}
-          title="Trusted-main & Evidence Health" />
+          title={<span className="overview-heading-with-info">Trusted-main & Evidence Health{sampleData && <IconInfoCircle className="overview-heading-info" size={14} aria-hidden="true" />}</span>} />
         <div className="evidence-health-list">
           <div><IconGitBranch size={16} /><span>Trusted-main<small>Protected · Verified · Up to date</small></span><Badge className={sampleData ? 'mock-health-tag' : 'muted-tag'}>{sampleData ? 'Healthy' : 'Unavailable'}</Badge></div>
           <div><IconStack2 size={16} /><span>Evidence<small>Artifacts · Test results · Reviews · Traces</small></span><Badge className={sampleData ? 'mock-health-tag' : 'muted-tag'}>{sampleData ? 'Healthy' : 'Unavailable'}</Badge></div>
@@ -211,6 +212,6 @@ function MockTrend({ value, data, teal = false }: { value: string; data: number[
     <Sparkline data={data} color={teal ? 'teal.4' : 'violet.5'} w={98} h={32} curveType="monotone" /></span>;
 }
 
-function MockBars() {
-  return <span className="mock-bars" aria-hidden="true">{[8, 14, 11, 20, 27].map((height) => <i key={height} style={{ height }} />)}</span>;
+function MockBars({ sampleData }: { sampleData: boolean }) {
+  return <span className="mock-bars" aria-hidden="true">{(sampleData ? [8, 14, 18, 23, 28] : [8, 14, 11, 20, 27]).map((height) => <i key={height} style={{ height }} />)}</span>;
 }
