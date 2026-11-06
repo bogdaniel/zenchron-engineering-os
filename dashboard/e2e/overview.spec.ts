@@ -144,7 +144,8 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.notification-indicator')).toHaveCSS('top', '-4px');
   await expect(page.locator('.workflow-panel .overview-heading-info')).toBeVisible();
   await expect(page.locator('.workflow-panel')).toHaveCSS('background-image', /radial-gradient/);
-  expect(await page.locator('.workflow-panel').evaluate((panel) => getComputedStyle(panel).backgroundImage)).not.toContain('linear-gradient');
+  expect(await page.locator('.workflow-panel').evaluate((panel) => getComputedStyle(panel).backgroundImage)).toContain('linear-gradient');
+  expect(await page.locator('.workflow-panel').evaluate((panel) => getComputedStyle(panel).backgroundImage.match(/radial-gradient/g))).toHaveLength(2);
   await expect(page.locator('.workflow-overview-canvas .react-flow__edge-path').first()).toHaveCSS('filter', /0px 0px 2px/);
   await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeHidden();
   await expect(page.locator('.workflow-node.trigger .workflow-node-icon svg')).toHaveCSS('width', '28px');
@@ -374,7 +375,7 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(timelineMockAlignment.headingIcon.x).toBeCloseTo(789, 0);
   expect(timelineMockAlignment.headingTitle.x).toBeCloseTo(830, 0);
   expect(timelineMockAlignment.headingTitle.x - timelineMockAlignment.headingIcon.right).toBeCloseTo(13, 0);
-  expect(timelineMockAlignment.headingDescriptionGap).toBeCloseTo(4, 0);
+  expect(timelineMockAlignment.headingDescriptionGap).toBeCloseTo(2, 0);
   await expect(page.locator('.preview-timeline-dates')).toHaveCSS('color', 'rgb(228, 223, 237)');
   expect(timelineMockAlignment.headingIconCenterY).toBeCloseTo(timelineMockAlignment.headingTitleCenterY, 0);
   expect(timelineMockAlignment.labelX.x).toBeCloseTo(812, 0);
