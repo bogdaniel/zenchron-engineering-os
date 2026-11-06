@@ -148,7 +148,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.workflow-node.trigger .workflow-node-icon svg path').first()).toHaveCSS('fill', 'rgb(125, 185, 255)');
   const triggerIconAlignment = await page.locator('.workflow-node.trigger .workflow-node-icon').evaluate((icon) => {
     const circle = icon.getBoundingClientRect();
-    const glyph = icon.querySelector('svg')!.getBoundingClientRect();
+    const glyph = icon.querySelector('svg path')!.getBoundingClientRect();
     return {
       x: Math.abs(circle.x + circle.width / 2 - glyph.x - glyph.width / 2),
       y: Math.abs(circle.y + circle.height / 2 - glyph.y - glyph.height / 2),

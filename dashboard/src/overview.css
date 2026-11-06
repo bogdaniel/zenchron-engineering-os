@@ -181,7 +181,7 @@
 .overview-layout .workflow-overview-canvas .workflow-node-icon { width: 24px; height: 24px; background: transparent; border-radius: 0; }
 .overview-layout .workflow-overview-canvas .workflow-node-icon svg { width: 28px; height: 28px; }
 .overview-layout .workflow-node.trigger .workflow-node-icon { border: 1px solid #52729b; border-radius: 50%; background: #183451; }
-.overview-layout .workflow-node.trigger .workflow-node-icon svg { transform: translate(-3px, -3px); }
+.overview-layout .workflow-node.trigger .workflow-node-icon svg { transform: translate(-4.75px, -3px); }
 .overview-layout .workflow-overview-canvas .workflow-node b { font-size: 15px; }
 .overview-layout .workflow-overview-canvas .workflow-node small { font-size: 12px; }
 .overview-layout .workflow-node.trigger { width: 195px; }
