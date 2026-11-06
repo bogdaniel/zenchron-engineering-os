@@ -248,6 +248,10 @@
   .design-preview .metric-grid { grid-template-columns: 270fr 266fr 266fr 270fr 259fr; }
   .design-preview .search-box { width: 410px; }
   .design-preview .search-box input { height: 42px; }
+  .design-preview .overview-middle-grid .panel-heading { transform: none; }
+  .design-preview .review-panel .panel-heading > div { transform: translateY(-2px); }
+  .design-preview .timeline-panel .panel-heading > div { transform: translate(4px, 3px); }
+  .design-preview .analytics-panel .panel-heading > div { transform: translate(-4px, -4px); }
 }
 .design-preview .metric-card { min-height: 100px; padding-right: 14px; padding-left: 21px; border-radius: 16px; }
 .design-preview .metric-card .metric-top { gap: 22px; }
