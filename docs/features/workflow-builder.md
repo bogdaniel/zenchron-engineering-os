@@ -31,6 +31,7 @@ flowchart LR
     API --> Validate[Validate node types and edge references]
     Validate --> Store[(Versioned JSON snapshot)]
     Store -->|Workflow JSON + version| Dashboard
+    LocalPreview[Local mock route] -->|Static design fixture only| Dashboard
 ```
 
 ## Behavior
@@ -69,6 +70,8 @@ flowchart LR
 - Opening a saved workflow selects its Agent Router so the inspector starts with real graph data. Workflows without
   an Agent Router leave the inspector unselected.
 - Run and Publish remain disabled because there is no workflow execution runner or publish service yet.
+- `/?preview=mock#workflows` opens the builder without a session, uses the local design fixture, and disables create/save;
+  it makes no workflow API requests.
 - Run Preview shows the saved graph's actual node and edge counts and states explicitly that no execution is available;
   it does not show simulated statuses, duration, or cost.
 - Validate checks that the graph contains a trigger and that edges refer to existing nodes. Saving increments the
@@ -81,6 +84,7 @@ flowchart LR
 ```sh
 go test ./cmd/zenchron -run 'TestWorkflow|TestPersistentMuxRestoresObjectivesAndWorkflows' -count=1
 cd dashboard && npm run test:e2e -- e2e/workflows.spec.ts -g 'workflow graph can be edited'
+cd dashboard && npm run test:e2e -- e2e/workflows.spec.ts -g 'local Workflow Builder mock preview'
 ```
 
 The focused browser check verifies workflow creation, selection, graph switching, editing, saving, palette search and drag

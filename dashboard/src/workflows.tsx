@@ -77,12 +77,13 @@ const mobileOverviewStages: {
   },
 ];
 const designPreviewWorkflow: Workflow = {
-  id: 'overview-design-preview', name: 'PR Review & Release Orchestration', description: '', status: 'active', version: 1,
+  id: 'overview-design-preview', name: 'PR Review & Release Orchestration',
+  description: 'Review changes, validate quality, and gate releases.', status: 'active', version: 1,
   updated_at: '',
   nodes: [
     ['trigger', 'trigger', 'Trigger', 'PR or objective update'],
     ['plan', 'planner', 'Plan', 'Generate plan'],
-    ['build', 'agent-router', 'Build', 'Run agents'],
+    ['build', 'agent-router', 'Agent Router', 'Route work to specialized agents'],
     ['tests', 'test-generator', 'Test', 'Run test suite'],
     ['coverage', 'coverage-analyzer', 'Coverage', 'Analyze coverage'],
     ['review', 'code-reviewer', 'Review', 'AI + human review'],
@@ -340,9 +341,12 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
   </PanelCard>;
 }
 
-export function WorkflowsPage() {
+export function WorkflowsPage({ designPreview = false }: { designPreview?: boolean }) {
   const queryClient = useQueryClient();
-  const query = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows });
+  const query = useQuery({
+    queryKey: ['workflows'], queryFn: loadWorkflows, enabled: !designPreview,
+    initialData: designPreview ? [designPreviewWorkflow] : undefined,
+  });
   const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const loadedWorkflowId = useRef('');
@@ -490,7 +494,7 @@ export function WorkflowsPage() {
       <Button
         className="workflow-create-button"
         loading={createWorkflow.isPending}
-        disabled={!createName.trim()}
+        disabled={designPreview || !createName.trim()}
         onClick={() => createWorkflow.mutate()}
       >Create workflow</Button>
     </Modal>
@@ -515,7 +519,8 @@ export function WorkflowsPage() {
           <Button className="workflow-run" variant="default" leftSection={<IconPlayerPlay size={15} />} disabled title="Runner not connected">
             Run
           </Button>
-          <Button className="workflow-save" leftSection={<IconDeviceFloppy size={15} />} loading={save.isPending} onClick={() => save.mutate()}>
+          <Button className="workflow-save" leftSection={<IconDeviceFloppy size={15} />} loading={save.isPending}
+            disabled={designPreview} onClick={() => save.mutate()}>
             Save
           </Button>
           <Button className="workflow-publish" variant="light" disabled title="Workflow publishing is not connected">Publish</Button>
@@ -530,7 +535,9 @@ export function WorkflowsPage() {
         <button className="selected" aria-current="page">Overview</button>
         <button disabled>Runs</button><button disabled>Tasks</button><button disabled>Approvals</button>
       </nav>
-      <div className="workflow-mobile-overview"><WorkflowOverview mobile workflowID={activeWorkflow.id} /></div>
+      <div className="workflow-mobile-overview">
+        <WorkflowOverview mobile workflowID={activeWorkflow.id} designPreview={designPreview} />
+      </div>
       <div className="workflow-mobile-summary" aria-label="Workflow execution status">
         <div><small>Run status</small><b>Not run</b></div>
         <div><small>Components</small><b>{activeWorkflow.nodes.length}</b></div>
@@ -607,7 +614,7 @@ export function WorkflowsPage() {
               searchable
               maxDropdownHeight={280}
             />
-            <Button variant="default" onClick={() => setCreateOpen(true)}>New Workflow</Button>
+            <Button variant="default" disabled={designPreview} onClick={() => setCreateOpen(true)}>New Workflow</Button>
           </div>
           <button onClick={async () => {
             try {
@@ -632,7 +639,8 @@ export function WorkflowsPage() {
           </ReactFlow>
         </WorkflowDropCanvas>
         <div className="workflow-status" aria-live="polite">
-          <IconPlayerPlay size={14} /><span>{notice || 'Draft · validate and save changes'}</span>
+          <IconPlayerPlay size={14} /><span>{notice || (designPreview
+            ? 'Design preview · changes are not saved' : 'Draft · validate and save changes')}</span>
           <small>Runner not connected</small>
         </div>
       </div>

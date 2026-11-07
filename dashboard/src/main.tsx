@@ -77,7 +77,8 @@ function App() {
   const mockPreview = localReviewHost && previewMode === 'mock';
   const designPreview = activePage === 'overview' && (mockPreview || (localReviewHost && !loginPreview && previewMode !== 'live'));
   const objectivePreview = activePage === 'objectives' && mockPreview;
-  const previewPage = designPreview || objectivePreview;
+  const workflowPreview = activePage === 'workflows' && mockPreview;
+  const previewPage = designPreview || objectivePreview || workflowPreview;
   useEffect(() => {
     const syncPage = () => setActivePage(pageFromHash());
     window.addEventListener('popstate', syncPage);
@@ -159,7 +160,7 @@ function App() {
   </div>;
   return (
     <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
-      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview ? ' sample-data' : ''}`} id="overview">
+      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview || workflowPreview ? ' sample-data' : ''}`} id="overview">
         <aside className="sidebar">
           <a className="brand" href="#overview" aria-label="Zenchron Engineering home">
             <span className="brand-mark" aria-hidden="true" />
@@ -243,7 +244,7 @@ function App() {
             objectives={objectives.data} objectivesLoading={objectives.isLoading} objectivesError={objectives.isError}
             agentRuns={agentRuns.data} agentRunsLoading={agentRuns.isLoading} agentRunsError={agentRuns.isError}
             onlineWorkers={onlineWorkers.length} onlineWorkerNames={onlineWorkers.map((worker) => worker.name)}
-            controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} /> : activePage === 'workflows' ? <WorkflowsPage /> : activePage === 'projects' ? (
+          controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={workflowPreview} /> : activePage === 'projects' ? (
             <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} />
           ) : activePage === 'workspace' ? (
             <WorkspacePage

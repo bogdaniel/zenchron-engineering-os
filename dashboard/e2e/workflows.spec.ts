@@ -1,6 +1,35 @@
 import { expect, test } from '@playwright/test';
 
+test('local Workflow Builder mock preview uses its fixture without API reads or writes', async ({ page }) => {
+  const workflowRequests: string[] = [];
+  await page.route('**/api/v1/workflows**', (route) => {
+    workflowRequests.push(route.request().method());
+    return route.fulfill({ status: 401, body: 'authentication required' });
+  });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/?preview=mock#workflows');
+
+  await expect(page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ })).toBeVisible();
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(9);
+  await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Router');
+  await expect(page.locator('.workflow-status')).toContainText('Design preview · changes are not saved');
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New Workflow' })).toBeDisabled();
+  await expect(page.locator('.workflow-run-preview')).toContainText('Execution preview unavailable');
+  expect(workflowRequests).toEqual([]);
+});
+
 test('workflow graph can be edited and saved to the control plane', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }),
+  }));
+  await page.route('**/api/v1/workflows**', (route) => {
+    const apiURL = new URL(route.request().url());
+    apiURL.port = '8083';
+    return route.continue({ url: apiURL.toString() });
+  });
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/?preview=live');
   await page.getByRole('link', { name: 'Workflows' }).click();
@@ -35,7 +64,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   const preview = await page.locator('.workflow-run-preview').boundingBox();
   const properties = await page.locator('.workflow-properties').boundingBox();
   const builder = await page.locator('.workflow-builder-layout').boundingBox();
-  expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(250);
+  expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(247);
   expect(palette?.x).toBe(263);
   expect(palette?.y).toBeGreaterThanOrEqual(201);
   expect(palette?.y).toBeLessThanOrEqual(203);
