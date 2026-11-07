@@ -80,7 +80,8 @@ function App() {
   const workflowPreview = activePage === 'workflows' && mockPreview;
   const reviewPreview = activePage === 'reviews' && mockPreview;
   const reportPreview = activePage === 'reports' && mockPreview;
-  const previewPage = designPreview || objectivePreview || workflowPreview || reviewPreview || reportPreview;
+  const integrationPreview = activePage === 'integrations' && mockPreview;
+  const previewPage = designPreview || objectivePreview || workflowPreview || reviewPreview || reportPreview || integrationPreview;
   useEffect(() => {
     const syncPage = () => setActivePage(pageFromHash());
     window.addEventListener('popstate', syncPage);
@@ -162,7 +163,7 @@ function App() {
   </div>;
   return (
     <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
-      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview || workflowPreview || reviewPreview || reportPreview ? ' sample-data' : ''}`} id="overview">
+      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview || workflowPreview || reviewPreview || reportPreview || integrationPreview ? ' sample-data' : ''}`} id="overview">
         <aside className="sidebar">
           <a className="brand" href="#overview" aria-label="Zenchron Engineering home">
             <span className="brand-mark" aria-hidden="true" />
@@ -196,7 +197,9 @@ function App() {
               </div> : <PageHeading className="greeting" titleLevel={1}
                 title={previewPage ? <>Good morning, Alex <span aria-hidden="true">👋</span></>
                   : <>Good morning{auth.data?.login ? `, ${auth.data.login}` : ''} <span aria-hidden="true">👋</span></>}
-                description={activePage === 'workflows' ? 'You’re building and orchestrating intelligent engineering workflows.'
+                description={activePage === 'integrations' && integrationPreview
+                  ? 'Configure your organization, connect integrations, and control how Zenchron runs.'
+                  : activePage === 'workflows' ? 'You’re building and orchestrating intelligent engineering workflows.'
                   : activePage === 'overview' ? <>
                   <span className="greeting-desktop-copy">Your AI-native engineering operating system for objectives, agents, code, and delivery.</span>
                   <span className="greeting-mobile-copy">Your engineering mission at a glance.</span>
@@ -261,6 +264,7 @@ function App() {
           ) : activePage === 'objectives' ? <ObjectivesPage sampleData={objectivePreview} /> : ['integrations', 'settings'].includes(activePage) ? (
             <SystemPage
               section={activePage === 'settings' ? 'settings' : 'integrations'}
+              designPreview={integrationPreview}
               apiOnline={health.isSuccess}
               githubLogin={auth.data?.local === false}
               workerCount={workers.data?.length ?? 0}

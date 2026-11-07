@@ -2,6 +2,7 @@ import { Badge, Button, Card } from '@mantine/core';
 import { PageHeading } from './PageHeading';
 import { PanelHeading } from './PanelHeading';
 import { PanelCard } from './PanelCard';
+import { SystemIntegrationsPreview } from './SystemIntegrationsPreview';
 import {
   IconActivity,
   IconBell,
@@ -19,11 +20,13 @@ import {
   IconUsers,
 } from '@tabler/icons-react';
 import './system.css';
+import './system-preview.css';
 
 type SystemSection = 'integrations' | 'settings';
 
 interface SystemPageProps {
   section: SystemSection;
+  designPreview?: boolean;
   apiOnline: boolean;
   githubLogin: boolean;
   workerCount: number;
@@ -35,7 +38,7 @@ interface SystemPageProps {
 }
 
 export function SystemPage({
-  section, apiOnline, githubLogin, workerCount, onlineWorkerCount, modelRuntimeWorkerCount, modelRuntimeUnknownWorkerCount,
+  section, designPreview = false, apiOnline, githubLogin, workerCount, onlineWorkerCount, modelRuntimeWorkerCount, modelRuntimeUnknownWorkerCount,
   projectCount, gitHubProjectCount,
 }: SystemPageProps) {
   const modelEndpointDetail = modelRuntimeWorkerCount
@@ -103,13 +106,15 @@ export function SystemPage({
       <div className="system-heading">
         <div className="system-page-title">
           <IconSettings size={25} aria-hidden="true" />
-          <PageHeading title="Settings & Integrations" description="Review connected runtime services and the current control-plane boundary." />
+          <PageHeading title="Settings & Integrations" description={designPreview
+            ? 'Manage your organization, connect integrations, set policies, and control platform behavior.'
+            : 'Review connected runtime services and the current control-plane boundary.'} />
         </div>
         <div className="system-page-actions">
           <Button className="system-quiet-button" variant="default" disabled><IconHistory size={14} /> Audit log</Button>
           <Button className="system-quiet-button" variant="default" disabled><IconDatabase size={14} /> Import / Export</Button>
           <Badge className="system-health" variant="light">
-            <i />{apiOnline ? 'API online' : 'API offline'}
+            <i />{designPreview ? 'All Systems Operational' : apiOnline ? 'API online' : 'API offline'}
           </Badge>
         </div>
       </div>
@@ -126,7 +131,7 @@ export function SystemPage({
         </button>
       </nav>
 
-      {section === 'integrations' ? (
+      {section === 'integrations' && designPreview ? <SystemIntegrationsPreview /> : section === 'integrations' ? (
         <div className="system-workspace">
           <nav className="system-config-nav" aria-label="Configuration categories">
             <b>Configuration</b>

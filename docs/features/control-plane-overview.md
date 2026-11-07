@@ -5,7 +5,7 @@ mockup: workspace navigation, status metrics, workflow visualization, recent act
 evidence health, local branch reviews, timeline, and analytics. Control-plane health, workers, discovered projects,
 objectives, workflow definitions, agent-run history, GitHub pull-request counts, and GitHub Actions health are backed
 by current API/provider records. Budget, approvals, evidence, and timeline remain unavailable until their sources
-exist. The local `?preview=mock` URL shows the supplied Overview, Objectives, or Reports mock content as sample data; the preview
+exist. The local `?preview=mock` URL shows the supplied Overview, Objectives, Integrations, or Reports mock content as sample data; the preview
 does not fetch protected dashboard data or require a GitHub session. Workflow Builder and Reviews also expose
 localhost-only, read-only mock previews with separate fixtures.
 
@@ -26,6 +26,7 @@ flowchart LR
     Sample --> WorkflowPreview[Workflow Builder mock preview<br/>Canvas · router settings · sample run timeline]
     Sample --> ReviewsPreview[Reviews mock preview<br/>PR queue · diff · evidence summary]
     Sample --> ReportsPreview[Reports mock preview<br/>metrics · charts · summaries]
+    Sample --> IntegrationsPreview[Integrations mock preview<br/>providers · policies · settings]
     LiveSources[Existing API and provider queries] -->|Live mode| Dashboard
     Dashboard -->|GET /healthz| Health[Go health endpoint]
     Dashboard --> MobileShortcuts[Mobile shortcuts<br/>Overview · My Work · Alerts]
