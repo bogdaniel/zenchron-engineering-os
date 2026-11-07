@@ -43,6 +43,7 @@ flowchart LR
 - The dashboard filters by text, product, owner, status, and due-date quarter. The default is This Quarter; All due dates includes unscheduled objectives.
 - The local `?preview=mock#objectives` route uses the same Objectives page with sample KPI, approval, workflow, and milestone data. Its local fixture is read only and does not call protected objective or product APIs.
 - The mock KPI row keeps the success-rate change beside its value and omits extra captions from the four compact count cards, matching the supplied layout. Live objective cards retain their explanatory details.
+- The mock preview uses larger table and detail text than the dense live table. Its title, status, product, and due-date columns fit the sample rows at the reference viewport without horizontal clipping.
 - Approval and linked-workflow counts in the mock preview are illustrative fields; they remain unavailable in live mode until their sources are part of the objective API.
 - Empty workspaces prompt the user to create the first objective. When filters hide all records, the table and toolbar say no objectives match instead of implying the workspace is empty.
 - Table, Cards, and Kanban views render the same filtered records; selecting any record opens the read-only objective overview. The status, progress, and product editor appears only after choosing **Edit objective**. Kanban groups by the saved objective status.

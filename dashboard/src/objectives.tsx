@@ -210,20 +210,20 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     },
   });
   const columns = useMemo<ColDef<Objective>[]>(() => [
-    { field: 'title', headerName: 'Objective', flex: 1.8, minWidth: 130 },
-    { field: 'owner', headerName: 'Owner', flex: .8, minWidth: 72, valueFormatter: ({ value }) => sampleData ? value?.replace(/\s+(\S).*$/, ' $1.') : value,
+    { field: 'title', headerName: 'Objective', flex: 1.8, minWidth: sampleData ? 145 : 130 },
+    { field: 'owner', headerName: 'Owner', flex: .8, minWidth: sampleData ? 64 : 72, valueFormatter: ({ value }) => sampleData ? value?.replace(/\s+(\S).*$/, ' $1.') : value,
       cellRenderer: ({ value, valueFormatted }: ICellRendererParams<Objective, string>) => sampleData
         ? <span className="objective-owner-cell"><span className="objective-owner-avatar" aria-hidden="true">{value?.split(/\s+/).map((part) => part[0]).join('')}</span>{valueFormatted}</span>
         : value },
-    { field: 'status', headerName: 'Status', flex: .9, minWidth: 78, cellRenderer: ({ value }: ICellRendererParams<Objective, Objective['status']>) => statusBadge(value ?? 'in_progress') },
-    { field: 'progress', headerName: 'Progress', flex: 1, minWidth: 70, cellRenderer: ({ value, data }: ICellRendererParams<Objective, number>) => <div className="grid-progress"><Progress value={value ?? 0} size="xs" color={data?.status === 'on_track' ? 'teal' : data?.status === 'at_risk' ? 'yellow' : data?.status === 'blocked' ? 'red' : 'violet'} /><span>{value ?? 0}%</span></div> },
+    { field: 'status', headerName: 'Status', flex: .9, minWidth: sampleData ? 80 : 78, cellRenderer: ({ value }: ICellRendererParams<Objective, Objective['status']>) => statusBadge(value ?? 'in_progress') },
+    { field: 'progress', headerName: 'Progress', flex: 1, minWidth: sampleData ? 64 : 70, cellRenderer: ({ value, data }: ICellRendererParams<Objective, number>) => <div className="grid-progress"><Progress value={value ?? 0} size="xs" color={data?.status === 'on_track' ? 'teal' : data?.status === 'at_risk' ? 'yellow' : data?.status === 'blocked' ? 'red' : 'violet'} /><span>{value ?? 0}%</span></div> },
     {
-      field: 'product', headerName: 'Product', flex: .9, minWidth: 85,
+      field: 'product', headerName: 'Product', flex: .9, minWidth: sampleData ? 90 : 85,
       valueGetter: ({ data }) => data ? productName(data) : 'Unassigned',
     },
-    { field: 'approval', headerName: 'Approval', flex: .95, minWidth: 90, cellRenderer: ({ value }: ICellRendererParams<Objective, string>) => value ? <Badge className={`objective-approval-status ${value.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`}>{value}</Badge> : '—' },
-    { field: 'due_date', headerName: 'Due Date', flex: .85, minWidth: 86, valueFormatter: ({ value }) => value ? formatObjectiveDate(value) : '' },
-    { field: 'workflow_count', headerName: 'Workflows', flex: .65, minWidth: 65, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => value === undefined ? '—' : <span className="objective-workflow-count"><IconHierarchy size={11} />{value}</span> },
+    { field: 'approval', headerName: 'Approval', flex: .95, minWidth: sampleData ? 80 : 90, cellRenderer: ({ value }: ICellRendererParams<Objective, string>) => value ? <Badge className={`objective-approval-status ${value.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`}>{value}</Badge> : '—' },
+    { field: 'due_date', headerName: 'Due Date', flex: .85, minWidth: sampleData ? 78 : 86, valueFormatter: ({ value }) => value ? formatObjectiveDate(value) : '' },
+    { field: 'workflow_count', headerName: 'Workflows', flex: .65, minWidth: sampleData ? 67 : 65, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => value === undefined ? '—' : <span className="objective-workflow-count"><IconHierarchy size={11} />{value}</span> },
   ], [sampleData]);
   const legacyProducts = Array.from(new Set(items.filter((item) => !item.product_id).map((item) => item.product)
     .filter((product) => product && !products.data?.some((known) => known.name === product))));

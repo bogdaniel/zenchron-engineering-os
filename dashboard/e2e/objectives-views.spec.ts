@@ -54,17 +54,36 @@ test('local Objectives mock preview renders the supplied screen without protecte
     await expect(page.locator('.objective-metric').nth(index).locator('small')).toBeHidden();
   }
   await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(6);
+  await expect(page.locator('.objective-grid-wrap .ag-cell').first()).toHaveCSS('font-size', '10.5px');
+  await expect(page.locator('.objective-grid-wrap .objective-status').first()).toHaveCSS('font-size', '9px');
+  await expect(page.locator('.objective-preview-overview .objective-overview-card b').first())
+    .toHaveCSS('font-size', '11px');
   await expect(page.locator('.objective-owner-avatar')).toHaveCount(6);
   await expect(page.locator('.objective-approval-status.changes-req')).toHaveCount(1);
   await expect(page.locator('.objective-detail-panel')).toContainText('Launch AI code review v2');
   await expect(page.locator('.objective-preview-blocker')).toContainText('Model training run (PR #1462)');
   await expect(page.locator('.objective-milestones-list > div')).toHaveCount(4);
-  const detailCardsFit = await page.locator('.objective-preview-overview .objective-overview-card')
-    .evaluateAll((cards) => cards.every((card) => card.scrollHeight <= card.clientHeight));
-  expect(detailCardsFit).toBe(true);
+  const overflowingCards = await page.locator('.objective-preview-overview .objective-overview-card')
+    .evaluateAll((cards) => cards.filter((card) => card.scrollHeight > card.clientHeight)
+      .map((card) => card.querySelector('b')?.textContent));
+  expect(overflowingCards).toEqual([]);
   const clippedHeaders = await page.locator('.objective-preview-layout .ag-header-cell-text')
     .evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).map((header) => header.textContent));
   expect(clippedHeaders).toEqual([]);
+  const headersFit = await page.locator('.objective-grid-wrap .ag-header-cell').evaluateAll((headers) => {
+    const gridRight = document.querySelector('.objective-grid-wrap')!.getBoundingClientRect().right;
+    return headers.every((header) => header.getBoundingClientRect().right <= gridRight + 1);
+  });
+  expect(headersFit).toBe(true);
+  const clippedObjectiveTitles = await page.locator('.objective-grid-wrap .ag-cell[col-id="title"] .ag-cell-value')
+    .evaluateAll((cells) => cells.filter((cell) => cell.scrollWidth > cell.clientWidth).map((cell) => cell.textContent));
+  expect(clippedObjectiveTitles).toEqual([]);
+  const clippedCells = await page.locator('.objective-grid-wrap .ag-cell[col-id="product"], .objective-grid-wrap .ag-cell[col-id="due_date"]')
+    .evaluateAll((cells) => cells.filter((cell) => {
+      const content = cell.querySelector('.ag-cell-value');
+      return content && content.scrollWidth > content.clientWidth;
+    }).map((cell) => cell.textContent));
+  expect(clippedCells).toEqual([]);
   expect(objectiveRequests).toEqual([]);
   expect(productRequests).toEqual([]);
 
