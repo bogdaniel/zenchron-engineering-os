@@ -209,18 +209,21 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     },
   });
   const columns = useMemo<ColDef<Objective>[]>(() => [
-    { field: 'title', headerName: 'Objective', flex: 1.8, minWidth: 120 },
-    { field: 'owner', headerName: 'Owner', flex: .8, minWidth: 60 },
+    { field: 'title', headerName: 'Objective', flex: 1.8, minWidth: 130 },
+    { field: 'owner', headerName: 'Owner', flex: .8, minWidth: 72, valueFormatter: ({ value }) => sampleData ? value?.replace(/\s+(\S).*$/, ' $1.') : value,
+      cellRenderer: ({ value, valueFormatted }: ICellRendererParams<Objective, string>) => sampleData
+        ? <span className="objective-owner-cell"><span className="objective-owner-avatar" aria-hidden="true">{value?.split(/\s+/).map((part) => part[0]).join('')}</span>{valueFormatted}</span>
+        : value },
     { field: 'status', headerName: 'Status', flex: .9, minWidth: 78, cellRenderer: ({ value }: ICellRendererParams<Objective, Objective['status']>) => statusBadge(value ?? 'in_progress') },
-    { field: 'progress', headerName: 'Progress', flex: 1, minWidth: 78, cellRenderer: ({ value, data }: ICellRendererParams<Objective, number>) => <div className="grid-progress"><Progress value={value ?? 0} size="xs" color={data?.status === 'on_track' ? 'teal' : data?.status === 'at_risk' ? 'yellow' : data?.status === 'blocked' ? 'red' : 'violet'} /><span>{value ?? 0}%</span></div> },
+    { field: 'progress', headerName: 'Progress', flex: 1, minWidth: 70, cellRenderer: ({ value, data }: ICellRendererParams<Objective, number>) => <div className="grid-progress"><Progress value={value ?? 0} size="xs" color={data?.status === 'on_track' ? 'teal' : data?.status === 'at_risk' ? 'yellow' : data?.status === 'blocked' ? 'red' : 'violet'} /><span>{value ?? 0}%</span></div> },
     {
-      field: 'product', headerName: 'Product', flex: .9, minWidth: 76,
+      field: 'product', headerName: 'Product', flex: .9, minWidth: 85,
       valueGetter: ({ data }) => data ? productName(data) : 'Unassigned',
     },
-    { field: 'approval', headerName: 'Approval', flex: .85, minWidth: 74, cellRenderer: ({ value }: ICellRendererParams<Objective, string>) => value ? <Badge className={`objective-approval-status ${value.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</Badge> : '—' },
-    { field: 'due_date', headerName: 'Due Date', flex: .85, minWidth: 75, valueFormatter: ({ value }) => value ? formatObjectiveDate(value) : '' },
-    { field: 'workflow_count', headerName: 'Workflows', flex: .65, minWidth: 52, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => value === undefined ? '—' : <span className="objective-workflow-count"><IconHierarchy size={11} />{value}</span> },
-  ], []);
+    { field: 'approval', headerName: 'Approval', flex: .95, minWidth: 90, cellRenderer: ({ value }: ICellRendererParams<Objective, string>) => value ? <Badge className={`objective-approval-status ${value.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`}>{value}</Badge> : '—' },
+    { field: 'due_date', headerName: 'Due Date', flex: .85, minWidth: 86, valueFormatter: ({ value }) => value ? formatObjectiveDate(value) : '' },
+    { field: 'workflow_count', headerName: 'Workflows', flex: .65, minWidth: 65, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => value === undefined ? '—' : <span className="objective-workflow-count"><IconHierarchy size={11} />{value}</span> },
+  ], [sampleData]);
   const legacyProducts = Array.from(new Set(items.filter((item) => !item.product_id).map((item) => item.product)
     .filter((product) => product && !products.data?.some((known) => known.name === product))));
   const productOptions = [
@@ -292,7 +295,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
       <section className="objective-metrics" aria-label="Objective metrics">
         <MetricCard className="objective-metric purple" label={sampleData ? 'Objective Throughput' : 'Completed objectives'}
           value={sampleData ? '28' : completed} detail={sampleData ? 'Completed this quarter' : 'In workspace'} icon={<IconTarget size={18} />}
-          trend={sampleData && <span className="objective-metric-trend"><Badge>↑ +40%</Badge><Sparkline data={[3, 4, 3, 6, 5, 7, 8]} color="violet.5" w={54} h={24} withGradient={false} /></span>} />
+          trend={sampleData && <span className="objective-metric-trend"><Badge>↑ +40%</Badge><span className="objective-throughput-bars" aria-hidden="true">
+            {[10, 14, 18, 16, 22, 27, 31].map((height, index) => <i key={index} style={{ height }} />)}
+          </span></span>} />
         <MetricCard className="objective-metric teal" label="Objective Success Rate"
           value={sampleData ? '86.7%' : items.length ? `${Math.round(completed / items.length * 100)}%` : '—'}
           detail={sampleData ? '+6.9 pp' : 'Completed / total objectives'} icon={<IconCircleCheck size={18} />}

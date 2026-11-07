@@ -49,9 +49,17 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await expect(page.locator('.objective-metric').nth(0)).toContainText('Completed this quarter');
   await expect(page.locator('.objective-metric').nth(1)).toContainText('Objective Success Rate86.7%');
   await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(6);
+  await expect(page.locator('.objective-owner-avatar')).toHaveCount(6);
+  await expect(page.locator('.objective-approval-status.changes-req')).toHaveCount(1);
   await expect(page.locator('.objective-detail-panel')).toContainText('Launch AI code review v2');
   await expect(page.locator('.objective-preview-blocker')).toContainText('Model training run (PR #1462)');
   await expect(page.locator('.objective-milestones-list > div')).toHaveCount(4);
+  const detailCardsFit = await page.locator('.objective-preview-overview .objective-overview-card')
+    .evaluateAll((cards) => cards.every((card) => card.scrollHeight <= card.clientHeight));
+  expect(detailCardsFit).toBe(true);
+  const clippedHeaders = await page.locator('.objective-preview-layout .ag-header-cell-text')
+    .evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).map((header) => header.textContent));
+  expect(clippedHeaders).toEqual([]);
   expect(objectiveRequests).toEqual([]);
   expect(productRequests).toEqual([]);
 

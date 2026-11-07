@@ -11,6 +11,8 @@
 .objective-metric .metric-top { display: flex; align-items: center; gap: 6px; color: #b2aec1; }
 .objective-metric .metric-top > span { min-width: 0; white-space: nowrap; }
 .objective-metric .metric-top > svg { position: static; order: -1; flex: 0 0 auto; color: #ba8cff; }
+.objective-metric .metric-value-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.objective-metric .metric-value-row > strong { flex: 0 0 auto; margin-top: 0; }
 .objective-metric.teal { border-color: #28515a; background: linear-gradient(145deg, #14272d, #12131d 80%); }
 .objective-metric.teal .metric-top > svg { color: #66d4ce; }
 .objective-metric.green { border-color: #285343; }
@@ -73,27 +75,37 @@
 .objective-status.at_risk { border-color: #66502c; color: #f0c06d; background: #382d1b; }
 .objective-status.blocked { border-color: #67364a; color: #ed8096; background: #3b202b; }
 .objective-status.in_progress { border-color: #304c69; color: #84baff; background: #1b2b3c; }
-.objective-approval-status { padding: 3px 5px; border: 1px solid #345141; color: #63dba8; background: #143629; font-size: 8px; text-transform: none; white-space: nowrap; }
+.objective-approval-status { padding: 3px 5px; border: 1px solid #345141; color: #63dba8; background: #143629; font-size: 9px; text-transform: none; white-space: nowrap; }
 .objective-approval-status.pending { border-color: #69522a; color: #f1c061; background: #382d1b; }
 .objective-approval-status.changes-req { border-color: #70452c; color: #f2ab5f; background: #392519; }
+.objective-approval-status.changes-req { padding-right: 2px; padding-left: 2px; font-size: 8px; }
 .objective-workflow-count { display: flex; align-items: center; gap: 3px; color: #bda1ee; }
 .grid-progress { display: flex; width: 100%; align-items: center; gap: 7px; }
 .grid-progress .mantine-Progress-root { flex: 1; }
 .grid-progress span { color: #c4bed1; font-size: 10px; }
 .objective-load-error { display: grid; height: 100%; place-items: center; color: #ed8096; font-size: 10px; }
 .objective-detail-panel { padding: 13px; }
-.objective-preview-layout .objective-detail-panel { min-height: 0; overflow: hidden; }
-.objective-preview-layout .objective-grid-wrap .ag-cell { font-size: 10px; }
-.objective-preview-layout .objective-grid-wrap .ag-header-cell-text { font-size: 9px; }
+.objective-preview-layout .objective-detail-panel { display: flex; min-height: 0; flex-direction: column; overflow: hidden; }
+.objective-preview-layout .objective-grid-wrap .ag-cell { font-size: 10.5px; }
+.objective-preview-layout .objective-grid-wrap .ag-cell:first-child { font-size: 9.5px; }
+.objective-preview-layout .objective-grid-wrap .ag-header-cell-text { font-size: 10px; }
+.objective-preview-layout .objective-grid-wrap .ag-header-cell,
+.objective-preview-layout .objective-grid-wrap .ag-cell { padding-right: 5px; padding-left: 5px; }
 .objective-preview-layout .objective-grid-wrap .ag-cell-value { min-width: 0; }
+.objective-owner-cell { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.objective-owner-avatar { display: grid; width: 16px; height: 16px; flex: 0 0 auto; place-items: center; border: 1px solid #60477e; border-radius: 50%; color: #e1cfff; background: #342448; font-size: 7px; font-weight: 600; }
 .objective-preview-layout .objective-grid-wrap .objective-status { padding: 3px 5px; font-size: 8px; white-space: nowrap; }
+.objective-preview-layout .detail-summary { margin: 6px 0; }
+.objective-preview-layout .detail-meta-grid { padding: 5px 0; }
+.objective-preview-layout .objective-detail-tabs { margin: 4px 0; }
+.objective-preview-layout .objective-detail-tabs button { padding-top: 5px; padding-bottom: 5px; }
 .objective-preview-actions { display: flex; align-items: center; gap: 7px; }
 .objective-preview-actions button { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #302b45; border-radius: 9px; color: #c9c2d8; background: #1a1927; font-size: 17px; }
-.objective-preview-overview { grid-template-rows: repeat(3, minmax(0, 1fr)); }
-.objective-preview-overview .objective-overview-card { min-height: 0; padding: 8px; overflow: hidden; }
+.objective-preview-overview { min-height: 0; flex: 1; grid-template-rows: repeat(3, minmax(0, 1fr)); }
+.objective-preview-overview .objective-overview-card { min-height: 0; padding: 6px; overflow: hidden; }
 .objective-preview-overview .objective-overview-card p { margin-top: 5px; }
-.objective-preview-overview ul { display: grid; gap: 4px; margin: 5px 0 0; padding: 0; color: #c4bed1; font-size: 9px; line-height: 1.25; list-style: none; }
-.objective-preview-overview li { display: flex; min-width: 0; align-items: flex-start; gap: 5px; }
+.objective-preview-overview ul { display: grid; gap: 0; margin: 2px 0 0; padding: 0; color: #c4bed1; font-size: 9px; line-height: 1; list-style: none; }
+.objective-preview-overview li { display: flex; min-width: 0; align-items: center; gap: 5px; overflow: hidden; white-space: nowrap; }
 .objective-preview-overview li::before { flex: 0 0 auto; color: #35d59d; content: '✓'; font-weight: 700; }
 .objective-preview-overview .objective-preview-blocker { border-color: #68412f; background: #241c1b; }
 .objective-preview-overview .objective-preview-blocker b { color: #f2bb62; }
@@ -105,7 +117,7 @@
 .objective-milestones-card .panel-heading { min-height: 25px; }
 .objective-milestones-card .panel-heading > div:last-child { color: #c5bfd2; font-size: 9px; }
 .objective-milestones-list { display: grid; gap: 4px; margin-top: 4px; }
-.objective-milestones-list > div { display: grid; grid-template-columns: 13px minmax(100px, 1.2fr) minmax(65px, 1fr) 80px 70px; align-items: center; gap: 6px; min-height: 18px; color: #c5bfd2; font-size: 9px; }
+.objective-milestones-list > div { display: grid; grid-template-columns: 13px minmax(100px, 1.2fr) minmax(65px, 1fr) 90px 70px; align-items: center; gap: 6px; min-height: 18px; color: #c5bfd2; font-size: 9px; }
 .objective-milestone-flag { color: #b783f5; }
 .objective-milestone-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .objective-milestones-list .mantine-Progress-root { height: 7px; }
@@ -156,10 +168,11 @@
 .objective-capacity-chart .recharts-cartesian-grid line { stroke: #302d3c; }
 .objective-capacity-chart .recharts-cartesian-axis-tick-value { fill: #9d97aa; font-size: 8px; }
 .objective-capacity-chart .recharts-area-area { opacity: .12; }
-.objective-metric-trend { display: flex; align-items: center; gap: 5px; }
+.objective-metric-trend { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: space-between; gap: 5px; }
 .objective-metric-trend > span { color: #3fd9a2; font-size: 10px; font-weight: 600; }
-.objective-metric-trend > span[aria-hidden] { letter-spacing: 1px; }
 .objective-metric-trend .mantine-Badge-root { border: 0; color: #3ee1a2; background: #123b30; font-size: 9px; }
+.objective-throughput-bars { display: flex; width: 68px; height: 28px; align-items: flex-end; justify-content: space-between; }
+.objective-throughput-bars i { width: 6px; border-radius: 2px 2px 0 0; background: #a65cf4; }
 .objective-table-stack .objective-capacity { min-height: 0; margin-top: 0; overflow: hidden; }
 .capacity-empty { display: grid; min-height: 72px; place-items: center; color: #868095; font-size: 10px; }
 .capacity-bars { display: grid; gap: 3px; margin-top: 3px; }
@@ -189,7 +202,7 @@
   .objective-filters { width: min(560px, 100%); }
   .objective-metrics { grid-template-columns: 2fr 2fr repeat(4, .75fr); gap: 8px; }
   .objective-metric { height: 84px; min-height: 84px; padding: 10px 12px; }
-  .objective-content-grid { height: 603px; grid-template-columns: .49fr .51fr; gap: 12px; margin-top: 22px; }
+  .objective-content-grid { height: 615px; grid-template-columns: .49fr .51fr; gap: 12px; margin-top: 10px; }
   .objective-preview-layout .objective-grid-toolbar { display: none; }
   .objective-preview-layout .objective-grid-wrap { height: calc(100% - 42px); }
   .objective-preview-layout .objective-detail-stack { grid-template-rows: minmax(0, 1fr) 128px; }
