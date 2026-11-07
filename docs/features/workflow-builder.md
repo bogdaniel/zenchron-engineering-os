@@ -31,7 +31,7 @@ flowchart LR
     API --> Validate[Validate node types and edge references]
     Validate --> Store[(Versioned JSON snapshot)]
     Store -->|Workflow JSON + version| Dashboard
-    LocalPreview[Local mock route] -->|Static design fixture only| Dashboard
+    LocalPreview[Local mock route] -->|Static design fixture and labeled sample run| Dashboard
 ```
 
 ## Behavior
@@ -72,8 +72,11 @@ flowchart LR
 - Run and Publish remain disabled because there is no workflow execution runner or publish service yet.
 - `/?preview=mock#workflows` opens the builder without a session, uses the local design fixture, and disables create/save;
   it makes no workflow API requests.
+- The local mock route shows the Agent Router's visible rule, budget, retry, and execution-condition panels, plus the
+  mock's canvas toolbar and simulated PR #4827 timeline. These sample values are read-only preview content and never
+  enter saved workflows.
 - Run Preview shows the saved graph's actual node and edge counts and states explicitly that no execution is available;
-  it does not show simulated statuses, duration, or cost.
+  it does not show simulated statuses, duration, or cost in the authenticated editor.
 - Validate checks that the graph contains a trigger and that edges refer to existing nodes. Saving increments the
   workflow version.
 - Workflow definitions survive API restarts through an atomic versioned JSON snapshot. The current control plane does

@@ -194,7 +194,8 @@ function App() {
               </div> : <PageHeading className="greeting" titleLevel={1}
                 title={previewPage ? <>Good morning, Alex <span aria-hidden="true">👋</span></>
                   : <>Good morning{auth.data?.login ? `, ${auth.data.login}` : ''} <span aria-hidden="true">👋</span></>}
-                description={activePage === 'overview' ? <>
+                description={activePage === 'workflows' ? 'You’re building and orchestrating intelligent engineering workflows.'
+                  : activePage === 'overview' ? <>
                   <span className="greeting-desktop-copy">Your AI-native engineering operating system for objectives, agents, code, and delivery.</span>
                   <span className="greeting-mobile-copy">Your engineering mission at a glance.</span>
                 </> : 'Your engineering control center for objectives, agents, code, and delivery.'} />}

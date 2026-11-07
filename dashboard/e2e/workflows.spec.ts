@@ -11,12 +11,30 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   await page.goto('/?preview=mock#workflows');
 
   await expect(page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ })).toBeVisible();
+  await expect(page.locator('.workflow-page-heading .eyebrow')).toContainText('Workflows');
+  await expect(page.getByRole('group', { name: 'Canvas tools' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Workflow' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Custom Block' })).toBeDisabled();
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(9);
+  const branchNodes = await Promise.all(['code-reviewer', 'test-generator', 'coverage-analyzer']
+    .map((kind) => page.locator(`.workflow-canvas .workflow-node.${kind}`).boundingBox()));
+  expect(branchNodes.every(Boolean)).toBe(true);
+  expect(branchNodes[0]!.y).toBeLessThan(branchNodes[1]!.y);
+  expect(branchNodes[1]!.y).toBeLessThan(branchNodes[2]!.y);
   await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Router');
   await expect(page.locator('.workflow-status')).toContainText('Design preview · changes are not saved');
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'New Workflow' })).toBeDisabled();
-  await expect(page.locator('.workflow-run-preview')).toContainText('Execution preview unavailable');
+  await expect(page.getByRole('button', { name: 'New Workflow' })).toBeHidden();
+  await expect(page.getByRole('navigation', { name: 'Agent Router settings' })).toContainText('Properties');
+  await expect(page.getByRole('region', { name: 'Routing Parameters' })).toContainText('Code Reviewer');
+  await expect(page.getByRole('region', { name: 'Budgets and limits' })).toContainText('$ 0.020');
+  await expect(page.getByRole('region', { name: 'Retry Rules' })).toContainText('Exponential');
+  await expect(page.getByRole('region', { name: 'Execution Conditions' })).toContainText('pr.changed_files_count');
+  await expect(page.getByRole('region', { name: 'Simulated run timeline' })).toContainText('PR #4827');
+  await expect(page.locator('.workflow-simulated-summary')).toContainText('$0.038');
+  const inspectorFits = await page.locator('.workflow-properties').evaluate((panel) =>
+    panel.scrollHeight <= panel.clientHeight);
+  expect(inspectorFits).toBe(true);
   expect(workflowRequests).toEqual([]);
 });
 

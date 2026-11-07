@@ -12,15 +12,16 @@ import type { Connection, Edge, Node, NodeProps, ReactFlowInstance } from '@xyfl
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { z } from 'zod';
 import {
-  IconBolt, IconCheck, IconChecklist, IconChevronRight, IconCirclePlus, IconCode, IconDeviceFloppy, IconDots,
+  IconBolt, IconCheck, IconChecklist, IconChevronDown, IconChevronRight, IconCirclePlus, IconCode, IconDeviceFloppy, IconDots,
   IconFileText, IconFlask, IconGitBranch, IconGitMerge, IconGripVertical, IconHierarchy, IconInfoCircle, IconLayoutBoard, IconMaximize, IconMessage2, IconStack2,
-  IconPlayerPlay, IconPlayerPlayFilled, IconRepeat, IconRobot, IconRoute, IconSearch, IconTestPipe, IconChartBar, IconUserCheck,
+  IconPlayerPlay, IconPlayerPlayFilled, IconRepeat, IconRobot, IconRoute, IconSearch, IconSettings, IconTestPipe, IconChartBar, IconUserCheck,
 } from '@tabler/icons-react';
 import '@xyflow/react/dist/style.css';
 import { PageHeading } from './PageHeading';
 import { PanelHeading } from './PanelHeading';
 import { PanelCard } from './PanelCard';
 import './workflows.css';
+import { WorkflowDesignRouterSettings, WorkflowDesignRunPreview } from './WorkflowDesignPreview';
 
 const nodeTypes = [
   'trigger', 'planner', 'agent-router', 'agent-task', 'code-reviewer', 'test-generator',
@@ -78,24 +79,25 @@ const mobileOverviewStages: {
 ];
 const designPreviewWorkflow: Workflow = {
   id: 'overview-design-preview', name: 'PR Review & Release Orchestration',
-  description: 'Review changes, validate quality, and gate releases.', status: 'active', version: 1,
+  description: 'Automate code review, test generation, coverage analysis, approval, and release reporting.',
+  status: 'active', version: 1,
   updated_at: '',
   nodes: [
     ['trigger', 'trigger', 'Trigger', 'PR or objective update'],
-    ['plan', 'planner', 'Plan', 'Generate plan'],
+    ['plan', 'planner', 'Planner', 'Create an execution plan'],
     ['build', 'agent-router', 'Agent Router', 'Route work to specialized agents'],
-    ['tests', 'test-generator', 'Test', 'Run test suite'],
-    ['coverage', 'coverage-analyzer', 'Coverage', 'Analyze coverage'],
-    ['review', 'code-reviewer', 'Review', 'AI + human review'],
-    ['approval', 'human-approval', 'Approval', 'Require manual review'],
-    ['merge', 'merge-gate', 'Merge', 'Apply merge gate'],
-    ['publish', 'publish-report', 'Publish', 'Release report'],
+    ['review', 'code-reviewer', 'Code Reviewer', 'Analyze changes and provide review'],
+    ['tests', 'test-generator', 'Test Generator', 'Generate and update tests'],
+    ['coverage', 'coverage-analyzer', 'Coverage Analyzer', 'Compute test coverage and quality'],
+    ['approval', 'human-approval', 'Human Approval', 'Review results and approve'],
+    ['merge', 'merge-gate', 'Merge Gate', 'Conditional merge with policies'],
+    ['publish', 'publish-report', 'Publish Report', 'Generate and publish release report'],
   ].map(([id, type, label, description]) => ({
     id, type: type as ComponentType, position: { x: 0, y: 0 }, data: { label, description },
   })),
   edges: [
-    ['trigger', 'plan'], ['plan', 'build'], ['build', 'tests'], ['build', 'coverage'], ['build', 'review'],
-    ['tests', 'approval'], ['coverage', 'approval'], ['review', 'approval'], ['approval', 'merge'], ['merge', 'publish'],
+    ['trigger', 'plan'], ['plan', 'build'], ['build', 'review'], ['build', 'tests'], ['build', 'coverage'],
+    ['review', 'approval'], ['tests', 'approval'], ['coverage', 'approval'], ['approval', 'merge'], ['merge', 'publish'],
   ].map(([source, target]) => ({ id: `${source}-${target}`, source, target, label: '' })),
 };
 
@@ -127,6 +129,10 @@ const workflowNodeIcons: Record<ComponentType, typeof IconRoute> = {
   loop: IconRepeat,
 };
 const componentGroups = [...new Set(components.map(([group]) => group))];
+const workflowSections = [
+  ['Builder', IconLayoutBoard], ['Runs', IconPlayerPlay], ['Versions', IconFileText],
+  ['Schedules', IconRepeat], ['Permissions', IconUserCheck], ['Settings', IconSettings],
+] as const;
 const defaultDescriptions: Record<ComponentType, string> = {
   trigger: 'Start on a pull request or event', planner: 'Create an execution plan',
   'agent-router': 'Route work to specialized agents', 'agent-task': 'Run a configured agent',
@@ -498,10 +504,10 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         onClick={() => createWorkflow.mutate()}
       >Create workflow</Button>
     </Modal>
-    <div className="workflow-builder-layout">
+    <div className={`workflow-builder-layout${designPreview ? ' workflow-design-preview' : ''}`}>
       <div className="workflow-page-heading">
         <PageHeading
-          eyebrow="ORCHESTRATION"
+          eyebrow={designPreview ? <>Workflows <IconChevronRight size={10} /> Workflow Builder</> : 'ORCHESTRATION'}
           title={<>
             <span className="workflow-desktop-title">Workflow Builder — {activeWorkflow.name}</span>
             <span className="workflow-mobile-title">Workflow Orchestration</span>
@@ -514,7 +520,9 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
           </>}
         />
         <div className="workflow-toolbar">
-          <Badge className="workflow-version" color="gray">v{activeWorkflow.version}</Badge>
+          <Badge className="workflow-version" color="gray">
+            {designPreview ? <>v2.4.0 (Draft) <IconChevronDown size={12} /></> : `v${activeWorkflow.version}`}
+          </Badge>
           <Button className="workflow-validate" variant="default" leftSection={<IconCheck size={15} />} onClick={validate}>Validate</Button>
           <Button className="workflow-run" variant="default" leftSection={<IconPlayerPlay size={15} />} disabled title="Runner not connected">
             Run
@@ -527,8 +535,10 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         </div>
       </div>
       <nav className="workflow-section-tabs" aria-label="Workflow sections">
-        {['Builder', 'Runs', 'Versions', 'Schedules', 'Permissions', 'Settings'].map((section, index) => (
-          <button className={index === 0 ? 'selected' : ''} disabled={index !== 0} key={section}>{section}</button>
+        {workflowSections.map(([section, Icon], index) => (
+          <button className={index === 0 ? 'selected' : ''} disabled={index !== 0} key={section}>
+            <Icon size={14} />{section}
+          </button>
         ))}
       </nav>
       <nav className="workflow-mobile-tabs" aria-label="Workflow mobile sections">
@@ -569,7 +579,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       <DndContext onDragEnd={handleDragEnd}>
       <div className="workflow-editor">
       <aside className="workflow-palette">
-        <PanelHeading className="workflow-subheading" icon={<IconCirclePlus size={16} />} title="Components" />
+        <PanelHeading className="workflow-subheading" icon={<IconCirclePlus size={16} />} title="Components"
+          actions={designPreview && <button className="workflow-preview-custom-block" disabled>＋ Custom Block</button>} />
         <TextInput
           className="workflow-palette-search"
           aria-label="Search blocks"
@@ -600,31 +611,42 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         <Panel id="canvas" className="workflow-center-panel" minSize="40%">
       <div className="workflow-canvas-wrap">
         <div className="workflow-canvas-tools">
-          <div className="workflow-canvas-actions">
-            <Select
-              className="workflow-select"
-              aria-label="Workflow"
-              data={query.data?.map(({ id, name: workflowName }) => ({ value: id, label: workflowName })) ?? []}
-              value={activeWorkflow.id}
-              onChange={(id) => {
-                if (!id) return;
-                setSelectedWorkflowId(id);
-                setSelectedId('');
-              }}
-              searchable
-              maxDropdownHeight={280}
-            />
-            <Button variant="default" disabled={designPreview} onClick={() => setCreateOpen(true)}>New Workflow</Button>
-          </div>
-          <button onClick={async () => {
-            try {
-              setNodes(await layoutNodes(nodes, edges));
-              setLayoutRevision((revision) => revision + 1);
-              setNotice('Layout updated');
-            } catch {
-              setNotice('Could not arrange workflow nodes');
-            }
-          }}><IconLayoutBoard size={15} /> Auto layout</button>
+          {designPreview ? <>
+            <div className="workflow-preview-toolset" role="group" aria-label="Canvas tools">
+              <span className="selected" aria-hidden="true">↖</span><span aria-hidden="true">✋</span>
+              <span aria-hidden="true">＋</span><span aria-hidden="true">□</span><span aria-hidden="true">⤢</span>
+            </div>
+            <div className="workflow-preview-zoom" role="group" aria-label="Canvas zoom">
+              <span aria-hidden="true">−</span><b aria-hidden="true">100%</b>
+              <span aria-hidden="true">＋</span><span aria-hidden="true">▦</span>
+            </div>
+          </> : <>
+            <div className="workflow-canvas-actions">
+              <Select
+                className="workflow-select"
+                aria-label="Workflow"
+                data={query.data?.map(({ id, name: workflowName }) => ({ value: id, label: workflowName })) ?? []}
+                value={activeWorkflow.id}
+                onChange={(id) => {
+                  if (!id) return;
+                  setSelectedWorkflowId(id);
+                  setSelectedId('');
+                }}
+                searchable
+                maxDropdownHeight={280}
+              />
+              <Button variant="default" onClick={() => setCreateOpen(true)}>New Workflow</Button>
+            </div>
+            <button onClick={async () => {
+              try {
+                setNodes(await layoutNodes(nodes, edges));
+                setLayoutRevision((revision) => revision + 1);
+                setNotice('Layout updated');
+              } catch {
+                setNotice('Could not arrange workflow nodes');
+              }
+            }}><IconLayoutBoard size={15} /> Auto layout</button>
+          </>}
         </div>
         <WorkflowDropCanvas>
           <ReactFlow
@@ -633,9 +655,9 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
             onInit={(instance) => { flow.current = instance; }}
             onNodeClick={(_, node) => setSelectedId(node.id)} fitView minZoom={0.2} attributionPosition="bottom-left"
           >
-            <Background color="#37324c" gap={18} />
+            <Background color={designPreview ? '#504665' : '#37324c'} gap={18} size={designPreview ? 1.2 : 1} />
             <MiniMap nodeColor="#8e52db" maskColor="#0b0b14bb" />
-            <Controls position="top-right" />
+            {!designPreview && <Controls position="top-right" />}
           </ReactFlow>
         </WorkflowDropCanvas>
         <div className="workflow-status" aria-live="polite">
@@ -651,9 +673,11 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
             <div className="workflow-preview-heading">
               <div><b>Run Preview</b><button disabled>Execution Graph</button><button disabled>Logs</button>
                 <button disabled>Outputs</button><button disabled>Artifacts</button></div>
-              <Badge color="gray">Runner unavailable</Badge>
+              <Badge color={designPreview ? 'green' : 'gray'}>
+                {designPreview ? '✓ All steps valid' : 'Runner unavailable'}
+              </Badge>
             </div>
-            <div className="workflow-preview-content">
+            {designPreview ? <WorkflowDesignRunPreview /> : <div className="workflow-preview-content">
               <div className="workflow-preview-empty"><IconPlayerPlay size={19} />
                 <b>Execution preview unavailable</b>
                 <span>Workflow execution is not connected. Save and validate this graph to keep its definition ready.</span>
@@ -663,7 +687,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
                 <span><small>Connections</small> {edges.length}</span>
                 <span><small>Last run</small>Not run</span>
               </div>
-            </div>
+            </div>}
           </div>
         </Panel>
       </Group>
@@ -672,6 +696,10 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       <aside className="workflow-properties">
         <PanelHeading className="workflow-subheading" title={selected?.data.label ?? 'Selected component'}
           icon={selected && <span className="workflow-inspector-icon" aria-hidden="true"><InspectorIcon size={18} /></span>} />
+        {designPreview && <nav className="workflow-inspector-tabs" aria-label="Agent Router settings">
+          <button className="selected" aria-current="page">Properties</button>
+          <button disabled>Prompt</button><button disabled>Variables</button><button disabled>Advanced</button>
+        </nav>}
         {selected ? <>
           <section className="workflow-basic-configuration" aria-label="Basic configuration">
             <h4>Basic Configuration</h4>
@@ -679,38 +707,41 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
               <TextInput
                 label="Node Name" value={selected.data.label}
                 onChange={(event) => updateSelected('label', event.currentTarget.value)} maxLength={100}
+                readOnly={designPreview}
               />
               <TextInput label="Type" value={selectedType} readOnly />
               <Textarea
                 label="Description" value={selected.data.description}
                 onChange={(event) => updateSelected('description', event.currentTarget.value)}
-                maxLength={500} autosize minRows={2}
+                maxLength={500} autosize minRows={2} readOnly={designPreview}
               />
             </div>
           </section>
-          <Button color="red" variant="subtle" onClick={() => {
+          {designPreview ? <WorkflowDesignRouterSettings /> : <Button color="red" variant="subtle" onClick={() => {
             setNodes((current) => current.filter((node) => node.id !== selectedId));
             setEdges((current) => current.filter((edge) => edge.source !== selectedId && edge.target !== selectedId));
             setSelectedId('');
-          }}>Delete component</Button>
+          }}>Delete component</Button>}
         </> : <p className="workflow-hint">Select a node on the canvas to edit it.</p>}
-        <div className="workflow-divider" />
-        <details className="workflow-settings">
-          <summary>Workflow settings</summary>
-          <TextInput label="Name" value={name} onChange={(event) => setName(event.currentTarget.value)} maxLength={200} />
-          <Textarea
-            label="Description" value={description} onChange={(event) => setDescription(event.currentTarget.value)}
-            maxLength={1000} autosize minRows={2}
-          />
-          <label className="workflow-field">
-            Status
-            <select value={status} onChange={(event) => setStatus(event.currentTarget.value as 'draft' | 'active')}>
-              <option value="draft">Draft</option><option value="active">Active</option>
-            </select>
-          </label>
-        </details>
-        <div className="workflow-divider" />
-        <span className="workflow-hint">Version {activeWorkflow.version} · saved to local control plane</span>
+        {!designPreview && <>
+          <div className="workflow-divider" />
+          <details className="workflow-settings">
+            <summary>Workflow settings</summary>
+            <TextInput label="Name" value={name} onChange={(event) => setName(event.currentTarget.value)} maxLength={200} />
+            <Textarea
+              label="Description" value={description} onChange={(event) => setDescription(event.currentTarget.value)}
+              maxLength={1000} autosize minRows={2}
+            />
+            <label className="workflow-field">
+              Status
+              <select value={status} onChange={(event) => setStatus(event.currentTarget.value as 'draft' | 'active')}>
+                <option value="draft">Draft</option><option value="active">Active</option>
+              </select>
+            </label>
+          </details>
+          <div className="workflow-divider" />
+          <span className="workflow-hint">Version {activeWorkflow.version} · saved to local control plane</span>
+        </>}
       </aside>
     </div>
   </section>;
