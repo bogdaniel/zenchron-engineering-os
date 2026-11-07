@@ -50,6 +50,8 @@ flowchart LR
     Browser --> IssueWrite
     IssueWrite -->|Submit as configured token owner| GitHub
     GitHub -. inbound reviews, checks, and merge unavailable .-> Governance
+    Preview[Local ?preview=mock#reviews] -->|Fixed PR, diff, and review summary fixture| Browser
+    Preview -. does not call GitHub or write review actions .-> ProviderQueue
 ```
 
 Provider descriptions render as sanitized Markdown/HTML; external images are stripped. A provider diff without a unified hunk shows a clear no-readable-patch state and leaves the GitHub file-changes link available. The summary panel identifies whether its content belongs to a local branch, GitHub pull request, or GitHub issue. The Code changes, Conversations, Evidence, and Checklist controls switch the detail panel. The Code changes panel reserves a lower row for suggestions, evidence artifacts, and checklist information, with explicit unavailable states while those provider details are not synced. The Conversations view submits issue/PR feedback and shows local run comments; its composer fills the available detail width. Existing provider conversation, check, and artifact data show explicit unavailable states until synced.
@@ -68,9 +70,14 @@ GitHub requests use compact selectable cards so the number, status, title, autho
 the narrow queue. Its status chips filter the loaded provider items by open/draft pull requests or open/closed issues;
 search uses the same loaded list. Local branch runs continue to use AG Grid.
 
+On localhost, `?preview=mock#reviews` renders this same Reviews page with a fixed sample PR, diff, and summary so the
+supplied visual can be reviewed without a GitHub session. The fixture is read-only, makes no provider or protected-data
+requests, and is never used in the authenticated Reviews route.
+
 ## Verification
 
 `cd dashboard && npm run test:e2e -- e2e/github-reviews.spec.ts` checks safe provider Markdown rendering, detail section controls, PR diff rendering, and review submission.
+`cd dashboard && npm run test:e2e -- e2e/reviews-preview.spec.ts` checks the local visual fixture and verifies that it makes no provider reads or review writes.
 `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Reviews page'` checks empty provider state and local branch diffs, comments, request-changes, disabled merge actions, and resizing.
 `go test ./cmd/zenchron -run 'TestGitHub|TestAgentRunQueuePersistsAndFencesClaims'` checks review
 validation/submission, persistence, runtime gating, same-run requeue, feedback prompts, and diff retrieval. The focused worker test

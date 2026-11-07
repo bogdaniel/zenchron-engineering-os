@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 
 test('Reviews replaces the loading overlay after an empty GitHub response', async ({ page }) => {
   const projectID = 'fedcbafedcbafedcbafedcbafedcbafe';
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }) }));
   await page.route('**/api/v1/projects', (route) => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify([{
@@ -23,6 +25,8 @@ test('Reviews replaces the loading overlay after an empty GitHub response', asyn
 
 test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ page }) => {
   await page.setViewportSize({ width: 1512, height: 874 });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }) }));
   const projectID = 'fedcbafedcbafedcbafedcbafedcbafe';
   const runID = 'abcdefabcdefabcdefabcdefabcdefab';
   const submittedReviews: { body: string; event: string }[] = [];

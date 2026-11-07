@@ -19,7 +19,9 @@ import { PanelHeading } from './PanelHeading';
 import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
 import { MonacoEditor } from './MonacoEditor';
+import { reviewPreviewDiff, reviewPreviewProject, reviewPreviewPullRequests } from './review-preview';
 import './reviews.css';
+import './reviews-preview.css';
 import './reviews-feedback.css';
 import type { AgentRun } from './agents';
 
@@ -60,6 +62,7 @@ const metrics = [
   ['Open pull requests', IconGitPullRequest], ['Draft pull requests', IconMessageCircle], ['Open issues', IconFileText],
   ['Avg. review time', IconClockHour4], ['Merge success rate', IconGitMerge], ['Policy gate pass', IconShieldCheck],
 ] as const;
+const previewMetricLabels = ['Pull Requests', 'In Review', 'Review Queue', 'Avg. Review Time', 'Merge Success Rate', 'Policy Gate Pass'];
 const tabs = ['Pull requests', 'Issues', 'Local branches', 'Code Review', 'Evidence', 'Merge Governance', 'Policies', 'Trusted-main'];
 const stages = ['Code review', 'Evidence', 'Policy gates', 'CI', 'Merge'];
 const detailTabs = [
@@ -105,7 +108,7 @@ function summarizeDiff(diff: string) {
   return { files, added, removed };
 }
 
-export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Project[] }) {
+export function ReviewsPage({ runs, projects, designPreview = false }: { runs: AgentRun[]; projects: Project[]; designPreview?: boolean }) {
   const stacked = useMediaQuery('(max-width: 1150px)');
   const queryClient = useQueryClient();
   const [section, setSection] = useState<'pull-requests' | 'issues' | 'local-branches'>('pull-requests');
@@ -121,17 +124,19 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
   const [issueCommentBody, setIssueCommentBody] = useState('');
   const [issueCommentStatus, setIssueCommentStatus] = useState('');
   const [issueStateStatus, setIssueStateStatus] = useState('');
-  const gitHubProjects = projects.filter((project) => project.git_remote.startsWith('github.com/'));
+  const gitHubProjects = designPreview ? [reviewPreviewProject] : projects.filter((project) => project.git_remote.startsWith('github.com/'));
   const selectedProject = gitHubProjects.find((project) => project.id === projectID) ?? gitHubProjects[0];
   const pullRequests = useQuery({
-    queryKey: ['github-pull-requests', selectedProject?.id],
+    queryKey: ['github-pull-requests', designPreview ? 'mock' : selectedProject?.id],
     queryFn: () => loadGitHubItems(selectedProject!.id, 'pull-requests', pullRequestSchema),
-    enabled: Boolean(selectedProject), refetchInterval: 60_000,
+    enabled: Boolean(selectedProject) && !designPreview, refetchInterval: 60_000,
+    initialData: designPreview ? reviewPreviewPullRequests : undefined,
   });
   const issues = useQuery({
-    queryKey: ['github-issues', selectedProject?.id],
+    queryKey: ['github-issues', designPreview ? 'mock' : selectedProject?.id],
     queryFn: () => loadGitHubItems(selectedProject!.id, 'issues', issueSchema),
-    enabled: Boolean(selectedProject), refetchInterval: 60_000,
+    enabled: Boolean(selectedProject) && !designPreview, refetchInterval: 60_000,
+    initialData: designPreview ? [] : undefined,
   });
   const localBranches = runs.filter((run) => run.diff_available || ['queued', 'running', 'cancelled'].includes(run.status));
   const selected = localBranches.find((run) => run.id === selectedID) ?? localBranches[0];
@@ -162,14 +167,15 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
   const selectedIssue = section === 'issues' ? selectedProviderItem as GitHubIssue | undefined : undefined;
   const providerQuery = section === 'issues' ? issues : pullRequests;
   const pullRequestDiff = useQuery({
-    queryKey: ['github-pull-request-diff', selectedProject?.id, selectedPullRequest?.number],
+    queryKey: ['github-pull-request-diff', designPreview ? 'mock' : selectedProject?.id, selectedPullRequest?.number],
     queryFn: () => loadPullRequestDiff(selectedProject!.id, selectedPullRequest!.number),
-    enabled: Boolean(selectedProject && selectedPullRequest), staleTime: 60_000,
+    enabled: Boolean(selectedProject && selectedPullRequest) && !designPreview, staleTime: 60_000,
+    initialData: designPreview ? { diff: reviewPreviewDiff } : undefined,
   });
   const pullRequestPatch = pullRequestDiff.data?.diff;
   const canComment = Boolean(section === 'local-branches' && selected &&
     ['succeeded', 'failed', 'cancelled'].includes(selected.status) && selected.diff_available);
-  const metricValues = [
+  const metricValues = designPreview ? [428, 37, 15, '8.4h', '98.7%', '99.2%'] : [
     pullRequests.data?.length, pullRequests.data?.filter((item) => item.draft).length, issues.data?.length,
     undefined, undefined, undefined,
   ];
@@ -252,16 +258,16 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
   });
   const diffStats = useMemo(() => diff.data ? summarizeDiff(diff.data.diff) : null, [diff.data]);
   return (
-    <div className="reviews-page">
+    <div className={`reviews-page${designPreview ? ' reviews-design-preview' : ''}`} data-preview={designPreview ? 'mock' : undefined}>
       <section className="reviews-metrics" aria-label="Review metrics">
         {metrics.map(([label, Icon], index) => {
-          const value = index < 3
+          const value = designPreview ? metricValues[index] : index < 3
             ? metricValues[index] ?? ((index === 0 ? pullRequests : index === 1 ? pullRequests : issues).isLoading ? '…' : 'Unavailable')
             : 'Unavailable';
           return <MetricCard
             className="reviews-metric"
             key={label}
-            label={label}
+            label={designPreview ? previewMetricLabels[index]! : label}
             value={value}
             icon={<Icon size={17} />}
           />;
@@ -269,17 +275,23 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
       </section>
       <div className="reviews-title-row">
         <div className="reviews-title-copy">
-          <IconCode className="reviews-title-icon" size={24} />
+          {designPreview ? <IconGitPullRequest className="reviews-title-icon" size={24} /> : <IconCode className="reviews-title-icon" size={24} />}
           <PageHeading className="reviews-heading-copy" title="Reviews" description="Pull requests, code review, evidence, and merge governance." />
         </div>
-        <Badge className={gitHubProjects.length && !providerQuery.isError ? 'reviews-provider-available' : 'reviews-unavailable'} variant="light">
-          <i />{!selectedProject ? 'GitHub repository not connected'
+          <Badge className={gitHubProjects.length && !providerQuery.isError ? 'reviews-provider-available' : 'reviews-unavailable'} variant="light">
+          <i />{designPreview ? 'Design preview · sample PR content' : !selectedProject ? 'GitHub repository not connected'
             : providerQuery.isLoading ? 'Connecting to GitHub'
               : providerQuery.isError ? 'GitHub unavailable' : `GitHub · ${selectedProject.name}`}
         </Badge>
       </div>
       <nav className="reviews-tabs" aria-label="Review sections">
-        {tabs.map((tab, index) => {
+        {designPreview ? <>
+          {['Pull Requests 428', 'Code Review', 'Evidence', 'Merge Governance', 'Policies', 'Trusted-main'].map((tab, index) =>
+            <button className={index === 0 ? 'selected' : ''} disabled={index > 0} key={tab}>{tab}</button>)}
+          <span className="reviews-tab-spacer" />
+          <Button className="reviews-filter" variant="default" disabled>Last 14 Days <IconChevronDown size={13} /></Button>
+          <Button className="reviews-filter" variant="default" disabled><IconFilter size={13} /> All Repos <IconChevronDown size={13} /></Button>
+        </> : tabs.map((tab, index) => {
           const key = (['pull-requests', 'issues', 'local-branches'] as const)[index];
           return <button
             className={section === key ? 'selected' : ''}
@@ -295,7 +307,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
           >{tab}</button>;
         })}
         <span className="reviews-tab-spacer" />
-        {section !== 'local-branches' && <Select
+        {!designPreview && section !== 'local-branches' && <Select
           aria-label="GitHub repository"
           className="reviews-filter-select"
           data={gitHubProjects.map((project) => ({ value: project.id, label: project.name }))}
@@ -320,9 +332,9 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
         <Panel id="queue" className="reviews-pane" minSize={stacked ? '340px' : '220px'}>
           <PanelCard className="reviews-queue" withBorder>
           <PanelHeading className="reviews-panel-heading"
-            title={section === 'pull-requests' ? 'Pull requests' : section === 'issues' ? 'Open issues' : 'Agent runs & local branches'}
+            title={designPreview ? 'Pull Requests (428)' : section === 'pull-requests' ? 'Pull requests' : section === 'issues' ? 'Open issues' : 'Agent runs & local branches'}
             description={section === 'local-branches' ? 'Active requests and isolated agent changes' : selectedProject?.git_remote ?? 'GitHub project data'}
-            actions={<Badge className="reviews-required" variant="light">{section === 'local-branches' ? `${localBranches.length} runs` : `${providerItems.length} items`}</Badge>} />
+            actions={designPreview ? undefined : <Badge className="reviews-required" variant="light">{section === 'local-branches' ? `${localBranches.length} runs` : `${providerItems.length} items`}</Badge>} />
           <div className="reviews-queue-tools">
             <TextInput
               leftSection={<IconSearch size={14} />}
@@ -334,7 +346,10 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
             />
             <IconFilter size={16} />
           </div>
-          <div className="reviews-queue-states">{section === 'local-branches' ? <>
+          <div className="reviews-queue-states">{designPreview ? <>
+              {['All 428', 'In Review 37', 'Changes Req. 12', 'Approved 276', 'Blocked 5', 'Draft 18'].map((filter, index) =>
+                <button className={index === 0 ? 'selected' : ''} disabled key={filter}>{filter}</button>)}
+            </> : section === 'local-branches' ? <>
               <span>All {localBranches.length}</span>
               <span>Succeeded {localBranches.filter((run) => run.status === 'succeeded').length}</span>
               <span>Failed {localBranches.filter((run) => run.status === 'failed').length}</span>
@@ -371,7 +386,9 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
                         }}>
                         <span className="reviews-provider-card-top">
                           <span className="reviews-provider-number">{pullRequest ? <IconGitPullRequest size={13} /> : <IconFileText size={13} />} #{item.number}</span>
-                          <span className="reviews-provider-state">{pullRequest?.draft ? 'Draft' : item.state}</span>
+                          {designPreview && item.number === 4827 && <span className="reviews-preview-category">Feature</span>}
+                          <span className="reviews-provider-state">{designPreview && pullRequest && item.number === 4827
+                            ? 'In Review' : pullRequest?.draft ? 'Draft' : item.state}</span>
                         </span>
                         <strong>{item.title}</strong>
                         <span className="reviews-provider-meta">
@@ -381,6 +398,9 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
                           <span className="reviews-provider-date">{Number.isFinite(updatedAt)
                             ? new Date(updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Date unavailable'}</span>
                         </span>
+                        {designPreview && item.number === 4827 && <span className="reviews-preview-signals">
+                          <i>R 78</i><i>94%</i><i>CI ✓</i><i>Q 3</i>
+                        </span>}
                       </button>;
                     })}
                   </div>
@@ -404,7 +424,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
               ? selected ? `${selected.project_name} · ${selected.agent_name} · ${selected.worker_name}` : 'Agent-run diffs will appear when a worker completes a run.'
               : selectedProviderItem && selectedProject ? `${selectedProject.name} · opened by ${selectedProviderItem.user.login}`
                 : selectedProject?.git_remote ?? 'GitHub items will appear when a repository is selected.'}
-            actions={<Badge className="reviews-required" variant="light">{section === 'local-branches'
+            actions={<Badge className="reviews-required" variant="light">{designPreview ? 'In Review' : section === 'local-branches'
               ? selected?.status ?? 'Waiting for changes' : selectedProviderItem?.state ?? 'No open item'}</Badge>}
           />
           <div className="reviews-stage-row" aria-label="Review pipeline">
@@ -417,7 +437,8 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
                   )}
                 </span>
                 <b>{stage}</b>
-                <small>{index === 0 && selectedPullRequest ? (selectedPullRequest.draft ? 'Draft' : 'Open') : 'Unavailable'}</small>
+                <small>{designPreview ? ['2/3 approved', '94% complete', 'All passed', '8/8 passed', 'Ready'][index]
+                    : index === 0 && selectedPullRequest ? (selectedPullRequest.draft ? 'Draft' : 'Open') : 'Unavailable'}</small>
               </div>
             ))}
           </div>
@@ -460,15 +481,15 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
               {selectedPullRequest && <div className="reviews-github-composer">
                 <Textarea aria-label="GitHub pull request review" placeholder="Leave a review comment or describe the changes needed…"
                   value={providerReviewBody} onChange={(event) => setProviderReviewBody(event.currentTarget.value)}
-                  maxLength={1000} minRows={2} maxRows={3} disabled={providerReview.isPending} />
+                  maxLength={1000} minRows={2} maxRows={3} disabled={designPreview || providerReview.isPending} />
                 <small>GitHub records the review under the configured control-plane token owner.</small>
                 {providerReview.isError && <span className="reviews-action-error" role="alert">{providerReview.error.message}</span>}
                 {providerReviewStatus && <span className="reviews-action-success" role="status">{providerReviewStatus}</span>}
                 <div>
-                  <Button variant="default" disabled={!providerReviewBody.trim() || providerReview.isPending}
+                  <Button variant="default" disabled={designPreview || !providerReviewBody.trim() || providerReview.isPending}
                     onClick={() => selectedProject && providerReview.mutate({ projectID: selectedProject.id,
                       number: selectedPullRequest.number, event: 'COMMENT', body: providerReviewBody.trim() })}>Comment</Button>
-                  <Button color="violet" disabled={!providerReviewBody.trim() || providerReview.isPending}
+                  <Button color="violet" disabled={designPreview || !providerReviewBody.trim() || providerReview.isPending}
                     onClick={() => selectedProject && providerReview.mutate({ projectID: selectedProject.id,
                       number: selectedPullRequest.number, event: 'REQUEST_CHANGES', body: providerReviewBody.trim() })}>
                     Request changes</Button>
@@ -485,7 +506,7 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
               <div className="reviews-provider-detail">
                 {section === 'pull-requests' && selectedPullRequest && <div className="reviews-diff-meta">
                   <span>{selectedPullRequest.head.ref} → {selectedPullRequest.base.ref}</span>
-                  <a href={selectedPullRequest.html_url} target="_blank" rel="noreferrer">Open pull request on GitHub ↗</a>
+                  <a href={designPreview ? undefined : selectedPullRequest.html_url} target={designPreview ? undefined : '_blank'} rel="noreferrer">Open pull request on GitHub ↗</a>
                 </div>}
                 {section === 'issues' && selectedIssue && <div className="reviews-diff-meta">
                   <span>{selectedIssue.labels.map((label) => label.name).join(' · ') || 'No labels'}</span>
@@ -583,16 +604,16 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
           {detailTab === 'code-changes' && section === 'pull-requests' && selectedPullRequest &&
             <div className="reviews-context-panels" aria-label="Additional review context">
             <section className="reviews-context-card">
-              <h4><IconSparkles size={13} /> AI Suggestions</h4>
-              <span>Suggestions are unavailable for this pull request.</span>
+              <h4><IconSparkles size={13} /> AI Suggestions {designPreview && <small>4</small>}</h4>
+              <span>{designPreview ? 'Add schema version to artifact metadata · High impact' : 'Suggestions are unavailable for this pull request.'}</span>
             </section>
             <section className="reviews-context-card">
-              <h4><IconShieldCheck size={13} /> Evidence Artifacts</h4>
-              <span>Artifact data is unavailable.</span>
+              <h4><IconShieldCheck size={13} /> Evidence Artifacts {designPreview && <small>7</small>}</h4>
+              <span>{designPreview ? 'evidence.json · 412 KB · Verified' : 'Artifact data is unavailable.'}</span>
             </section>
             <section className="reviews-context-card">
-              <h4><IconChecks size={13} /> Review Checklist</h4>
-              <span>Provider check data is unavailable.</span>
+              <h4><IconChecks size={13} /> Review Checklist {designPreview && <small>12/12</small>}</h4>
+              <span>{designPreview ? 'Code follows standards · Tests added · Evidence attached' : 'Provider check data is unavailable.'}</span>
             </section>
           </div>}
           </PanelCard>
@@ -608,20 +629,22 @@ export function ReviewsPage({ runs, projects }: { runs: AgentRun[]; projects: Pr
             ? selected?.output ?? selected?.error ?? 'Select a local branch to review its agent run.'
             : selectedProviderItem?.body ?? 'Select a GitHub item to review its description.'} />
           <div className="reviews-summary-stats">
-            <div><span>Files changed</span><b>{section === 'local-branches' && diffStats ? `${diffStats.files}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
-            <div><span>Lines added</span><b>{section === 'local-branches' && diffStats ? `+${diffStats.added}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
-            <div><span>Lines removed</span><b>{section === 'local-branches' && diffStats ? `−${diffStats.removed}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
-            <div><span>Evidence completeness</span><b>Unavailable</b></div>
+            <div><span>Files changed</span><b>{designPreview ? '6' : section === 'local-branches' && diffStats ? `${diffStats.files}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
+            <div><span>Lines added</span><b>{designPreview ? '+427' : section === 'local-branches' && diffStats ? `+${diffStats.added}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
+            <div><span>{designPreview ? 'Risk score' : 'Lines removed'}</span><b>{designPreview ? '78/100 · High' : section === 'local-branches' && diffStats ? `−${diffStats.removed}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
+            <div><span>Evidence completeness</span><b>{designPreview ? '94%' : 'Unavailable'}</b></div>
           </div>
-          <div className="reviews-checks-heading"><b>Required checks</b><span>Unavailable</span></div>
-          <div className="reviews-check-empty">
-            <IconLock size={16} /> Checks and policy results need provider data.
+          <div className="reviews-checks-heading"><b>Required checks</b><span>{designPreview ? '8/8 All Passed' : 'Unavailable'}</span></div>
+          <div className={`reviews-check-empty${designPreview ? ' reviews-preview-checks' : ''}`}>
+            {designPreview ? <><span>✓ CI / Build (8 jobs) <b>3m 41s</b></span><span>✓ Tests (1,284) <b>4m 07s</b></span>
+              <span>✓ Coverage (87.6% ≥ 85%) <b>28s</b></span><span>✓ Security Scan (SAST/SCA) <b>1m 32s</b></span>
+              <span>✓ Evidence Completeness (≥ 90%) <b>94%</b></span></> : <><IconLock size={16} /> Checks and policy results need provider data.</>}
           </div>
           <div className="reviews-summary-actions">
             <Button variant="default" disabled fullWidth><IconDownload size={14} /> Export evidence</Button>
             <div className="reviews-summary-review-actions">
               <Button color="green" disabled>Approve</Button>
-              {selectedPullRequest && <Button color="violet" onClick={() => setDetailTab('conversations')}>Request changes</Button>}
+              {selectedPullRequest && <Button color="violet" disabled={designPreview} onClick={() => setDetailTab('conversations')}>Request changes</Button>}
               {selectedIssue && <Button variant="default" onClick={() => setDetailTab('conversations')}>Add comment</Button>}
             </div>
           </div>

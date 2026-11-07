@@ -1,0 +1,65 @@
+.reviews-design-preview .reviews-provider-card { min-height: 105px; padding: 10px; }
+.reviews-preview-category {
+  padding: 2px 7px;
+  border: 1px solid #5d4385;
+  border-radius: 9px;
+  color: #d3b6ff;
+  background: #281d3a;
+  font-size: 9px;
+}
+.reviews-preview-signals { display: flex; gap: 5px; }
+.reviews-preview-signals i {
+  padding: 2px 6px;
+  border-radius: 9px;
+  color: #70dfae;
+  background: #173528;
+  font-size: 9px;
+  font-style: normal;
+}
+.reviews-design-preview .reviews-stage small { color: #55dfa9; }
+.reviews-design-preview .reviews-stage-icon { border-color: #1f7e60; color: #55dfa9; background: #123428; }
+.reviews-design-preview .reviews-preview-checks {
+  display: grid;
+  min-height: 0;
+  gap: 4px;
+  padding: 7px 10px;
+  color: #56dfa8;
+}
+.reviews-preview-checks span { display: flex; justify-content: space-between; gap: 5px; font-size: 9px; }
+.reviews-preview-checks b { color: #a59caf; font-weight: 500; }
+.reviews-design-preview .reviews-summary-stats b { color: #ef635f; }
+.reviews-design-preview .reviews-summary-stats > div:nth-child(4) b { color: #56dfa8; }
+.reviews-design-preview .reviews-summary-actions .mantine-Button-root { opacity: 1; }
+.reviews-design-preview .reviews-summary-copy { max-height: 74px; overflow: hidden; }
+.reviews-design-preview .reviews-summary-copy p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.reviews-design-preview .reviews-context-panels { flex-basis: 126px; }
+.reviews-design-preview .reviews-context-card h4 small {
+  margin-left: auto;
+  padding: 1px 5px;
+  border-radius: 8px;
+  color: #d5c1f4;
+  background: #30233e;
+  font-size: 8px;
+}
+.reviews-design-preview .reviews-summary-review-actions .mantine-Button-root:disabled,
+.reviews-design-preview .reviews-merge-button:disabled {
+  opacity: 1;
+}
+.reviews-design-preview .reviews-summary-review-actions .mantine-Button-root:first-child {
+  border-color: #149c6a;
+  color: #d1ffeb;
+  background: linear-gradient(110deg, #06b982, #168458);
+}
+.reviews-design-preview .reviews-summary-review-actions .mantine-Button-root:nth-child(2) {
+  border-color: #a45be1;
+  color: #fff;
+  background: linear-gradient(110deg, #8b49d5, #65299e);
+}
+.reviews-design-preview .reviews-merge-button:disabled {
+  border-color: #a058dc;
+  color: #fff;
+  background: linear-gradient(110deg, #8f4bd5, #61269c);
+}
+@media (max-height: 800px) {
+  .reviews-design-preview .reviews-summary { overflow-y: auto; }
+}
