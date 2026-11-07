@@ -30,9 +30,24 @@
 .reviews-design-preview .reviews-summary-stats b { color: #ef635f; }
 .reviews-design-preview .reviews-summary-stats > div:nth-child(4) b { color: #56dfa8; }
 .reviews-design-preview .reviews-summary-actions .mantine-Button-root { opacity: 1; }
-.reviews-design-preview .reviews-summary-copy { max-height: 74px; overflow: hidden; }
+.reviews-design-preview .reviews-summary-copy { max-height: 66px; margin: 7px 9px; overflow: hidden; }
+.reviews-design-preview .reviews-summary-stats { gap: 4px; padding: 0 8px 6px; }
+.reviews-design-preview .reviews-summary-stats > div { min-height: 40px; padding: 5px; }
+.reviews-design-preview .reviews-summary-stats b { margin-top: 3px; }
+.reviews-design-preview .reviews-checks-heading,
+.reviews-design-preview .reviews-governance-heading,
+.reviews-design-preview .reviews-governance-row { flex-shrink: 0; padding: 7px; }
+.reviews-design-preview .reviews-preview-checks { flex-shrink: 0; gap: 3px; padding: 5px 8px; }
+.reviews-design-preview .reviews-summary-actions { flex-shrink: 0; gap: 5px; padding: 0 8px 6px; }
+.reviews-design-preview .reviews-summary-actions > .mantine-Button-root { min-height: 26px; height: 26px; }
+.reviews-design-preview .reviews-summary-review-actions .mantine-Button-root { min-height: 27px; height: 27px; }
+.reviews-design-preview .reviews-merge-button { flex-shrink: 0; }
 .reviews-design-preview .reviews-summary-copy p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
-.reviews-design-preview .reviews-context-panels { flex-basis: 126px; }
+.reviews-design-preview .reviews-context-panels { flex-basis: 226px; grid-template-rows: 1.2fr 1fr; }
+.reviews-design-preview .reviews-context-secondary { gap: 4px; }
+.reviews-design-preview .reviews-context-secondary span { font-size: 8px; }
+.reviews-design-preview .reviews-governance-row .mantine-Switch-root { margin-left: auto; opacity: 1; }
+.reviews-design-preview .reviews-governance-row .mantine-Switch-input:checked + .mantine-Switch-track { background: #15bd88; border-color: #15bd88; }
 .reviews-design-preview .reviews-context-card h4 small {
   margin-left: auto;
   padding: 1px 5px;

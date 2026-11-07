@@ -1,7 +1,7 @@
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, colorSchemeDark, themeQuartz } from 'ag-grid-community';
 import type { ColDef } from 'ag-grid-community';
-import { Badge, Button, Select, Textarea, TextInput } from '@mantine/core';
+import { Badge, Button, Select, Switch, Textarea, TextInput } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -12,7 +12,7 @@ import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { Project } from './projects';
 import {
   IconChecks, IconChevronDown, IconClockHour4, IconCode, IconDownload, IconFileText, IconFilter,
-  IconGitMerge, IconGitPullRequest, IconLock, IconMessageCircle, IconSearch, IconShieldCheck, IconSparkles,
+  IconGitMerge, IconGitPullRequest, IconLock, IconMessageCircle, IconSearch, IconShieldCheck, IconSparkles, IconUserCheck,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
 import { PanelHeading } from './PanelHeading';
@@ -69,7 +69,10 @@ const detailTabs = [
   ['code-changes', 'Code changes', IconFileText], ['conversations', 'Conversations', IconMessageCircle],
   ['evidence', 'Evidence', IconShieldCheck], ['checklist', 'Checklist', IconChecks],
 ] as const;
-type DetailTab = typeof detailTabs[number][0];
+const previewDetailTabs = [
+  ['ai-suggestions', 'AI Suggestions', IconSparkles], ['approvals', 'Approvals', IconUserCheck],
+] as const;
+type DetailTab = typeof detailTabs[number][0] | typeof previewDetailTabs[number][0];
 
 const diffSchema = z.object({ run_id: z.string(), diff: z.string(), truncated: z.boolean() });
 const pullRequestDiffSchema = z.object({ diff: z.string().max(1 << 20) });
@@ -324,7 +327,7 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
       <Group
         className={`reviews-workspace${stacked ? ' is-stacked' : ''}`}
         orientation={stacked ? 'vertical' : 'horizontal'}
-        style={{ height: stacked ? '1090px' : 'calc(100vh - 239px)' }}
+        style={{ height: stacked ? '1090px' : designPreview ? 'calc(100vh - 290px)' : 'calc(100vh - 239px)' }}
         defaultLayout={stacked
           ? { queue: 33, detail: 39, summary: 28 }
           : { queue: 24, detail: 52, summary: 24 }}
@@ -443,7 +446,7 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             ))}
           </div>
           <div className="reviews-detail-tabs" role="group" aria-label="Review detail sections">
-            {detailTabs.map(([value, label, Icon]) => <button key={value} type="button"
+            {(designPreview ? [...detailTabs, ...previewDetailTabs] : detailTabs).map(([value, label, Icon]) => <button key={value} type="button"
               aria-pressed={detailTab === value} onClick={() => setDetailTab(value)}>
               <Icon size={14} /> {label}
             </button>)}
@@ -495,12 +498,16 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
                     Request changes</Button>
                 </div>
               </div>}
-            </div> : <div role="status">
-              {detailTab === 'evidence' ? <IconShieldCheck size={24} /> : <IconChecks size={24} />}
-              <b>{detailTab === 'evidence' ? 'Evidence unavailable' : 'Required checks unavailable'}</b>
-              <span>{detailTab === 'evidence' ? 'CI checks and evidence artifacts are not synchronized for this item yet.'
-                : 'The control plane does not currently load GitHub checks or policy results.'}</span>
-            </div>}
+            </div> : detailTab === 'ai-suggestions' ? <div role="status"><IconSparkles size={24} />
+              <b>AI Suggestions · 4</b><span>Add schema version to artifact metadata · High impact</span></div>
+              : detailTab === 'approvals' ? <div role="status"><IconUserCheck size={24} />
+                <b>Approvals · 2 of 3 approved</b><span>Jordan Kim and Riley Torres approved. Casey Morgan is pending.</span></div>
+                : <div role="status">
+                  {detailTab === 'evidence' ? <IconShieldCheck size={24} /> : <IconChecks size={24} />}
+                  <b>{detailTab === 'evidence' ? 'Evidence unavailable' : 'Required checks unavailable'}</b>
+                  <span>{detailTab === 'evidence' ? 'CI checks and evidence artifacts are not synchronized for this item yet.'
+                    : 'The control plane does not currently load GitHub checks or policy results.'}</span>
+                </div>}
           </div> : <div className="reviews-change-empty">
             {section !== 'local-branches' && selectedProviderItem ? (
               <div className="reviews-provider-detail">
@@ -615,6 +622,21 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
               <h4><IconChecks size={13} /> Review Checklist {designPreview && <small>12/12</small>}</h4>
               <span>{designPreview ? 'Code follows standards · Tests added · Evidence attached' : 'Provider check data is unavailable.'}</span>
             </section>
+            {designPreview && <>
+              <section className="reviews-context-card reviews-context-secondary">
+                <h4><IconUserCheck size={13} /> Approvals <small>2/3</small></h4>
+                <span>Jordan Kim · Approved · 1h ago</span><span>Riley Torres · Approved · 47m ago</span>
+                <span>Casey Morgan · Pending</span>
+              </section>
+              <section className="reviews-context-card reviews-context-secondary">
+                <h4><IconChecks size={13} /> Policy Gate Status <small>5/5</small></h4>
+                <span>✓ Security　✓ Quality　✓ Compliance</span><span>✓ Risk　✓ Evidence</span>
+              </section>
+              <section className="reviews-context-card reviews-context-secondary">
+                <h4><IconShieldCheck size={13} /> Trusted-main Readiness</h4>
+                <span>Ready to Merge</span><span>All governance checks passed.</span>
+              </section>
+            </>}
           </div>}
           </PanelCard>
         </Panel>
@@ -649,9 +671,14 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             </div>
           </div>
           <div className="reviews-governance-heading"><IconGitMerge size={15} /><b>Merge Governance</b></div>
-          <div className="reviews-governance-row"><span>Target branch</span><b>{section === 'local-branches'
+          {designPreview && <div className="reviews-governance-row"><span>Merge strategy</span><b>Squash &amp; Merge</b></div>}
+          <div className="reviews-governance-row"><span>Target branch</span><b>{designPreview ? 'trusted-main' : section === 'local-branches'
             ? selected?.base_branch || 'Unavailable' : selectedPullRequest?.base.ref || 'Unavailable'}</b></div>
-          <Button className="reviews-merge-button" disabled fullWidth>Merge to protected branch</Button>
+          {designPreview && <>
+            <div className="reviews-governance-row"><span>Policy</span><b>Core Product v2.4</b></div>
+            <div className="reviews-governance-row"><span>Auto-merge (when ready)</span><Switch checked disabled size="xs" aria-label="Auto-merge when ready" /></div>
+          </>}
+          <Button className="reviews-merge-button" disabled fullWidth>{designPreview ? 'Merge to Trusted-main' : 'Merge to protected branch'}</Button>
           </PanelCard>
         </Panel>
       </Group>
