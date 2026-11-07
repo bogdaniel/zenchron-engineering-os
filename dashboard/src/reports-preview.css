@@ -1,0 +1,24 @@
+.reports-preview-badge {
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  z-index: 1;
+  padding: 2px 6px;
+  border: 1px solid #7651a8;
+  border-radius: 8px;
+  color: #d9bdff;
+  background: #191728;
+  font-size: 8px;
+  line-height: 1.2;
+}
+.reports-preview-value { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.reports-preview-value small { color: #40d9a3; font-size: 9px; font-weight: 600; }
+.reports-preview-value small::before { content: '↑ '; }
+.reports-metric.cycle-time .reports-preview-value small::before,
+.reports-metric.ci-duration .reports-preview-value small::before,
+.reports-metric.review-latency .reports-preview-value small::before { content: '↓ '; }
+.reports-scope-bar { position: relative; }
+.reports-outcomes-preview .report-chart-label::after { content: 'Work Items'; display: block; color: #9d97ae; font-size: 9px; }
+.reports-design-preview .reports-panel .recharts-cartesian-grid line { stroke: #302c3e; }
+.reports-design-preview .reports-panel .recharts-cartesian-axis-tick-value { fill: #9d97ae; }
+.reports-design-preview .report-summary-total td { color: #42dca8; font-weight: 650; }

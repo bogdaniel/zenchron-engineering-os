@@ -1,5 +1,5 @@
 import { Button } from '@mantine/core';
-import { IconDownload, IconFileTypeCsv } from '@tabler/icons-react';
+import { IconDownload, IconFileTypeCsv, IconFileTypePdf, IconFileTypeXls } from '@tabler/icons-react';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
 
@@ -17,9 +17,11 @@ export function DownloadableReports({ reports }: { reports: DownloadableReport[]
       <div className="downloadable-report-list">
         {reports.map((report) => (
           <div className="downloadable-report" key={report.name}>
-            <span className={`downloadable-report-format ${report.download ? '' : 'unavailable'}`}
+            <span className={`downloadable-report-format format-${report.format.toLowerCase()}${report.download ? '' : ' unavailable'}`}
               role="img" aria-label={`${report.format} file`}>
-              <IconFileTypeCsv size={22} aria-hidden="true" />
+              {report.format === 'PDF' ? <IconFileTypePdf size={22} aria-hidden="true" />
+                : report.format === 'XLSX' ? <IconFileTypeXls size={22} aria-hidden="true" />
+                  : <IconFileTypeCsv size={22} aria-hidden="true" />}
             </span>
             <div className="downloadable-report-copy"><b>{report.name}</b><span>{report.detail}</span></div>
             <Button className="downloadable-report-button" variant="subtle" disabled={!report.download}

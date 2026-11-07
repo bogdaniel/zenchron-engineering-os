@@ -9,11 +9,15 @@ export function ChartLegend({ items }: { items: { tone: string; label: string }[
   </div>;
 }
 
-export function ReportOutcomeLegend({ items }: { items: { name: string; value: number; color: string }[] }) {
-  return <div className="report-outcome-legend" role="group" aria-label="Pull request outcomes legend">
+export function ReportOutcomeLegend({ items, valueSuffix = '', label = 'Pull request outcomes legend' }: {
+  items: { name: string; value: number; color: string }[];
+  valueSuffix?: string;
+  label?: string;
+}) {
+  return <div className="report-outcome-legend" role="group" aria-label={label}>
     {items.map(({ name, value, color }) => <div key={name}>
       <i className="report-outcome-dot" style={{ backgroundColor: color }} />
-      <span>{name}</span><b>{value}</b>
+      <span>{name}</span><b>{value}{valueSuffix}</b>
     </div>)}
   </div>;
 }

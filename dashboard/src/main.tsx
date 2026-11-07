@@ -79,7 +79,8 @@ function App() {
   const objectivePreview = activePage === 'objectives' && mockPreview;
   const workflowPreview = activePage === 'workflows' && mockPreview;
   const reviewPreview = activePage === 'reviews' && mockPreview;
-  const previewPage = designPreview || objectivePreview || workflowPreview || reviewPreview;
+  const reportPreview = activePage === 'reports' && mockPreview;
+  const previewPage = designPreview || objectivePreview || workflowPreview || reviewPreview || reportPreview;
   useEffect(() => {
     const syncPage = () => setActivePage(pageFromHash());
     window.addEventListener('popstate', syncPage);
@@ -161,7 +162,7 @@ function App() {
   </div>;
   return (
     <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
-      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview || workflowPreview || reviewPreview ? ' sample-data' : ''}`} id="overview">
+      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview || workflowPreview || reviewPreview || reportPreview ? ' sample-data' : ''}`} id="overview">
         <aside className="sidebar">
           <a className="brand" href="#overview" aria-label="Zenchron Engineering home">
             <span className="brand-mark" aria-hidden="true" />
@@ -270,7 +271,7 @@ function App() {
               gitHubProjectCount={projects.data?.filter((project) => project.git_remote.startsWith('github.com/')).length ?? 0}
             />
           ) : activePage === 'reports' ? (
-            <ReportsPage
+            <ReportsPage designPreview={reportPreview}
               apiOnline={health.isSuccess}
               objectives={objectives.data}
               projects={projects.data}

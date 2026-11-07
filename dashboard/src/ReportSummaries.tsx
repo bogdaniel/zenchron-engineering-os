@@ -21,17 +21,27 @@ export interface ProductDeliverySummary extends DeliveryMetrics {
   runs: number | undefined;
 }
 
+interface WorkspaceDeliverySummary {
+  name: string;
+  workItems: number;
+  deliveryVelocity: number | undefined;
+  cycleTime: number | undefined;
+  acceptanceRate: number | undefined;
+  autonomousCompletion: number | undefined;
+}
+
 function show(value: number | undefined, unit = ''): ReactNode {
   return value === undefined
     ? <abbr className="report-unavailable" aria-label="Unavailable" title="Unavailable">N/A</abbr>
     : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${unit}`;
 }
 
-export function ProductSummaryPanel({ rows, loading, error, checkoutCount }: {
+export function ProductSummaryPanel({ rows, loading, error, checkoutCount, designPreview = false }: {
   rows: ProductDeliverySummary[];
   loading: boolean;
   error: boolean;
   checkoutCount: number | undefined;
+  designPreview?: boolean;
 }) {
   return <PanelCard className="reports-panel product-summary-panel" withBorder>
     <PanelHeading className="reports-panel-heading" icon={<IconFolders size={15} />} title="Product summary"
@@ -44,13 +54,13 @@ export function ProductSummaryPanel({ rows, loading, error, checkoutCount }: {
               <Table.Th>Product</Table.Th><Table.Th>Velocity</Table.Th><Table.Th>Cycle time</Table.Th>
               <Table.Th>CI duration</Table.Th><Table.Th>Accept rate</Table.Th><Table.Th>Auto. comp.</Table.Th>
             </Table.Tr></Table.Thead>
-            <Table.Tbody>{rows.map((row) => <Table.Tr key={row.id}>
+            <Table.Tbody>{rows.map((row) => <Table.Tr className={row.id === 'total' ? 'report-summary-total' : undefined} key={row.id}>
               <Table.Td>{row.name}</Table.Td>
               <Table.Td>{show(row.deliveryVelocity, ' / wk')}</Table.Td>
               <Table.Td>{show(row.cycleTime, ' h')}</Table.Td>
               <Table.Td>{show(row.ciDuration, ' min')}</Table.Td>
               <Table.Td>{show(row.acceptanceRate, '%')}</Table.Td>
-              <Table.Td title="Agent runs do not record autonomous-completion evidence.">
+              <Table.Td title={designPreview ? undefined : 'Agent runs do not record autonomous-completion evidence.'}>
                 {show(row.autonomousCompletion, '%')}
               </Table.Td>
             </Table.Tr>)}</Table.Tbody>
@@ -60,9 +70,11 @@ export function ProductSummaryPanel({ rows, loading, error, checkoutCount }: {
   </PanelCard>;
 }
 
-export function WorkspaceSummaryPanel({ workItems, metrics }: {
+export function WorkspaceSummaryPanel({ workItems, metrics, rows, designPreview = false }: {
   workItems: number | undefined;
   metrics: DeliveryMetrics;
+  rows?: WorkspaceDeliverySummary[];
+  designPreview?: boolean;
 }) {
   return <PanelCard className="reports-panel inventory-panel" withBorder>
     <PanelHeading className="reports-panel-heading" icon={<IconStack size={15} />} title="Workspace summary"
@@ -73,18 +85,19 @@ export function WorkspaceSummaryPanel({ workItems, metrics }: {
           <Table.Th>Workspace</Table.Th><Table.Th>Work items</Table.Th><Table.Th>Velocity</Table.Th>
           <Table.Th>Cycle time</Table.Th><Table.Th>Accept rate</Table.Th><Table.Th>Auto. comp.</Table.Th>
         </Table.Tr></Table.Thead>
-        <Table.Tbody><Table.Tr>
+        <Table.Tbody>{rows?.length ? rows.map((row) => <Table.Tr className={row.name === 'Total / Avg.' ? 'report-summary-total' : undefined} key={row.name}>
+          <Table.Td>{row.name}</Table.Td><Table.Td>{row.workItems.toLocaleString()}</Table.Td>
+          <Table.Td>{show(row.deliveryVelocity, ' / wk')}</Table.Td><Table.Td>{show(row.cycleTime, ' h')}</Table.Td>
+          <Table.Td>{show(row.acceptanceRate, '%')}</Table.Td><Table.Td>{show(row.autonomousCompletion, '%')}</Table.Td>
+        </Table.Tr>) : <Table.Tr>
           <Table.Td>Local workspace</Table.Td><Table.Td>{workItems ?? 'Unavailable'}</Table.Td>
-          <Table.Td>{show(metrics.deliveryVelocity, ' / wk')}</Table.Td>
-          <Table.Td>{show(metrics.cycleTime, ' h')}</Table.Td>
+          <Table.Td>{show(metrics.deliveryVelocity, ' / wk')}</Table.Td><Table.Td>{show(metrics.cycleTime, ' h')}</Table.Td>
           <Table.Td>{show(metrics.acceptanceRate, '%')}</Table.Td>
-          <Table.Td title="Agent runs do not record autonomous-completion evidence.">
-            {show(metrics.autonomousCompletion, '%')}
-          </Table.Td>
-        </Table.Tr></Table.Tbody>
+          <Table.Td title="Agent runs do not record autonomous-completion evidence.">{show(metrics.autonomousCompletion, '%')}</Table.Td>
+        </Table.Tr>}</Table.Tbody>
       </Table>
     </div>
-    <p className="inventory-footnote">Work items count objectives. Delivery metrics use GitHub history; autonomy requires
-      run evidence.</p>
+    {!designPreview && <p className="inventory-footnote">Work items count objectives. Delivery metrics use GitHub history; autonomy requires
+      run evidence.</p>}
   </PanelCard>;
 }

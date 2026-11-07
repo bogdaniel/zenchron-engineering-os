@@ -170,7 +170,10 @@
   background: linear-gradient(145deg, #1a3847, #142633);
 }
 .downloadable-report-format.unavailable { border-color: #403b4b; color: #8f899f; background: #24222d; }
+.downloadable-report-format.format-pdf { border-color: #813e51; color: #ff9b9b; background: linear-gradient(145deg, #482532, #291a23); }
+.downloadable-report-format.format-xlsx { border-color: #326d54; color: #70dc9e; background: linear-gradient(145deg, #1b4533, #142b23); }
 .downloadable-report-format svg { display: block; }
+.report-summary-total td { border-top: 1px solid #403a51; color: #42dca8; font-weight: 650; }
 .downloadable-report-copy { display: grid; min-width: 0; gap: 1px; }
 .downloadable-report-copy b {
   color: #e4deed;
