@@ -27,10 +27,12 @@ import { PanelHeading } from './PanelHeading';
 import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
 import './workspace.css';
+import { WorkspaceDesignPreview } from './WorkspaceDesignPreview';
 
 type WorkspaceTab = 'overview' | 'objectives' | 'repositories' | 'files' | 'decisions' | 'templates';
 
 interface WorkspacePageProps {
+  designPreview?: boolean;
   projects: Project[] | undefined;
   objectives: Objective[] | undefined;
   projectsLoading: boolean;
@@ -60,7 +62,12 @@ async function loadAgents() {
   return agentsSchema.parse(await response.json());
 }
 
-export function WorkspacePage({
+export function WorkspacePage(props: WorkspacePageProps) {
+  if (props.designPreview) return <WorkspaceDesignPreview />;
+  return <LiveWorkspacePage {...props} />;
+}
+
+function LiveWorkspacePage({
   projects,
   objectives,
   projectsLoading,

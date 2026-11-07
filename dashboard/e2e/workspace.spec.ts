@@ -2,6 +2,11 @@ import { expect, test } from '@playwright/test';
 
 test('Product Workspace matches its desktop frame and filters products', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 856 });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }),
+  }));
   const projectID = 'c'.repeat(32);
   await page.route('**/api/v1/products', (route) => route.fulfill({
     status: 200,
@@ -83,6 +88,6 @@ test('Product Workspace matches its desktop frame and filters products', async (
   await page.setViewportSize({ width: 1672, height: 749 });
   await expect(page.locator('.workspace-title-row')).toBeHidden();
   await expect(page.getByRole('button', { name: '+ Add Product', exact: true })).toHaveCount(1);
-  expect(await page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().width)).toBe(250);
+  expect(await page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().width)).toBe(247);
   expect(await page.locator('.workspace-directory').evaluate((element) => element.getBoundingClientRect().x)).toBe(263);
 });

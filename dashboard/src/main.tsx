@@ -77,11 +77,12 @@ function App() {
   const mockPreview = localReviewHost && previewMode === 'mock';
   const designPreview = activePage === 'overview' && (mockPreview || (localReviewHost && !loginPreview && previewMode !== 'live'));
   const objectivePreview = activePage === 'objectives' && mockPreview;
+  const workspacePreview = activePage === 'workspace' && mockPreview;
   const workflowPreview = activePage === 'workflows' && mockPreview;
   const reviewPreview = activePage === 'reviews' && mockPreview;
   const reportPreview = activePage === 'reports' && mockPreview;
   const integrationPreview = activePage === 'integrations' && mockPreview;
-  const previewPage = designPreview || objectivePreview || workflowPreview || reviewPreview || reportPreview || integrationPreview;
+  const previewPage = designPreview || objectivePreview || workflowPreview || reviewPreview || reportPreview || integrationPreview || workspacePreview;
   useEffect(() => {
     const syncPage = () => setActivePage(pageFromHash());
     window.addEventListener('popstate', syncPage);
@@ -163,7 +164,7 @@ function App() {
   </div>;
   return (
     <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
-      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview || workflowPreview || reviewPreview || reportPreview || integrationPreview ? ' sample-data' : ''}`} id="overview">
+      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview || workflowPreview || reviewPreview || reportPreview || integrationPreview || workspacePreview ? ' sample-data' : ''}`} id="overview">
         <aside className="sidebar">
           <a className="brand" href="#overview" aria-label="Zenchron Engineering home">
             <span className="brand-mark" aria-hidden="true" />
@@ -254,6 +255,7 @@ function App() {
             <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} />
           ) : activePage === 'workspace' ? (
             <WorkspacePage
+              designPreview={workspacePreview}
               projects={projects.data}
               objectives={objectives.data}
               projectsLoading={projects.isLoading}

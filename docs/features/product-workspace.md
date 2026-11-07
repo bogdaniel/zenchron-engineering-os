@@ -6,6 +6,10 @@ Search filters products by name; creating a workspace uses the existing product 
 assigned to products by stable ID; reusable workflow and agent definitions remain workspace-wide. Files, decisions,
 stakeholders, and release streams remain unavailable without their source services.
 
+The local `?preview=mock#workspace` route renders the supplied Product Workspace overview in the existing dashboard.
+Its product list, roadmap, objective progress, connected services, people, releases, decisions, and delivery metrics are
+illustrative and read only; preview mode makes no protected product, objective, workflow, agent, or repository requests.
+
 ## Feature diagram
 
 ```mermaid
@@ -28,6 +32,8 @@ flowchart LR
     Agents --> Templates[Reusable agent profiles]
     Missing[Files, decisions, stakeholders,<br/>and release streams: unavailable]
     Browser --> Missing
+    Preview[Local ?preview=mock#workspace] -->|Static, read-only fixture| Mock[Product Workspace mock overview]
+    Mock --> MockData[Roadmap · objectives · repositories · workflows<br/>files · stakeholders · releases · decisions · metrics]
 ```
 
 ## Data boundaries
@@ -56,4 +62,10 @@ the product directory and objective roadmap using isolated API fixtures, then ex
 ```sh
 go test ./cmd/zenchron -run 'TestProducts|TestPersistentMuxRestoresObjectivesAndWorkflows'
 cd dashboard && npm run test:e2e -- e2e/workspace.spec.ts
+```
+
+The mock overview has its own read-only route check:
+
+```sh
+cd dashboard && npm run test:e2e -- e2e/workspace-preview.spec.ts
 ```
