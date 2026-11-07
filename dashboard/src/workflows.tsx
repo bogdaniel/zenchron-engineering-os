@@ -22,6 +22,7 @@ import { PanelHeading } from './PanelHeading';
 import { PanelCard } from './PanelCard';
 import './workflows.css';
 import { WorkflowDesignRouterSettings, WorkflowDesignRunPreview } from './WorkflowDesignPreview';
+import { WorkflowMobileRunPreview } from './WorkflowMobileRunPreview';
 
 const nodeTypes = [
   'trigger', 'planner', 'agent-router', 'agent-task', 'code-reviewer', 'test-generator',
@@ -548,34 +549,36 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       <div className="workflow-mobile-overview">
         <WorkflowOverview mobile workflowID={activeWorkflow.id} designPreview={designPreview} />
       </div>
-      <div className="workflow-mobile-summary" aria-label="Workflow execution status">
-        <div><small>Run status</small><b>Not run</b></div>
-        <div><small>Components</small><b>{activeWorkflow.nodes.length}</b></div>
-        <div><small>Connections</small><b>{activeWorkflow.edges.length}</b></div>
-        <p>Runner not connected. Saved graph is ready for a future run.</p>
-      </div>
-      <div className="workflow-mobile-details">
-        <section aria-label="Task progress">
-          <PanelCard className="workflow-mobile-detail-panel">
-            <PanelHeading icon={<IconChecklist size={16} />} title="Task progress" />
-            <div className="workflow-mobile-task-list">
-              {mobileStages.map((stage) => <div className="workflow-mobile-task-row" key={stage.id}>
-                <span>{stage.data.label}</span><Badge color="gray">Not run</Badge>
-              </div>)}
-            </div>
-          </PanelCard>
-        </section>
-        <section aria-label="Approvals">
-          <PanelCard className="workflow-mobile-detail-panel">
-            <PanelHeading icon={<IconUserCheck size={16} />} title="Approvals" />
-            <div className="workflow-mobile-approval-state">
-              <span>{approvalRequired ? 'Human approval' : 'No approval step configured'}</span>
-              {approvalRequired && <Badge color="gray">Not requested</Badge>}
-            </div>
-            <p>No approval activity is recorded before a workflow run.</p>
-          </PanelCard>
-        </section>
-      </div>
+      {designPreview ? <WorkflowMobileRunPreview /> : <>
+        <div className="workflow-mobile-summary" aria-label="Workflow execution status">
+          <div><small>Run status</small><b>Not run</b></div>
+          <div><small>Components</small><b>{activeWorkflow.nodes.length}</b></div>
+          <div><small>Connections</small><b>{activeWorkflow.edges.length}</b></div>
+          <p>Runner not connected. Saved graph is ready for a future run.</p>
+        </div>
+        <div className="workflow-mobile-details">
+          <section aria-label="Task progress">
+            <PanelCard className="workflow-mobile-detail-panel">
+              <PanelHeading icon={<IconChecklist size={16} />} title="Task progress" />
+              <div className="workflow-mobile-task-list">
+                {mobileStages.map((stage) => <div className="workflow-mobile-task-row" key={stage.id}>
+                  <span>{stage.data.label}</span><Badge color="gray">Not run</Badge>
+                </div>)}
+              </div>
+            </PanelCard>
+          </section>
+          <section aria-label="Approvals">
+            <PanelCard className="workflow-mobile-detail-panel">
+              <PanelHeading icon={<IconUserCheck size={16} />} title="Approvals" />
+              <div className="workflow-mobile-approval-state">
+                <span>{approvalRequired ? 'Human approval' : 'No approval step configured'}</span>
+                {approvalRequired && <Badge color="gray">Not requested</Badge>}
+              </div>
+              <p>No approval activity is recorded before a workflow run.</p>
+            </PanelCard>
+          </section>
+        </div>
+      </>}
       <DndContext onDragEnd={handleDragEnd}>
       <div className="workflow-editor">
       <aside className="workflow-palette">

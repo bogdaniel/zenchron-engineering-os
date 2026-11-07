@@ -31,7 +31,8 @@ flowchart LR
     API --> Validate[Validate node types and edge references]
     Validate --> Store[(Versioned JSON snapshot)]
     Store -->|Workflow JSON + version| Dashboard
-    LocalPreview[Local mock route] -->|Static design fixture and labeled sample run| Dashboard
+    LocalPreview[Local mock route] -->|Desktop canvas and router fixture| Dashboard
+    LocalPreview -->|Phone sample run #8821 and approval fixture| MobileRun[Mobile run detail preview]
 ```
 
 ## Behavior
@@ -54,10 +55,9 @@ flowchart LR
 - On desktop the component palette spans the canvas and run-preview rows, while the inspector spans the header through the
   preview. The Overview and phone summaries group configured node types into six readable workflow stages with concise
   action captions; component and connection totals still report the full saved graph. On phones, the compact heading,
-  save action, read-only graph
-  overview, and current run availability match the supplied mobile hierarchy. Configured stages and approval
-  requirements appear with honest empty run states when no execution exists. The editor stays desktop-only, and the UI
-  does not simulate execution state.
+  save action, and read-only graph overview match the supplied mobile hierarchy. Live mode keeps honest empty run states
+  when no execution exists; the local mock route uses a static run fixture for the supplied run-detail design. The
+  editor stays desktop-only.
 - The builder content stays within the supplied desktop frame width while the shared app shell provides the same rail and
   typography as other routes. `PanelHeading` supplies component and node headings; the selected node opens in the
   inspector first, with workflow-level fields available in a collapsed native disclosure below it.
@@ -75,6 +75,8 @@ flowchart LR
 - The local mock route shows the Agent Router's visible rule, budget, retry, and execution-condition panels, plus the
   mock's canvas toolbar and simulated PR #4827 timeline. These sample values are read-only preview content and never
   enter saved workflows.
+- On phones, `/?preview=mock#workflows` shows run #8821 at 78%, its five task states, and two approval states. These
+  sample values are static and do not imply a live run or approval.
 - Run Preview shows the saved graph's actual node and edge counts and states explicitly that no execution is available;
   it does not show simulated statuses, duration, or cost in the authenticated editor.
 - Validate checks that the graph contains a trigger and that edges refer to existing nodes. Saving increments the
@@ -88,6 +90,7 @@ flowchart LR
 go test ./cmd/zenchron -run 'TestWorkflow|TestPersistentMuxRestoresObjectivesAndWorkflows' -count=1
 cd dashboard && npm run test:e2e -- e2e/workflows.spec.ts -g 'workflow graph can be edited'
 cd dashboard && npm run test:e2e -- e2e/workflows.spec.ts -g 'local Workflow Builder mock preview'
+cd dashboard && npm run test:e2e -- e2e/workflow-mobile-preview.spec.ts
 ```
 
 The focused browser check verifies workflow creation, selection, graph switching, editing, saving, palette search and drag

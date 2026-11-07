@@ -1,0 +1,30 @@
+.workflow-mobile-run-preview { display: none; }
+@media (max-width: 760px) {
+  .workflow-mobile-run-preview { display: grid; gap: 7px; margin: 6px 0; }
+  .workflow-mobile-run-preview > .shared-panel-surface { display: grid; gap: 7px; padding: 8px 10px; border: 1px solid #302b48; border-radius: 10px; background: #14131f; }
+  .workflow-mobile-run-preview .shared-panel-heading { display: flex; min-height: 21px; align-items: center; justify-content: space-between; gap: 5px; }
+  .workflow-mobile-run-preview .shared-panel-heading > div { display: flex; min-width: 0; align-items: center; gap: 6px; }
+  .workflow-mobile-run-preview .shared-panel-heading > div > svg { flex: 0 0 auto; color: #c49aff; }
+  .workflow-mobile-run-preview .shared-panel-heading h3 { margin: 0; color: #ece7f4; font-size: 11px; line-height: 1.2; }
+  .workflow-mobile-run-preview .shared-panel-heading p { margin: 2px 0 0; color: #a59eb2; font-size: 8px; }
+  .workflow-mobile-run-preview .shared-panel-heading > span { color: #bdb5cc; font-size: 8px; white-space: nowrap; }
+  .workflow-mobile-running { min-height: 20px; padding: 0 7px; border: 1px solid #1b7456; border-radius: 10px; color: #40dfa5; background: #103b2c; font-size: 8px; }
+  .workflow-mobile-run-progress { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; gap: 8px; }
+  .workflow-mobile-run-progress .mantine-Progress-root { height: 9px; border-radius: 8px; background: #332944; }
+  .workflow-mobile-run-progress .mantine-Progress-section { border-radius: 8px; background: linear-gradient(90deg, #16c999, #a744f1); }
+  .workflow-mobile-run-progress b { color: #e5deee; font-size: 9px; text-align: right; }
+  .workflow-mobile-run-task-list { display: grid; gap: 3px; }
+  .workflow-mobile-run-task { display: grid; grid-template-columns: 17px minmax(0, 1fr) auto; min-height: 20px; align-items: center; gap: 5px; color: #d9d3e1; }
+  .workflow-mobile-run-task svg { color: #aaa4b6; }
+  .workflow-mobile-run-task.complete svg { color: #35d99e; }
+  .workflow-mobile-run-task.active svg { color: #31a4fd; }
+  .workflow-mobile-run-task b { overflow: hidden; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+  .workflow-mobile-run-task small { color: #aaa3b7; font-size: 8px; white-space: nowrap; }
+  .workflow-mobile-approval-row { display: grid; grid-template-columns: 17px minmax(0, 1fr) auto auto; min-height: 27px; align-items: center; gap: 5px; color: #d9d3e1; }
+  .workflow-mobile-approval-row > svg { color: #aaa4b6; }
+  .workflow-mobile-approval-row.approved > svg { color: #35d99e; }
+  .workflow-mobile-approval-row b { overflow: hidden; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+  .workflow-mobile-approval-row small { color: #aaa3b7; font-size: 8px; white-space: nowrap; }
+  .workflow-mobile-approval-row .mantine-Button-root { min-height: 23px; height: 23px; padding: 0 7px; border: 1px solid #9c50e4; border-radius: 6px; color: #fff; background: #602b98; font-size: 8px; }
+  .workflow-mobile-approval-row .mantine-Button-root:disabled { opacity: 1; }
+}

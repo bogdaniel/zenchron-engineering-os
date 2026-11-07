@@ -23,7 +23,7 @@ flowchart LR
     Shell --> TypeScale[Shared CSS type scale<br/>Page title + panel heading tokens]
     Sample[Local ?preview=mock<br/>frontend sample data only] --> Dashboard
     Sample --> ObjectivesPreview[Objectives mock preview<br/>KPI · table · details · milestones]
-    Sample --> WorkflowPreview[Workflow Builder mock preview<br/>Canvas · router settings · sample run timeline]
+    Sample --> WorkflowPreview[Workflow Builder mock preview<br/>Canvas · router settings · sample run timeline · phone run detail]
     Sample --> ReviewsPreview[Reviews mock preview<br/>PR queue · diff · evidence summary]
     Sample --> ReportsPreview[Reports mock preview<br/>metrics · charts · summaries]
     Sample --> IntegrationsPreview[Integrations mock preview<br/>providers · policies · settings]
