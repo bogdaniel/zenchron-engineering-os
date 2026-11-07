@@ -74,7 +74,10 @@ function App() {
   const previewMode = new URLSearchParams(window.location.search).get('preview');
   const loginPreview = previewMode === 'login';
   const localReviewHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-  const designPreview = activePage === 'overview' && (previewMode === 'mock' || (localReviewHost && !loginPreview && previewMode !== 'live'));
+  const mockPreview = localReviewHost && previewMode === 'mock';
+  const designPreview = activePage === 'overview' && (mockPreview || (localReviewHost && !loginPreview && previewMode !== 'live'));
+  const objectivePreview = activePage === 'objectives' && mockPreview;
+  const previewPage = designPreview || objectivePreview;
   useEffect(() => {
     const syncPage = () => setActivePage(pageFromHash());
     window.addEventListener('popstate', syncPage);
@@ -116,7 +119,7 @@ function App() {
       return workersResponse.parse(await response.json());
     },
     refetchInterval: 5_000,
-    enabled: auth.data?.authenticated === true && !designPreview,
+    enabled: auth.data?.authenticated === true && !previewPage,
   });
   const onlineWorkers = workers.data?.filter((worker) => worker.status === 'online') ?? [];
   const projects = useQuery({
@@ -127,10 +130,10 @@ function App() {
       return projectsSchema.parse(await response.json());
     },
     refetchInterval: 5_000,
-    enabled: auth.data?.authenticated === true && !designPreview,
+    enabled: auth.data?.authenticated === true && !previewPage,
   });
   const agentRuns = useQuery({ queryKey: ['agent-runs'], queryFn: loadAgentRuns, refetchInterval: 3_000,
-    enabled: auth.data?.authenticated === true && !designPreview });
+    enabled: auth.data?.authenticated === true && !previewPage });
   const objectives = useQuery({
     queryKey: ['objectives'],
     queryFn: async () => {
@@ -138,12 +141,12 @@ function App() {
       if (!response.ok) throw new Error(`Objective list failed: ${response.status}`);
       return objectivesSchema.parse(await response.json());
     },
-    enabled: auth.data?.authenticated === true && !designPreview,
+    enabled: auth.data?.authenticated === true && !previewPage,
   });
   const unauthorized = (auth.error as (Error & { status?: number }) | null)?.status === 401;
   const sessionUnavailable = auth.isError && !unauthorized;
-  if (auth.isLoading && !designPreview) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
-  if (!designPreview && ((auth.isError && unauthorized) || loginPreview)) return <div className="auth-screen">
+  if (auth.isLoading && !previewPage) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
+  if (!previewPage && ((auth.isError && unauthorized) || loginPreview)) return <div className="auth-screen">
     <div className="auth-card">
       <span className="brand-mark" aria-hidden="true" />
       <div><h1>Zenchron Engineering</h1><p>Sign in to access your engineering control plane.</p></div>
@@ -156,7 +159,7 @@ function App() {
   </div>;
   return (
     <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
-      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : ''}`} id="overview">
+      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview ? ' sample-data' : ''}`} id="overview">
         <aside className="sidebar">
           <a className="brand" href="#overview" aria-label="Zenchron Engineering home">
             <span className="brand-mark" aria-hidden="true" />
@@ -176,7 +179,7 @@ function App() {
             <strong>Zenchron Engineering</strong>
             <p>{designPreview && activePage === 'overview' ? 'The AI-native engineering operating system.'
               : 'Autonomous, verifiable, and aligned engineering.'}</p>
-            {auth.data?.local && !designPreview && <a className="preview-login-link" href="/?preview=login">Preview sign-in</a>}
+            {auth.data?.local && !previewPage && <a className="preview-login-link" href="/?preview=login">Preview sign-in</a>}
           </div>
         </aside>
 
@@ -188,7 +191,7 @@ function App() {
                   title="Reports" titleAdornment={<span>Engineering Operations Analytics</span>}
                   description="Executive analytics for delivery, quality, productivity, and agent operations across products and workspaces." />
               </div> : <PageHeading className="greeting" titleLevel={1}
-                title={designPreview && activePage === 'overview' ? <>Good morning, Alex <span aria-hidden="true">👋</span></>
+                title={previewPage ? <>Good morning, Alex <span aria-hidden="true">👋</span></>
                   : <>Good morning{auth.data?.login ? `, ${auth.data.login}` : ''} <span aria-hidden="true">👋</span></>}
                 description={activePage === 'overview' ? <>
                   <span className="greeting-desktop-copy">Your AI-native engineering operating system for objectives, agents, code, and delivery.</span>
@@ -204,22 +207,22 @@ function App() {
             />
             <div className="top-actions">
               <button className="icon-button notification-button" aria-label="Notifications" disabled><IconBell size={19} />
-                {designPreview && <span className="notification-indicator" aria-hidden="true" />}</button>
-              {!designPreview && auth.data?.authenticated && auth.data.local === false && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
+                {previewPage && <span className="notification-indicator" aria-hidden="true" />}</button>
+              {!previewPage && auth.data?.authenticated && auth.data.local === false && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
                 await fetch('/api/v1/auth/logout', { method: 'POST' });
                 await auth.refetch();
               }}><IconLogout size={17} /></button>}
               <button className="workspace-button" disabled>
-                <span className="workspace-glyph">{designPreview ? <IconStack2 size={15} /> : 'Z'}</span>
-                {designPreview ? 'Core Product' : 'Workspace'} <IconChevronDown size={15} />
+                <span className="workspace-glyph">{previewPage ? <IconStack2 size={15} /> : 'Z'}</span>
+                {previewPage ? 'Core Product' : 'Workspace'} <IconChevronDown size={15} />
               </button>
               <div className="user-chip">
-                {designPreview ? <img className="avatar avatar-image" src="/alex-chen-avatar.jpg" alt="" /> : auth.data?.avatar_url
+                {previewPage ? <img className="avatar avatar-image" src="/alex-chen-avatar.jpg" alt="" /> : auth.data?.avatar_url
                   ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" />
                   : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?'}</span>}
-                <span>{designPreview ? 'Alex Chen' : auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}
-                  <small>{designPreview ? 'Engineering Lead' : auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Preview only'}</small></span>
-                {designPreview && <IconChevronDown className="user-profile-chevron" size={15} aria-hidden="true" />}
+                <span>{previewPage ? 'Alex Chen' : auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}
+                  <small>{previewPage ? 'Engineering Lead' : auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Preview only'}</small></span>
+                {previewPage && <IconChevronDown className="user-profile-chevron" size={15} aria-hidden="true" />}
               </div>
             </div>
           </header>
@@ -230,7 +233,7 @@ function App() {
             <a href="#activity">Alerts</a>
           </nav>}
 
-          {sessionUnavailable ? <section className="session-preview-region" aria-labelledby="session-preview-title"><PanelCard className="session-preview-card" withBorder>
+          {sessionUnavailable && !previewPage ? <section className="session-preview-region" aria-labelledby="session-preview-title"><PanelCard className="session-preview-card" withBorder>
             <IconActivity size={24} aria-hidden="true" />
             <h2 id="session-preview-title">Session check unavailable</h2>
             <p>The dashboard shell is available, but page data stays hidden until your session can be verified.</p>
@@ -251,7 +254,7 @@ function App() {
               objectivesLoading={objectives.isLoading}
               objectivesError={objectives.isError}
             />
-          ) : activePage === 'objectives' ? <ObjectivesPage /> : ['integrations', 'settings'].includes(activePage) ? (
+          ) : activePage === 'objectives' ? <ObjectivesPage sampleData={objectivePreview} /> : ['integrations', 'settings'].includes(activePage) ? (
             <SystemPage
               section={activePage === 'settings' ? 'settings' : 'integrations'}
               apiOnline={health.isSuccess}

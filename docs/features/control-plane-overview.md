@@ -5,8 +5,8 @@ mockup: workspace navigation, status metrics, workflow visualization, recent act
 evidence health, local branch reviews, timeline, and analytics. Control-plane health, workers, discovered projects,
 objectives, workflow definitions, agent-run history, GitHub pull-request counts, and GitHub Actions health are backed
 by current API/provider records. Budget, approvals, evidence, and timeline remain unavailable until their sources
-exist. The local `?preview=mock` URL shows the supplied Overview mock content as clearly labeled sample data; it does
-not fetch protected dashboard data or require a GitHub session.
+exist. The local `?preview=mock` URL shows the supplied Overview or Objectives mock content as sample data; the preview
+does not fetch protected dashboard data or require a GitHub session.
 
 ## Feature diagram
 
@@ -21,6 +21,7 @@ flowchart LR
     Pages --> PanelHeading[Shared PanelHeading<br/>Panel + detail titles · descriptions · actions]
     Shell --> TypeScale[Shared CSS type scale<br/>Page title + panel heading tokens]
     Sample[Local ?preview=mock<br/>frontend sample data only] --> Dashboard
+    Sample --> ObjectivesPreview[Objectives mock preview<br/>KPI · table · details · milestones]
     LiveSources[Existing API and provider queries] -->|Live mode| Dashboard
     Dashboard -->|GET /healthz| Health[Go health endpoint]
     Dashboard --> MobileShortcuts[Mobile shortcuts<br/>Overview · My Work · Alerts]
@@ -72,8 +73,9 @@ flowchart LR
   the available history. It shows an empty state when there are no merged records or the history is incomplete.
 - Budget usage, approval records, evidence artifacts, and delivery timeline do not have backend sources yet. The live
   Overview uses unavailable or empty states instead of sample values.
-- The local `?preview=mock` view uses the same OverviewPage layout as live mode, populated with labeled frontend sample
-  content and the sample avatar. It does not query protected project, objective, agent-run, PR, or CI records.
+- The local `?preview=mock` Overview view uses the same OverviewPage layout as live mode, populated with frontend
+  sample content and the sample avatar. The Objectives route uses the same local-only preview mode with supplied
+  mock fixtures; neither route queries protected records.
 - The overview Reviews card lists only agent runs with captured local diffs and links to the Reviews page for comments
   and request-changes; provider-sourced pull requests and issues appear in their own Reviews queues.
 - Local branch runs and their diffs/comments are available in Reviews alongside provider-sourced open items.

@@ -1,4 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function useLocalSession(page: Page) {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }),
+  }));
+}
 
 const objectives = [
   {
@@ -23,7 +29,41 @@ const objectives = [
   },
 ];
 
+test('local Objectives mock preview renders the supplied screen without protected reads or writes', async ({ page }) => {
+  const objectiveRequests: string[] = [];
+  const productRequests: string[] = [];
+  await page.route('**/api/v1/objectives', (route) => {
+    objectiveRequests.push(route.request().method());
+    return route.fulfill({ status: 401, body: 'authentication required' });
+  });
+  await page.route('**/api/v1/products', (route) => {
+    productRequests.push(route.request().method());
+    return route.fulfill({ status: 401, body: 'authentication required' });
+  });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/?preview=mock#objectives');
+
+  await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
+  await expect(page.locator('.objective-metric').nth(0)).toContainText('Objective Throughput');
+  await expect(page.locator('.objective-metric').nth(0)).toContainText('Completed this quarter');
+  await expect(page.locator('.objective-metric').nth(1)).toContainText('Objective Success Rate86.7%');
+  await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(6);
+  await expect(page.locator('.objective-detail-panel')).toContainText('Launch AI code review v2');
+  await expect(page.locator('.objective-preview-blocker')).toContainText('Model training run (PR #1462)');
+  await expect(page.locator('.objective-milestones-list > div')).toHaveCount(4);
+  expect(objectiveRequests).toEqual([]);
+  expect(productRequests).toEqual([]);
+
+  await page.getByRole('button', { name: 'New Objective' }).click();
+  await page.getByRole('textbox', { name: 'Objective title' }).fill('Preview-only objective');
+  await page.getByRole('button', { name: 'Create objective' }).click();
+  await expect(page.getByText('The mock preview is read-only.')).toBeVisible();
+  expect(objectiveRequests).toEqual([]);
+});
+
 test('empty objective workspace shows a first-objective prompt without stale selection guidance', async ({ page }) => {
+  await useLocalSession(page);
   await page.route('**/api/v1/objectives', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',
   }));
@@ -39,6 +79,7 @@ test('empty objective workspace shows a first-objective prompt without stale sel
 });
 
 test('filtered objective table distinguishes no matches from an empty workspace', async ({ page }) => {
+  await useLocalSession(page);
   await page.route('**/api/v1/objectives', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify(objectives),
   }));
@@ -55,6 +96,7 @@ test('filtered objective table distinguishes no matches from an empty workspace'
 });
 
 test('objective quarter filter and table, cards, and Kanban views share records', async ({ page }) => {
+  await useLocalSession(page);
   await page.route('**/api/v1/objectives', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify(objectives),
   }));

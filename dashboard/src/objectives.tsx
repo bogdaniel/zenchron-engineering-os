@@ -2,16 +2,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, colorSchemeDark, themeQuartz } from 'ag-grid-community';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
+import { AreaChart, Sparkline } from '@mantine/charts';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, Modal, NumberInput, Progress, Select, Text, Textarea, TextInput } from '@mantine/core';
-import { IconAlertTriangle, IconCalendar, IconCircleCheck, IconPlus, IconTarget } from '@tabler/icons-react';
+import { IconAlertTriangle, IconCalendar, IconCircleCheck, IconHierarchy, IconPlus, IconTarget } from '@tabler/icons-react';
 import { z } from 'zod';
 import { loadProducts } from './productEditor';
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
 import { PageHeading } from './PageHeading';
 import { PanelHeading } from './PanelHeading';
+import { objectivePreviewCapacity, objectivePreviewDetails, objectivePreviewRecords } from './objective-preview';
 import './objectives.css';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -28,6 +30,8 @@ const objectiveSchema = z.object({
   due_date: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
+  approval: z.string().optional(),
+  workflow_count: z.number().int().nonnegative().optional(),
 });
 export const objectivesSchema = z.array(objectiveSchema);
 const createSchema = z.object({
@@ -117,7 +121,7 @@ function groupObjectivesByQuarter(items: Objective[]) {
   return [...groups].sort((left, right) => left[1].order - right[1].order);
 }
 
-export function ObjectivesPage() {
+export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean }) {
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -131,11 +135,12 @@ export function ObjectivesPage() {
   const [productFilter, setProductFilter] = useState('all');
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dueQuarter, setDueQuarter] = useState('this');
+  const [dueQuarter, setDueQuarter] = useState(sampleData ? 'all' : 'this');
   const [section, setSection] = useState<'objectives' | 'planning' | 'roadmap'>('objectives');
   const [view, setView] = useState<'kanban' | 'table' | 'cards'>('table');
-  const objectives = useQuery({ queryKey: ['objectives'], queryFn: loadObjectives });
-  const products = useQuery({ queryKey: ['products'], queryFn: loadProducts });
+  const objectives = useQuery({ queryKey: ['objectives'], queryFn: loadObjectives, enabled: !sampleData,
+    initialData: sampleData ? objectivePreviewRecords : undefined });
+  const products = useQuery({ queryKey: ['products'], queryFn: loadProducts, enabled: !sampleData });
   const items = objectives.data ?? [];
   const selected = items.find((item) => item.id === selectedID) ?? items[0];
   useEffect(() => {
@@ -204,15 +209,17 @@ export function ObjectivesPage() {
     },
   });
   const columns = useMemo<ColDef<Objective>[]>(() => [
-    { field: 'title', headerName: 'Objective', flex: 2, minWidth: 150 },
-    { field: 'owner', headerName: 'Owner', flex: 1, minWidth: 80 },
-    { field: 'status', headerName: 'Status', flex: 1, minWidth: 85, cellRenderer: ({ value }: ICellRendererParams<Objective, Objective['status']>) => statusBadge(value ?? 'in_progress') },
-    { field: 'progress', headerName: 'Progress', flex: 1, minWidth: 90, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => <div className="grid-progress"><Progress value={value ?? 0} size="xs" /><span>{value ?? 0}%</span></div> },
+    { field: 'title', headerName: 'Objective', flex: 1.8, minWidth: 120 },
+    { field: 'owner', headerName: 'Owner', flex: .8, minWidth: 60 },
+    { field: 'status', headerName: 'Status', flex: .9, minWidth: 78, cellRenderer: ({ value }: ICellRendererParams<Objective, Objective['status']>) => statusBadge(value ?? 'in_progress') },
+    { field: 'progress', headerName: 'Progress', flex: 1, minWidth: 78, cellRenderer: ({ value, data }: ICellRendererParams<Objective, number>) => <div className="grid-progress"><Progress value={value ?? 0} size="xs" color={data?.status === 'on_track' ? 'teal' : data?.status === 'at_risk' ? 'yellow' : data?.status === 'blocked' ? 'red' : 'violet'} /><span>{value ?? 0}%</span></div> },
     {
-      field: 'product', headerName: 'Product', flex: 1, minWidth: 108,
+      field: 'product', headerName: 'Product', flex: .9, minWidth: 76,
       valueGetter: ({ data }) => data ? productName(data) : 'Unassigned',
     },
-    { field: 'due_date', headerName: 'Due date', flex: 1, minWidth: 85, valueFormatter: ({ value }) => value ? formatObjectiveDate(value) : '' },
+    { field: 'approval', headerName: 'Approval', flex: .85, minWidth: 74, cellRenderer: ({ value }: ICellRendererParams<Objective, string>) => value ? <Badge className={`objective-approval-status ${value.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{value}</Badge> : '—' },
+    { field: 'due_date', headerName: 'Due Date', flex: .85, minWidth: 75, valueFormatter: ({ value }) => value ? formatObjectiveDate(value) : '' },
+    { field: 'workflow_count', headerName: 'Workflows', flex: .65, minWidth: 52, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => value === undefined ? '—' : <span className="objective-workflow-count"><IconHierarchy size={11} />{value}</span> },
   ], []);
   const legacyProducts = Array.from(new Set(items.filter((item) => !item.product_id).map((item) => item.product)
     .filter((product) => product && !products.data?.some((known) => known.name === product))));
@@ -265,7 +272,7 @@ export function ObjectivesPage() {
       <div className="objectives-title-row">
         <div className="objectives-title-copy">
           <span className="objectives-title-icon"><IconTarget size={25} /></span>
-          <PageHeading title="Objectives" description="Plan, manage, and track engineering outcomes across your products and delivery." />
+          <PageHeading title="Objectives" description="Plan, manage, and track engineering objectives across products, workflows, and delivery." />
         </div>
         <div className="objectives-title-actions">
           <div className="objective-filters">
@@ -283,15 +290,20 @@ export function ObjectivesPage() {
       </div>
 
       <section className="objective-metrics" aria-label="Objective metrics">
-        <MetricCard className="objective-metric purple" label="Completed objectives" value={completed} detail="In workspace" icon={<IconTarget size={18} />} />
-        <MetricCard className="objective-metric teal" label="Objective success rate" value={items.length ? `${Math.round(completed / items.length * 100)}%` : '—'} detail="Completed / total objectives" icon={<IconCircleCheck size={18} />} />
-        <MetricCard className="objective-metric" label="Total objectives" value={items.length} detail="Across this workspace" icon={<IconTarget size={18} />} />
-        <MetricCard className="objective-metric green" label="On track" value={onTrack} detail="Objectives" icon={<IconCircleCheck size={18} />} />
-        <MetricCard className="objective-metric amber" label="At risk" value={atRisk} detail="Objectives" icon={<IconAlertTriangle size={18} />} />
-        <MetricCard className="objective-metric red" label="Blocked" value={blocked} detail="Objectives" icon={<IconAlertTriangle size={18} />} />
+        <MetricCard className="objective-metric purple" label={sampleData ? 'Objective Throughput' : 'Completed objectives'}
+          value={sampleData ? '28' : completed} detail={sampleData ? 'Completed this quarter' : 'In workspace'} icon={<IconTarget size={18} />}
+          trend={sampleData && <span className="objective-metric-trend"><Badge>↑ +40%</Badge><Sparkline data={[3, 4, 3, 6, 5, 7, 8]} color="violet.5" w={54} h={24} withGradient={false} /></span>} />
+        <MetricCard className="objective-metric teal" label="Objective Success Rate"
+          value={sampleData ? '86.7%' : items.length ? `${Math.round(completed / items.length * 100)}%` : '—'}
+          detail={sampleData ? '+6.9 pp' : 'Completed / total objectives'} icon={<IconCircleCheck size={18} />}
+          trend={sampleData && <span className="objective-metric-trend"><Sparkline data={[3, 4, 3, 6, 5, 7, 8]} color="teal.4" w={54} h={24} withGradient={false} /></span>} />
+        <MetricCard className="objective-metric" label="Total objectives" value={sampleData ? '42' : items.length} detail="Across this workspace" icon={<IconTarget size={18} />} />
+        <MetricCard className="objective-metric green" label="On track" value={sampleData ? '28' : onTrack} detail="Objectives" icon={<IconCircleCheck size={18} />} />
+        <MetricCard className="objective-metric amber" label="At risk" value={sampleData ? '7' : atRisk} detail="Objectives" icon={<IconAlertTriangle size={18} />} />
+        <MetricCard className="objective-metric red" label="Blocked" value={sampleData ? '3' : blocked} detail="Objectives" icon={<IconAlertTriangle size={18} />} />
       </section>
 
-      <div className="objective-content-grid">
+      <div className={`objective-content-grid${sampleData ? ' objective-preview-layout' : ''}`}>
         <div className="objective-table-stack">
           <PanelCard className="objective-table-panel" withBorder>
             <div className="objectives-tabs" role="tablist" aria-label="Objective views">
@@ -327,6 +339,7 @@ export function ObjectivesPage() {
                   )) : <div className="objective-view-empty">No objectives match these filters.</div>}
                 </div> : view === 'table' ? (
                 <AgGridReact<Objective>
+                  key={items.length ? 'has-objectives' : 'empty-objectives'}
                   theme={objectiveTheme}
                   rowData={filteredItems}
                   columnDefs={columns}
@@ -364,22 +377,37 @@ export function ObjectivesPage() {
           </PanelCard>
           <PanelCard className="objective-capacity" withBorder>
             <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconCalendar size={18} /></span>}
-              title="Objective progress" description="Current completion across objectives" />
-            {items.length ? <div className="capacity-bars">{items.slice(0, 6).map((item) => <div key={item.id}><span>{item.title}</span><Progress value={item.progress} color={item.status === 'blocked' ? 'red' : 'violet'} /><b>{item.progress}%</b></div>)}</div> : <div className="capacity-empty">Create objectives to build a delivery plan.</div>}
+              title={sampleData ? 'Objective Planning & Capacity' : 'Objective progress'}
+              description={sampleData ? 'Planned vs. actual objective delivery (This Quarter)' : 'Current completion across objectives'}
+              actions={sampleData && <div className="objective-capacity-legend"><span><i />Planned (cumulative)</span><span><i />Completed (cumulative)</span></div>} />
+            {sampleData ? <AreaChart className="objective-capacity-chart" h={111} data={objectivePreviewCapacity} dataKey="week"
+              series={[{ name: 'planned', color: '#bd70f2', label: 'Planned' }, { name: 'completed', color: '#23d9a0', label: 'Completed' }]}
+              withXAxis withYAxis withDots withTooltip gridAxis="xy" xAxisProps={{ tickLine: false, axisLine: false }}
+              yAxisProps={{ width: 25, domain: [0, 40], ticks: [0, 10, 20, 30, 40], interval: 0 }} />
+              : items.length ? <div className="capacity-bars">{items.slice(0, 6).map((item) => <div key={item.id}><span>{item.title}</span><Progress value={item.progress} color={item.status === 'blocked' ? 'red' : 'violet'} /><b>{item.progress}%</b></div>)}</div> : <div className="capacity-empty">Create objectives to build a delivery plan.</div>}
           </PanelCard>
         </div>
+        <div className="objective-detail-stack">
         <PanelCard className="objective-detail-panel" withBorder>
           {selected ? (
             <>
               <PanelHeading className="objective-detail-head entity-detail-heading" title={selected.title}
-                description={<small>{selected.id.slice(0, 8).toUpperCase()}</small>}
+                description={<small>{selected.id.startsWith('OBJ-') ? selected.id : selected.id.slice(0, 8).toUpperCase()}</small>}
                 icon={<span className="detail-objective-icon"><IconTarget size={19} /></span>}
-                actions={<Button className="edit-objective-button" onClick={() => {
+                actions={sampleData ? <div className="objective-preview-actions">
+                  <button aria-label="Favorite objective" disabled>☆</button><button aria-label="Copy objective link" disabled>↗</button><button aria-label="More objective actions" disabled>⋯</button>
+                </div> : <Button className="edit-objective-button" onClick={() => {
                   if (editing) cancelEdit();
                   else { setDetailTab('overview'); setEditing(true); }
                 }}>{editing ? 'Cancel edit' : 'Edit objective'}</Button>} />
               <div className="detail-summary">{statusBadge(statusValue)}<span>{progressValue}% complete</span><Progress value={progressValue} size="sm" /></div>
-              <div className="detail-meta-grid"><div><small>Owner</small><b>{selected.owner || 'Unassigned'}</b></div><div><small>Product</small><b>{productName(selected)}</b></div><div><small>Due date</small><b>{selected.due_date ? formatObjectiveDate(selected.due_date) : 'No date'}</b></div><div><small>Created</small><b>{formatObjectiveDate(selected.created_at)}</b></div></div>
+              <div className="detail-meta-grid">{sampleData ? <>
+                <div><small>Owner</small><b>{selected.owner}</b></div><div><small>Product</small><b>{productName(selected)}</b></div>
+                <div><small>Approval</small><b>{selected.approval}</b></div><div><small>Workflows</small><b>{selected.workflow_count} linked</b></div>
+              </> : <>
+                <div><small>Owner</small><b>{selected.owner || 'Unassigned'}</b></div><div><small>Product</small><b>{productName(selected)}</b></div>
+                <div><small>Due date</small><b>{selected.due_date ? formatObjectiveDate(selected.due_date) : 'No date'}</b></div><div><small>Created</small><b>{formatObjectiveDate(selected.created_at)}</b></div>
+              </>}</div>
               <div className="objective-detail-tabs" role="tablist" aria-label="Objective details">
                 {([
                   ['overview', 'Overview'], ['milestones', 'Milestones'],
@@ -388,7 +416,14 @@ export function ObjectivesPage() {
                   aria-selected={detailTab === id} className={detailTab === id ? 'active' : ''}
                   onClick={() => { if (editing) cancelEdit(); setDetailTab(id); }}>{label}</button>)}
               </div>
-              {!editing && detailTab === 'overview' ? <>
+              {!editing && sampleData && detailTab === 'overview' ? <div className="objective-overview-grid objective-preview-overview">
+                <section className="objective-overview-card"><b>Description</b><p>{selected.description}</p></section>
+                <section className="objective-overview-card objective-preview-blocker"><b>Blockers (1)</b><p>{objectivePreviewDetails.blocker}</p></section>
+                <section className="objective-overview-card"><b>Acceptance Criteria</b><ul>{objectivePreviewDetails.acceptanceCriteria.map((item) => <li key={item}>{item}</li>)}</ul></section>
+                <section className="objective-overview-card"><b>Related PRs (4)</b><ul>{objectivePreviewDetails.relatedPullRequests.map((item) => <li key={item.id}><span>{item.id} {item.title}</span><em>{item.status}</em></li>)}</ul></section>
+                <section className="objective-overview-card"><b>Plan Summary</b><ul>{objectivePreviewDetails.planSummary.map((item) => <li key={item}>{item}</li>)}</ul></section>
+                <section className="objective-overview-card"><b>Activity Feed</b><ul>{objectivePreviewDetails.activity.map((item) => <li key={item.text}><span>{item.text}</span><em>{item.time}</em></li>)}</ul></section>
+              </div> : !editing && detailTab === 'overview' ? <>
                 <div className="objective-overview-grid">
                   <section className="objective-overview-card"><b>Description</b><p>{selected.description || 'No description provided.'}</p></section>
                   <section className="objective-overview-card"><b>Blockers</b><p>Not included in the available objective data.</p></section>
@@ -398,7 +433,10 @@ export function ObjectivesPage() {
                   <section className="objective-overview-card"><b>Activity feed</b><p>Not included in the available objective data.</p></section>
                   <section className="objective-overview-card objective-overview-wide objective-progress-card"><b>Objective progress</b><Progress value={selected.progress} /><span>{selected.progress}%</span></section>
                 </div>
-              </> : editing ? <>
+              </> : sampleData && detailTab === 'milestones' ? <div className="objective-detail-milestones">{objectivePreviewDetails.milestones.map((item) => <div key={item.title}><span>{item.title}</span><Progress value={item.progress} /><b>{item.progress}%</b><em>{item.status}</em></div>)}</div>
+                : sampleData && detailTab === 'pull-requests' ? <div className="objective-detail-prs">{objectivePreviewDetails.relatedPullRequests.map((item) => <div key={item.id}><span>{item.id}</span><b>{item.title}</b><em>{item.status}</em></div>)}</div>
+                  : sampleData && detailTab === 'activity' ? <div className="objective-detail-activity">{objectivePreviewDetails.activity.map((item) => <div key={item.text}><span>{item.text}</span><time>{item.time}</time></div>)}</div>
+              : editing ? <>
                 <div className="detail-edit-grid">
                   <Select label="Status" value={statusValue} data={statusOptions}
                     onChange={(value) => { if (value) setStatusValue(value as Objective['status']); }} />
@@ -423,10 +461,20 @@ export function ObjectivesPage() {
             <div className="objective-detail-empty"><span className="detail-objective-icon"><IconTarget size={19} /></span><h3>Objective details</h3><p>Select an objective to see its plan and progress, or create the first objective for this workspace.</p><Button className="new-objective-button" onClick={() => setCreateOpen(true)}>Create objective</Button></div>
           )}
         </PanelCard>
+        {sampleData && <PanelCard className="objective-milestones-card" withBorder>
+          <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon">⚑</span>} title="Milestone Progress"
+            actions={<span>3 of 4 complete (75%)</span>} />
+          <div className="objective-milestones-list">{objectivePreviewDetails.milestones.map((item) => <div key={item.title}>
+            <span className="objective-milestone-flag">⚑</span><span className="objective-milestone-name">{item.title}</span>
+            <Progress value={item.progress} color={item.progress === 100 ? 'teal' : 'violet'} />
+            <Badge className={`objective-milestone-status ${item.status.toLowerCase().replace(' ', '-')}`}>{item.status}</Badge><time>{item.date}</time>
+          </div>)}</div>
+        </PanelCard>}
+        </div>
       </div>
 
       <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="New objective" centered className="objective-modal">
-        <form onSubmit={createForm.onSubmit((values) => createMutation.mutate(createSchema.parse(values)))}>
+        <form onSubmit={createForm.onSubmit((values) => sampleData ? setSubmitError('The mock preview is read-only.') : createMutation.mutate(createSchema.parse(values)))}>
           <TextInput label="Objective title" placeholder="e.g. Improve review velocity" required {...createForm.getInputProps('title')} />
           <Textarea label="Description" placeholder="Describe the outcome and why it matters" minRows={3} {...createForm.getInputProps('description')} />
           <div className="objective-form-row">

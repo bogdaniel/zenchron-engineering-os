@@ -9,6 +9,8 @@ and the installed AG Grid Community table.
 ```mermaid
 flowchart LR
     User[Engineering user] -->|Create / update| Dashboard[Objectives dashboard]
+    LocalPreview[Local ?preview=mock#objectives] -->|Read only| Fixture[Supplied objective mock data]
+    Fixture --> Dashboard
     Dashboard -->|Validate form| Zod[Zod schema]
     Dashboard -->|GET /api/v1/objectives + /api/v1/products| API[Go control plane]
     Dashboard -->|POST /api/v1/objectives with product_id| API
@@ -39,6 +41,8 @@ flowchart LR
 - `PATCH /api/v1/objectives/{id}` accepts status, progress, and/or product assignment. Progress is limited to 0–100;
   marking an objective `completed` sets progress to 100.
 - The dashboard filters by text, product, owner, status, and due-date quarter. The default is This Quarter; All due dates includes unscheduled objectives.
+- The local `?preview=mock#objectives` route uses the same Objectives page with sample KPI, approval, workflow, and milestone data. Its local fixture is read only and does not call protected objective or product APIs.
+- Approval and linked-workflow counts in the mock preview are illustrative fields; they remain unavailable in live mode until their sources are part of the objective API.
 - Empty workspaces prompt the user to create the first objective. When filters hide all records, the table and toolbar say no objectives match instead of implying the workspace is empty.
 - Table, Cards, and Kanban views render the same filtered records; selecting any record opens the read-only objective overview. The status, progress, and product editor appears only after choosing **Edit objective**. Kanban groups by the saved objective status.
 - The overview, milestones, related pull requests, and activity tabs switch the detail panel. Tabs without supported data show an unavailable state.

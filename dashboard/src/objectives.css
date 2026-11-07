@@ -23,6 +23,7 @@
 .objective-filters input, .objective-filters [data-combobox-input] { min-height: 31px; border-color: #353149; color: #e5e0ee; background: #1b1a28; font-size: 10px; }
 .objective-filters input::placeholder { color: #827d93; }
 .objective-content-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; align-items: stretch; }
+.objective-detail-stack { display: grid; min-width: 0; min-height: 0; grid-template-rows: minmax(0, 1fr); gap: 12px; }
 .objective-table-stack { display: grid; min-width: 0; min-height: 0; grid-template-rows: minmax(0, 1fr) 167px; gap: 12px; }
 .objective-table-panel, .objective-detail-panel, .objective-capacity { min-width: 0; }
 .objective-table-stack .objective-table-panel { min-height: 0; }
@@ -72,11 +73,46 @@
 .objective-status.at_risk { border-color: #66502c; color: #f0c06d; background: #382d1b; }
 .objective-status.blocked { border-color: #67364a; color: #ed8096; background: #3b202b; }
 .objective-status.in_progress { border-color: #304c69; color: #84baff; background: #1b2b3c; }
+.objective-approval-status { padding: 3px 5px; border: 1px solid #345141; color: #63dba8; background: #143629; font-size: 8px; text-transform: none; white-space: nowrap; }
+.objective-approval-status.pending { border-color: #69522a; color: #f1c061; background: #382d1b; }
+.objective-approval-status.changes-req { border-color: #70452c; color: #f2ab5f; background: #392519; }
+.objective-workflow-count { display: flex; align-items: center; gap: 3px; color: #bda1ee; }
 .grid-progress { display: flex; width: 100%; align-items: center; gap: 7px; }
 .grid-progress .mantine-Progress-root { flex: 1; }
 .grid-progress span { color: #c4bed1; font-size: 10px; }
 .objective-load-error { display: grid; height: 100%; place-items: center; color: #ed8096; font-size: 10px; }
 .objective-detail-panel { padding: 13px; }
+.objective-preview-layout .objective-detail-panel { min-height: 0; overflow: hidden; }
+.objective-preview-layout .objective-grid-wrap .ag-cell { font-size: 10px; }
+.objective-preview-layout .objective-grid-wrap .ag-header-cell-text { font-size: 9px; }
+.objective-preview-layout .objective-grid-wrap .ag-cell-value { min-width: 0; }
+.objective-preview-layout .objective-grid-wrap .objective-status { padding: 3px 5px; font-size: 8px; white-space: nowrap; }
+.objective-preview-actions { display: flex; align-items: center; gap: 7px; }
+.objective-preview-actions button { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #302b45; border-radius: 9px; color: #c9c2d8; background: #1a1927; font-size: 17px; }
+.objective-preview-overview { grid-template-rows: repeat(3, minmax(0, 1fr)); }
+.objective-preview-overview .objective-overview-card { min-height: 0; padding: 8px; overflow: hidden; }
+.objective-preview-overview .objective-overview-card p { margin-top: 5px; }
+.objective-preview-overview ul { display: grid; gap: 4px; margin: 5px 0 0; padding: 0; color: #c4bed1; font-size: 9px; line-height: 1.25; list-style: none; }
+.objective-preview-overview li { display: flex; min-width: 0; align-items: flex-start; gap: 5px; }
+.objective-preview-overview li::before { flex: 0 0 auto; color: #35d59d; content: '✓'; font-weight: 700; }
+.objective-preview-overview .objective-preview-blocker { border-color: #68412f; background: #241c1b; }
+.objective-preview-overview .objective-preview-blocker b { color: #f2bb62; }
+.objective-preview-overview .objective-preview-blocker p::before { margin-right: 5px; color: #f2bb62; content: '▲'; }
+.objective-preview-overview li span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.objective-preview-overview li em { flex: 0 0 auto; color: #c5a4f5; font-size: 8px; font-style: normal; }
+.objective-preview-layout .objective-detail-stack { grid-template-rows: minmax(0, 1fr) 128px; }
+.objective-milestones-card { min-height: 0; padding: 10px 12px; overflow: hidden; }
+.objective-milestones-card .panel-heading { min-height: 25px; }
+.objective-milestones-card .panel-heading > div:last-child { color: #c5bfd2; font-size: 9px; }
+.objective-milestones-list { display: grid; gap: 4px; margin-top: 4px; }
+.objective-milestones-list > div { display: grid; grid-template-columns: 13px minmax(100px, 1.2fr) minmax(65px, 1fr) 80px 70px; align-items: center; gap: 6px; min-height: 18px; color: #c5bfd2; font-size: 9px; }
+.objective-milestone-flag { color: #b783f5; }
+.objective-milestone-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.objective-milestones-list .mantine-Progress-root { height: 7px; }
+.objective-milestone-status { justify-self: start; border: 1px solid #3b3451; color: #c5bfd2; background: #1a1927; font-size: 8px; }
+.objective-milestone-status.complete { border-color: #276a50; color: #54e0a9; background: #12392e; }
+.objective-milestone-status.in-progress { border-color: #37619a; color: #8fc3ff; background: #172b45; }
+.objective-milestones-list time { color: #9d97aa; text-align: right; white-space: nowrap; }
 .objective-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .objective-detail-head > div { display: flex; min-width: 0; align-items: center; gap: 9px; }
 .detail-objective-icon { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid #594079; border-radius: 10px; color: #ce9dff; background: #2a1e3a; }
@@ -112,6 +148,18 @@
 .objective-detail-empty p { max-width: 240px; margin: 0 0 12px; color: #8e889c; font-size: 10px; line-height: 1.5; }
 .objective-detail-empty button { font-size: 10px; }
 .objective-capacity { margin-top: 11px; padding: 12px; }
+.objective-preview-layout .objective-capacity { overflow: hidden; }
+.objective-capacity-legend { display: flex; align-items: center; gap: 12px; color: #aaa5b9; font-size: 9px; white-space: nowrap; }
+.objective-capacity-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.objective-capacity-legend i { width: 6px; height: 6px; border-radius: 50%; background: #bd70f2; }
+.objective-capacity-legend span + span i { background: #23d9a0; }
+.objective-capacity-chart .recharts-cartesian-grid line { stroke: #302d3c; }
+.objective-capacity-chart .recharts-cartesian-axis-tick-value { fill: #9d97aa; font-size: 8px; }
+.objective-capacity-chart .recharts-area-area { opacity: .12; }
+.objective-metric-trend { display: flex; align-items: center; gap: 5px; }
+.objective-metric-trend > span { color: #3fd9a2; font-size: 10px; font-weight: 600; }
+.objective-metric-trend > span[aria-hidden] { letter-spacing: 1px; }
+.objective-metric-trend .mantine-Badge-root { border: 0; color: #3ee1a2; background: #123b30; font-size: 9px; }
 .objective-table-stack .objective-capacity { min-height: 0; margin-top: 0; overflow: hidden; }
 .capacity-empty { display: grid; min-height: 72px; place-items: center; color: #868095; font-size: 10px; }
 .capacity-bars { display: grid; gap: 3px; margin-top: 3px; }
@@ -142,6 +190,9 @@
   .objective-metrics { grid-template-columns: 2fr 2fr repeat(4, .75fr); gap: 8px; }
   .objective-metric { height: 84px; min-height: 84px; padding: 10px 12px; }
   .objective-content-grid { height: 603px; grid-template-columns: .49fr .51fr; gap: 12px; margin-top: 22px; }
+  .objective-preview-layout .objective-grid-toolbar { display: none; }
+  .objective-preview-layout .objective-grid-wrap { height: calc(100% - 42px); }
+  .objective-preview-layout .objective-detail-stack { grid-template-rows: minmax(0, 1fr) 128px; }
   .objective-table-stack { grid-template-rows: minmax(0, 1fr) 167px; gap: 12px; }
   .objective-grid-wrap { height: calc(100% - 93px); min-height: 0; }
   .objective-detail-panel { min-height: 0; }
@@ -155,6 +206,7 @@
   .objectives-title-actions { flex-wrap: wrap; justify-content: flex-start; }
   .objective-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .objective-content-grid { grid-template-columns: 1fr; }
+  .objective-detail-stack { grid-template-rows: minmax(420px, auto) auto; }
   .objective-grid-wrap { height: 330px; }
   .objective-detail-panel { min-height: 320px; }
   .detail-meta-grid { grid-template-columns: 1fr 1fr; }
