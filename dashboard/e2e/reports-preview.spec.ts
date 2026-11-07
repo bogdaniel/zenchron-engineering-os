@@ -20,8 +20,19 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(5);
   await expect(page.locator('.inventory-panel tbody tr')).toHaveCount(5);
   await expect(page.locator('.reports-insight')).toHaveCount(5);
+  const insightsFit = await page.locator('.reports-summary').evaluate((panel) => panel.scrollHeight <= panel.clientHeight);
+  expect(insightsFit).toBe(true);
   await expect(page.getByRole('combobox', { name: 'Insights view' })).toHaveValue('Executive summary');
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
+  const downloadsFit = await page.locator('.downloadable-reports-panel').evaluate((panel) => {
+    const panelBottom = panel.getBoundingClientRect().bottom;
+    const lastReportBottom = panel.querySelector('.downloadable-report:last-child')!.getBoundingClientRect().bottom;
+    return lastReportBottom <= panelBottom - 6;
+  });
+  expect(downloadsFit).toBe(true);
+  const reportDetailsFit = await page.locator('.downloadable-report-copy span').evaluateAll((details) =>
+    details.every((detail) => detail.scrollHeight <= detail.clientHeight));
+  expect(reportDetailsFit).toBe(true);
   await expect(page.locator('.downloadable-report-format').evaluateAll((formats) =>
     formats.map((format) => format.getAttribute('aria-label')))).resolves.toEqual([
     'PDF file', 'XLSX file', 'CSV file', 'PDF file',

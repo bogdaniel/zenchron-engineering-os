@@ -480,7 +480,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
 
         <PanelCard className="reports-panel reports-summary" withBorder>
           <PanelHeading className="reports-panel-heading" icon={<IconSparkles size={15} />} title="Insights &amp; narrative"
-            description="Findings from the selected snapshot"
+            description={designPreview ? undefined : 'Findings from the selected snapshot'}
             actions={<Select className="reports-insight-filter" aria-label="Insights view" data={insightViews}
               value={insightView} onChange={(value) => setInsightView(value ?? 'executive')} />} />
           <div className="reports-insights">

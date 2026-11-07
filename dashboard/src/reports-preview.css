@@ -22,3 +22,13 @@
 .reports-design-preview .reports-panel .recharts-cartesian-grid line { stroke: #302c3e; }
 .reports-design-preview .reports-panel .recharts-cartesian-axis-tick-value { fill: #9d97ae; }
 .reports-design-preview .report-summary-total td { color: #42dca8; font-weight: 650; }
+.reports-design-preview .reports-summary .reports-insights { gap: 4px; }
+.reports-design-preview .reports-summary .reports-insight b { font-size: 10px; }
+.reports-design-preview .reports-summary .reports-insight span { font-size: 9.5px; line-height: 1.15; }
+.reports-design-preview .reports-summary .reports-key-takeaway { margin-top: 4px; padding: 5px; font-size: 9.5px; line-height: 1.2; }
+.reports-design-preview .reports-summary .reports-key-takeaway b { font-size: 9.5px; }
+.reports-design-preview .downloadable-reports-panel { padding-block: 4px; }
+.reports-design-preview .downloadable-reports-panel .reports-panel-heading { margin-bottom: 3px; }
+.reports-design-preview .downloadable-report-list { gap: 3px; }
+.reports-design-preview .downloadable-report-copy b { font-size: 11px; line-height: 1.05; }
+.reports-design-preview .downloadable-report-copy span { font-size: 9px; line-height: 1.05; }
