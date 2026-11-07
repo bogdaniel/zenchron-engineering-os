@@ -13,6 +13,9 @@
 .objective-metric .metric-top > svg { position: static; order: -1; flex: 0 0 auto; color: #ba8cff; }
 .objective-metric .metric-value-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
 .objective-metric .metric-value-row > strong { flex: 0 0 auto; margin-top: 0; }
+.objective-metrics-preview .metric-top > span { text-transform: capitalize; }
+.app-shell .main-content .objective-metrics-preview .objective-metric:not(:first-child) > small { display: none; }
+.objective-metrics-preview .objective-metric-trend .mantine-Badge-root { text-transform: none; }
 .objective-metric.teal { border-color: #28515a; background: linear-gradient(145deg, #14272d, #12131d 80%); }
 .objective-metric.teal .metric-top > svg { color: #66d4ce; }
 .objective-metric.green { border-color: #285343; }

@@ -48,6 +48,11 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await expect(page.locator('.objective-metric').nth(0)).toContainText('Objective Throughput');
   await expect(page.locator('.objective-metric').nth(0)).toContainText('Completed this quarter');
   await expect(page.locator('.objective-metric').nth(1)).toContainText('Objective Success Rate86.7%');
+  await expect(page.locator('.objective-metric').nth(1)
+    .locator('.objective-metric-trend .mantine-Badge-root')).toHaveText('↑ +6.9 pp');
+  for (const index of [2, 3, 4, 5]) {
+    await expect(page.locator('.objective-metric').nth(index).locator('small')).toBeHidden();
+  }
   await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(6);
   await expect(page.locator('.objective-owner-avatar')).toHaveCount(6);
   await expect(page.locator('.objective-approval-status.changes-req')).toHaveCount(1);

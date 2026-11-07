@@ -6,7 +6,8 @@ import { AreaChart, Sparkline } from '@mantine/charts';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, Modal, NumberInput, Progress, Select, Text, Textarea, TextInput } from '@mantine/core';
-import { IconAlertTriangle, IconCalendar, IconCircleCheck, IconHierarchy, IconPlus, IconTarget } from '@tabler/icons-react';
+import { IconAlertTriangle, IconCalendar, IconCircleCheck, IconHierarchy, IconPlus, IconTarget,
+  IconTargetArrow } from '@tabler/icons-react';
 import { z } from 'zod';
 import { loadProducts } from './productEditor';
 import { MetricCard } from './MetricCard';
@@ -292,7 +293,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
         </div>
       </div>
 
-      <section className="objective-metrics" aria-label="Objective metrics">
+      <section className={`objective-metrics${sampleData ? ' objective-metrics-preview' : ''}`}
+        aria-label="Objective metrics">
         <MetricCard className="objective-metric purple" label={sampleData ? 'Objective Throughput' : 'Completed objectives'}
           value={sampleData ? '28' : completed} detail={sampleData ? 'Completed this quarter' : 'In workspace'} icon={<IconTarget size={18} />}
           trend={sampleData && <span className="objective-metric-trend"><Badge>↑ +40%</Badge><span className="objective-throughput-bars" aria-hidden="true">
@@ -300,8 +302,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
           </span></span>} />
         <MetricCard className="objective-metric teal" label="Objective Success Rate"
           value={sampleData ? '86.7%' : items.length ? `${Math.round(completed / items.length * 100)}%` : '—'}
-          detail={sampleData ? '+6.9 pp' : 'Completed / total objectives'} icon={<IconCircleCheck size={18} />}
-          trend={sampleData && <span className="objective-metric-trend"><Sparkline data={[3, 4, 3, 6, 5, 7, 8]} color="teal.4" w={54} h={24} withGradient={false} /></span>} />
+          detail={sampleData ? undefined : 'Completed / total objectives'} icon={<IconTargetArrow size={18} />}
+          trend={sampleData && <span className="objective-metric-trend"><Badge>↑ +6.9 pp</Badge>
+            <Sparkline data={[3, 4, 3, 6, 5, 7, 8]} color="teal.4" w={54} h={24} withGradient={false} /></span>} />
         <MetricCard className="objective-metric" label="Total objectives" value={sampleData ? '42' : items.length} detail="Across this workspace" icon={<IconTarget size={18} />} />
         <MetricCard className="objective-metric green" label="On track" value={sampleData ? '28' : onTrack} detail="Objectives" icon={<IconCircleCheck size={18} />} />
         <MetricCard className="objective-metric amber" label="At risk" value={sampleData ? '7' : atRisk} detail="Objectives" icon={<IconAlertTriangle size={18} />} />
