@@ -268,7 +268,6 @@
 }
 .overview-layout .metric-card .metric-top > svg { filter: drop-shadow(0 0 5px currentColor); }
 .app-shell.overview-layout .main-content .shared-metric-card .metric-top { color: #f4efff; font-size: 15px; font-weight: 600; }
-.overview-layout .nav-link.active { min-height: 46px; }
 .overview-layout .metric-value-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .overview-layout .metric-card:not(:last-child):not(.green) .metric-value-row { justify-content: flex-start; }
 .overview-layout .metric-value-row > .mock-trend { flex: 1; justify-content: space-between; margin-left: 12px; }
