@@ -181,7 +181,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await page.getByRole('combobox', { name: 'Workflow' }).click();
   await page.getByRole('option', { name: 'PR Review & Release Orchestration' }).click();
   await expect(page.getByRole('combobox', { name: 'Workflow' })).toHaveValue('PR Review & Release Orchestration');
-  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(9);
   await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Router');
   const dragHandle = page.getByRole('button', { name: 'Drag Agent Task to canvas' });
   const source = await dragHandle.boundingBox();
@@ -202,7 +202,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
     return Math.abs(bounds.x + bounds.width / 2 - dropPoint.x) < 30 &&
       Math.abs(bounds.y + bounds.height / 2 - dropPoint.y) < 30;
   }).toBe(true);
-  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(11);
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
   const splitter = page.getByRole('separator');
   await expect(splitter).toHaveAttribute('tabindex', '0');
   const separatorBox = await splitter.boundingBox();

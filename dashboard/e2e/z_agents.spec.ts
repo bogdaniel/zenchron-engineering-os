@@ -39,7 +39,7 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   await expect(page.locator('.agent-row').nth(4)).toContainText('disabled');
   await expect(page.locator('.agents-metric').nth(0).locator('strong')).toHaveText('6');
   await expect(page.locator('.agents-metric').nth(1).locator('strong')).toHaveText('5');
-  await expect(page.locator('.agents-metric').filter({ hasText: 'Model cost (30d)' }))
+  await expect(page.locator('.agents-metric').filter({ hasText: 'Total Cost (30d)' }))
     .toContainText('Provider usage records are unavailable');
   const firstMetric = page.locator('.agents-metric').first();
   const [metricIcon, metricLabel] = await Promise.all([
@@ -163,7 +163,7 @@ test('Agents empty state uses the primary create action', async ({ page }) => {
 
 test('Agents queue dialog explains when a worker has no model runtime', async ({ page }) => {
   await page.route('**/api/v1/workers', async (route) => {
-    const response = await route.fetch();
+    const response = await route.fetch({ url: route.request().url().replace('zenchron.test:4173', '127.0.0.1:4173') });
     const workers = await response.json() as { agent_runtime_enabled?: boolean }[];
     await route.fulfill({ response, body: JSON.stringify(workers.map((worker) => ({
       ...worker, agent_runtime_enabled: false,
@@ -316,7 +316,7 @@ test('Agents dashboard completes a run and resumes requested review changes on t
   expect(followUp.diff.diff).toContain('Created by the E2E model.');
   expect(followUp.diff.diff).toContain('Review feedback addressed by the E2E worker.');
   await page.getByRole('link', { name: 'Overview' }).click();
-  await expect(page.locator('.metric-card.blue')).toContainText('Running agents');
+  await expect(page.locator('.metric-card.blue')).toContainText('Running Agents');
   await expect(page.locator('.metric-card.blue')).toContainText('0');
   await expect(page.locator('.agents-panel')).toContainText('E2E Reviewer');
 });

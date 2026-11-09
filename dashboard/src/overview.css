@@ -89,6 +89,15 @@
 .timeline-panel { grid-column: span 5; min-height: 230px; }
 .analytics-panel { grid-column: span 3; min-height: 230px; }
 .overview-layout .panel-heading { min-height: 36px; }
+.overview-layout .timeline-panel .panel-heading > div:first-child { align-items: flex-start; }
+.overview-layout .timeline-panel .shared-panel-heading p { margin-top: 2px; }
+.overview-layout .timeline-panel .section-icon { transform: translateY(-1px); }
+@media (min-height: 850px) {
+  .overview-layout .timeline-panel .section-icon { transform: translateY(-4px); }
+}
+@media (min-height: 850px) and (max-width: 1600px) {
+  .overview-layout .timeline-panel .section-icon { transform: translateY(-1px); }
+}
 .violet-icon { color: #c099ff; }
 .muted-tag {
   padding: 4px 7px;

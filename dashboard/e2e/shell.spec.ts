@@ -170,7 +170,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     expect(styles.letterSpacing, `${route}: metric value letter spacing`).toBe('-0.8px');
     expect(styles.radius, `${route}: metric card radius`).toBe(route === 'overview' ? '16px' : '10px');
     if (styles.detail) expect(styles.detail, `${route}: metric detail size`).toBe(
-      route === 'agents' ? '9px' : '11px',
+      '11px',
     );
   }
 

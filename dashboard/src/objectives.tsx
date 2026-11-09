@@ -246,7 +246,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     },
     { field: 'approval', headerName: 'Approval', flex: .95, minWidth: sampleData ? 78 : 90, cellRenderer: ({ value }: ICellRendererParams<Objective, string>) => value ? <Badge className={`objective-approval-status ${value.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`}>{value}</Badge> : '—' },
     { field: 'due_date', headerName: 'Due Date', flex: .85, minWidth: sampleData ? 75 : 86, valueFormatter: ({ value }) => value ? formatObjectiveDate(value) : '' },
-    { field: 'workflow_count', headerName: 'Workflows', flex: .65, minWidth: sampleData ? 72 : 65, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => value === undefined ? '—' : <span className="objective-workflow-count"><IconHierarchy size={11} />{value}</span> },
+    { field: 'workflow_count', headerName: 'Workflows', flex: .65, minWidth: sampleData ? 66 : 65, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => value === undefined ? '—' : <span className="objective-workflow-count"><IconHierarchy size={11} />{value}</span> },
   ], [sampleData]);
   const legacyProducts = Array.from(new Set(items.filter((item) => !item.product_id).map((item) => item.product)
     .filter((product) => product && !products.data?.some((known) => known.name === product))));

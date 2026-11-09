@@ -46,7 +46,7 @@ test('local dashboard has a direct sign-in screen and explains when OAuth is unc
     body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }) }));
   await page.goto('http://127.0.0.1:4173/');
   await page.getByRole('link', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL('/#login');
+  await expect(page).toHaveURL('http://127.0.0.1:4173/#login');
   await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeDisabled();
   await expect(page.getByText('GitHub sign-in is not configured in this local preview.')).toBeVisible();

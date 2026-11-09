@@ -60,9 +60,10 @@ test('local Objectives mock preview renders the supplied screen without protecte
     await expect(page.locator('.objective-metric').nth(index).locator('small')).toBeHidden();
   }
   await expect(page.getByRole('combobox', { name: 'Filter by due quarter' })).toHaveValue('This Quarter');
-  await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(6);
-  await expect(page.locator('.objective-grid-wrap .ag-row').first()).toHaveClass(/ag-row-selected/);
-  await expect(page.locator('.objective-grid-wrap .ag-cell').first()).toHaveCSS('font-size', '11px');
+  const objectiveRows = page.locator('.objective-grid-wrap .ag-center-cols-container .ag-row');
+  await expect(objectiveRows).toHaveCount(6);
+  await expect(objectiveRows.first()).toHaveClass(/ag-row-selected/);
+  await expect(page.locator('.objective-grid-wrap .ag-center-cols-container .ag-cell').first()).toHaveCSS('font-size', '11px');
   await expect(page.locator('.objective-grid-wrap .objective-status').first()).toHaveCSS('font-size', '9px');
   await expect(page.locator('.objective-preview-overview .objective-overview-card b').first())
     .toHaveCSS('font-size', '12px');
@@ -90,11 +91,13 @@ test('local Objectives mock preview renders the supplied screen without protecte
   const clippedHeaders = await page.locator('.objective-preview-layout .ag-header-cell-text')
     .evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).map((header) => header.textContent));
   expect(clippedHeaders).toEqual([]);
-  const headersFit = await page.locator('.objective-grid-wrap .ag-header-cell').evaluateAll((headers) => {
-    const gridRight = document.querySelector('.objective-grid-wrap')!.getBoundingClientRect().right;
-    return headers.every((header) => header.getBoundingClientRect().right <= gridRight + 1);
+  const overflowingGridHeaders = await page.locator('.objective-grid-wrap .ag-header-cell').evaluateAll((headers) => {
+    const centerRight = document.querySelector('.objective-grid-wrap .ag-header-viewport')!.getBoundingClientRect().right;
+    return headers.filter((header) => header.closest('.ag-header-viewport')
+      && header.getBoundingClientRect().right > centerRight + 1)
+      .map((header) => ({ label: header.textContent, right: header.getBoundingClientRect().right, centerRight }));
   });
-  expect(headersFit).toBe(true);
+  expect(overflowingGridHeaders).toEqual([]);
   const clippedObjectiveTitles = await page.locator('.objective-grid-wrap .ag-cell[col-id="title"] .ag-cell-value')
     .evaluateAll((cells) => cells.filter((cell) => cell.scrollWidth > cell.clientWidth).map((cell) => cell.textContent));
   expect(clippedObjectiveTitles).toEqual([]);
@@ -125,7 +128,7 @@ test('Objectives mock layout stays within desktop, tablet, and mobile viewports'
     await page.goto('http://127.0.0.1:4173/#objectives');
     await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Objective' })).toBeVisible();
-    await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(6);
+    await expect(page.locator('.objective-grid-wrap .ag-center-cols-container .ag-row')).toHaveCount(6);
     if (width === 390) {
       const tabButtonsFit = await page.locator('.objectives-tabs').evaluate((tabs) => {
         const bounds = tabs.getBoundingClientRect();
@@ -223,34 +226,35 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await page.goto('http://zenchron.test:4173/#objectives');
 
   await expect(page.getByRole('button', { name: 'Table', pressed: true })).toBeVisible();
-  await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(2);
+  const objectiveRows = page.locator('.objective-grid-wrap .ag-center-cols-container .ag-row');
+  await expect(objectiveRows).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Filter by owner' }).click();
   await page.getByRole('option', { name: 'Alex Chen' }).click();
-  await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(1);
+  await expect(objectiveRows).toHaveCount(1);
   await page.getByRole('combobox', { name: 'Filter by owner' }).click();
   await page.getByRole('option', { name: 'All owners' }).click();
   await page.getByRole('combobox', { name: 'Filter by status' }).click();
   await page.getByRole('option', { name: 'At Risk' }).click();
-  await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(1);
+  await expect(objectiveRows).toHaveCount(1);
   await page.getByRole('combobox', { name: 'Filter by status' }).click();
   await page.getByRole('option', { name: 'All statuses' }).click();
   await page.getByRole('combobox', { name: 'Filter by product' }).click();
   await page.getByRole('option', { name: 'Core Product' }).click();
-  await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(2);
+  await expect(objectiveRows).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Filter by product' }).click();
   await page.getByRole('option', { name: 'All products' }).click();
-  await expect(page.locator('.objective-grid-wrap .ag-row').first()).toHaveCSS('height', '42px');
+  await expect(objectiveRows.first()).toHaveCSS('height', '42px');
   await page.locator('.objective-grid-wrap .ag-cell[col-id=title]').filter({ hasText: 'Reduce CI time' }).click();
-  await expect(page.locator('.objective-grid-wrap .ag-row-selected')).toContainText('Reduce CI time');
+  await expect(page.locator('.objective-grid-wrap .ag-center-cols-container .ag-row-selected')).toContainText('Reduce CI time');
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Reduce CI time');
   await expect(page.locator('.objective-grid-wrap .ag-cell').first()).toHaveCSS('font-size', '11px');
   await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').first()).toHaveCSS('font-size', '10px');
   await page.getByRole('combobox', { name: 'Filter by due quarter' }).click();
   await page.getByRole('option', { name: 'All due dates' }).click();
-  await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(4);
+  await expect(objectiveRows).toHaveCount(4);
   await page.getByRole('combobox', { name: 'Filter by due quarter' }).click();
   await page.getByRole('option', { name: 'This Quarter' }).click();
-  await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(2);
+  await expect(objectiveRows).toHaveCount(2);
 
   await page.getByRole('button', { name: 'Cards' }).click();
   const shipCard = page.getByRole('button', { name: /Ship API v2/ });

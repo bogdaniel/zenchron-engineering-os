@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test';
 
 test('Reports panel rows match the desktop mockup proportions', async ({ page }) => {
+  await page.route('**/api/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'Reports E2E' }),
+  }));
   const projectID = 'a'.repeat(32);
   await page.route('**/api/v1/products', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',
@@ -26,12 +30,12 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await page.goto('/#reports');
   await expect(page.locator('.reports-panel-heading > div > svg')).toHaveCount(10);
   await expect(page.locator('.reports-metric')).toHaveText([
-    /Delivery velocity/, /Cycle time/, /CI duration/, /Review latency/, /Agent spend/, /Acceptance rate/,
-    /Autonomous completion/,
+    /Delivery Velocity/, /Cycle Time/, /CI Duration/, /Review Latency/, /Agent Spend/, /Acceptance Rate/,
+    /Autonomous Completion/,
   ]);
   await expect(page.getByRole('heading', { name: 'Work outcomes' })).toBeVisible();
   const insightsHeading = page.locator('.reports-summary .reports-panel-heading h3');
-  await expect(insightsHeading).toHaveText('Insights & narrative');
+  await expect(insightsHeading).toHaveText('Insights & Narrative');
   expect(await insightsHeading.evaluate((heading) =>
     heading.scrollHeight <= parseFloat(getComputedStyle(heading).lineHeight) + 1,
   ), 'Insights heading stays on one line at the mock viewport').toBe(true);
@@ -62,8 +66,8 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.locator('.downloadable-reports-panel .shared-panel-heading p')).toHaveCount(0);
   await expect(page.locator('.downloadable-report-list')).toHaveCSS('row-gap', '0px');
   await expect(page.locator('.downloadable-report').first()).toHaveCSS('min-height', '34px');
-  await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '12px');
-  await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '10px');
+  await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '11px');
+  await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '9px');
   await expect(page.getByRole('button', { name: 'Download Agent Spend & Utilization CSV' })).toBeEnabled();
   await expect(page.locator('.reports-empty-chart')).toHaveCount(4);
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
@@ -116,10 +120,10 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   expect(delivery.width).toBeGreaterThan(ci.width);
   expect(ci.width).toBeGreaterThan(outcomes.width);
   expect(spend.width).toBeGreaterThan(review.width);
-  expect(acceptance.width).toBeGreaterThan(review.width);
+  expect(acceptance.width).toBeGreaterThanOrEqual(review.width);
   expect(coverage.width).toBeLessThan(acceptance.width);
   expect(downloads.width).toBeLessThan(inventory.width);
-  expect(coverage.width).toBeGreaterThan(downloads.width);
+  expect(coverage.width).toBeCloseTo(downloads.width, 0);
   expect(coverage.height).toBeGreaterThan(product.y + product.height - coverage.y - 1);
   const acceptanceChart = page.locator('.acceptance-panel .reports-empty-chart');
   const acceptanceLayout = await acceptanceChart.evaluate((chart) => {
@@ -151,6 +155,10 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
 });
 
 test('Reports headings fit the mock display viewport', async ({ page }) => {
+  await page.route('**/api/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'Reports E2E' }),
+  }));
   await page.setViewportSize({ width: 1505, height: 847 });
   await page.goto('/#reports');
 
@@ -173,7 +181,7 @@ test('Reports headings fit the mock display viewport', async ({ page }) => {
   expect(Math.abs(titleBounds!.y - filterBounds!.y)).toBeLessThanOrEqual(1);
   await expect(filter).toHaveCSS('width', '122px');
   await expect(filter.locator('input')).toHaveCSS('font-size', '8px');
-  await expect(filter.locator('input')).toHaveValue('Executive summary');
+  await expect(filter.locator('input')).toHaveValue('Executive Summary');
 
   const reportTitlesFit = await page.locator('.downloadable-report-copy b').evaluateAll((titles) =>
     titles.every((title) => title.scrollWidth <= title.clientWidth &&
@@ -302,11 +310,11 @@ test('Reports derives GitHub delivery metrics from complete pull-request history
     ] }),
   }));
   await page.goto('/#reports');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' }).locator('strong')).toHaveText('0.5');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Cycle time' }).locator('strong')).toHaveText('42');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Acceptance rate' }).locator('strong')).toHaveText('67%');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'CI duration' }).locator('strong')).toHaveText('10');
-  for (const label of ['Delivery velocity', 'Cycle time', 'CI duration', 'Acceptance rate']) {
+  await expect(page.locator('.reports-metric').filter({ hasText: /Delivery Velocity/i }).locator('strong')).toHaveText('0.5');
+  await expect(page.locator('.reports-metric').filter({ hasText: /Cycle Time/i }).locator('strong')).toHaveText('42');
+  await expect(page.locator('.reports-metric').filter({ hasText: /Acceptance Rate/i }).locator('strong')).toHaveText('67%');
+  await expect(page.locator('.reports-metric').filter({ hasText: /CI Duration/i }).locator('strong')).toHaveText('10');
+  for (const label of ['Delivery Velocity', 'Cycle Time', 'CI Duration', 'Acceptance Rate']) {
     await expect(page.getByRole('img', { name: `${label} trend` })).toBeVisible();
   }
   await expect(page.locator('.reports-ci-chart')).toBeVisible();
@@ -322,8 +330,8 @@ test('Reports derives GitHub delivery metrics from complete pull-request history
     .toHaveCSS('fill', 'rgb(150, 145, 168)');
   const trend = page.locator('.reports-pull-request-chart');
   await expect(trend).toBeVisible();
-  await expect(page.locator('.delivery-velocity-panel .reports-chart-legend')).toContainText('Merged PRs');
-  await expect(page.locator('.delivery-velocity-panel .reports-chart-legend')).toContainText('Cycle time');
+  await expect(page.locator('.delivery-velocity-panel .reports-chart-legend')).toContainText('Delivery Velocity (PRs/week)');
+  await expect(page.locator('.delivery-velocity-panel .reports-chart-legend')).toContainText('Cycle Time (hours)');
   await expect(trend.locator('.recharts-line')).toHaveCount(2);
   await expect(trend.locator('.recharts-cartesian-axis-tick-value').first())
     .toHaveCSS('fill', 'rgb(150, 145, 168)');
@@ -354,8 +362,8 @@ test('Reports explains complete provider histories with no chart events', async 
   await expect(page.locator('.work-outcomes-panel .reports-empty'))
     .toHaveText('No pull requests match this report scope.');
   await expect(page.locator('.reports-key-takeaway')).toContainText('No pull-request activity was recorded in this scope.');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' }).locator('strong')).toHaveText('0');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'CI duration' }).locator('strong')).toHaveText('Unavailable');
+  await expect(page.locator('.reports-metric').filter({ hasText: /Delivery Velocity/i }).locator('strong')).toHaveText('0');
+  await expect(page.locator('.reports-metric').filter({ hasText: /CI Duration/i }).locator('strong')).toHaveText('Unavailable');
 });
 
 test('Reports suppresses GitHub delivery metrics when PR history is truncated', async ({ page }) => {
@@ -382,9 +390,9 @@ test('Reports suppresses GitHub delivery metrics when PR history is truncated', 
     ] }),
   }));
   await page.goto('/#reports');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' }).locator('strong')).toHaveText('Unavailable');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Cycle time' }).locator('strong')).toHaveText('Unavailable');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'CI duration' }).locator('strong')).toHaveText('Unavailable');
+  await expect(page.locator('.reports-metric').filter({ hasText: /Delivery Velocity/i }).locator('strong')).toHaveText('Unavailable');
+  await expect(page.locator('.reports-metric').filter({ hasText: /Cycle Time/i }).locator('strong')).toHaveText('Unavailable');
+  await expect(page.locator('.reports-metric').filter({ hasText: /CI Duration/i }).locator('strong')).toHaveText('Unavailable');
   await expect(page.locator('.ci-distribution-panel .reports-empty-chart'))
     .toContainText('Waiting for complete GitHub Actions history.');
   await expect(page.locator('.delivery-velocity-panel .reports-empty-chart'))

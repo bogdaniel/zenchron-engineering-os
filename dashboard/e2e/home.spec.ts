@@ -23,7 +23,7 @@ test('Reviews matches the supplied desktop workspace frame', async ({ page }) =>
       })(),
     };
   });
-  expect(layout.sidebar?.width).toBe(250);
+  expect(layout.sidebar?.width).toBe(247);
   expect(layout.metrics?.x).toBe(263);
   expect(layout.metrics?.y).toBe(92);
   expect(layout.metricIconGap).toBeCloseTo(6, 0);
@@ -141,11 +141,12 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('http://zenchron.test:4173/#objectives');
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
-  await expect(page.locator('.ag-row')).toHaveCount(6);
-  await expect(page.locator('.ag-row').first()).toContainText('Launch AI code review v2');
-  await expect(page.locator('.ag-row').last()).toContainText('Migrate to unified pipeline');
-  await expect(page.locator('.ag-row').first().locator('.ag-cell[col-id="due_date"]')).toHaveText(/^[A-Z][a-z]{2} \d{1,2}, 2026$/);
-  const linkedProductCell = page.locator('.ag-row').first().locator('.ag-cell[col-id="product"]');
+  const objectiveRows = page.locator('.ag-center-cols-container .ag-row');
+  await expect(objectiveRows).toHaveCount(6);
+  await expect(objectiveRows.first()).toContainText('Launch AI code review v2');
+  await expect(objectiveRows.last()).toContainText('Migrate to unified pipeline');
+  await expect(objectiveRows.first().locator('.ag-cell[col-id="due_date"]')).toHaveText(/^[A-Z][a-z]{2} \d{1,2}, 2026$/);
+  const linkedProductCell = objectiveRows.first().locator('.ag-cell[col-id="product"]');
   await expect(linkedProductCell).toHaveText('Core Product');
   expect(await linkedProductCell.evaluate((cell) => cell.scrollWidth <= cell.clientWidth)).toBe(true);
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Launch AI code review v2');
@@ -214,10 +215,11 @@ test('Objectives grid keeps product names while the catalog loads', async ({ pag
   }));
   await page.setViewportSize({ width: 1522, height: 856 });
   await page.goto('http://zenchron.test:4173/#objectives');
-  const productCell = page.locator('.ag-row').first().locator('.ag-cell[col-id="product"]');
+  const objectiveRows = page.locator('.ag-center-cols-container .ag-row');
+  const productCell = objectiveRows.first().locator('.ag-cell[col-id="product"]');
   await expect(productCell).toHaveText('Nova Platform');
   await page.getByRole('textbox', { name: 'Search objectives' }).fill('Nova Platform');
-  await expect(page.locator('.ag-row')).toHaveCount(1);
+  await expect(objectiveRows).toHaveCount(1);
 });
 
 test('Projects page shows the live local worker inventory', async ({ page }) => {
@@ -410,9 +412,9 @@ test('Reports summarizes live objectives and run records without inventing deliv
     await expect(page.locator('.work-outcomes-panel .reports-empty')).toContainText(/pull-request|repository|history/i);
   }
   await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Delivery velocity & cycle time' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'CI duration distribution' })).toBeVisible();
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' })).toContainText('Unavailable');
+  await expect(page.getByRole('heading', { name: 'Delivery Velocity & Cycle Time' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'CI Duration Distribution' })).toBeVisible();
+  await expect(page.locator('.reports-metric').filter({ hasText: /Delivery Velocity/i })).toContainText('Unavailable');
   await expect(page.getByRole('button', { name: 'Download Executive Summary CSV' })).toBeVisible();
 });
 

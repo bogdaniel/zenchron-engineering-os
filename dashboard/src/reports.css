@@ -104,6 +104,7 @@
 .reports-summary { grid-column: span 3; }
 .downloadable-reports-panel { grid-column: span 3; }
 .reports-summary .reports-panel-heading h3 { font-size: 11px; white-space: nowrap; }
+.reports-summary .reports-panel-heading > .reports-insight-filter { align-self: flex-start; }
 .reports-panel-heading > div > svg { color: #bd8aff; }
 .reports-panel-heading p { line-height: 1.2; }
 .reports-percentiles { display: flex; flex: 0 0 auto; gap: 4px; }
@@ -116,7 +117,7 @@
   font-size: 9px;
   line-height: 1.2;
 }
-.acceptance-panel .reports-panel-heading h3 { letter-spacing: -.5px; white-space: nowrap; }
+.acceptance-panel .reports-panel-heading h3 { font-size: 14px; letter-spacing: -.5px; white-space: nowrap; }
 .reports-insight-filter.mantine-Select-root { width: 122px; flex: 0 0 auto; }
 .reports-insight-filter .mantine-Select-input { min-height: 24px; height: 24px; border-color: #38324c; background: #1b1928; font-size: 8px; }
 .report-summary-table-wrap { overflow-x: auto; }
