@@ -437,7 +437,11 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     setEdges(workflowEdges);
     void layoutNodes(selectedNodes, workflowEdges).then((laidOut) => {
       if (!isCurrent) return;
-      setNodes(laidOut);
+      const positions = new Map(laidOut.map((node) => [node.id, node.position]));
+      setNodes((currentNodes) => currentNodes.map((node) => {
+        const position = positions.get(node.id);
+        return position ? { ...node, position } : node;
+      }));
       setLayoutRevision((revision) => revision + 1);
     }).catch(() => {
       if (isCurrent) setNotice('Auto layout unavailable; arrange nodes manually');

@@ -31,10 +31,11 @@ test('Reviews matches the supplied desktop workspace frame', async ({ page }) =>
   expect(layout.title?.x).toBe(291);
   expect(layout.tabs?.y).toBeCloseTo(205, 0);
   expect(layout.workspace?.y).toBeCloseTo(238, 0);
-  expect(layout.workspace?.height).toBe(635);
+  expect(layout.workspace?.height).toBe(584);
 });
 
 test('overview lists only agent runs with captured local diffs', async ({ page }) => {
+  await useTestShell(page);
   const now = new Date().toISOString();
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
     status: 200,

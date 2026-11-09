@@ -39,6 +39,11 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
 });
 
 test('workflow graph can be edited and saved to the control plane', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!crypto.randomUUID) Object.defineProperty(Crypto.prototype, 'randomUUID', {
+      value: () => crypto.getRandomValues(new Uint32Array(4)).join('-'),
+    });
+  });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }),
@@ -136,6 +141,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   expect(canvasPanel && editorStatus && editorStatus.y + editorStatus.height)
     .toBeLessThanOrEqual(canvasPanel!.y + canvasPanel!.height);
   await page.getByRole('button', { name: 'Auto layout' }).click();
+  await expect(page.locator('.workflow-status')).toContainText('Layout updated');
   const branchNodes = await Promise.all(['code-reviewer', 'test-generator', 'coverage-analyzer']
     .map((kind) => page.locator(`.workflow-canvas .workflow-node.${kind}`).boundingBox()));
   expect(branchNodes.every(Boolean)).toBe(true);
@@ -164,7 +170,9 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
     return canvas && box.right > canvas.left && box.left < canvas.right &&
       box.bottom > canvas.top && box.top < canvas.bottom;
   }))).toBe(true);
-  await page.locator('.workflow-component-add').filter({ hasText: 'Agent Task' }).click();
+  const addAgentTask = page.locator('.workflow-component-add').filter({ hasText: 'Agent Task' });
+  await addAgentTask.click();
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText(/Saved v\d+/)).toBeVisible();
   await page.locator('.workflow-canvas .workflow-node').filter({ hasText: 'Trigger' }).click();
@@ -181,7 +189,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await page.getByRole('combobox', { name: 'Workflow' }).click();
   await page.getByRole('option', { name: 'PR Review & Release Orchestration' }).click();
   await expect(page.getByRole('combobox', { name: 'Workflow' })).toHaveValue('PR Review & Release Orchestration');
-  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(9);
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
   await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Router');
   const dragHandle = page.getByRole('button', { name: 'Drag Agent Task to canvas' });
   const source = await dragHandle.boundingBox();
@@ -202,7 +210,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
     return Math.abs(bounds.x + bounds.width / 2 - dropPoint.x) < 30 &&
       Math.abs(bounds.y + bounds.height / 2 - dropPoint.y) < 30;
   }).toBe(true);
-  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(11);
   const splitter = page.getByRole('separator');
   await expect(splitter).toHaveAttribute('tabindex', '0');
   const separatorBox = await splitter.boundingBox();
@@ -242,7 +250,9 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(page.locator('.workflow-mobile-task-row')).toHaveCount(6);
   await expect(page.getByRole('region', { name: 'Approvals' })).toContainText('Human approval');
   await expect(page.getByRole('region', { name: 'Approvals' })).toContainText('Not requested');
-  const approvals = await page.getByRole('region', { name: 'Approvals' }).boundingBox();
+  const approvalsRegion = page.getByRole('region', { name: 'Approvals' });
+  await approvalsRegion.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+  const approvals = await approvalsRegion.boundingBox();
   const mobileNavigation = await page.locator('.sidebar nav').boundingBox();
   if (!approvals || !mobileNavigation) throw new Error('Mobile approval or navigation bounds are unavailable');
   expect(approvals.y + approvals.height).toBeLessThanOrEqual(mobileNavigation.y);

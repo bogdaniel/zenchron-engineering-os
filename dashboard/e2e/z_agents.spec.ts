@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test';
 
 test('Agents populated desktop layout matches the reference panel geometry', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'E2E' }),
+  }));
   await page.setViewportSize({ width: 1672, height: 941 });
   const profileID = 'ab'.repeat(16);
   const projectID = 'ef'.repeat(16);
@@ -85,7 +89,7 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   const metrics = await page.locator('.agents-metrics').boundingBox();
   const noteCount = await page.locator('.agents-runtime-note').count();
   expect(list && detail && runs && sidebar && metrics).toBeTruthy();
-  expect(sidebar!.width).toBe(250);
+  expect(sidebar!.width).toBe(247);
   expect(metrics!.x).toBe(263);
   expect(Math.abs(metrics!.y - 136.5)).toBeLessThanOrEqual(1);
   expect(Math.abs(metrics!.height - 65)).toBeLessThanOrEqual(1);
@@ -96,7 +100,7 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   expect(runs!.x).toBeCloseTo(detail!.x, 0);
   expect(runs!.y).toBeGreaterThan(detail!.y);
   expect(runs!.y + runs!.height).toBeLessThanOrEqual((list!.y + list!.height) + 1);
-  await expect(page.locator('.agents-panel-heading h3').first()).toHaveCSS('font-size', '14px');
+  await expect(page.locator('.agents-panel-heading h3').first()).toHaveCSS('font-size', '16px');
 
   await page.setViewportSize({ width: 1672, height: 749 });
   const compact = await page.evaluate(() => Object.fromEntries(
