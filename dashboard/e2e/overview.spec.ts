@@ -276,7 +276,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await page.getByRole('button', { name: 'Workflow options' }).click();
   await expect(page.getByRole('menuitem', { name: 'Open workflow editor' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('.workflow-overview-canvas')).toHaveAttribute('aria-label', /6 stages summarize 9 components/);
+  await expect(page.locator('.workflow-overview-canvas')).toHaveAttribute('aria-label', /6 stages summarize 10 components/);
   const workflowNodeGaps = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
     return {

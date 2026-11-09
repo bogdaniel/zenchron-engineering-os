@@ -472,7 +472,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
             onInit={(instance) => { flow.current = instance; }}
             onNodeClick={(_, node) => setSelectedId(node.id)} fitView minZoom={0.2} attributionPosition="bottom-left"
           >
-            <Background color={designPreview ? '#504665' : '#37324c'} gap={18} size={designPreview ? 1.2 : 1} />
+            <Background color={designPreview ? '#504665' : '#37324c'} gap={designPreview ? 36 : 18} size={designPreview ? 4 : 2} />
             <MiniMap style={{ width: 128, height: 54 }} nodeColor="#8e52db" maskColor="#0b0b14bb" />
             {!designPreview && <Controls position="top-right" />}
           </ReactFlow>

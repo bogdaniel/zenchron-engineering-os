@@ -195,7 +195,7 @@
 .workflow-component-icon.planner { color: #7db9ff; background: #203f65; }
 .workflow-component-icon.test-generator,
 .workflow-component-icon.coverage-analyzer { color: #53ddd0; background: #18534e; }
-.workflow-component-icon.human-approval { color: #43dda6; background: #1e5842; }
+.workflow-component-icon.human-approval, .workflow-component-icon.condition { color: #43dda6; background: #1e5842; }
 .workflow-component-add {
   display: grid;
   min-height: 46px;
@@ -309,7 +309,7 @@
 .workflow-node.planner { --workflow-accent: #7db9ff; --workflow-border: #3c78b2; --workflow-tint: #172d4b; --workflow-icon-bg: #203f65; --workflow-glow: #7db9ff66; }
 .workflow-node.agent-router, .workflow-node.code-reviewer, .workflow-node.merge-gate, .workflow-node.publish-report { --workflow-accent: #c38bff; --workflow-border: #8d4cda; --workflow-tint: #2b1740; --workflow-icon-bg: #452969; --workflow-glow: #c38bff66; }
 .workflow-node.test-generator, .workflow-node.coverage-analyzer { --workflow-accent: #53ddd0; --workflow-border: #258b83; --workflow-tint: #133b3a; --workflow-icon-bg: #18534e; --workflow-glow: #53ddd066; }
-.workflow-node.human-approval { --workflow-accent: #43dda6; --workflow-border: #318b6d; --workflow-tint: #133a2d; --workflow-icon-bg: #1e5842; --workflow-glow: #43dda066; }
+.workflow-node.human-approval, .workflow-node.condition { --workflow-accent: #43dda6; --workflow-border: #318b6d; --workflow-tint: #133a2d; --workflow-icon-bg: #1e5842; --workflow-glow: #43dda066; }
 .workflow-node-icon {
   display: grid;
   width: 26px;

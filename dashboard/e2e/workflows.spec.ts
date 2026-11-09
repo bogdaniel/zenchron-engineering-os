@@ -8,14 +8,26 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('http://127.0.0.1:4173/#workflows');
+  const previewURL = new URL('/#workflows', test.info().project.use.baseURL ?? 'http://127.0.0.1:4173');
+  previewURL.hostname = '127.0.0.1';
+  await page.goto(previewURL.toString());
 
   await expect(page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ })).toBeVisible();
   await expect(page.locator('.workflow-page-heading .eyebrow')).toContainText('Workflows');
   await expect(page.getByRole('group', { name: 'Canvas tools' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Workflow' })).toBeHidden();
   await expect(page.getByRole('button', { name: 'Custom Block' })).toBeDisabled();
-  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(9);
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
+  await expect(page.locator('.workflow-canvas .workflow-node.condition')).toContainText('Coverage ≥ 80% and tests pass');
+  await expect(page.locator('.workflow-canvas .workflow-node.condition .workflow-node-icon')).toHaveCSS('color', 'rgb(67, 221, 166)');
+  const dot = await page.locator('.workflow-canvas .react-flow__background-pattern.dots').evaluate((circle) => ({
+    radius: Number(circle.getAttribute('r')),
+    spacing: Number(circle.closest('pattern')?.getAttribute('width')),
+    fill: getComputedStyle(circle).fill,
+  }));
+  expect(dot.radius).toBeGreaterThanOrEqual(0.9);
+  expect(dot.spacing).toBeGreaterThanOrEqual(16);
+  expect(dot.fill).toBe('rgb(80, 70, 101)');
   const branchNodes = await Promise.all(['code-reviewer', 'test-generator', 'coverage-analyzer']
     .map((kind) => page.locator(`.workflow-canvas .workflow-node.${kind}`).boundingBox()));
   expect(branchNodes.every(Boolean)).toBe(true);

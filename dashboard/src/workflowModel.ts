@@ -73,6 +73,7 @@ export const designPreviewWorkflow: Workflow = {
     ['review', 'code-reviewer', 'Code Reviewer', 'Analyze changes and provide review'],
     ['tests', 'test-generator', 'Test Generator', 'Generate and update tests'],
     ['coverage', 'coverage-analyzer', 'Coverage Analyzer', 'Compute test coverage and quality'],
+    ['condition', 'condition', 'Condition', 'Coverage ≥ 80% and tests pass'],
     ['approval', 'human-approval', 'Human Approval', 'Review results and approve'],
     ['merge', 'merge-gate', 'Merge Gate', 'Conditional merge with policies'],
     ['publish', 'publish-report', 'Publish Report', 'Generate and publish release report'],
@@ -81,7 +82,8 @@ export const designPreviewWorkflow: Workflow = {
   })),
   edges: [
     ['trigger', 'plan'], ['plan', 'build'], ['build', 'review'], ['build', 'tests'], ['build', 'coverage'],
-    ['review', 'approval'], ['tests', 'approval'], ['coverage', 'approval'], ['approval', 'merge'], ['merge', 'publish'],
+    ['review', 'approval'], ['tests', 'condition'], ['coverage', 'condition'], ['condition', 'approval'],
+    ['approval', 'merge'], ['merge', 'publish'],
   ].map(([source, target]) => ({ id: `${source}-${target}`, source, target, label: '' })),
 };
 
