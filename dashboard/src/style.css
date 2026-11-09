@@ -589,13 +589,13 @@ button:disabled, input:disabled {
 }
 .app-shell .main-content .shared-metric-card strong.metric-unavailable { font-size: 14px; }
 .shared-panel-heading { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 10px; }
-.shared-panel-heading > div:first-child { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.shared-panel-heading > div:first-child { display: flex; min-width: 0; align-items: flex-start; gap: 9px; }
 .section-icon { display: grid; width: 31px; height: 31px; flex: 0 0 auto; place-items: center; border: 1px solid #3a3153; border-radius: 9px; color: #c59bff; background: #2a2139; }
 .blue-icon { border-color: #2c3e58; color: #92c7ff; background: #1a2939; }
 .teal-icon { border-color: #28505a; color: #7ddde1; background: #172b30; }
 .green-icon { border-color: #34725d; color: #80e3b3; background: #193128; }
 .shared-panel-heading h3 { margin: 0; color: #eee9f6; font-size: var(--panel-heading-size); font-weight: var(--panel-heading-weight); }
-.shared-panel-heading p { margin: 4px 0 0; color: #9691a8; font-size: var(--panel-description-size); }
+.shared-panel-heading p { margin: 2px 0 0; color: #9691a8; font-size: var(--panel-description-size); }
 .shared-panel-heading .shared-panel-eyebrow { display: block; margin-bottom: 4px; color: #88839a; font-size: 8px; }
 .app-shell .main-content .entity-detail-heading h3,
 .app-shell .main-content h3.entity-detail-heading {
