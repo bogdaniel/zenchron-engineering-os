@@ -320,8 +320,9 @@ Before you say a task is complete:
 - UI and design work meets every item in §14.3, with the screenshots actually inspected.
 - The feature has a doc under `docs/features/` with a current `## Feature diagram` Mermaid block (§14.8), created if
   it did not exist and updated if the change altered the flow.
-- The work is committed in coherent, separately verified steps with Conventional Commit messages (§14.9); nothing in
-  scope is left uncommitted in the working tree.
+- The work is committed in coherent, separately verified steps with Conventional Commit messages, pushed on a task
+  branch, and open as a pull request whose body is the §14.5 report (§14.9); nothing in scope is left uncommitted in
+  the working tree.
 - If available, `/ponytail-review` was run on the diff; apply its delete-list only where consistent with this file and
   the task, and justify each skipped item.
 - Your summary lists every `ponytail:` corner you added.
@@ -500,8 +501,8 @@ passing, or matching unless you observed it in this session.
   `dashboard/playwright-report`) or the session scratch directory unless the human asks for them in `docs/screenshots`.
 - Stop every process you started (`./dev.sh`, Playwright web servers, `go run`) before you finish, unless the human
   asked you to leave the preview running.
-- Commit your work as you go (§14.9). Do not push, create remote branches, or open pull requests unless the task
-  asks for it.
+- Commit your work as you go and deliver it as a pull request (§14.9). Never push to `main` directly and never merge
+  a pull request yourself unless the human asks for exactly that.
 
 ### 14.7 Long sessions, compaction, and subagents
 
@@ -556,8 +557,22 @@ work in pieces. One large uncommitted working tree at the end of a session defea
   not obvious. Add the attribution trailer the host requires.
 - Stage only the files of the step (`git add <paths>`), never `git add -A` or `git add .`. Review `git diff --cached`
   before every commit for stray debug output, build artifacts, secrets, screenshots, and other contributors' hunks.
-- Work on a branch when the task will take more than one commit or touches shared code; name it after the task.
-  Stay on `main` only for a single small commit the human asked for directly.
+- Work on a branch, named after the task (`feat/review-queue-filters`, `fix/worker-heartbeat-timeout`,
+  `docs/agent-rules`). Commit directly on `main` only when the human asks for exactly that.
+- Push the branch and open a pull request against `main` as the normal way of delivering work; do not wait to be
+  asked. Open it as a draft as soon as the first verified commit exists when the task spans several steps or
+  sessions, so the human can watch progress and CI runs on every push. Mark it ready for review when every
+  acceptance item is done and the §13 checks pass locally. For a small single-commit task, push and open the pull
+  request when the task is complete.
+- The pull request title is the Conventional Commit subject of the change. The body is the §14.5 report (Done,
+  Verified, Not done or blocked, Deviations and risks), the list of commits, and the attribution line the host
+  requires. Link the feature doc you created or updated (§14.8). After opening, check that the `go` and `dashboard`
+  CI jobs ran on the head commit and report their result; fix failures on the branch, never by weakening checks.
+- One task, one pull request. Do not pile unrelated tasks onto an open branch; start a new branch from `main`. Keep
+  pushing follow-up commits to the same branch while the human reviews, and answer review comments with commits or
+  a reply, not with a new pull request.
+- Never merge a pull request, delete a remote branch you did not create in this session, or push to `main` unless the
+  human asks for exactly that.
 - Never rewrite or discard history you did not create in this session: no `git reset --hard`, `git checkout -- .`,
   `git stash` of others' work, `git commit --amend` on a pushed commit, or force push. To undo your own last
   unpushed commit, use `git revert` or a soft reset and say so in the report.
