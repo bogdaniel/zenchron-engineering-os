@@ -320,6 +320,8 @@ Before you say a task is complete:
 - UI and design work meets every item in §14.3, with the screenshots actually inspected.
 - The feature has a doc under `docs/features/` with a current `## Feature diagram` Mermaid block (§14.8), created if
   it did not exist and updated if the change altered the flow.
+- The work is committed in coherent, separately verified steps with Conventional Commit messages (§14.9); nothing in
+  scope is left uncommitted in the working tree.
 - If available, `/ponytail-review` was run on the diff; apply its delete-list only where consistent with this file and
   the task, and justify each skipped item.
 - Your summary lists every `ponytail:` corner you added.
@@ -498,8 +500,8 @@ passing, or matching unless you observed it in this session.
   `dashboard/playwright-report`) or the session scratch directory unless the human asks for them in `docs/screenshots`.
 - Stop every process you started (`./dev.sh`, Playwright web servers, `go run`) before you finish, unless the human
   asked you to leave the preview running.
-- Do not commit, push, create branches, or open pull requests unless the task asks for it. When it does, use the
-  commit and PR conventions already in the history and the attribution the host requires.
+- Commit your work as you go (§14.9). Do not push, create remote branches, or open pull requests unless the task
+  asks for it.
 
 ### 14.7 Long sessions, compaction, and subagents
 
@@ -536,3 +538,29 @@ an optional extra.
   explicitly as outstanding, as the roadmap does.
 - Add the README link when creating a doc. Do not create a doc for a bug fix or a pure refactor unless the human
   asks; update the existing one if the fix changes documented behavior.
+
+### 14.9 Work in commits
+
+The history is how humans and later agents understand what changed and why, recover from a bad step, and review
+work in pieces. One large uncommitted working tree at the end of a session defeats all three.
+
+- Commit after each coherent step that leaves the tree consistent: typecheck passes, the focused check for that step
+  passes, and the step is one idea. Typical steps: a failing regression test, the fix that makes it pass, an
+  extraction, a page's markup, that page's styles, the feature doc and diagram. Do not batch a session's work into
+  one commit, and do not commit a half-finished step to "save progress"; finish the step first.
+- Never mix unrelated changes in one commit. A refactor and a behavior change are two commits. A fix and the
+  `.gitignore` tweak you noticed on the way are two commits.
+- Messages follow Conventional Commits as the history does: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`,
+  `chore:`, `ci:`, with an optional scope such as `feat(dashboard):` or `fix(worker):`. The subject is imperative,
+  under 72 characters, and says what changed; the body says why and names the check that verified it when that is
+  not obvious. Add the attribution trailer the host requires.
+- Stage only the files of the step (`git add <paths>`), never `git add -A` or `git add .`. Review `git diff --cached`
+  before every commit for stray debug output, build artifacts, secrets, screenshots, and other contributors' hunks.
+- Work on a branch when the task will take more than one commit or touches shared code; name it after the task.
+  Stay on `main` only for a single small commit the human asked for directly.
+- Never rewrite or discard history you did not create in this session: no `git reset --hard`, `git checkout -- .`,
+  `git stash` of others' work, `git commit --amend` on a pushed commit, or force push. To undo your own last
+  unpushed commit, use `git revert` or a soft reset and say so in the report.
+- Each commit's tests pass on their own. If a later step shows an earlier commit was wrong, add a fixing commit; do
+  not squash the evidence away unless the human asks for a squash before merge.
+- The §14.5 report lists the commits made, by hash and subject, in order.
