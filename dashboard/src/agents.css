@@ -217,12 +217,12 @@
 .agent-row-body small {
   overflow: hidden;
   color: #958ea2;
-  font-size: 9px;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .agent-tool-badges { display: flex; min-width: 0; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
-.agent-tool-badge { height: 16px; padding-inline: 5px; border: 1px solid #504064; color: #c3a0ff; background: #292035; font-size: 8px; font-weight: 550; }
+.agent-tool-badge { height: 16px; padding-inline: 5px; border: 1px solid #504064; color: #c3a0ff; background: #292035; font-size: 9px; font-weight: 550; }
 .agent-tool-empty { color: #958ea2; font-size: 9px; }
 .agents-empty,
 .agents-detail-empty {
@@ -463,7 +463,7 @@
 .agents-design-preview .agent-row:nth-child(6) .agent-row-icon { border-color: #225a5e; color: #49d7d8; background: #163235; }
 .agents-design-preview .agent-row-body { gap: 2px; }
 .agents-design-preview .agent-row-body b { font-size: 11px; }
-.agents-design-preview .agent-row-body small { font-size: 8.5px; line-height: 1.05; }
+.agents-design-preview .agent-row-body small { font-size: 10px; line-height: 1.05; }
 .agents-design-preview .agent-tool-badge { text-transform: none; }
 .agents-design-preview .agents-detail-heading { min-height: 58px; padding: 9px 11px; }
 .agents-design-preview .agents-detail-actions { gap: 5px; }

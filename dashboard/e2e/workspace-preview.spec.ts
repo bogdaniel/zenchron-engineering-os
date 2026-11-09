@@ -31,6 +31,27 @@ test('local Product Workspace mock matches the supplied overview without protect
   const overflowingCards = await page.locator('.workspace-mock-card').evaluateAll((cards) =>
     cards.filter((card) => card.scrollHeight > card.clientHeight + 1).map((card) => card.textContent?.trim()));
   expect(overflowingCards).toEqual([]);
+  for (const [width, height, columns] of [[1024, 768, 2], [768, 1024, 1], [390, 844, 1]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/#workspace');
+    const responsiveLayout = await page.evaluate(() => ({
+      width: document.documentElement.scrollWidth,
+      viewport: window.innerWidth,
+      columns: getComputedStyle(document.querySelector('.workspace-mock-grid')!)
+        .gridTemplateColumns.trim().split(/\s+/).length,
+      tabsFit: [...document.querySelectorAll('.workspace-mock-tabs button')].every((button) => {
+        const tabs = document.querySelector('.workspace-mock-tabs')!.getBoundingClientRect();
+        const item = button.getBoundingClientRect();
+        return item.left >= tabs.left && item.right <= tabs.right + 1;
+      }),
+    }));
+    expect(responsiveLayout.width).toBe(responsiveLayout.viewport);
+    expect(responsiveLayout.columns).toBe(columns);
+    expect(responsiveLayout.tabsFit).toBe(true);
+    const clippedCards = await page.locator('.workspace-mock-card').evaluateAll((cards) =>
+      cards.filter((card) => card.scrollHeight > card.clientHeight + 1).map((card) => card.textContent?.trim()));
+    expect(clippedCards).toEqual([]);
+  }
   expect(apiRequests.filter(({ path }) => path !== '/api/v1/auth/session')).toEqual([]);
   expect(apiRequests.filter(({ method }) => method !== 'GET')).toEqual([]);
 });

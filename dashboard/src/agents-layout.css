@@ -29,3 +29,8 @@
     min-height: 0;
   }
 }
+
+@media (max-width: 700px) {
+  .agents-list-panel { min-height: 0; overflow: visible; }
+  .agents-design-preview .agents-list-panel { max-height: none; overflow: visible; }
+}

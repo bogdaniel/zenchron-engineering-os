@@ -48,4 +48,13 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(page.locator('.reviews-summary-review-actions').getByRole('button', { name: 'Request changes' })).toBeDisabled();
   expect(apiRequests.filter(({ path }) => path !== '/api/v1/auth/session')).toEqual([]);
   expect(apiRequests.filter(({ method }) => method !== 'GET')).toEqual([]);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#reviews');
+  const mobileMetrics = await page.locator('.reviews-metric').evaluateAll((cards) => cards.map((card) => ({
+    height: card.clientHeight,
+    contentHeight: card.scrollHeight,
+  })));
+  expect(mobileMetrics.every(({ contentHeight, height }) => contentHeight <= height + 1)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });

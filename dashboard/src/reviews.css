@@ -403,6 +403,7 @@
     order: 2;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  .reviews-metric { height: auto; }
   .reviews-tabs {
     overflow-x: auto;
   }

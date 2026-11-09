@@ -163,14 +163,22 @@
 @media (max-width: 1050px) {
   .workspace-mock { grid-template-columns: 1fr; }
   .workspace-mock-directory { display: none; }
-  .workspace-mock-grid { grid-template-rows: 174px 166px 154px; }
+  .workspace-mock-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-mock-metric { height: auto; min-height: 76px; }
+  .workspace-mock-tabs button { min-width: 0; flex: 1; padding: 0 5px; }
+  .workspace-mock-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; }
+  .workspace-mock-grid > .workspace-mock-card { height: auto; grid-column: auto; min-height: 166px; }
+  .workspace-mock-grid > .workspace-mock-card.roadmap { grid-column: 1 / -1; min-height: 185px; }
+}
+@media (max-width: 850px) {
+  .workspace-mock-grid { grid-template-columns: 1fr; }
+  .workspace-mock-grid > .workspace-mock-card.roadmap { grid-column: auto; }
 }
 @media (max-width: 760px) {
   .workspace-mock { padding-top: 8px; }
   .workspace-mock-heading { min-height: 66px; flex-wrap: wrap; }
   .workspace-mock-heading p, .workspace-mock-meta, .workspace-mock-heading > button { display: none; }
   .workspace-mock-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .workspace-mock-tabs button { min-width: 0; flex: 1; padding: 0 5px; }
   .workspace-mock-grid { grid-template-columns: 1fr; grid-template-rows: auto; }
   .workspace-mock-card, .workspace-mock-card.roadmap, .workspace-mock-card.objectives,
   .workspace-mock-card.repositories, .workspace-mock-card.linked-workflows, .workspace-mock-card.files, .workspace-mock-card.people,
