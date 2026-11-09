@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+test.use({ baseURL: 'http://127.0.0.1:4173' });
+
 test('local Integrations mock uses static content and keeps controls read only', async ({ page }) => {
   const apiRequests: { method: string; path: string }[] = [];
   await page.route('**/api/v1/**', async (route) => {

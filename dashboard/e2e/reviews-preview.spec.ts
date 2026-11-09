@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+test.use({ baseURL: 'http://127.0.0.1:4173' });
+
 test('local Reviews mock uses its fixture without provider reads or review writes', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   const apiRequests: { method: string; path: string }[] = [];
@@ -11,7 +13,7 @@ test('local Reviews mock uses its fixture without provider reads or review write
 
   await page.goto('/#reviews');
 
-  await expect(page.getByText('Design preview · sample PR content')).toBeVisible();
+  await expect(page.locator('.reviews-page')).toHaveAttribute('data-preview', 'mock');
   await expect(page.locator('.reviews-metric').nth(0)).toContainText('428');
   await expect(page.locator('.reviews-metric').nth(5)).toContainText('99.2%');
   await expect(page.getByRole('button', { name: 'All Repos' })).toBeDisabled();

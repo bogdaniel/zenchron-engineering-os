@@ -8,7 +8,7 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/#workflows');
+  await page.goto('http://127.0.0.1:4173/#workflows');
 
   await expect(page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ })).toBeVisible();
   await expect(page.locator('.workflow-page-heading .eyebrow')).toContainText('Workflows');

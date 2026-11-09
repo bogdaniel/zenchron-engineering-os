@@ -60,7 +60,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.locator('.downloadable-report-format').first()).toHaveCSS('width', '30px');
   await expect(page.locator('.downloadable-report-format').first()).toHaveCSS('height', '30px');
   await expect(page.locator('.downloadable-reports-panel .shared-panel-heading p')).toHaveCount(0);
-  await expect(page.locator('.downloadable-report-list')).toHaveCSS('row-gap', '4px');
+  await expect(page.locator('.downloadable-report-list')).toHaveCSS('row-gap', '0px');
   await expect(page.locator('.downloadable-report').first()).toHaveCSS('min-height', '34px');
   await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '12px');
   await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '10px');

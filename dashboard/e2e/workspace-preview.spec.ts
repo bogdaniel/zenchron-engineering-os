@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+test.use({ baseURL: 'http://127.0.0.1:4173' });
+
 test('local Product Workspace mock matches the supplied overview without protected API traffic', async ({ page }) => {
   const apiRequests: { method: string; path: string }[] = [];
   await page.route('**/api/v1/**', async (route) => {
@@ -23,7 +25,7 @@ test('local Product Workspace mock matches the supplied overview without protect
   await expect(page.getByRole('button', { name: 'New Workspace' })).toBeDisabled();
   await expect(page.getByRole('textbox', { name: 'Search products' })).toBeDisabled();
 
-  const gridColumns = await page.locator('.workspace-mock-grid').evaluate((grid) =>
+  const gridColumns = await page.locator('div.workspace-mock-grid').evaluate((grid) =>
     getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length);
   expect(gridColumns).toBe(12);
   const overflowingCards = await page.locator('.workspace-mock-card').evaluateAll((cards) =>

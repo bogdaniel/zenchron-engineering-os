@@ -135,7 +135,7 @@
 }
 .report-summary-table td, .report-summary-table th { padding: 2px; overflow-wrap: anywhere; vertical-align: top; }
 .report-summary-table .report-unavailable { font: inherit; text-decoration: none; cursor: help; }
-.downloadable-report-list { display: grid; gap: 3px; }
+.downloadable-report-list { display: grid; gap: 0; }
 .downloadable-report {
   display: grid;
   min-width: 0;
@@ -175,8 +175,10 @@
 .downloadable-report-copy span {
   color: #a9a5b9;
   font-size: 9px;
-  line-height: 1.05;
-  overflow-wrap: anywhere;
+  line-height: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .downloadable-report-button.mantine-Button-root {
   width: 24px;

@@ -9,7 +9,7 @@ async function useTestShell(page: Page) {
 }
 test('Reviews matches the supplied desktop workspace frame', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 874 });
-  await page.goto('/#reviews');
+  await page.goto('http://127.0.0.1:4173/#reviews');
   await expect(page.locator('.reviews-metrics')).toBeVisible();
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();

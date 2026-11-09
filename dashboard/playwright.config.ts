@@ -4,10 +4,17 @@ export default defineConfig({
   testDir: './e2e',
   globalTeardown: './e2e/teardown.mjs',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: 'http://zenchron.test:4173',
     launchOptions: { args: ['--host-resolver-rules=MAP zenchron.test 127.0.0.1'] },
   },
   webServer: [
+    {
+      command: 'sh ./dev.sh',
+      url: 'http://127.0.0.1:4173',
+      env: { ZENCHRON_API_PROXY: 'http://127.0.0.1:8083' },
+      reuseExistingServer: true,
+      timeout: 120_000,
+    },
     {
       command: 'node ./dashboard/e2e/mock-llm.mjs',
       cwd: '..',

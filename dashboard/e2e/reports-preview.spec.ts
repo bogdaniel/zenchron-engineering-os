@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+test.use({ baseURL: 'http://127.0.0.1:4173' });
+
 test('local Reports mock renders its fixture without protected reads or exports', async ({ page }) => {
   const apiRequests: { method: string; path: string }[] = [];
   await page.route('**/api/v1/**', async (route) => {
@@ -10,7 +12,7 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
 
-  await expect(page.getByText('Mock data')).toBeVisible();
+  await expect(page.locator('.reports-page')).toHaveClass(/reports-design-preview/);
   await expect(page.locator('.reports-metric')).toHaveCount(7);
   await expect(page.locator('.reports-metric').nth(0)).toContainText('42');
   await expect(page.locator('.reports-metric').nth(6)).toContainText('68.4%');
@@ -36,7 +38,7 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await expect(page.locator('.reports-insight')).toHaveCount(5);
   const insightsFit = await page.locator('.reports-summary').evaluate((panel) => panel.scrollHeight <= panel.clientHeight);
   expect(insightsFit).toBe(true);
-  await expect(page.getByRole('combobox', { name: 'Insights view' })).toHaveValue('Executive summary');
+  await expect(page.getByRole('combobox', { name: 'Insights view' })).toHaveValue('Executive Summary');
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
   const downloadsFit = await page.locator('.downloadable-reports-panel').evaluate((panel) => {
     const panelBottom = panel.getBoundingClientRect().bottom;

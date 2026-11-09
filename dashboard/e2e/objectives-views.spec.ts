@@ -48,7 +48,7 @@ test('local Objectives mock preview renders the supplied screen without protecte
   });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/#objectives');
+  await page.goto('http://127.0.0.1:4173/#objectives');
 
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   await expect(page.locator('.objective-metric').nth(0)).toContainText('Objective Throughput');
@@ -122,7 +122,7 @@ test('Objectives mock layout stays within desktop, tablet, and mobile viewports'
   });
   for (const [width, height] of [[1668, 750], [1440, 900], [1280, 800], [768, 1024], [390, 844]]) {
     await page.setViewportSize({ width, height });
-    await page.goto('/#objectives');
+    await page.goto('http://127.0.0.1:4173/#objectives');
     await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Objective' })).toBeVisible();
     await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(6);

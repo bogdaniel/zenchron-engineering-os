@@ -44,7 +44,7 @@ test('keeps the dashboard shell visible until a failed session check can be retr
 test('local dashboard has a direct sign-in screen and explains when OAuth is unconfigured', async ({ page }) => {
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }) }));
-  await page.goto('/');
+  await page.goto('http://127.0.0.1:4173/');
   await page.getByRole('link', { name: 'Sign in' }).click();
   await expect(page).toHaveURL('/#login');
   await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
