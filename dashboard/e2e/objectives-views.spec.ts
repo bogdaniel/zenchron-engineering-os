@@ -60,10 +60,10 @@ test('local Objectives mock preview renders the supplied screen without protecte
     await expect(page.locator('.objective-metric').nth(index).locator('small')).toBeHidden();
   }
   await expect(page.getByRole('combobox', { name: 'Filter by due quarter' })).toHaveValue('This Quarter');
-  const objectiveRows = page.locator('.objective-grid-wrap .ag-center-cols-container .ag-row');
+  const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(6);
   await expect(objectiveRows.first()).toHaveClass(/ag-row-selected/);
-  await expect(page.locator('.objective-grid-wrap .ag-center-cols-container .ag-cell').first()).toHaveCSS('font-size', '11px');
+  await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="title"]').first()).toHaveCSS('font-size', '11px');
   await expect(page.locator('.objective-grid-wrap .objective-status').first()).toHaveCSS('font-size', '9px');
   await expect(page.locator('.objective-preview-overview .objective-overview-card b').first())
     .toHaveCSS('font-size', '12px');
@@ -92,8 +92,8 @@ test('local Objectives mock preview renders the supplied screen without protecte
     .evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).map((header) => header.textContent));
   expect(clippedHeaders).toEqual([]);
   const overflowingGridHeaders = await page.locator('.objective-grid-wrap .ag-header-cell').evaluateAll((headers) => {
-    const centerRight = document.querySelector('.objective-grid-wrap .ag-header-viewport')!.getBoundingClientRect().right;
-    return headers.filter((header) => header.closest('.ag-header-viewport')
+    const centerRight = document.querySelector('.objective-grid-wrap .ag-header')!.getBoundingClientRect().right;
+    return headers.filter((header) => header.closest('.ag-header')
       && header.getBoundingClientRect().right > centerRight + 1)
       .map((header) => ({ label: header.textContent, right: header.getBoundingClientRect().right, centerRight }));
   });
@@ -128,7 +128,7 @@ test('Objectives mock layout stays within desktop, tablet, and mobile viewports'
     await page.goto('http://127.0.0.1:4173/#objectives');
     await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Objective' })).toBeVisible();
-    await expect(page.locator('.objective-grid-wrap .ag-center-cols-container .ag-row')).toHaveCount(6);
+    await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(6);
     if (width === 390) {
       const tabButtonsFit = await page.locator('.objectives-tabs').evaluate((tabs) => {
         const bounds = tabs.getBoundingClientRect();
@@ -226,7 +226,7 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await page.goto('http://zenchron.test:4173/#objectives');
 
   await expect(page.getByRole('button', { name: 'Table', pressed: true })).toBeVisible();
-  const objectiveRows = page.locator('.objective-grid-wrap .ag-center-cols-container .ag-row');
+  const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Filter by owner' }).click();
   await page.getByRole('option', { name: 'Alex Chen' }).click();
@@ -245,7 +245,7 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await page.getByRole('option', { name: 'All products' }).click();
   await expect(objectiveRows.first()).toHaveCSS('height', '42px');
   await page.locator('.objective-grid-wrap .ag-cell[col-id=title]').filter({ hasText: 'Reduce CI time' }).click();
-  await expect(page.locator('.objective-grid-wrap .ag-center-cols-container .ag-row-selected')).toContainText('Reduce CI time');
+  await expect(page.locator('.objective-grid-wrap [role="row"].ag-row-selected')).toContainText('Reduce CI time');
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Reduce CI time');
   await expect(page.locator('.objective-grid-wrap .ag-cell').first()).toHaveCSS('font-size', '11px');
   await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').first()).toHaveCSS('font-size', '10px');

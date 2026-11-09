@@ -9,6 +9,9 @@ test('dashboard displays the connected control plane and local worker', async ({
     const response = await page.request.get(upstream);
     await route.fulfill({ response });
   });
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
   await page.goto('/');
   await expect(page.locator('.search-box')).toBeVisible();
   const overviewIconsLeadLabels = await page.locator('.metric-card .metric-top').evaluateAll((headers) =>
