@@ -45,25 +45,28 @@ function StaticField({ label, value, select = false }: { label: string; value: s
     rightSection={select ? <span className="system-preview-chevron">⌄</span> : undefined} /></label>;
 }
 
-export function SystemIntegrationsPreview() {
+export function SystemIntegrationsPreview({ section }: { section: 'integrations' | 'settings' }) {
   return <div className="system-workspace system-preview-workspace">
     <nav className="system-config-nav" aria-label="Configuration categories">
       <b>Configuration</b><small>INTEGRATIONS</small>
-      <a className="active" href="#integrations"><IconDatabase size={12} />Connected Integrations</a>
+      <a className={section === 'integrations' ? 'active' : ''} href="#integrations" aria-current={section === 'integrations' ? 'page' : undefined}>
+        <IconDatabase size={12} />Connected Integrations</a>
       <span><IconBrandOpenai size={12} />Model Providers</span>
       <span><IconCloud size={12} />Runners &amp; Infrastructure</span>
       <span><IconDatabase size={12} />Storage &amp; Evidence</span>
       <small>SETTINGS</small>
-      <span><IconBuilding size={12} />Organization Profile</span>
+      <a className={section === 'settings' ? 'active' : ''} href="#settings" aria-current={section === 'settings' ? 'page' : undefined}>
+        <IconBuilding size={12} />Organization Profile</a>
       <span><IconShieldCheck size={12} />Policies</span>
       <span><IconUsers size={12} />Permissions</span>
       <span><span className="system-preview-dollar">$</span>Budgets</span>
       <span><IconKey size={12} />Secrets</span>
       <span><IconSettings size={12} />Controller Configuration</span>
-      <span><span className="system-preview-bell">♧</span>Notification Rules</span>
+      <span><IconBell size={12} />Notification Rules</span>
     </nav>
 
     <div className="system-workspace-main">
+      {section === 'integrations' && <>
       <div className="system-integration-header system-preview-integration-header">
         <PanelHeading className="system-section-heading" title="Integrations Overview"
           description="Connect your engineering tools, model providers, infrastructure, and data backends." />
@@ -87,6 +90,7 @@ export function SystemIntegrationsPreview() {
           <span>＋</span><div><b>Add Integration</b><small>Connect another tool, model provider, runner, or storage backend.</small></div>
         </PanelCard>
       </div>
+      </>}
 
       <div className="system-preview-settings-grid">
         <PanelCard className="system-preview-card system-preview-profile" withBorder>

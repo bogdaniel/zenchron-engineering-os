@@ -8,7 +8,7 @@ test('phone Workflow mock shows the sample run, task progress, and approvals wit
     await route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"preview fixture expected"}' });
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/?preview=mock#workflows');
+  await page.goto('/#workflows');
 
   await expect(page.getByRole('heading', { name: 'Workflow Orchestration' })).toBeVisible();
   await expect(page.locator('.workflow-mobile-overview .workflow-overview-canvas')).toBeVisible();

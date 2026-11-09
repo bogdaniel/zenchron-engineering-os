@@ -26,7 +26,10 @@ sequenceDiagram
     Start-->>Dev: Keep dashboard available at the fixed URL
     alt Session verified
         UI-->>Dev: Render the selected authenticated page
-    else Session returns HTTP 401
+    else Local session returns HTTP 401
+        UI-->>Dev: Render sample fixtures in the same dashboard shell
+        Dev->>UI: Open /#login when sign-in is needed
+    else Remote session returns HTTP 401
         UI-->>Dev: Show GitHub sign-in
     else Session verification is unavailable
         UI-->>Dev: Keep the shell visible and hide API-backed page data
@@ -40,8 +43,9 @@ sequenceDiagram
 ```
 
 The control plane and dashboard bind to loopback by default. Without OAuth settings, the local dashboard signs in as
-`Local workspace`; use **Preview sign-in** at the bottom of the sidebar to inspect the login screen. The GitHub button is
-disabled in local mode because OAuth is not configured. Exercise real GitHub sign-in by setting the OAuth, session,
+`Local workspace`; **Sign in** opens `/#login`, where the GitHub button explains that OAuth is not configured. With OAuth
+configured, an unauthenticated localhost session shows sample fixtures in the same dashboard shell; sign-in is available
+at `/#login`. There is no separate dashboard URL or query-string mode. Exercise real GitHub sign-in by setting the OAuth, session,
 allowlist, and public-origin variables from
 [GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md) before starting the preview.
 The launcher reads optional root `.env.local` before starting services; `.env.*` is ignored by Git. Set its permissions to

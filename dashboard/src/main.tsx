@@ -9,16 +9,9 @@ import {
   IconBrandGithub,
   IconChartBar,
   IconChevronDown,
-  IconCode,
-  IconHome,
-  IconHierarchy,
-  IconStack2,
   IconLogout,
-  IconPuzzle,
-  IconRobot,
   IconSearch,
-  IconSettings,
-  IconTarget,
+  IconStack2,
 } from '@tabler/icons-react';
 import '@mantine/core/styles.css';
 import '@mantine/charts/styles.css';
@@ -31,26 +24,16 @@ import { SystemPage } from './system';
 import { ReportsPage } from './reports';
 import { WorkspacePage } from './workspace';
 import { OverviewPage } from './OverviewPage';
+import { Sidebar } from './Sidebar';
 import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
 import './style.css';
 import './overview.css';
 import './monaco.css';
 
-const navigation = [
-  { label: 'Overview', href: '#overview', icon: IconHome },
-  { label: 'Objectives', href: '#objectives', icon: IconTarget },
-  { label: 'Workflows', href: '#workflows', icon: IconHierarchy },
-  { label: 'Agents', href: '#agents', icon: IconRobot },
-  { label: 'Product Workspace', href: '#workspace', icon: IconStack2 },
-  { label: 'Reviews', href: '#reviews', icon: IconCode },
-  { label: 'Integrations', href: '#integrations', icon: IconPuzzle },
-  { label: 'Reports', href: '#reports', icon: IconChartBar },
-  { label: 'Settings', href: '#settings', icon: IconSettings },
-];
 const pageIDs = [
   'overview', 'objectives', 'workflows', 'agents', 'projects', 'workspace', 'reviews', 'integrations', 'reports',
-  'settings',
+  'settings', 'login',
 ];
 function pageFromHash() {
   const page = window.location.hash.slice(1);
@@ -71,18 +54,8 @@ const workersResponse = z.array(
 );
 function App() {
   const [activePage, setActivePage] = useState(pageFromHash);
-  const previewMode = new URLSearchParams(window.location.search).get('preview');
-  const loginPreview = previewMode === 'login';
   const localReviewHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-  const mockPreview = localReviewHost && previewMode === 'mock';
-  const designPreview = activePage === 'overview' && (mockPreview || (localReviewHost && !loginPreview && previewMode !== 'live'));
-  const objectivePreview = activePage === 'objectives' && mockPreview;
-  const workspacePreview = activePage === 'workspace' && mockPreview;
-  const workflowPreview = activePage === 'workflows' && mockPreview;
-  const reviewPreview = activePage === 'reviews' && mockPreview;
-  const reportPreview = activePage === 'reports' && mockPreview;
-  const integrationPreview = activePage === 'integrations' && mockPreview;
-  const previewPage = designPreview || objectivePreview || workflowPreview || reviewPreview || reportPreview || integrationPreview || workspacePreview;
+  const loginRoute = activePage === 'login';
   useEffect(() => {
     const syncPage = () => setActivePage(pageFromHash());
     window.addEventListener('popstate', syncPage);
@@ -101,6 +74,17 @@ function App() {
     },
     retry: false,
   });
+  const unauthorized = (auth.error as (Error & { status?: number }) | null)?.status === 401;
+  const mockPreview = localReviewHost && !loginRoute;
+  const designPreview = activePage === 'overview' && mockPreview;
+  const objectivePreview = activePage === 'objectives' && mockPreview;
+  const workspacePreview = activePage === 'workspace' && mockPreview;
+  const workflowPreview = activePage === 'workflows' && mockPreview;
+  const reviewPreview = activePage === 'reviews' && mockPreview;
+  const reportPreview = activePage === 'reports' && mockPreview;
+  const systemPreview = ['integrations', 'settings'].includes(activePage) && mockPreview;
+  const agentsPreview = activePage === 'agents' && mockPreview && auth.data?.authenticated !== true;
+  const previewPage = mockPreview;
   const navigatePage = (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (!pageIDs.includes(href.slice(1))) return;
     event.preventDefault();
@@ -148,10 +132,9 @@ function App() {
     },
     enabled: auth.data?.authenticated === true && !previewPage,
   });
-  const unauthorized = (auth.error as (Error & { status?: number }) | null)?.status === 401;
   const sessionUnavailable = auth.isError && !unauthorized;
   if (auth.isLoading && !previewPage) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
-  if (!previewPage && ((auth.isError && unauthorized) || loginPreview)) return <div className="auth-screen">
+  if (!previewPage && ((auth.isError && unauthorized) || loginRoute)) return <div className="auth-screen">
     <div className="auth-card">
       <span className="brand-mark" aria-hidden="true" />
       <div><h1>Zenchron Engineering</h1><p>Sign in to access your engineering control plane.</p></div>
@@ -159,34 +142,13 @@ function App() {
         ? <><button className="github-login-button" disabled><IconBrandGithub size={19} /> Continue with GitHub</button>
           <p>GitHub sign-in is not configured in this local preview.</p></>
         : <a className="github-login-button" href="/auth/github"><IconBrandGithub size={19} /> Continue with GitHub</a>}
-      <a className="auth-preview-link" href="/?preview=mock#overview">Open dashboard preview</a>
+      <a className="auth-preview-link" href="/#overview">Back to dashboard</a>
     </div>
   </div>;
   return (
     <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
-      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview || workflowPreview || reviewPreview || reportPreview || integrationPreview || workspacePreview ? ' sample-data' : ''}`} id="overview">
-        <aside className="sidebar">
-          <a className="brand" href="#overview" aria-label="Zenchron Engineering home">
-            <span className="brand-mark" aria-hidden="true" />
-            <span>Zenchron<small>Engineering</small></span>
-          </a>
-          <nav aria-label="Main navigation">
-            {navigation.map(({ label, href, icon: Icon }) => (
-              <a className={`nav-link${href === `#${activePage}` ? ' active' : ''}`} href={href} key={label} onClick={(event) => navigatePage(event, href)}>
-                <Icon size={18} stroke={1.8} />
-                <span className="nav-label" data-mobile-label={href === '#overview' ? 'Home' : href === '#settings' ? 'Profile' : undefined}>
-                  {label}
-                </span>
-              </a>
-            ))}
-          </nav>
-          <div className="sidebar-bottom">
-            <strong>Zenchron Engineering</strong>
-            <p>{designPreview && activePage === 'overview' ? 'The AI-native engineering operating system.'
-              : 'Autonomous, verifiable, and aligned engineering.'}</p>
-            {auth.data?.local && !previewPage && <a className="preview-login-link" href="/?preview=login">Preview sign-in</a>}
-          </div>
-        </aside>
+      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview || workflowPreview || reviewPreview || reportPreview || systemPreview || workspacePreview || agentsPreview ? ' sample-data' : ''}`} id="overview">
+        <Sidebar activePage={activePage} localReviewHost={localReviewHost} onNavigate={navigatePage} />
 
         <main className="main-content">
           <header className="topbar">
@@ -198,7 +160,7 @@ function App() {
               </div> : <PageHeading className="greeting" titleLevel={1}
                 title={previewPage ? <>Good morning, Alex <span aria-hidden="true">👋</span></>
                   : <>Good morning{auth.data?.login ? `, ${auth.data.login}` : ''} <span aria-hidden="true">👋</span></>}
-                description={activePage === 'integrations' && integrationPreview
+                description={['integrations', 'settings'].includes(activePage) && systemPreview
                   ? 'Configure your organization, connect integrations, and control how Zenchron runs.'
                   : activePage === 'workflows' ? 'You’re building and orchestrating intelligent engineering workflows.'
                   : activePage === 'overview' ? <>
@@ -251,7 +213,7 @@ function App() {
             objectives={objectives.data} objectivesLoading={objectives.isLoading} objectivesError={objectives.isError}
             agentRuns={agentRuns.data} agentRunsLoading={agentRuns.isLoading} agentRunsError={agentRuns.isError}
             onlineWorkers={onlineWorkers.length} onlineWorkerNames={onlineWorkers.map((worker) => worker.name)}
-          controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} designPreview={reviewPreview} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={workflowPreview} /> : activePage === 'projects' ? (
+          controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} designPreview={agentsPreview} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} designPreview={reviewPreview} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={workflowPreview} /> : activePage === 'projects' ? (
             <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} />
           ) : activePage === 'workspace' ? (
             <WorkspacePage
@@ -266,7 +228,7 @@ function App() {
           ) : activePage === 'objectives' ? <ObjectivesPage sampleData={objectivePreview} /> : ['integrations', 'settings'].includes(activePage) ? (
             <SystemPage
               section={activePage === 'settings' ? 'settings' : 'integrations'}
-              designPreview={integrationPreview}
+              designPreview={systemPreview}
               apiOnline={health.isSuccess}
               githubLogin={auth.data?.local === false}
               workerCount={workers.data?.length ?? 0}

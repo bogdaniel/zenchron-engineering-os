@@ -1,16 +1,3 @@
-.reports-preview-badge {
-  position: absolute;
-  top: -8px;
-  right: 10px;
-  z-index: 1;
-  padding: 2px 6px;
-  border: 1px solid #7651a8;
-  border-radius: 8px;
-  color: #d9bdff;
-  background: #191728;
-  font-size: 8px;
-  line-height: 1.2;
-}
 .reports-preview-value { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .reports-preview-value small { color: #40d9a3; font-size: 9px; font-weight: 600; }
 .reports-preview-value small::before { content: '↑ '; }
@@ -18,17 +5,10 @@
 .reports-metric.ci-duration .reports-preview-value small::before,
 .reports-metric.review-latency .reports-preview-value small::before { content: '↓ '; }
 .reports-scope-bar { position: relative; }
-.reports-outcomes-preview .report-chart-label::after { content: 'Work Items'; display: block; color: #9d97ae; font-size: 9px; }
+.reports-outcomes-donut { position: relative; flex: 0 0 120px; height: 120px; }
+.reports-outcomes-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #f5f1ff; pointer-events: none; }
+.reports-outcomes-label b { font-size: 19px; line-height: 1.1; }
+.reports-outcomes-label span { margin-top: 2px; color: #9d97ae; font-size: 9px; }
 .reports-design-preview .reports-panel .recharts-cartesian-grid line { stroke: #302c3e; }
 .reports-design-preview .reports-panel .recharts-cartesian-axis-tick-value { fill: #9d97ae; }
 .reports-design-preview .report-summary-total td { color: #42dca8; font-weight: 650; }
-.reports-design-preview .reports-summary .reports-insights { gap: 4px; }
-.reports-design-preview .reports-summary .reports-insight b { font-size: 10px; }
-.reports-design-preview .reports-summary .reports-insight span { font-size: 9.5px; line-height: 1.15; }
-.reports-design-preview .reports-summary .reports-key-takeaway { margin-top: 4px; padding: 5px; font-size: 9.5px; line-height: 1.2; }
-.reports-design-preview .reports-summary .reports-key-takeaway b { font-size: 9.5px; }
-.reports-design-preview .downloadable-reports-panel { padding-block: 4px; }
-.reports-design-preview .downloadable-reports-panel .reports-panel-heading { margin-bottom: 3px; }
-.reports-design-preview .downloadable-report-list { gap: 3px; }
-.reports-design-preview .downloadable-report-copy b { font-size: 11px; line-height: 1.05; }
-.reports-design-preview .downloadable-report-copy span { font-size: 9px; line-height: 1.05; }

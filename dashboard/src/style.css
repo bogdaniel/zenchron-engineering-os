@@ -12,7 +12,7 @@
   --entity-detail-title-size: 18px;
   --entity-detail-title-weight: 650;
   --page-description-size: 12px;
-  --panel-heading-size: 14px;
+  --panel-heading-size: 16px;
   --panel-heading-weight: 600;
   --panel-description-size: 11px;
   --metric-label-size: 12px;
@@ -52,7 +52,7 @@ button:disabled, input:disabled {
   display: flex;
   width: var(--sidebar-width);
   flex-direction: column;
-  padding: 18px 14px 20px;
+  padding: 14px 14px 20px;
   border-right: 1px solid #252438;
   background:
     url('/sidebar-wave.png') left calc(100% - 91px) / 100% 290px no-repeat,
@@ -63,8 +63,8 @@ button:disabled, input:disabled {
 .brand {
   display: flex;
   align-items: center;
-  gap: 20px;
-  margin: 0 0 29px;
+  gap: 24px;
+  margin: 0 0 33px;
   margin-left: 25px;
   font-size: 16px;
   font-weight: 750;
@@ -148,16 +148,35 @@ button:disabled, input:disabled {
 .nav-link.active svg {
   color: #d6a5ff;
 }
+@media (min-width:1260px) {
+  .sidebar { padding-right: 11px; }
+  .sidebar .nav-link { gap: 18px; padding-left: 27px; }
+}
+@media (min-width:1622px) {
+  .brand { gap: 19px; margin-bottom: 27px; font-size: 18px; transform: translateY(2px); }
+  .brand small { margin-top: 0; font-size: 15px; }
+  .brand-mark { width: 34px; height: 36px; }
+  .brand-mark::before, .brand-mark::after { width: 23px; height: 10px; }
+  .brand-mark::before { top: 7px; left: 4px; }
+  .brand-mark::after { top: 20px; left: 9px; }
+  .sidebar-bottom { transform: translateY(-4px); }
+}
 .sidebar-bottom {
   margin-top: auto;
+  margin-bottom: 0;
   padding: 14px 6px 4px 25px;
-  border-top: 1px solid #252438;
 }
 .sidebar-bottom strong {
   color: #e4dfef;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1.15;
 }
+.sidebar-bottom-brand { display: flex; width: max-content; align-items: center; gap: 8px; }
+.sidebar-bottom-brand .brand-mark { width: 24px; height: 26px; }
+.sidebar-bottom-brand .brand-mark::before, .sidebar-bottom-brand .brand-mark::after { width: 17px; height: 8px; }
+.sidebar-bottom-brand .brand-mark::before { top: 5px; left: 3px; }
+.sidebar-bottom-brand .brand-mark::after { top: 14px; left: 7px; }
 .preview-badge span {
   width: 7px;
   height: 7px;
@@ -166,9 +185,9 @@ button:disabled, input:disabled {
   box-shadow: 0 0 10px #ae81ff;
 }
 .sidebar-bottom p {
-  margin: 6px 0 0;
-  color: #77738d;
-  font-size: 11px;
+  margin: 9px 0 0;
+  color: #9690a8;
+  font-size: 13px;
   line-height: 1.45;
 }
 .main-content {
@@ -403,12 +422,12 @@ button:disabled, input:disabled {
     position:static;
     width:auto;
     height:auto;
-    padding:12px 14px 0;
+    padding:57px 14px 0;
     border-right:0;
     border-bottom:0;
   }
   .brand {
-    margin:0 2px 2px;
+    margin:0 2px 28px;
   }
   .sidebar-bottom {
     display:none;
@@ -442,7 +461,7 @@ button:disabled, input:disabled {
   .sidebar nav .nav-link:nth-child(9) { display:flex; }
   .nav-link span { display:block; }
   .nav-label[data-mobile-label] { font-size:0; }
-  .nav-label[data-mobile-label]::after { content:attr(data-mobile-label); font-size:8px; }
+  .nav-label[data-mobile-label]::after { content:attr(data-mobile-label); font-size:12px; }
   .main-content {
     margin:0;
     padding:0 14px 82px;
@@ -569,6 +588,12 @@ button:disabled, input:disabled {
   line-height: 1.2;
 }
 .app-shell .main-content .shared-metric-card strong.metric-unavailable { font-size: 14px; }
+.shared-panel-heading { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 10px; }
+.shared-panel-heading > div:first-child { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.section-icon { display: grid; width: 31px; height: 31px; flex: 0 0 auto; place-items: center; border: 1px solid #3a3153; border-radius: 9px; color: #c59bff; background: #2a2139; }
+.blue-icon { border-color: #2c3e58; color: #92c7ff; background: #1a2939; }
+.teal-icon { border-color: #28505a; color: #7ddde1; background: #172b30; }
+.green-icon { border-color: #34725d; color: #80e3b3; background: #193128; }
 .shared-panel-heading h3 { margin: 0; color: #eee9f6; font-size: var(--panel-heading-size); font-weight: var(--panel-heading-weight); }
 .shared-panel-heading p { margin: 4px 0 0; color: #9691a8; font-size: var(--panel-description-size); }
 .shared-panel-heading .shared-panel-eyebrow { display: block; margin-bottom: 4px; color: #88839a; font-size: 8px; }

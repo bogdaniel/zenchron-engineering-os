@@ -281,11 +281,10 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
           {designPreview ? <IconGitPullRequest className="reviews-title-icon" size={24} /> : <IconCode className="reviews-title-icon" size={24} />}
           <PageHeading className="reviews-heading-copy" title="Reviews" description="Pull requests, code review, evidence, and merge governance." />
         </div>
-          <Badge className={gitHubProjects.length && !providerQuery.isError ? 'reviews-provider-available' : 'reviews-unavailable'} variant="light">
-          <i />{designPreview ? 'Design preview · sample PR content' : !selectedProject ? 'GitHub repository not connected'
-            : providerQuery.isLoading ? 'Connecting to GitHub'
+          {!designPreview && <Badge className={gitHubProjects.length && !providerQuery.isError ? 'reviews-provider-available' : 'reviews-unavailable'} variant="light">
+          <i />{!selectedProject ? 'GitHub repository not connected' : providerQuery.isLoading ? 'Connecting to GitHub'
               : providerQuery.isError ? 'GitHub unavailable' : `GitHub · ${selectedProject.name}`}
-        </Badge>
+        </Badge>}
       </div>
       <nav className="reviews-tabs" aria-label="Review sections">
         {designPreview ? <>
@@ -446,9 +445,11 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             ))}
           </div>
           <div className="reviews-detail-tabs" role="group" aria-label="Review detail sections">
-            {(designPreview ? [...detailTabs, ...previewDetailTabs] : detailTabs).map(([value, label, Icon]) => <button key={value} type="button"
+            {(designPreview
+              ? [detailTabs[0], detailTabs[1], previewDetailTabs[0], detailTabs[2], detailTabs[3], previewDetailTabs[1]]
+              : detailTabs).map(([value, label, Icon], index) => <button key={value} type="button"
               aria-pressed={detailTab === value} onClick={() => setDetailTab(value)}>
-              <Icon size={14} /> {label}
+              <Icon size={14} /> {label}{designPreview && <small>{[14, 8, 4, 7, 12, 2][index]}</small>}
             </button>)}
           </div>
           {detailTab !== 'code-changes' ? <div className="reviews-change-empty reviews-detail-tab-panel">

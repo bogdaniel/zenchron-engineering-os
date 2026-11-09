@@ -9,7 +9,7 @@ test('local Reviews mock uses its fixture without provider reads or review write
     await route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"preview fixture expected"}' });
   });
 
-  await page.goto('/?preview=mock#reviews');
+  await page.goto('/#reviews');
 
   await expect(page.getByText('Design preview · sample PR content')).toBeVisible();
   await expect(page.locator('.reviews-metric').nth(0)).toContainText('428');

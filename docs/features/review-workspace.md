@@ -24,7 +24,7 @@ flowchart LR
     Runs[Agent run history API] --> Queue
     GitHub[GitHub REST API] -->|Open issues and pull requests| ProviderQueue[Provider queue]
     Browser --> ProviderQueue
-    MockPreview[Local ?preview=mock#reviews] -->|Static PR, diff, context, and governance fixture| Browser
+    MockPreview[Local unauthenticated Reviews state] -->|Static PR, diff, context, and governance fixture| Browser
     Browser -->|Select code, conversations, evidence, or checklist| Detail
     GitHub -->|Provider Markdown/HTML body| Render[Marked then DOMPurify; remote images removed]
     Render --> Detail
@@ -51,7 +51,7 @@ flowchart LR
     Browser --> IssueWrite
     IssueWrite -->|Submit as configured token owner| GitHub
     GitHub -. inbound reviews, checks, and merge unavailable .-> Governance
-    Preview[Local ?preview=mock#reviews] -->|Fixed PR, diff, and review summary fixture| Browser
+    Preview[Local unauthenticated Reviews state] -->|Fixed PR, diff, and review summary fixture| Browser
     Preview -. does not call GitHub or write review actions .-> ProviderQueue
 ```
 
@@ -71,7 +71,7 @@ GitHub requests use compact selectable cards so the number, status, title, autho
 the narrow queue. Its status chips filter the loaded provider items by open/draft pull requests or open/closed issues;
 search uses the same loaded list. Local branch runs continue to use AG Grid.
 
-On localhost, `?preview=mock#reviews` renders this same Reviews page with a fixed sample PR, diff, and summary so the
+On localhost, an unauthenticated session at `/#reviews` renders this same Reviews page with a fixed sample PR, diff, and summary so the
 supplied visual can be reviewed without a GitHub session. The fixture is read-only, makes no provider or protected-data
 requests, and is never used in the authenticated Reviews route.
 Its mock also shows six review tabs, approval and policy context, trusted-main readiness, and merge strategy details; these remain static and the preview actions stay disabled.

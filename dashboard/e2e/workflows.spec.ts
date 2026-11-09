@@ -8,7 +8,7 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/?preview=mock#workflows');
+  await page.goto('/#workflows');
 
   await expect(page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ })).toBeVisible();
   await expect(page.locator('.workflow-page-heading .eyebrow')).toContainText('Workflows');
@@ -49,7 +49,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
     return route.continue({ url: apiURL.toString() });
   });
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/?preview=live');
+  await page.goto('/');
   await page.getByRole('link', { name: 'Workflows' }).click();
   await expect(page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ })).toBeVisible();
   await expect(page.locator('.workflow-mobile-details')).toBeHidden();
@@ -129,8 +129,8 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
     return parseFloat(getComputedStyle(node.querySelector('b')!).fontSize) * zoom;
   });
   expect(graphLabelSize).toBeGreaterThanOrEqual(10);
-  expect(miniMap?.width).toBe(176);
-  expect(miniMap?.height).toBe(74);
+  expect(miniMap?.width).toBe(128);
+  expect(miniMap?.height).toBe(54);
   expect(flowControls?.x).toBeGreaterThan((workflowNode?.x ?? 0) + (workflowNode?.width ?? 0));
   const editorStatus = await page.locator('.workflow-status').boundingBox();
   expect(canvasPanel && editorStatus && editorStatus.y + editorStatus.height)

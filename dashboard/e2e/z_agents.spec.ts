@@ -187,7 +187,7 @@ test('Agents queue dialog explains when a worker has no model runtime', async ({
 
 test('agent profiles can be saved and disabled from the dashboard', async ({ page }) => {
   const name = `QA Reviewer ${Date.now()}`;
-  await page.goto('/?preview=live');
+  await page.goto('/');
   await page.getByRole('link', { name: 'Agents' }).click();
   await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
   await page.getByRole('button', { name: 'Create Agent' }).click();
@@ -242,7 +242,7 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
 });
 
 test('Agents dashboard completes a run and resumes requested review changes on the same branch', async ({ page }) => {
-  await page.goto('/?preview=live');
+  await page.goto('/');
   await page.getByRole('link', { name: 'Agents' }).click();
   const profile = await page.evaluate(async () => {
     const profileResponse = await fetch('/api/v1/agents', {

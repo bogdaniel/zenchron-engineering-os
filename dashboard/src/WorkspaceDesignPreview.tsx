@@ -1,9 +1,10 @@
 import { Badge, Progress, TextInput } from '@mantine/core';
 import type { ReactNode } from 'react';
 import {
-  IconActivity, IconChartBar, IconChevronRight, IconCode,
-  IconFileText, IconGitBranch, IconHistory, IconLayersIntersect, IconLink, IconSearch,
-  IconTarget, IconUsers,
+  IconActivity, IconApps, IconBook, IconBrandFigma, IconBrandGithub, IconCalendarTime, IconChartBar,
+  IconChevronDown, IconChevronRight, IconCode, IconCube, IconDots, IconFileText, IconFolder,
+  IconGitBranch, IconHierarchy, IconHistory, IconHome, IconLink, IconMap2,
+  IconPlayerPlay, IconRobot, IconRocket, IconSearch, IconShare, IconStack2, IconTarget, IconUsers,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
@@ -19,10 +20,10 @@ const products = [
 ] as const;
 
 const initiatives = [
-  ['Platform v3.0', 'In Progress', '16%', 'green'],
-  ['AI Agent SDK', 'In Progress', '47%', 'purple'],
-  ['Enterprise Controls', 'Planned', '70%', 'blue'],
-  ['Developer Experience', 'Planned', '86%', 'teal'],
+  ['Platform v3.0', 'In Progress', '0%', '36%', 'green'],
+  ['AI Agent SDK', 'In Progress', '25%', '42%', 'purple'],
+  ['Enterprise Controls', 'Planned', '52%', '24%', 'blue'],
+  ['Developer Experience', 'Planned', '72%', '25%', 'teal'],
 ] as const;
 
 const objectives = [
@@ -66,27 +67,28 @@ export function WorkspaceDesignPreview() {
         {products.map(([name, description, state, icon], index) => <button key={name} type="button" disabled
           className={`workspace-mock-product${index === 0 ? ' selected' : ''}`}>
           <span className={`workspace-mock-product-icon ${icon}`}>{icon === 'chart' ? <IconChartBar size={17} />
-            : icon === 'link' ? <IconLink size={17} /> : <IconLayersIntersect size={17} />}</span>
+            : icon === 'agents' ? <IconRobot size={17} /> : icon === 'workspace' ? <IconHierarchy size={17} />
+              : icon === 'link' ? <IconLink size={17} /> : <IconStack2 size={17} />}</span>
           <span className="workspace-mock-product-copy"><b>{name}</b><small>{description}</small></span>
           <Badge className={state === 'Active' ? 'workspace-mock-active' : 'workspace-mock-planning'} variant="light">{state}</Badge>
           <IconChevronRight className="workspace-mock-chevron" size={13} />
         </button>)}
-        <button className="workspace-mock-all" disabled><span>▦</span> All Products (5) <IconChevronRight size={13} /></button>
+        <button className="workspace-mock-all" disabled><IconApps size={15} /> All Products (5) <IconChevronRight size={13} /></button>
       </div>
     </aside>
 
     <div className="workspace-mock-detail">
       <header className="workspace-mock-heading">
-        <span className="workspace-mock-product-icon large"><IconLayersIntersect size={21} /></span>
+        <span className="workspace-mock-product-icon large"><IconStack2 size={25} /></span>
         <div><h1>Nova Platform</h1><p>Developer platform, APIs, and core services for building on Zenchron.</p>
           <span className="workspace-mock-meta"><b>● Active</b><i /> Product <i /> Owner: Platform Eng <i /> Updated 2m ago</span></div>
-        <button disabled>♧ Share</button><button disabled>•••</button><button className="workspace-mock-add" disabled>＋ Add Product</button>
+        <button disabled><IconShare size={13} /> Share</button><button className="workspace-mock-menu" disabled><IconDots size={16} /></button><button className="workspace-mock-add" disabled>＋ Add Product</button>
       </header>
 
       <div className="workspace-mock-metrics">
         <MetricCard className="workspace-mock-metric health" label="Product Health" value="99.4%" icon={<IconActivity size={14} />}
-          detail={<span className="workspace-mock-health">✓ Healthy <svg viewBox="0 0 64 22" aria-hidden="true"><path d="M1 19 12 17 20 18 29 9 39 13 47 6 54 9 63 1" /></svg></span>} />
-        <MetricCard className="workspace-mock-metric" label="Active Initiatives" value="7" icon={<IconLayersIntersect size={14} />}
+          detail={<span className="workspace-mock-health"><b>✓ Healthy</b><svg viewBox="0 0 64 22" aria-hidden="true"><path d="M1 19 12 17 20 18 29 9 39 13 47 6 54 9 63 1" /></svg></span>} />
+        <MetricCard className="workspace-mock-metric initiatives" label="Active Initiatives" value="7" icon={<IconStack2 size={14} />}
           detail={<span className="workspace-mock-growth">↑ +2</span>} />
         <MetricCard className="workspace-mock-metric delivery" label="Delivery Metrics" value="68%" icon={<IconChartBar size={14} />}
           detail={<span>On-time delivery <b className="workspace-mock-growth">↑ +6 pts</b></span>} />
@@ -95,15 +97,19 @@ export function WorkspaceDesignPreview() {
       </div>
 
       <nav className="workspace-mock-tabs" aria-label="Product sections">
-        {['Overview', 'Objectives', 'Repos', 'Files', 'Decisions', 'Templates'].map((tab, index) => <button key={tab} disabled className={index === 0 ? 'active' : ''}>{tab}</button>)}
+        {['Overview', 'Objectives', 'Repos', 'Files', 'Decisions', 'Templates'].map((tab, index) => <button key={tab} disabled className={index === 0 ? 'active' : ''}>
+          {index === 0 ? <IconHome size={13} /> : index === 1 ? <IconTarget size={13} />
+            : index === 2 ? <IconCode size={13} /> : index === 3 ? <IconFolder size={13} />
+              : index === 4 ? <IconGitBranch size={13} /> : <IconStack2 size={13} />}{tab}
+        </button>)}
       </nav>
 
       <div className="workspace-mock-grid">
-        <Card className="roadmap" title="Product Roadmap" description="Strategic delivery plan and key milestones" icon={<IconActivity size={15} />}
-          action={<span className="workspace-mock-roadmap-tabs"><b>Roadmap</b><span>◷ Timeline</span><span>Quarterly⌄</span></span>}>
+        <Card className="roadmap" title="Product Roadmap" description="Strategic delivery plan and key milestones" icon={<IconMap2 size={15} />}
+          action={<span className="workspace-mock-roadmap-tabs"><b>Roadmap</b><span><IconCalendarTime size={11} /> Timeline</span><span>Quarterly<IconChevronDown size={10} /></span></span>}>
           <div className="workspace-mock-roadmap"><div className="workspace-mock-quarter-labels"><span />{["Q1 ’25", "Q2 ’25", "Today", "Q3 ’25", "Q4 ’25"].map((q) => <span key={q}>{q}</span>)}</div>
-            {initiatives.map(([name, status, width, tone]) => <div className="workspace-mock-roadmap-row" key={name}>
-              <span className={`workspace-mock-dot ${tone}`} /> <b>{name}</b><div className="workspace-mock-track"><span className={tone} style={{ width }} />{status === 'In Progress' && <em>{status}</em>}</div>
+            {initiatives.map(([name, status, start, width, tone]) => <div className="workspace-mock-roadmap-row" key={name}>
+              <span className={`workspace-mock-dot ${tone}`} /> <b>{name}</b><div className="workspace-mock-track"><span className={tone} style={{ left: start, width }}>{status}</span></div>
             </div>)}
           </div>
         </Card>
@@ -115,27 +121,34 @@ export function WorkspaceDesignPreview() {
         </Card>
 
         <Card className="repositories" title="Repositories (6)" icon={<IconCode size={15} />} action="View All">
-          <div className="workspace-mock-list">{['zenchron/nova-platform', 'zenchron/agent-sdk', 'zenchron/platform-services', 'zenchron/devtools'].map((repo) => <div key={repo}><IconGitBranch className="workspace-mock-git-icon" size={13} aria-hidden="true" /><b>{repo}</b><span>◌ Main</span></div>)}<small>+ 2 more repositories</small></div>
+          <div className="workspace-mock-list">{['zenchron/nova-platform', 'zenchron/agent-sdk', 'zenchron/platform-services', 'zenchron/devtools'].map((repo) => <div key={repo}><IconBrandGithub className="workspace-mock-git-icon" size={13} aria-hidden="true" /><b>{repo}</b><span>◌ Main</span></div>)}<small>+ 2 more repositories</small></div>
         </Card>
-        <Card className="linked-workflows" title="Linked Workflows (4)" icon={<IconActivity size={15} />} action="View All">
-          <div className="workspace-mock-list status-list">{[['PR Review & CI', 'Running'], ['Build & Test', 'Success'], ['Release (Staging)', 'Success'], ['Release (Prod)', 'Scheduled']].map(([name, state]) => <div key={name}><span className="workspace-mock-run">▶</span><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase().replaceAll(' ', '-')}`} variant="light">{state}</Badge></div>)}</div>
+        <Card className="linked-workflows" title="Linked Workflows (4)" icon={<IconHierarchy size={15} />} action="View All">
+          <div className="workspace-mock-list status-list">{[['PR Review & CI', 'Running'], ['Build & Test', 'Success'], ['Release (Staging)', 'Success'], ['Release (Prod)', 'Scheduled']].map(([name, state]) => <div key={name}><span className="workspace-mock-run"><IconPlayerPlay size={12} fill="currentColor" /></span><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase().replaceAll(' ', '-')}`} variant="light">{state}</Badge></div>)}</div>
         </Card>
         <Card className="files" title="Design / Docs / Files" icon={<IconFileText size={15} />} action="View All">
-          <div className="workspace-mock-list files">{[['Designs (Figma)', '24'], ['Documentation', '118'], ['Product Specs', '34'], ['Files & Assets', '269']].map(([name, count], i) => <div key={name}><span>{['●', '▤', '▣', '▱'][i]}</span><b>{name}</b><em>{count}</em></div>)}</div>
+          <div className="workspace-mock-list files">{[['Designs (Figma)', '24'], ['Documentation', '118'], ['Product Specs', '34'], ['Files & Assets', '269']].map(([name, count], i) => <div key={name}><span>{i === 0 ? <IconBrandFigma size={14} /> : i === 1 ? <IconBook size={14} /> : i === 2 ? <IconFileText size={14} /> : <IconFolder size={14} />}</span><b>{name}</b><em>{count}</em></div>)}</div>
         </Card>
         <Card className="people" title="Stakeholders (8)" icon={<IconUsers size={15} />} action="Manage">
-          <div className="workspace-mock-list people">{[['Alex Chen', 'Product Owner'], ['Priya Shah', 'Engineering Manager'], ['Marcus Lee', 'Design Lead'], ['Elena Rossi', 'Product Manager']].map(([name, role]) => <div key={name}><span>{name.slice(0, 1)}</span><b>{name}</b><small>{role}</small></div>)}<small>+ 4 more stakeholders</small></div>
+          <div className="workspace-mock-list people">{[['Alex Chen', 'Product Owner'], ['Priya Shah', 'Engineering Manager'], ['Marcus Lee', 'Design Lead'], ['Elena Rossi', 'Product Manager']].map(([name, role]) => <div key={name}><span>{name === 'Alex Chen' ? <img src="/alex-chen-avatar.jpg" alt="" /> : name.slice(0, 1)}</span><b>{name}</b><small>{role}</small></div>)}<small>+ 4 more stakeholders</small></div>
         </Card>
 
-        <Card className="release" title="Release Streams" description="Coordinated release trains and environments" icon={<IconCode size={15} />} action="View All">
-          <div className="workspace-mock-list release-list">{releases.map(([name, state, version, progress, tone]) => <div key={name}><span className={`workspace-mock-release-icon ${tone}`}>◇</span><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase().replaceAll(' ', '-')}`} variant="light">{state}</Badge><small>{version}</small><Progress value={Number(progress.slice(0, -1))} size="xs" color={tone === 'green' ? 'teal.5' : tone === 'blue' ? 'blue.5' : 'violet.5'} /></div>)}</div>
+        <Card className="release" title="Release Streams" description="Coordinated release trains and environments" icon={<IconRocket size={15} />} action="View All">
+          <div className="workspace-mock-list release-list">{releases.map(([name, state, version, progress, tone]) => <div key={name}><IconCube className={`workspace-mock-release-icon ${tone}`} size={16} /><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase().replaceAll(' ', '-')}`} variant="light">{state}</Badge><small>{version}</small><Progress value={Number(progress.slice(0, -1))} size="xs" color={tone === 'green' ? 'teal.5' : tone === 'blue' ? 'blue.5' : 'violet.5'} /></div>)}</div>
         </Card>
         <Card className="decisions" title="Recent Decisions" icon={<IconHistory size={15} />} action="View All">
           <div className="workspace-mock-list decision-list">{decisions.map(([name, state, time]) => <div key={name}><IconFileText size={13} /><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase()}`} variant="light">{state}</Badge><small>{time}</small></div>)}</div>
         </Card>
-        <Card className="analytics" title="Delivery Metrics" icon={<IconChartBar size={15} />} action="Last 8 weeks">
+        <Card className="analytics" title="Delivery Metrics" icon={<IconChartBar size={15} />}
+          action={<span className="workspace-mock-range">Last 8 weeks <IconChevronDown size={11} /></span>}>
           <div className="workspace-mock-analytics"><div><span>Cycle Time</span><b>4.2 days <small>↓ −28%</small></b></div><div><span>PR Merge Time</span><b>11.6 hrs <small>↓ −31%</small></b></div><div><span>Change Fail Rate</span><b>1.3% <small>↓ −0.9 pts</small></b></div>
-            <svg viewBox="0 0 150 70" preserveAspectRatio="none" aria-label="Delivery trend"><path d="M1 61 17 47 34 49 52 39 68 45 85 34 102 30 119 20 135 13 149 2" /></svg></div>
+            <svg viewBox="0 0 150 90" preserveAspectRatio="none" role="img" aria-label="Delivery trend, Nov 24 to Jan 12">
+              <defs><linearGradient id="workspace-mock-chart-fill" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#c878ff" stopOpacity=".3" /><stop offset="1" stopColor="#c878ff" stopOpacity="0" /></linearGradient></defs>
+              <g className="workspace-mock-grid">{[10, 27, 44, 61].map((y) => <path key={y} d={`M0 ${y}H150`} />)}</g>
+              <path className="workspace-mock-area" d="M1 61 17 47 34 49 52 39 68 45 85 34 102 30 119 20 135 13 149 2V72H1Z" />
+              <path className="workspace-mock-line" d="M1 61 17 47 34 49 52 39 68 45 85 34 102 30 119 20 135 13 149 2" />
+              <g className="workspace-mock-axis">{['Nov 24', 'Dec 1', 'Dec 8', 'Dec 15', 'Dec 22', 'Dec 29', 'Jan 5', 'Jan 12'].map((date, index) => <text key={date} x={index * 21} y="86">{date}</text>)}</g>
+            </svg></div>
         </Card>
       </div>
     </div>

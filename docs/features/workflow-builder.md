@@ -70,12 +70,12 @@ flowchart LR
 - Opening a saved workflow selects its Agent Router so the inspector starts with real graph data. Workflows without
   an Agent Router leave the inspector unselected.
 - Run and Publish remain disabled because there is no workflow execution runner or publish service yet.
-- `/?preview=mock#workflows` opens the builder without a session, uses the local design fixture, and disables create/save;
+- `/#workflows` in an unauthenticated local session opens the builder without a session, uses the local design fixture, and disables create/save;
   it makes no workflow API requests.
 - The local mock route shows the Agent Router's visible rule, budget, retry, and execution-condition panels, plus the
   mock's canvas toolbar and simulated PR #4827 timeline. These sample values are read-only preview content and never
   enter saved workflows.
-- On phones, `/?preview=mock#workflows` shows run #8821 at 78%, its five task states, and two approval states. These
+- On phones, `/#workflows` in an unauthenticated local session shows run #8821 at 78%, its five task states, and two approval states. These
   sample values are static and do not imply a live run or approval.
 - Run Preview shows the saved graph's actual node and edge counts and states explicitly that no execution is available;
   it does not show simulated statuses, duration, or cost in the authenticated editor.

@@ -2,11 +2,11 @@ import { expect, test } from '@playwright/test';
 
 test('shared shell, headings, and metric cards keep their visual scale across routes', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/?preview=live');
+  await page.goto('/');
   const referenceWidth = await page.locator('.sidebar').evaluate((sidebar) =>
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
-  expect(referenceWidth, 'full screen reference sidebar width').toBe(250);
+  expect(referenceWidth, 'full screen reference sidebar width').toBe(247);
   await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link'))
     .toHaveText([
       'Overview', 'Objectives', 'Workflows', 'Agents', 'Product Workspace', 'Reviews', 'Integrations', 'Reports', 'Settings',
@@ -35,7 +35,12 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     await expect(page.locator('.shared-panel-heading h3:visible').first(), `${route}: visible shared panel heading`).toBeVisible();
     const styles = await page.evaluate(({ title, panel }) => ({
       sidebarWidth: getComputedStyle(document.querySelector('.sidebar')!).width,
+      sidebarPaddingTop: getComputedStyle(document.querySelector('.sidebar')!).paddingTop,
+      brandFontSize: getComputedStyle(document.querySelector('.sidebar > .brand')!).fontSize,
+      brandGap: getComputedStyle(document.querySelector('.sidebar > .brand')!).gap,
       bodyFont: getComputedStyle(document.body).fontFamily,
+      navigationGap: getComputedStyle(document.querySelector('.nav-link')!).gap,
+      navigationPaddingLeft: getComputedStyle(document.querySelector('.nav-link')!).paddingLeft,
       navigationFont: getComputedStyle(document.querySelector('.nav-link')!).fontSize,
       navigationWeight: getComputedStyle(document.querySelector('.nav-link')!).fontWeight,
       navigationFontFamily: getComputedStyle(document.querySelector('.nav-link')!).fontFamily,
@@ -52,7 +57,12 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
         weight: getComputedStyle(heading).fontWeight,
       })),
     }), selectors);
-    expect(Math.round(parseFloat(styles.sidebarWidth))).toBe(250);
+    expect(Math.round(parseFloat(styles.sidebarWidth))).toBe(247);
+    expect(styles.sidebarPaddingTop).toBe('18px');
+    expect(styles.brandFontSize).toBe('16px');
+    expect(styles.brandGap).toBe('20px');
+    expect(styles.navigationGap).toBe('10px');
+    expect(styles.navigationPaddingLeft).toBe('31px');
     expect(styles.bodyFont).toContain('Inter');
     expect(styles.navigationFontFamily).toBe(styles.bodyFont);
     expect(styles.titleFontFamily).toBe(styles.bodyFont);
@@ -104,7 +114,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
   const framedReferenceWidth = await page.locator('.sidebar').evaluate((sidebar) =>
     Math.round(parseFloat(getComputedStyle(sidebar).width)),
   );
-  expect(framedReferenceWidth, 'monitor screen reference sidebar width').toBe(250);
+  expect(framedReferenceWidth, 'monitor screen reference sidebar width').toBe(247);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.nav-link').first()).toHaveCSS('font-weight', '400');
@@ -231,7 +241,7 @@ test('desktop sidebar matches mock width at reference and regular monitor sizes'
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/#reports');
     await expect(page.locator('.reports-page')).toBeVisible();
-    expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(250);
+    expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(247);
     expect(await page.locator('.reports-scope-bar').evaluate((bar) => bar.getBoundingClientRect().x)).toBe(263);
     expect(await page.locator('.sidebar nav .nav-link').evaluateAll((links) =>
       links.every((link) => link.scrollWidth <= link.clientWidth),
@@ -241,8 +251,8 @@ test('desktop sidebar matches mock width at reference and regular monitor sizes'
 
 test('mobile overview matches the phone shell and keeps workflow/reviews accessible', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/?preview=live');
-  await expect(page.getByRole('link', { name: 'Overview' })).toBeVisible();
+  await page.goto('/');
+  await expect(page.getByRole('link', { name: 'Overview', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Notifications' })).toBeVisible();

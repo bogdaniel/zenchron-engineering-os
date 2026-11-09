@@ -6,8 +6,9 @@ import { AreaChart, Sparkline } from '@mantine/charts';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, Modal, NumberInput, Progress, Select, Text, Textarea, TextInput } from '@mantine/core';
-import { IconAlertTriangle, IconCalendar, IconCircleCheck, IconHierarchy, IconPlus, IconTarget,
-  IconTargetArrow } from '@tabler/icons-react';
+import { IconActivity, IconAlertTriangle, IconCalendar, IconChecklist, IconCircleCheck, IconCube,
+  IconFileText, IconGitPullRequest, IconHierarchy, IconListCheck, IconPlus, IconShieldCheck, IconTarget,
+  IconTargetArrow, IconUser } from '@tabler/icons-react';
 import { z } from 'zod';
 import { loadProducts } from './productEditor';
 import { MetricCard } from './MetricCard';
@@ -82,6 +83,10 @@ function statusBadge(status: Objective['status']) {
   return <Badge className={`objective-status ${status}`} variant="light">{status.replace('_', ' ')}</Badge>;
 }
 
+function ObjectivePreviewHeading({ icon: Icon, children }: { icon: typeof IconTarget; children: React.ReactNode }) {
+  return <b><Icon size={13} aria-hidden="true" />{children}</b>;
+}
+
 function ObjectiveItemCard({ item, selected, productName, onSelect }: {
   item: Objective;
   selected: boolean;
@@ -136,19 +141,29 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [productFilter, setProductFilter] = useState('all');
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dueQuarter, setDueQuarter] = useState(sampleData ? 'all' : 'this');
+  const [dueQuarter, setDueQuarter] = useState<'this' | 'last' | 'all'>('this');
   const [section, setSection] = useState<'objectives' | 'planning' | 'roadmap'>('objectives');
   const [view, setView] = useState<'kanban' | 'table' | 'cards'>('table');
   const objectives = useQuery({ queryKey: ['objectives'], queryFn: loadObjectives, enabled: !sampleData,
-    initialData: sampleData ? objectivePreviewRecords : undefined });
-  const products = useQuery({ queryKey: ['products'], queryFn: loadProducts, enabled: !sampleData });
+    initialData: sampleData ? objectivePreviewRecords : undefined, retry: false });
+  const products = useQuery({ queryKey: ['products'], queryFn: loadProducts, enabled: !sampleData, retry: false });
   const items = objectives.data ?? [];
   const selected = items.find((item) => item.id === selectedID) ?? items[0];
+  const editForm = useForm<NewObjective>({
+    initialValues: { title: '', description: '', owner: '', product_id: '', due_date: '' },
+    validate: (values) => {
+      const result = createSchema.safeParse(values);
+      if (result.success) return {};
+      return Object.fromEntries(result.error.issues.map((issue) => [String(issue.path[0]), issue.message]));
+    },
+  });
   useEffect(() => {
     if (!selected) return;
     setProgressValue(selected.progress);
     setStatusValue(selected.status);
     setProductIDValue(selected.product_id);
+    editForm.setValues({ title: selected.title, description: selected.description, owner: selected.owner,
+      product_id: selected.product_id, due_date: selected.due_date });
   }, [selected?.id, selected?.progress, selected?.status, selected?.product_id]);
   const createForm = useForm<NewObjective>({
     initialValues: { title: '', description: '', owner: '', product_id: '', due_date: '' },
@@ -185,17 +200,25 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const updateMutation = useMutation({
     mutationFn: async (input: {
       id: string;
+      title: string;
+      description: string;
+      owner: string;
+      due_date: string;
       status: Objective['status'];
       progress: number;
-      product_id?: string;
+      product_id: string;
     }) => {
       const response = await fetch(`/api/v1/objectives/${input.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          title: input.title,
+          description: input.description,
+          owner: input.owner,
+          due_date: input.due_date,
           status: input.status,
           progress: input.progress,
-          ...(input.product_id !== undefined ? { product_id: input.product_id } : {}),
+          product_id: input.product_id,
         }),
       });
       if (!response.ok) throw new Error(await response.text());
@@ -210,36 +233,40 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     },
   });
   const columns = useMemo<ColDef<Objective>[]>(() => [
-    { field: 'title', headerName: 'Objective', flex: 1.8, minWidth: sampleData ? 145 : 130 },
+    { field: 'title', headerName: 'Objective', flex: 1.8, minWidth: sampleData ? 138 : 130 },
     { field: 'owner', headerName: 'Owner', flex: .8, minWidth: sampleData ? 64 : 72, valueFormatter: ({ value }) => sampleData ? value?.replace(/\s+(\S).*$/, ' $1.') : value,
       cellRenderer: ({ value, valueFormatted }: ICellRendererParams<Objective, string>) => sampleData
         ? <span className="objective-owner-cell"><span className="objective-owner-avatar" aria-hidden="true">{value?.split(/\s+/).map((part) => part[0]).join('')}</span>{valueFormatted}</span>
         : value },
-    { field: 'status', headerName: 'Status', flex: .9, minWidth: sampleData ? 80 : 78, cellRenderer: ({ value }: ICellRendererParams<Objective, Objective['status']>) => statusBadge(value ?? 'in_progress') },
-    { field: 'progress', headerName: 'Progress', flex: 1, minWidth: sampleData ? 64 : 70, cellRenderer: ({ value, data }: ICellRendererParams<Objective, number>) => <div className="grid-progress"><Progress value={value ?? 0} size="xs" color={data?.status === 'on_track' ? 'teal' : data?.status === 'at_risk' ? 'yellow' : data?.status === 'blocked' ? 'red' : 'violet'} /><span>{value ?? 0}%</span></div> },
+    { field: 'status', headerName: 'Status', flex: .9, minWidth: sampleData ? 76 : 78, cellRenderer: ({ value }: ICellRendererParams<Objective, Objective['status']>) => statusBadge(value ?? 'in_progress') },
+    { field: 'progress', headerName: 'Progress', flex: 1, minWidth: sampleData ? 60 : 70, cellRenderer: ({ value, data }: ICellRendererParams<Objective, number>) => <div className="grid-progress"><span>{value ?? 0}%</span><Progress value={value ?? 0} size="xs" color={data?.status === 'on_track' ? 'teal' : data?.status === 'at_risk' ? 'yellow' : data?.status === 'blocked' ? 'red' : 'violet'} /></div> },
     {
-      field: 'product', headerName: 'Product', flex: .9, minWidth: sampleData ? 90 : 85,
+      field: 'product', headerName: 'Product', flex: .9, minWidth: sampleData ? 86 : 85,
       valueGetter: ({ data }) => data ? productName(data) : 'Unassigned',
     },
-    { field: 'approval', headerName: 'Approval', flex: .95, minWidth: sampleData ? 80 : 90, cellRenderer: ({ value }: ICellRendererParams<Objective, string>) => value ? <Badge className={`objective-approval-status ${value.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`}>{value}</Badge> : '—' },
-    { field: 'due_date', headerName: 'Due Date', flex: .85, minWidth: sampleData ? 78 : 86, valueFormatter: ({ value }) => value ? formatObjectiveDate(value) : '' },
-    { field: 'workflow_count', headerName: 'Workflows', flex: .65, minWidth: sampleData ? 67 : 65, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => value === undefined ? '—' : <span className="objective-workflow-count"><IconHierarchy size={11} />{value}</span> },
+    { field: 'approval', headerName: 'Approval', flex: .95, minWidth: sampleData ? 78 : 90, cellRenderer: ({ value }: ICellRendererParams<Objective, string>) => value ? <Badge className={`objective-approval-status ${value.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`}>{value}</Badge> : '—' },
+    { field: 'due_date', headerName: 'Due Date', flex: .85, minWidth: sampleData ? 75 : 86, valueFormatter: ({ value }) => value ? formatObjectiveDate(value) : '' },
+    { field: 'workflow_count', headerName: 'Workflows', flex: .65, minWidth: sampleData ? 72 : 65, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => value === undefined ? '—' : <span className="objective-workflow-count"><IconHierarchy size={11} />{value}</span> },
   ], [sampleData]);
   const legacyProducts = Array.from(new Set(items.filter((item) => !item.product_id).map((item) => item.product)
     .filter((product) => product && !products.data?.some((known) => known.name === product))));
+  const linkedProductOptions = items.filter((item) => item.product_id)
+    .map((item) => ({ value: item.product_id, label: productName(item) }));
   const productOptions = [
     { value: 'all', label: 'All products' },
-    ...(products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []),
+    ...new Map([...(products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []),
+      ...linkedProductOptions].map((option) => [option.value, option])).values(),
     ...legacyProducts.map((product) => ({ value: `legacy:${product}`, label: product })),
   ];
+  const quarterReferenceDate = sampleData ? new Date(2025, 0, 20) : new Date();
   const filteredItems = items.filter((item) =>
-    `${item.title} ${item.owner} ${productName(item)}`.toLowerCase().includes(search.toLowerCase()) &&
+    `${item.title} ${item.description} ${item.owner} ${productName(item)}`.toLowerCase().includes(search.toLowerCase()) &&
     (productFilter === 'all' || (item.product_id
       ? item.product_id === productFilter
       : `legacy:${item.product}` === productFilter)) &&
     (ownerFilter === 'all' || item.owner === ownerFilter) &&
     (statusFilter === 'all' || item.status === statusFilter) &&
-    (dueQuarter === 'all' || dueDateIsInQuarter(item.due_date, dueQuarter === 'this' ? 0 : -1, new Date())),
+    (dueQuarter === 'all' || dueDateIsInQuarter(item.due_date, dueQuarter === 'this' ? 0 : -1, quarterReferenceDate)),
   );
   const plannedItems = [...filteredItems].sort((left, right) =>
     (left.due_date || '9999-12-31').localeCompare(right.due_date || '9999-12-31'));
@@ -264,6 +291,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
 
   function cancelEdit() {
     if (!selected) return;
+    editForm.setValues({ title: selected.title, description: selected.description, owner: selected.owner,
+      product_id: selected.product_id, due_date: selected.due_date });
     setProgressValue(selected.progress);
     setStatusValue(selected.status);
     setProductIDValue(selected.product_id);
@@ -300,9 +329,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
           trend={sampleData && <span className="objective-metric-trend"><Badge>↑ +40%</Badge><span className="objective-throughput-bars" aria-hidden="true">
             {[10, 14, 18, 16, 22, 27, 31].map((height, index) => <i key={index} style={{ height }} />)}
           </span></span>} />
-        <MetricCard className="objective-metric teal" label="Objective Success Rate"
+        <MetricCard className="objective-metric teal" label={sampleData ? 'Objective Success Rate' : 'Completion rate'}
           value={sampleData ? '86.7%' : items.length ? `${Math.round(completed / items.length * 100)}%` : '—'}
-          detail={sampleData ? undefined : 'Completed / total objectives'} icon={<IconTargetArrow size={18} />}
+          detail={sampleData ? undefined : 'Completed objectives / total'} icon={<IconTargetArrow size={18} />}
           trend={sampleData && <span className="objective-metric-trend"><Badge>↑ +6.9 pp</Badge>
             <Sparkline data={[3, 4, 3, 6, 5, 7, 8]} color="teal.4" w={54} h={24} withGradient={false} /></span>} />
         <MetricCard className="objective-metric" label="Total objectives" value={sampleData ? '42' : items.length} detail="Across this workspace" icon={<IconTarget size={18} />} />
@@ -329,10 +358,16 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                 </button>
               ))}
             </div>
-            <div className="objective-grid-toolbar"><span>{objectives.isLoading ? 'Loading objectives…' : `${filteredItems.length} objectives`}</span><TextInput aria-label="Search objectives" placeholder="Search objectives…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} /><span>{gridHint}</span></div>
+            <div className="objective-grid-toolbar"><span>{objectives.isLoading ? 'Loading objectives…' : `${filteredItems.length} objectives`}</span><TextInput aria-label="Search objectives" placeholder="Search objectives…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} /><span>{gridHint}</span>
+              {objectives.isError && objectives.data && <Button variant="subtle" onClick={() => void objectives.refetch()}>Retry</Button>}
+            </div>
             <div className={`objective-grid-wrap objective-view-${view}`}>
-              {objectives.isError ? <div className="objective-load-error">Could not load objectives. Refresh to try again.</div>
-                : section === 'planning' ? <div className="objective-planning-view" aria-label="Objective planning">
+              {objectives.isLoading && !objectives.data
+                ? <div className="objective-load-error" role="status">Loading objectives…</div>
+                : objectives.isError && !objectives.data ? <div className="objective-load-error" role="alert">
+                  <span>Could not load objectives.</span>
+                  <Button variant="subtle" onClick={() => void objectives.refetch()}>Retry loading objectives</Button>
+                </div> : section === 'planning' ? <div className="objective-planning-view" aria-label="Objective planning">
                   {plannedItems.length ? plannedItems.map((item) => (
                     <ObjectiveItemCard key={item.id} item={item} selected={selected?.id === item.id}
                       productName={productName(item)} onSelect={selectObjective} />
@@ -356,7 +391,15 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                   headerHeight={38}
                   pagination
                   paginationPageSize={6}
-                  onRowClicked={({ data }) => { if (data) selectObjective(data); }}
+                  rowSelection={{ mode: 'multiRow', checkboxes: true, headerCheckbox: true, selectAll: 'filtered', enableClickSelection: 'enableSelection' }}
+                  selectionColumnDef={{ width: 32, minWidth: 32, maxWidth: 32, pinned: 'left', resizable: false, sortable: false, suppressMovable: true }}
+                  onRowDataUpdated={({ api }) => {
+                    if (!api.getSelectedRows().length) api.getDisplayedRowAtIndex(0)?.setSelected(true);
+                  }}
+                  onSelectionChanged={({ api }) => {
+                    const item = api.getSelectedRows()[0];
+                    if (item) selectObjective(item);
+                  }}
                   overlayNoRowsTemplate={`<span class="ag-overlay-no-rows-center">${gridEmptyMessage}</span>`}
                 />
               ) : view === 'cards' ? (
@@ -410,27 +453,29 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                 }}>{editing ? 'Cancel edit' : 'Edit objective'}</Button>} />
               <div className="detail-summary">{statusBadge(statusValue)}<span>{progressValue}% complete</span><Progress value={progressValue} size="sm" /></div>
               <div className="detail-meta-grid">{sampleData ? <>
-                <div><small>Owner</small><b>{selected.owner}</b></div><div><small>Product</small><b>{productName(selected)}</b></div>
-                <div><small>Approval</small><b>{selected.approval}</b></div><div><small>Workflows</small><b>{selected.workflow_count} linked</b></div>
+                <div><small>Owner</small><b><IconUser size={13} aria-hidden="true" />{selected.owner}</b></div>
+                <div><small>Product</small><b><IconCube size={13} aria-hidden="true" />{productName(selected)}</b></div>
+                <div><small>Approval</small><b><IconShieldCheck size={13} aria-hidden="true" />{selected.approval}</b></div>
+                <div><small>Workflows</small><b><IconHierarchy size={13} aria-hidden="true" />{selected.workflow_count} linked</b></div>
               </> : <>
                 <div><small>Owner</small><b>{selected.owner || 'Unassigned'}</b></div><div><small>Product</small><b>{productName(selected)}</b></div>
                 <div><small>Due date</small><b>{selected.due_date ? formatObjectiveDate(selected.due_date) : 'No date'}</b></div><div><small>Created</small><b>{formatObjectiveDate(selected.created_at)}</b></div>
               </>}</div>
               <div className="objective-detail-tabs" role="tablist" aria-label="Objective details">
                 {([
-                  ['overview', 'Overview'], ['milestones', 'Milestones'],
-                  ['pull-requests', 'Related PRs'], ['activity', 'Activity'],
-                ] as const).map(([id, label]) => <button key={id} type="button" role="tab"
+                  ['overview', 'Overview', IconTarget], ['milestones', 'Milestones', IconCalendar],
+                  ['pull-requests', 'Related PRs', IconGitPullRequest], ['activity', 'Activity', IconActivity],
+                ] as const).map(([id, label, Icon]) => <button key={id} type="button" role="tab"
                   aria-selected={detailTab === id} className={detailTab === id ? 'active' : ''}
-                  onClick={() => { if (editing) cancelEdit(); setDetailTab(id); }}>{label}</button>)}
+                  onClick={() => { if (editing) cancelEdit(); setDetailTab(id); }}><Icon size={13} aria-hidden="true" />{label}</button>)}
               </div>
               {!editing && sampleData && detailTab === 'overview' ? <div className="objective-overview-grid objective-preview-overview">
-                <section className="objective-overview-card"><b>Description</b><p>{selected.description}</p></section>
-                <section className="objective-overview-card objective-preview-blocker"><b>Blockers (1)</b><p>{objectivePreviewDetails.blocker}</p></section>
-                <section className="objective-overview-card"><b>Acceptance Criteria</b><ul>{objectivePreviewDetails.acceptanceCriteria.map((item) => <li key={item}>{item}</li>)}</ul></section>
-                <section className="objective-overview-card"><b>Related PRs (4)</b><ul>{objectivePreviewDetails.relatedPullRequests.map((item) => <li key={item.id}><span>{item.id} {item.title}</span><em>{item.status}</em></li>)}</ul></section>
-                <section className="objective-overview-card"><b>Plan Summary</b><ul>{objectivePreviewDetails.planSummary.map((item) => <li key={item}>{item}</li>)}</ul></section>
-                <section className="objective-overview-card"><b>Activity Feed</b><ul>{objectivePreviewDetails.activity.map((item) => <li key={item.text}><span>{item.text}</span><em>{item.time}</em></li>)}</ul></section>
+                <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconFileText}>Description</ObjectivePreviewHeading><p>{selected.description}</p></section>
+                <section className="objective-overview-card objective-preview-blocker"><ObjectivePreviewHeading icon={IconAlertTriangle}>Blockers (1)</ObjectivePreviewHeading><p>{objectivePreviewDetails.blocker}</p></section>
+                <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconChecklist}>Acceptance Criteria</ObjectivePreviewHeading><ul>{objectivePreviewDetails.acceptanceCriteria.map((item) => <li key={item}><span>{item}</span></li>)}</ul></section>
+                <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconGitPullRequest}>Related PRs (4)</ObjectivePreviewHeading><ul>{objectivePreviewDetails.relatedPullRequests.map((item) => <li key={item.id}><span>{item.id} {item.title}</span><em>{item.status}</em></li>)}</ul></section>
+                <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconListCheck}>Plan Summary</ObjectivePreviewHeading><ul>{objectivePreviewDetails.planSummary.map((item) => <li key={item}><span>{item}</span></li>)}</ul></section>
+                <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconActivity}>Activity Feed</ObjectivePreviewHeading><ul>{objectivePreviewDetails.activity.map((item) => <li key={item.text}><span>{item.text}</span><em>{item.time}</em></li>)}</ul></section>
               </div> : !editing && detailTab === 'overview' ? <>
                 <div className="objective-overview-grid">
                   <section className="objective-overview-card"><b>Description</b><p>{selected.description || 'No description provided.'}</p></section>
@@ -445,21 +490,24 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                 : sampleData && detailTab === 'pull-requests' ? <div className="objective-detail-prs">{objectivePreviewDetails.relatedPullRequests.map((item) => <div key={item.id}><span>{item.id}</span><b>{item.title}</b><em>{item.status}</em></div>)}</div>
                   : sampleData && detailTab === 'activity' ? <div className="objective-detail-activity">{objectivePreviewDetails.activity.map((item) => <div key={item.text}><span>{item.text}</span><time>{item.time}</time></div>)}</div>
               : editing ? <>
-                <div className="detail-edit-grid">
+                <form className="detail-edit-grid" onSubmit={editForm.onSubmit((values) => updateMutation.mutate({
+                  id: selected.id, ...values, product_id: productIDValue, status: statusValue, progress: progressValue,
+                }, { onSuccess: () => { setDetailTab('overview'); setEditing(false); } }))}>
+                  <TextInput label="Objective title" required {...editForm.getInputProps('title')} />
+                  <Textarea label="Description" minRows={2} {...editForm.getInputProps('description')} />
+                  <TextInput label="Owner" {...editForm.getInputProps('owner')} />
+                  <TextInput label="Due date" type="date" {...editForm.getInputProps('due_date')} />
                   <Select label="Status" value={statusValue} data={statusOptions}
                     onChange={(value) => { if (value) setStatusValue(value as Objective['status']); }} />
                   <NumberInput label="Progress" min={0} max={100} decimalScale={0} suffix="%"
                     value={progressValue} onChange={(value) => setProgressValue(Number(value) || 0)} />
                   <Select label="Product" data={products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []}
-                    value={productIDValue || null} onChange={(value) => setProductIDValue(value ?? '')} clearable />
-                </div>
-                <Button className="save-objective-button" loading={updateMutation.isPending} onClick={() => updateMutation.mutate({
-                  id: selected.id,
-                  status: statusValue,
-                  progress: progressValue,
-                  ...(productIDValue !== selected.product_id ? { product_id: productIDValue } : {}),
-                }, { onSuccess: () => { setDetailTab('overview'); setEditing(false); } })}>Save updates</Button>
-                {updateMutation.isError && <Text className="form-error">{updateMutation.error.message}</Text>}
+                    value={productIDValue || null} onChange={(value) => setProductIDValue(value ?? '')}
+                    disabled={products.isLoading || products.isError} clearable />
+                  {products.isError && <Text className="form-error" role="alert">Product choices are unavailable; the current assignment is unchanged.</Text>}
+                  <Button className="save-objective-button" type="submit" loading={updateMutation.isPending}>Save updates</Button>
+                  {updateMutation.isError && <Text className="form-error" role="alert">{updateMutation.error.message}</Text>}
+                </form>
               </> : <section className="objective-detail-unavailable" role="tabpanel">
                 <b>{detailTab === 'pull-requests' ? 'Related pull requests' : detailTab[0].toUpperCase() + detailTab.slice(1)}</b>
                 <p>This information is not included in the available objective data.</p>
@@ -488,10 +536,11 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
           <div className="objective-form-row">
             <TextInput label="Owner" placeholder="Name" {...createForm.getInputProps('owner')} />
             <Select label="Product" data={products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []}
-              clearable {...createForm.getInputProps('product_id')} />
+              disabled={products.isLoading || products.isError} clearable {...createForm.getInputProps('product_id')} />
           </div>
+          {products.isError && <Text className="form-error" role="alert">Product choices are unavailable. You can create this objective without a product.</Text>}
           <TextInput label="Due date" type="date" {...createForm.getInputProps('due_date')} />
-          {submitError && <Text className="form-error">{submitError}</Text>}
+          {submitError && <Text className="form-error" role="alert">{submitError}</Text>}
           <div className="objective-form-actions"><Button variant="subtle" type="button" onClick={() => setCreateOpen(false)}>Cancel</Button><Button className="new-objective-button" type="submit" loading={createMutation.isPending}>Create objective</Button></div>
         </form>
       </Modal>

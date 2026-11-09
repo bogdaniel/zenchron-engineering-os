@@ -8,7 +8,7 @@ test('local Product Workspace mock matches the supplied overview without protect
     await route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"preview fixture expected"}' });
   });
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/?preview=mock#workspace');
+  await page.goto('/#workspace');
 
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Nova Platform' })).toBeVisible();

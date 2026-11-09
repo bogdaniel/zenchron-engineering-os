@@ -23,6 +23,7 @@ import { PanelCard } from './PanelCard';
 import './workflows.css';
 import { WorkflowDesignRouterSettings, WorkflowDesignRunPreview } from './WorkflowDesignPreview';
 import { WorkflowMobileRunPreview } from './WorkflowMobileRunPreview';
+import { WorkflowSectionPreview, WorkflowSectionTabs } from './WorkflowSectionsPreview';
 
 const nodeTypes = [
   'trigger', 'planner', 'agent-router', 'agent-task', 'code-reviewer', 'test-generator',
@@ -130,10 +131,6 @@ const workflowNodeIcons: Record<ComponentType, typeof IconRoute> = {
   loop: IconRepeat,
 };
 const componentGroups = [...new Set(components.map(([group]) => group))];
-const workflowSections = [
-  ['Builder', IconLayoutBoard], ['Runs', IconPlayerPlay], ['Versions', IconFileText],
-  ['Schedules', IconRepeat], ['Permissions', IconUserCheck], ['Settings', IconSettings],
-] as const;
 const defaultDescriptions: Record<ComponentType, string> = {
   trigger: 'Start on a pull request or event', planner: 'Create an execution plan',
   'agent-router': 'Route work to specialized agents', 'agent-task': 'Run a configured agent',
@@ -350,6 +347,7 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
 
 export function WorkflowsPage({ designPreview = false }: { designPreview?: boolean }) {
   const queryClient = useQueryClient();
+  const [section, setSection] = useState<'Builder' | 'Runs' | 'Versions' | 'Schedules' | 'Permissions' | 'Settings'>('Builder');
   const query = useQuery({
     queryKey: ['workflows'], queryFn: loadWorkflows, enabled: !designPreview,
     initialData: designPreview ? [designPreviewWorkflow] : undefined,
@@ -535,13 +533,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
           <Button className="workflow-publish" variant="light" disabled title="Workflow publishing is not connected">Publish</Button>
         </div>
       </div>
-      <nav className="workflow-section-tabs" aria-label="Workflow sections">
-        {workflowSections.map(([section, Icon], index) => (
-          <button className={index === 0 ? 'selected' : ''} disabled={index !== 0} key={section}>
-            <Icon size={14} />{section}
-          </button>
-        ))}
-      </nav>
+      <WorkflowSectionTabs section={section} designPreview={designPreview} onSelect={setSection} />
+      {section === 'Builder' ? <>
       <nav className="workflow-mobile-tabs" aria-label="Workflow mobile sections">
         <button className="selected" aria-current="page">Overview</button>
         <button disabled>Runs</button><button disabled>Tasks</button><button disabled>Approvals</button>
@@ -659,7 +652,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
             onNodeClick={(_, node) => setSelectedId(node.id)} fitView minZoom={0.2} attributionPosition="bottom-left"
           >
             <Background color={designPreview ? '#504665' : '#37324c'} gap={18} size={designPreview ? 1.2 : 1} />
-            <MiniMap nodeColor="#8e52db" maskColor="#0b0b14bb" />
+            <MiniMap style={{ width: 128, height: 54 }} nodeColor="#8e52db" maskColor="#0b0b14bb" />
             {!designPreview && <Controls position="top-right" />}
           </ReactFlow>
         </WorkflowDropCanvas>
@@ -746,6 +739,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
           <span className="workflow-hint">Version {activeWorkflow.version} · saved to local control plane</span>
         </>}
       </aside>
+      </> : <WorkflowSectionPreview section={section} />}
     </div>
   </section>;
 }

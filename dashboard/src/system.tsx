@@ -131,7 +131,7 @@ export function SystemPage({
         </button>
       </nav>
 
-      {section === 'integrations' && designPreview ? <SystemIntegrationsPreview /> : section === 'integrations' ? (
+      {designPreview ? <SystemIntegrationsPreview section={section} /> : section === 'integrations' ? (
         <div className="system-workspace">
           <nav className="system-config-nav" aria-label="Configuration categories">
             <b>Configuration</b>

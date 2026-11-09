@@ -4,11 +4,11 @@
 .objectives-title-copy { display: flex; align-items: center; gap: 11px; }
 .objectives-title-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; color: #bd8aff; filter: drop-shadow(0 0 8px #a34dff66); }
 .objectives-title-actions { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: flex-end; gap: 9px; }
-.new-objective-button { border: 1px solid #8050cc; color: #fff; background: linear-gradient(100deg, #8e48df, #6033bf); box-shadow: 0 0 18px #8540d936; font-size: 11px; }
+.new-objective-button { flex: 0 0 auto; border: 1px solid #8050cc; color: #fff; background: linear-gradient(100deg, #8e48df, #6033bf); box-shadow: 0 0 18px #8540d936; font-size: 11px; }
 .new-objective-button:hover { background: linear-gradient(100deg, #9a59e9, #7142cc); }
 .objective-metrics { display: grid; grid-template-columns: 2.2fr 2.2fr repeat(4, .75fr); gap: 9px; }
 .objective-metric { position: relative; min-height: 91px; padding: 11px 12px; }
-.objective-metric .metric-top { display: flex; align-items: center; gap: 6px; color: #b2aec1; }
+.objective-metric .metric-top { display: flex; align-items: center; gap: 6px; color: #b2aec1; font-size: 12px; }
 .objective-metric .metric-top > span { min-width: 0; white-space: nowrap; }
 .objective-metric .metric-top > svg { position: static; order: -1; flex: 0 0 auto; color: #ba8cff; }
 .objective-metric .metric-value-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
@@ -71,7 +71,10 @@
 .objective-grid-wrap .ag-root-wrapper { border: 0; border-top: 1px solid #272536; border-radius: 0; }
 .objective-grid-wrap .ag-header-cell-text { font-size: 10px; font-weight: 600; letter-spacing: .15px; }
 .objective-grid-wrap .ag-cell { display: flex; align-items: center; font-size: 11px; }
+.objective-grid-wrap .ag-header-cell, .objective-grid-wrap .ag-cell { padding-right: 6px; padding-left: 6px; }
+.objective-grid-wrap .ag-cell-value { min-width: 0; }
 .objective-grid-wrap .ag-row { cursor: pointer; }
+.objective-grid-wrap .ag-row-selected .ag-cell { background-color: #292039; }
 .objective-grid-wrap .ag-paging-panel { min-height: 34px; border-top: 1px solid #292737; color: #8f899f; font-size: 10px; }
 .objective-status { padding: 4px 6px; border: 1px solid transparent; border-radius: 10px; font-size: 10px; text-transform: capitalize; }
 .objective-status.on_track, .objective-status.completed { border-color: #286347; color: #61dba9; background: #17352b; }
@@ -83,18 +86,18 @@
 .objective-approval-status.changes-req { border-color: #70452c; color: #f2ab5f; background: #392519; }
 .objective-approval-status.changes-req { padding-right: 2px; padding-left: 2px; font-size: 8px; }
 .objective-workflow-count { display: flex; align-items: center; gap: 3px; color: #bda1ee; }
-.grid-progress { display: flex; width: 100%; align-items: center; gap: 7px; }
-.grid-progress .mantine-Progress-root { flex: 1; }
-.grid-progress span { color: #c4bed1; font-size: 10px; }
-.objective-load-error { display: grid; height: 100%; place-items: center; color: #ed8096; font-size: 10px; }
+.grid-progress { display: grid; width: 100%; gap: 3px; }
+.grid-progress .mantine-Progress-root { width: 100%; height: 4px; }
+.grid-progress span { color: #c4bed1; font-size: 10px; line-height: 1; }
+.objective-load-error { display: flex; height: 100%; align-items: center; justify-content: center; gap: 12px; color: #ed8096; font-size: 12px; }
+.objective-load-error .mantine-Button-root { min-height: 32px; color: #e5d3ff; }
 .objective-detail-panel { padding: 13px; }
 .objective-preview-layout .objective-detail-panel { display: flex; min-height: 0; flex-direction: column; overflow: hidden; }
-.objective-preview-layout .objective-grid-wrap .ag-cell { font-size: 11px; }
-.objective-preview-layout .objective-grid-wrap .ag-cell:first-child { font-size: 10.5px; }
+.objective-preview-layout .objective-grid-wrap .ag-cell { font-size: 11.5px; }
+.objective-preview-layout .objective-grid-wrap .ag-cell[col-id="title"] { font-size: 11px; }
 .objective-preview-layout .objective-grid-wrap .ag-header-cell-text { font-size: 10.5px; }
 .objective-preview-layout .objective-grid-wrap .ag-header-cell,
 .objective-preview-layout .objective-grid-wrap .ag-cell { padding-right: 5px; padding-left: 5px; }
-.objective-preview-layout .objective-grid-wrap .ag-cell-value { min-width: 0; }
 .objective-owner-cell { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .objective-owner-avatar { display: grid; width: 16px; height: 16px; flex: 0 0 auto; place-items: center; border: 1px solid #60477e; border-radius: 50%; color: #e1cfff; background: #342448; font-size: 7px; font-weight: 600; }
 .objective-preview-layout .objective-grid-wrap .objective-status { padding: 3px 5px; font-size: 9px; white-space: nowrap; }
@@ -105,28 +108,31 @@
 .objective-preview-actions { display: flex; align-items: center; gap: 7px; }
 .objective-preview-actions button { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #302b45; border-radius: 9px; color: #c9c2d8; background: #1a1927; font-size: 17px; }
 .objective-preview-overview { min-height: 0; flex: 1; grid-template-rows: minmax(0, .85fr) repeat(2, minmax(0, 1fr)); }
-.objective-preview-overview .objective-overview-card { min-height: 0; padding: 6px; overflow: hidden; }
+.objective-preview-overview .objective-overview-card { min-height: 0; padding: 4px; overflow: hidden; }
 .objective-preview-overview .objective-overview-card p { margin-top: 5px; }
-.objective-preview-overview .objective-overview-card b { font-size: 11px; }
-.objective-preview-overview .objective-overview-card p { font-size: 10px; line-height: 1.25; }
-.objective-preview-overview ul { display: grid; gap: 0; margin: 0; padding: 0; color: #c4bed1; font-size: 9.5px; line-height: 1; list-style: none; }
+.objective-preview-overview .objective-overview-card b { font-size: 12px; }
+.objective-preview-overview .objective-overview-card > b { display: flex; align-items: center; gap: 5px; line-height: 1.15; }
+.objective-preview-overview .objective-overview-card > b svg { flex: 0 0 auto; color: #c49aff; }
+.objective-preview-overview .objective-overview-card p { font-size: 10.5px; line-height: 1.3; }
+.objective-preview-overview ul { display: grid; gap: 0; margin: 0; padding: 0; color: #c4bed1; font-size: 11px; line-height: 1.1; list-style: none; }
 .objective-preview-overview li { display: flex; min-width: 0; align-items: center; gap: 5px; overflow: hidden; white-space: nowrap; }
 .objective-preview-overview li::before { flex: 0 0 auto; color: #35d59d; content: '✓'; font-weight: 700; }
 .objective-preview-overview .objective-preview-blocker { border-color: #68412f; background: #241c1b; }
 .objective-preview-overview .objective-preview-blocker b { color: #f2bb62; }
+.objective-preview-overview .objective-preview-blocker > b svg { color: #f2bb62; }
 .objective-preview-overview .objective-preview-blocker p::before { margin-right: 5px; color: #f2bb62; content: '▲'; }
 .objective-preview-overview li span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
-.objective-preview-overview li em { flex: 0 0 auto; color: #c5a4f5; font-size: 9px; font-style: normal; }
-.objective-preview-layout .objective-detail-stack { grid-template-rows: minmax(0, 1fr) 128px; }
+.objective-preview-overview li em { flex: 0 0 auto; color: #c5a4f5; font-size: 10px; font-style: normal; }
+.objective-preview-layout .objective-detail-stack { grid-template-rows: minmax(0, 1fr) 167px; }
 .objective-milestones-card { min-height: 0; padding: 10px 12px; overflow: hidden; }
 .objective-milestones-card .panel-heading { min-height: 25px; }
 .objective-milestones-card .panel-heading > div:last-child { color: #c5bfd2; font-size: 9px; }
 .objective-milestones-list { display: grid; gap: 4px; margin-top: 4px; }
-.objective-milestones-list > div { display: grid; grid-template-columns: 13px minmax(100px, 1.2fr) minmax(65px, 1fr) 90px 70px; align-items: center; gap: 6px; min-height: 18px; color: #c5bfd2; font-size: 9px; }
+.objective-milestones-list > div { display: grid; grid-template-columns: 13px minmax(100px, 1.2fr) minmax(65px, 1fr) 90px 70px; align-items: center; gap: 6px; min-height: 18px; color: #c5bfd2; font-size: 10px; }
 .objective-milestone-flag { color: #b783f5; }
 .objective-milestone-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .objective-milestones-list .mantine-Progress-root { height: 7px; }
-.objective-milestone-status { justify-self: start; border: 1px solid #3b3451; color: #c5bfd2; background: #1a1927; font-size: 8px; }
+.objective-milestone-status { justify-self: start; border: 1px solid #3b3451; color: #c5bfd2; background: #1a1927; font-size: 9px; }
 .objective-milestone-status.complete { border-color: #276a50; color: #54e0a9; background: #12392e; }
 .objective-milestone-status.in-progress { border-color: #37619a; color: #8fc3ff; background: #172b45; }
 .objective-milestones-list time { color: #9d97aa; text-align: right; white-space: nowrap; }
@@ -139,10 +145,11 @@
 .detail-summary > span { color: #aaa5b9; font-size: 9px; text-align: right; }
 .detail-summary .mantine-Progress-root { min-width: 64px; }
 .detail-meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; padding: 10px 0; border-top: 1px solid #2a2839; border-bottom: 1px solid #2a2839; }
-.detail-meta-grid small { display: block; margin-bottom: 4px; color: #817b91; font-size: 9px; }
-.detail-meta-grid b { display: block; overflow: hidden; color: #d5d0df; font-size: 10px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.detail-meta-grid small { display: block; margin-bottom: 4px; color: #817b91; font-size: 10px; }
+.detail-meta-grid b { display: flex; min-width: 0; align-items: center; gap: 4px; overflow: hidden; color: #d5d0df; font-size: 11px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.detail-meta-grid b svg { flex: 0 0 auto; color: #b783f5; }
 .objective-detail-tabs { display: flex; gap: 5px; overflow-x: auto; margin: 10px 0 8px; border-bottom: 1px solid #2a2839; }
-.objective-detail-tabs button { flex: 0 0 auto; padding: 8px 9px; border: 0; border-bottom: 2px solid transparent; color: #aaa5b9; background: transparent; font-size: 10px; }
+.objective-detail-tabs button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; padding: 8px 9px; border: 0; border-bottom: 2px solid transparent; color: #aaa5b9; background: transparent; font-size: 11px; }
 .objective-detail-tabs button.active { border-bottom-color: #a968ff; color: #e6d4ff; }
 .objective-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .objective-overview-card { min-height: 90px; padding: 9px; border: 1px solid #2e2b41; border-radius: 8px; background: #151520; }
@@ -156,8 +163,9 @@
 .objective-detail-unavailable b { color: #ddd7e9; font-size: 12px; }
 .objective-detail-unavailable p { max-width: 240px; color: #908a9d; font-size: 10px; line-height: 1.5; }
 .detail-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.detail-edit-grid > :nth-child(-n + 2), .detail-edit-grid .save-objective-button, .detail-edit-grid .form-error { grid-column: 1 / -1; }
 .detail-edit-grid label, .objective-modal label { color: #aaa5b9; font-size: 9px; }
-.detail-edit-grid input, .detail-edit-grid [data-combobox-input], .objective-modal input, .objective-modal textarea { border-color: #353149; color: #e4dfef; background: #1b1a28; font-size: 10px; }
+.detail-edit-grid input, .detail-edit-grid textarea, .detail-edit-grid [data-combobox-input], .objective-modal input, .objective-modal textarea { border-color: #353149; color: #e4dfef; background: #1b1a28; font-size: 10px; }
 .save-objective-button { width: 100%; margin-top: 11px; border: 1px solid #6643a2; color: #eee5ff; background: #302044; font-size: 10px; }
 .form-error { margin-top: 8px; color: #f18a9e; font-size: 10px; }
 .objective-detail-empty { display: flex; min-height: 325px; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
@@ -195,8 +203,12 @@
   .objectives-title-actions { flex-basis: 100%; }
   .objective-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .objective-filters { flex: 1; }
-  .objective-content-grid { grid-template-columns: minmax(0, 1.2fr) minmax(280px, .9fr); }
+  .objective-content-grid { grid-template-columns: 1fr; }
   .objective-table-stack { grid-template-rows: minmax(320px, auto) auto; }
+}
+
+@media (min-width: 1351px) {
+  .objective-metrics { grid-template-columns: 2fr 2fr repeat(4, .75fr); gap: 8px; }
 }
 
 @media (min-width: 1351px) and (min-height: 840px) {
@@ -205,12 +217,10 @@
   .objectives-title-row { margin-bottom: 10.5px; }
   .objectives-title-copy { min-width: 0; }
   .objective-filters { width: min(560px, 100%); }
-  .objective-metrics { grid-template-columns: 2fr 2fr repeat(4, .75fr); gap: 8px; }
   .objective-metric { height: 84px; min-height: 84px; padding: 10px 12px; }
   .objective-content-grid { height: 615px; grid-template-columns: .49fr .51fr; gap: 12px; margin-top: 10px; }
   .objective-preview-layout .objective-grid-toolbar { display: none; }
   .objective-preview-layout .objective-grid-wrap { height: calc(100% - 42px); }
-  .objective-preview-layout .objective-detail-stack { grid-template-rows: minmax(0, 1fr) 128px; }
   .objective-table-stack { grid-template-rows: minmax(0, 1fr) 167px; gap: 12px; }
   .objective-grid-wrap { height: calc(100% - 93px); min-height: 0; }
   .objective-detail-panel { min-height: 0; }
@@ -218,11 +228,39 @@
   .objective-capacity { padding: 12px; }
 }
 
+@media (min-width: 1500px) and (max-width: 1671px) {
+  .objective-content-grid { grid-template-columns: minmax(676px, 1fr) minmax(450px, 1fr); }
+}
+
+@media (min-width: 1500px) and (min-height: 840px) {
+  .objective-preview-layout .objective-detail-panel { padding: 8px 13px; }
+  .objective-preview-layout .detail-summary { margin: 2px 0; }
+  .objective-preview-layout .detail-meta-grid { padding: 2px 0; }
+  .objective-preview-layout .objective-detail-tabs { margin: 2px 0; }
+  .objective-preview-layout .objective-detail-tabs button { padding-top: 4px; padding-bottom: 4px; }
+  .objective-preview-layout .objective-overview-grid { gap: 5px; }
+  .objective-preview-overview .objective-overview-card { padding: 3px; }
+  .objective-preview-layout .objective-detail-head small { margin-top: 2px; }
+}
+
+@media (min-width: 851px) and (max-width: 1499px) {
+  .objective-content-grid { height: auto; grid-template-columns: 1fr; }
+  .objective-table-stack { grid-template-rows: minmax(372px, auto) 167px; }
+  .objective-grid-wrap { height: 330px; }
+  .objective-detail-stack { grid-template-rows: minmax(480px, auto) 128px; }
+}
+
+@media (min-width: 1351px) and (max-width: 1499px) {
+  .objective-metrics { grid-template-columns: 1.7fr 1.7fr repeat(4, 1fr); }
+}
+
 @media (max-width: 850px) {
   .objectives-title-row { align-items: flex-start; }
   .objectives-title-row p { max-width: 450px; line-height: 1.45; }
   .objectives-title-actions { flex-wrap: wrap; justify-content: flex-start; }
-  .objective-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .objective-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .objective-metric-trend > :last-child { display: none; }
+  .objective-filters { flex-basis: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .objective-content-grid { grid-template-columns: 1fr; }
   .objective-detail-stack { grid-template-rows: minmax(420px, auto) auto; }
   .objective-grid-wrap { height: 330px; }
@@ -233,11 +271,22 @@
   .objectives-page { padding-top: 12px; }
   .objectives-title-actions { width: 100%; }
   .objective-filters { flex-basis: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .objective-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .objective-metrics { gap: 7px; }
   .objective-metric { min-height: 82px; padding: 9px; }
   .objective-filters { grid-template-columns: 1fr 1fr; }
   .objective-filters > :first-child { grid-column: span 2; }
-  .objectives-tabs { gap: 7px; padding: 0 7px; }
+  .objectives-tabs { height: auto; min-height: 42px; flex-wrap: wrap; gap: 4px; padding: 6px 7px; }
+  .objectives-tabs > span { display: none; }
+  .objectives-tabs::after { content: ""; flex-basis: 100%; order: 1; }
+  .objectives-tabs button:nth-of-type(n + 4) { order: 2; }
   .objective-grid-toolbar span:last-child { display: none; }
   .objective-grid-wrap { height: 340px; }
+  .objective-capacity .shared-panel-heading { flex-wrap: wrap; }
+  .objective-capacity-legend { flex-basis: 100%; flex-wrap: wrap; justify-content: flex-start; gap: 4px 8px; white-space: normal; }
+  .objective-milestones-list > div { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 4px 8px; }
+  .objective-milestone-flag { display: none; }
+  .objective-milestone-name { grid-area: 1 / 1; }
+  .objective-milestones-list .mantine-Progress-root { grid-area: 2 / 1; }
+  .objective-milestone-status { grid-area: 1 / 2; }
+  .objective-milestones-list time { grid-area: 2 / 2; }
 }

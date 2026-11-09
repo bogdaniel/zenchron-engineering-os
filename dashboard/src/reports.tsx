@@ -57,11 +57,11 @@ const defaultScope: ReportScope = {
   timeRange: '30d', product: 'all', objectiveOwner: 'all', workflow: 'all', repository: 'all',
 };
 const timeRanges: { value: TimeRange; label: string }[] = [
-  { value: '30d', label: 'Last 30 days' }, { value: '90d', label: 'Last 90 days' },
-  { value: '365d', label: 'Last 12 months' }, { value: 'all', label: 'All time' },
+  { value: '30d', label: 'Last 30 Days' }, { value: '90d', label: 'Last 90 Days' },
+  { value: '365d', label: 'Last 12 Months' }, { value: 'all', label: 'All Time' },
 ];
 const insightViews = [
-  { value: 'executive', label: 'Executive summary' },
+  { value: 'executive', label: 'Executive Summary' },
   { value: 'delivery', label: 'Delivery' },
   { value: 'execution', label: 'Execution' },
   { value: 'objectives', label: 'Objectives' },
@@ -212,15 +212,15 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
   const objectiveOwners = [...new Set(objectives?.map((objective) => objective.owner.trim()).filter(Boolean) ?? [])]
     .sort((left, right) => left.localeCompare(right));
   const productOptions = [
-    { value: 'all', label: 'All products' },
+    { value: 'all', label: 'All Products' },
     ...(products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []),
   ];
   const repositoryOptions = [
-    { value: 'all', label: 'All repositories' },
+    { value: 'all', label: 'All Repositories' },
     ...(projects?.map((project) => ({ value: project.id, label: project.name })) ?? []),
   ];
   const ownerOptions = [
-    { value: 'all', label: designPreview ? 'All teams' : 'All objective owners' },
+    { value: 'all', label: designPreview ? 'All Teams' : 'All Objective Owners' },
     ...objectiveOwners.map((owner) => ({ value: owner, label: owner })),
   ];
   const downloadCSV = (name: string, rows: (string | number | undefined)[][]) => {
@@ -296,16 +296,15 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
   return (
     <section className={`reports-page${designPreview ? ' reports-design-preview' : ''}`}>
       <div className="reports-scope-bar" aria-label="Report scope">
-        <div className="reports-scope-label"><IconFilter size={16} /><span>Report scope</span>
-          {designPreview && <small className="reports-preview-badge">Mock data</small>}</div>
-        <Select aria-label="Time range" label="Time range" data={timeRanges}
+        <div className="reports-scope-label"><IconFilter size={16} /><span>Report Scope</span></div>
+        <Select aria-label="Time Range" label="Time Range" data={timeRanges}
           value={scope.timeRange} onChange={(value) => updateScope('timeRange', value)} disabled={designPreview} />
         <Select aria-label="Product" label="Product" data={productOptions}
           value={scope.product} onChange={(value) => updateScope('product', value)} disabled={designPreview} />
         <Select aria-label={designPreview ? 'Team' : 'Objective owner'} label={designPreview ? 'Team' : 'Objective owner'} data={ownerOptions} value={scope.objectiveOwner}
           onChange={(value) => updateScope('objectiveOwner', value)} disabled={designPreview} />
         <Select aria-label="Workflow filter unavailable because runs are not linked to workflows" label="Workflow"
-          data={[{ value: 'all', label: 'All workflows' }]} value="all" disabled />
+          data={[{ value: 'all', label: 'All Workflows' }]} value="all" disabled />
         <Select aria-label="Repository" label="Repository" data={repositoryOptions}
           value={scope.repository} onChange={(value) => updateScope('repository', value)} disabled={designPreview} />
         <div className="reports-scope-actions">
@@ -318,35 +317,35 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
       </div>
 
       <div className="reports-metrics" aria-label="Workspace metrics">
-        <Metric tone="velocity" label="Delivery velocity" value={designPreview ? previewValue('42', '+27%') : pullRequests.deliveryVelocity} detail="PRs / week"
+        <Metric tone="velocity" label="Delivery Velocity" value={designPreview ? previewValue('42', '+27%') : pullRequests.deliveryVelocity} detail="PRs / week"
           icon={<IconRocket size={17} />} trend={designPreview
             ? metricSparkline('Delivery velocity', reportPreviewTrend.map((item) => item.merged), 'violet.5')
             : pullRequests.complete ? metricSparkline('Delivery velocity', pullRequests.trend.map((item) => item.merged), 'violet.5') : undefined} />
-        <Metric tone="cycle-time" label="Cycle time" value={designPreview ? previewValue('13.6h', '−34%') : pullRequests.cycleTime} detail="Hours"
+        <Metric tone="cycle-time" label="Cycle Time" value={designPreview ? previewValue('13.6h', '−34%') : pullRequests.cycleTime} detail="Hours"
           icon={<IconStopwatch size={17} />} trend={designPreview
             ? metricSparkline('Cycle time', reportPreviewTrend.map((item) => item.cycle), 'teal.4')
             : pullRequests.complete ? metricSparkline('Cycle time', pullRequests.trend.map((item) => item.cycle), 'teal.4') : undefined} />
-        <Metric tone="ci-duration" label="CI duration" value={designPreview ? previewValue('8.2m', '−28%') : workflowRunMetrics.averageMinutes ?? 'Unavailable'}
+        <Metric tone="ci-duration" label="CI Duration" value={designPreview ? previewValue('8.2m', '−28%') : workflowRunMetrics.averageMinutes ?? 'Unavailable'}
           detail="Avg. minutes" icon={<IconStack size={17} />}
           trend={designPreview ? metricSparkline('CI duration', reportPreviewCIDistribution.map((item) => item.runs), 'teal.5')
             : workflowRunMetrics.complete ? metricSparkline('CI duration', workflowRunMetrics.trend, 'teal.5') : undefined} />
-        <Metric tone="review-latency" label="Review latency" value={designPreview ? previewValue('4.7h', '−41%') : 'Unavailable'} detail="Hours"
+        <Metric tone="review-latency" label="Review Latency" value={designPreview ? previewValue('4.7h', '−41%') : 'Unavailable'} detail="Hours"
           icon={<IconMessageCircle size={17} />} trend={designPreview ? metricSparkline('Review latency', [12, 9, 7, 6, 5, 4.7], 'violet.5') : undefined} />
-        <Metric tone="agent-spend" label="Agent spend" value={designPreview ? previewValue('$13.6K', '+12%') : 'Unavailable'} detail="USD"
+        <Metric tone="agent-spend" label="Agent Spend" value={designPreview ? previewValue('$13.6K', '+12%') : 'Unavailable'} detail="USD"
           icon={<IconCpu size={17} />} trend={designPreview ? metricSparkline('Agent spend', [5, 7, 7.5, 8, 10, 13.6], 'violet.5') : undefined} />
-        <Metric tone="acceptance-rate" label="Acceptance rate" value={designPreview ? previewValue('94.8%', '+3.1 pp') : pullRequests.acceptanceRate === undefined ? undefined : `${pullRequests.acceptanceRate}%`} detail="Closed pull requests"
+        <Metric tone="acceptance-rate" label="Acceptance Rate" value={designPreview ? previewValue('94.8%', '+3.1 pp') : pullRequests.acceptanceRate === undefined ? undefined : `${pullRequests.acceptanceRate}%`} detail="Closed pull requests"
           icon={<IconCircleCheck size={17} />}
           trend={designPreview ? metricSparkline('Acceptance rate', reportPreviewTrend.map((item) => item.acceptance), 'teal.5')
             : pullRequests.complete ? metricSparkline('Acceptance rate', pullRequests.trend.map((item) => item.acceptance), 'teal.5') : undefined} />
-        <Metric tone="autonomous-completion" label="Autonomous completion" value={designPreview ? previewValue('68.4%', '+9.7 pp') : 'Unavailable'} detail="Completed agent runs"
+        <Metric tone="autonomous-completion" label="Autonomous Completion" value={designPreview ? previewValue('68.4%', '+9.7 pp') : 'Unavailable'} detail="Completed agent runs"
           icon={<IconInfinity size={17} />} trend={designPreview ? metricSparkline('Autonomous completion', reportPreviewTrend.map((item) => item.autonomy), 'teal.5') : undefined} />
       </div>
 
       <div className="reports-content-grid">
         <PanelCard className="reports-panel delivery-velocity-panel" withBorder>
           <PanelHeading className="reports-panel-heading" icon={<IconChartBar size={15} />}
-            title="Delivery velocity &amp; cycle time" />
-          <ChartLegend items={[{ tone: 'violet', label: 'Merged PRs' }, { tone: 'teal', label: 'Cycle time' }]} />
+            title="Delivery Velocity &amp; Cycle Time" />
+          <ChartLegend items={[{ tone: 'violet', label: 'Delivery Velocity (PRs/week)' }, { tone: 'teal', label: 'Cycle Time (hours)' }]} />
           {designPreview || pullRequests.complete && pullRequests.mergedCount > 0 ? <CompositeChart
             className="reports-pull-request-chart"
             h={112}
@@ -354,8 +353,8 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
             data={designPreview ? reportPreviewTrend : pullRequests.trend}
             dataKey="date"
             series={[
-              { name: 'merged', label: 'Merged PRs', color: 'violet.5', type: 'line' },
-              { name: 'cycle', label: 'Cycle time (h)', color: 'teal.4', type: 'line', yAxisId: 'right' },
+              { name: 'merged', label: 'Delivery Velocity (PRs/week)', color: 'violet.5', type: 'line' },
+              { name: 'cycle', label: 'Cycle Time (hours)', color: 'teal.4', type: 'line', yAxisId: 'right' },
             ]}
             withRightYAxis
             withLegend={false}
@@ -375,7 +374,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
               : 'Connect a source to view this chart'} />}
         </PanelCard>
         <PanelCard className="reports-panel ci-distribution-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconActivity size={15} />} title="CI duration distribution"
+          <PanelHeading className="reports-panel-heading" icon={<IconActivity size={15} />} title="CI Duration Distribution"
             actions={(designPreview || workflowRunMetrics.p50Minutes !== undefined && workflowRunMetrics.p95Minutes !== undefined) &&
               <div className="reports-percentiles" role="group" aria-label="CI duration percentiles">
                 <span>p50 {designPreview ? '6.8' : workflowRunMetrics.p50Minutes!.toFixed(1)}m</span>
@@ -404,11 +403,13 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
         </PanelCard>
 
         <PanelCard className="reports-panel work-outcomes-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconRoute size={15} />} title="Work outcomes"
-            description={designPreview ? 'All workflows' : `Pull request status · ${selectedRangeLabel}`} />
-          {designPreview ? <div className="reports-outcomes-layout reports-outcomes-preview"><DonutChart size={120} thickness={15}
-            data={reportPreviewOutcomes} chartLabel="17,842" classNames={{ label: 'report-chart-label' }}
-            aria-label="Mock work outcomes for the last 30 days" />
+          <PanelHeading className="reports-panel-heading" icon={<IconRoute size={15} />} title="Work Outcomes"
+            description={designPreview ? 'All Workflows' : `Pull request status · ${selectedRangeLabel}`} />
+          {designPreview ? <div className="reports-outcomes-layout reports-outcomes-preview"><div className="reports-outcomes-donut">
+            <DonutChart size={120} thickness={15} data={reportPreviewOutcomes}
+              aria-label="Mock work outcomes for the last 30 days" />
+            <div className="reports-outcomes-label" aria-hidden="true"><b>17,842</b><span>Work Items</span></div>
+          </div>
             <ReportOutcomeLegend items={reportPreviewOutcomes} valueSuffix="%" label="Work outcomes legend" /></div>
             : pullRequests.isLoading ? <div className="reports-empty">Loading pull-request outcomes…</div>
             : pullRequests.isError ? <div className="reports-empty">Pull-request outcomes are unavailable.</div>
@@ -431,7 +432,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
               </div>}
         </PanelCard>
         {designPreview ? <PanelCard className="reports-panel review-latency-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconMessageCircle size={15} />} title="Review latency trend" />
+          <PanelHeading className="reports-panel-heading" icon={<IconMessageCircle size={15} />} title="Review Latency Trend" />
           <ChartLegend items={[{ tone: 'violet', label: 'Review latency' }]} />
           <LineChart className="reports-latency-chart" h={76} textColor="#9691a8"
             data={reportPreviewTrend.map((item, index) => ({ date: item.date, latency: reportPreviewLatency[index] }))}
@@ -439,10 +440,10 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
             yAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, width: 28 }}
             xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 'preserveStartEnd' }}
             gridAxis="xy" withDots={false} withTooltip aria-label="Mock review latency trend" />
-        </PanelCard> : <UnavailableMetricsPanel className="review-latency-panel" title="Review latency trend"
+        </PanelCard> : <UnavailableMetricsPanel className="review-latency-panel" title="Review Latency Trend"
           icon={<IconMessageCircle size={15} />} detail="Requires provider review events." />}
         {designPreview ? <PanelCard className="reports-panel agent-spend-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconCpu size={15} />} title="Agent spend" />
+          <PanelHeading className="reports-panel-heading" icon={<IconCpu size={15} />} title="Agent Spend" />
           <ChartLegend items={[{ tone: 'violet', label: 'Spend (USD)' }, { tone: 'teal', label: 'Autonomous completion rate' }]} />
           <CompositeChart className="reports-spend-chart" h={76} textColor="#9691a8"
             data={reportPreviewTrend.map((item, index) => ({ ...item, spend: reportPreviewSpend[index] }))}
@@ -452,11 +453,11 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
             yAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, width: 28 }}
             rightYAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, width: 28 }}
             gridAxis="xy" withTooltip aria-label="Mock agent spend and autonomous completion trend" />
-        </PanelCard> : <UnavailableMetricsPanel className="agent-spend-panel" title="Agent spend"
+        </PanelCard> : <UnavailableMetricsPanel className="agent-spend-panel" title="Agent Spend"
           icon={<IconCpu size={15} />} detail="Requires provider usage records." />}
         <PanelCard className="reports-panel acceptance-panel" withBorder>
           <PanelHeading className="reports-panel-heading" icon={<IconCircleCheck size={15} />}
-            title="Acceptance &amp; autonomous completion" />
+            title="Acceptance &amp; Autonomous Completion" />
           <ChartLegend items={[{ tone: 'violet', label: 'Acceptance rate' },
             { tone: 'teal', label: designPreview ? 'Autonomous completion rate' : 'Autonomous completion · unavailable' }]} />
           {designPreview ? <LineChart className="reports-acceptance-chart" h={76} textColor="#9691a8"
@@ -479,7 +480,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
         </PanelCard>
 
         <PanelCard className="reports-panel reports-summary" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconSparkles size={15} />} title="Insights &amp; narrative"
+          <PanelHeading className="reports-panel-heading" icon={<IconSparkles size={15} />} title="Insights &amp; Narrative"
             description={designPreview ? undefined : 'Findings from the selected snapshot'}
             actions={<Select className="reports-insight-filter" aria-label="Insights view" data={insightViews}
               value={insightView} onChange={(value) => setInsightView(value ?? 'executive')} />} />

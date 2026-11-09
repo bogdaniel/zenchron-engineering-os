@@ -13,11 +13,11 @@
 .workspace-mock-directory .mantine-Input-section { color: #aaa3b7; }
 .workspace-mock-products { display: grid; gap: 5px; margin-top: 9px; }
 .workspace-mock-product {
-  display: flex; width: 100%; min-width: 0; min-height: 56px; align-items: center; gap: 7px;
-  padding: 7px; border: 1px solid #282638; border-radius: 8px; color: #e5e1ec; background: #14141f; text-align: left;
+  display: flex; width: 100%; min-width: 0; min-height: 56px; align-items: center; gap: 5px;
+  padding: 7px 5px; border: 1px solid #282638; border-radius: 8px; color: #e5e1ec; background: #14141f; text-align: left;
 }
 .workspace-mock-product.selected { border-color: #7449a5; background: #21172e; box-shadow: 0 0 12px #9d4df033; }
-.workspace-mock-product-icon { display: grid; width: 31px; height: 31px; flex: 0 0 31px; place-items: center; border: 1px solid #503570; border-radius: 8px; color: #c797ff; background: #281b39; }
+.workspace-mock-product-icon { display: grid; width: 29px; height: 29px; flex: 0 0 29px; place-items: center; border: 1px solid #503570; border-radius: 8px; color: #c797ff; background: #281b39; }
 .workspace-mock-product-icon.chart { color: #76b3ff; background: #1c2a41; }
 .workspace-mock-product-icon.agents { color: #dc98ff; background: #2d1d3c; }
 .workspace-mock-product-icon.workspace { color: #ffca61; background: #352a1b; }
@@ -25,43 +25,56 @@
 .workspace-mock-product-icon.large { width: 55px; height: 55px; flex-basis: 55px; border-color: #8152c2; border-radius: 12px; box-shadow: 0 0 20px #8b48e933; }
 .workspace-mock-product-copy { min-width: 0; flex: 1; }
 .workspace-mock-product-copy b, .workspace-mock-product-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspace-mock-product-copy b { font-size: 10px; font-weight: 600; }
-.workspace-mock-product-copy small { margin-top: 3px; color: #a09aae; font-size: 8px; }
-.workspace-mock-active, .workspace-mock-planning { min-height: 16px; padding: 0 5px; border: 0; border-radius: 8px; background: #12372d; color: #43d99d; font-size: 7px; }
+.workspace-mock-product-copy b { font-size: 12px; font-weight: 600; }
+.workspace-mock-product-copy small { margin-top: 3px; color: #a09aae; font-size: 9px; }
+.workspace-mock-active, .workspace-mock-planning { min-height: 16px; padding: 0 4px; border: 0; border-radius: 8px; background: #12372d; color: #43d99d; font-size: 8px; text-transform: none; }
 .workspace-mock-planning { color: #f0bf56; background: #382c15; }
 .workspace-mock-chevron { flex: 0 0 auto; color: #b4adbe; }
 .workspace-mock-all { display: flex; min-height: 34px; align-items: center; gap: 8px; padding: 0 8px; border: 1px solid #2d2a3e; border-radius: 7px; color: #dbd7e3; background: #15151f; font-size: 9px; }
+.workspace-mock-all > svg:first-child { color: #bcb5c8; }
 .workspace-mock-all svg { margin-left: auto; }
 .workspace-mock-detail { min-width: 0; }
 .workspace-mock-heading { display: flex; min-height: 84px; align-items: center; gap: 13px; }
 .workspace-mock-heading > div { min-width: 0; flex: 1; }
-.workspace-mock-heading h1 { margin: 0 0 3px; color: #f4effb; font-size: 21px; font-weight: 650; line-height: 1.15; }
-.workspace-mock-heading p { margin: 0; color: #c5c0d0; font-size: 10px; }
-.workspace-mock-meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: #aaa4b7; font-size: 8px; }
+.workspace-mock-heading h1 { margin: 0 0 3px; color: #f4effb; font-size: 23px; font-weight: 650; line-height: 1.15; }
+.workspace-mock-heading p { margin: 0; color: #c5c0d0; font-size: 11px; }
+.workspace-mock-meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: #aaa4b7; font-size: 9px; }
 .workspace-mock-meta b { color: #45dfa1; }
 .workspace-mock-meta i { width: 1px; height: 10px; background: #514b60; }
-.workspace-mock-heading > button { min-height: 31px; padding: 0 10px; border: 1px solid #39334b; border-radius: 8px; color: #e4deeb; background: #191824; font-size: 9px; }
+.workspace-mock-heading > button { min-height: 31px; padding: 0 10px; border: 1px solid #39334b; border-radius: 8px; color: #e4deeb; background: #191824; font-size: 10px; }
+.workspace-mock-heading > button:not(.workspace-mock-add) { display: flex; align-items: center; justify-content: center; gap: 5px; }
+.workspace-mock-heading > .workspace-mock-menu { width: 38px; padding: 0; }
 .workspace-mock-heading > .workspace-mock-add { min-height: 34px; padding: 0 13px; }
 .workspace-mock-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 .workspace-mock-metric { min-width: 0; height: 76px; padding: 8px 11px; border: 1px solid #37314b; border-radius: 9px; background: #171522; }
 .workspace-mock-metric.health { border-color: #165f4e; background: linear-gradient(110deg, #0f3029, #101820); }
 .workspace-mock-metric.health { display: grid; grid-template-columns: 1fr auto; grid-template-rows: 20px 1fr; align-items: center; }
 .workspace-mock-metric.health .metric-top { grid-column: 1 / -1; }
+.workspace-mock-metric.initiatives { display: grid; grid-template-columns: auto 1fr; grid-template-rows: 20px 1fr; align-items: center; }
+.workspace-mock-metric.initiatives .metric-top { grid-column: 1 / -1; }
+.workspace-mock-metric.initiatives > strong { align-self: center; margin-top: 0; }
+.workspace-mock-metric.initiatives > small { justify-self: start; align-self: center; margin: 0 0 0 6px; padding: 3px 7px; border-radius: 12px; background: #17352b; }
 .workspace-mock-metric.health > strong { align-self: center; margin-top: 0; }
 .workspace-mock-metric.health > small { margin-top: 0; }
 .workspace-mock-metric.delivery { border-color: #284c7a; background: linear-gradient(110deg, #172b47, #17182a); }
-.workspace-mock-metric .metric-top { display: flex; align-items: center; gap: 5px; color: #e8e2f0; font-size: 9px; }
+.workspace-mock-metric.delivery { display: grid; grid-template-columns: auto 1fr; grid-template-rows: 20px 1fr; align-items: center; }
+.workspace-mock-metric.delivery .metric-top { grid-column: 1 / -1; }
+.workspace-mock-metric.delivery > strong { align-self: center; margin-top: 0; }
+.workspace-mock-metric.delivery > small { justify-self: start; align-self: center; margin: 0 0 0 8px; }
+.workspace-mock-metric.delivery > small > span { display: grid; gap: 2px; }
+.workspace-mock-metric .metric-top { display: flex; align-items: center; gap: 5px; color: #e8e2f0; font-size: 12px; }
 .workspace-mock-metric .metric-top svg { order: -1; color: #c48aff; }
 .workspace-mock-metric.health .metric-top svg { color: #4de0ac; }
 .workspace-mock-metric.delivery .metric-top svg { color: #7abaff; }
-.workspace-mock-metric > strong { display: block; margin-top: 6px; color: #f4effa; font-size: 19px; line-height: 1; }
-.workspace-mock-metric > small { display: block; margin-top: 4px; color: #c5bfd0; font-size: 8px; }
+.workspace-mock-metric > strong { display: block; margin-top: 6px; color: #f4effa; font-size: 22px; line-height: 1; }
+.workspace-mock-metric > small { display: block; margin-top: 4px; color: #c5bfd0; font-size: 9px; }
 .workspace-mock-health { display: flex; width: 100%; align-items: center; gap: 7px; color: #43dfa1; font-weight: 600; }
+.workspace-mock-health b { padding: 3px 8px; border: 1px solid #1d775d; border-radius: 12px; background: #12392f; white-space: nowrap; }
 .workspace-mock-health svg { width: 66px; height: 20px; margin-left: auto; overflow: visible; }
 .workspace-mock-health path { fill: none; stroke: #27dfa0; stroke-width: 2; }
-.workspace-mock-growth, .workspace-mock-metric small b { color: #43dfa1; font-size: 8px; }
+.workspace-mock-growth, .workspace-mock-metric small b { color: #43dfa1; font-size: 9px; }
 .workspace-mock-tabs { display: flex; min-height: 39px; gap: 4px; margin: 15px 0 12px; padding: 4px; border: 1px solid #302b48; border-radius: 9px; background: #12121d; }
-.workspace-mock-tabs button { min-width: 103px; padding: 0 12px; border: 0; border-radius: 7px; color: #d9d4e2; background: transparent; font-size: 9px; }
+.workspace-mock-tabs button { display: flex; min-width: 103px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 0; border-radius: 7px; color: #d9d4e2; background: transparent; font-size: 10px; }
 .workspace-mock-tabs button.active { color: #fff; background: linear-gradient(105deg, #6738a5, #442566); }
 .workspace-mock-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: 174px 166px 154px; gap: 8px; }
 .workspace-mock-card { min-width: 0; height: 100%; padding: 8px; overflow: hidden; border: 1px solid #302b45; border-radius: 9px; background: #151420; }
@@ -72,29 +85,30 @@
 .workspace-mock-card .shared-panel-heading { display: flex; min-height: 23px; align-items: flex-start; justify-content: space-between; gap: 5px; margin-bottom: 5px; }
 .workspace-mock-card .shared-panel-heading > div { display: flex; min-width: 0; flex: 1; align-items: center; gap: 6px; }
 .workspace-mock-card-icon { display: grid; width: 21px; height: 21px; flex: 0 0 21px; place-items: center; color: #c78bff; }
-.workspace-mock-card .shared-panel-heading h3 { margin: 0; color: #ece7f3; font-size: 10px; font-weight: 600; line-height: 1.2; }
-.workspace-mock-card .shared-panel-heading p { margin-top: 2px; color: #aaa4b8; font-size: 8px; }
-.workspace-mock-card-action { display: block; flex: 0 0 auto; padding-top: 2px; color: #bea0ef; font-size: 8px; white-space: nowrap; }
-.workspace-mock-roadmap-tabs { display: flex; align-items: center; gap: 3px; color: #d8d1e1; font-size: 7px; white-space: nowrap; }
-.workspace-mock-roadmap-tabs > * { padding: 4px 6px; border: 1px solid #38324b; border-radius: 7px; }
+.workspace-mock-card.release .workspace-mock-card-icon { color: #43d8a0; }
+.workspace-mock-card .shared-panel-heading h3 { margin: 0; color: #ece7f3; font-size: 13px; font-weight: 600; line-height: 1.2; }
+.workspace-mock-card .shared-panel-heading p { margin-top: 2px; color: #aaa4b8; font-size: 10px; }
+.workspace-mock-card-action { display: block; flex: 0 0 auto; padding-top: 2px; color: #bea0ef; font-size: 10px; white-space: nowrap; }
+.workspace-mock-roadmap-tabs { display: flex; align-items: center; gap: 3px; color: #d8d1e1; font-size: 8px; white-space: nowrap; }
+.workspace-mock-roadmap-tabs > * { display: flex; align-items: center; gap: 3px; padding: 4px 6px; border: 1px solid #38324b; border-radius: 7px; }
 .workspace-mock-roadmap-tabs b { border-color: #9b4de2; color: #fff; background: #7138ab; font-weight: 600; }
 .workspace-mock-roadmap { display: grid; gap: 5px; margin-top: 5px; }
-.workspace-mock-quarter-labels { display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(5, minmax(0, 1fr)); color: #b7b1c2; font-size: 8px; text-align: center; }
-.workspace-mock-quarter-labels span:nth-child(4) { color: #fff; }
+.workspace-mock-quarter-labels { display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(5, minmax(0, 1fr)); color: #b7b1c2; font-size: 9px; text-align: center; }
+.workspace-mock-quarter-labels span:nth-child(4) { justify-self: center; padding: 4px 7px; border-radius: 7px; color: #fff; background: #a532d2; font-weight: 700; }
 .workspace-mock-roadmap-row { display: grid; grid-template-columns: 10px minmax(105px, 1.2fr) minmax(0, 5fr); align-items: center; gap: 5px; min-height: 20px; }
-.workspace-mock-roadmap-row > b { overflow: hidden; color: #e8e3ef; font-size: 8px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-mock-roadmap-row > b { overflow: hidden; color: #e8e3ef; font-size: 10px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-mock-dot { width: 8px; height: 8px; border-radius: 50%; background: #36c98d; }
 .workspace-mock-dot.purple { background: #b65cf3; }.workspace-mock-dot.blue { background: #4c8ff1; }.workspace-mock-dot.teal { background: #2dc7c3; }
 .workspace-mock-track { position: relative; height: 20px; border: 1px solid #292638; background: repeating-linear-gradient(90deg, transparent 0 calc(20% - 1px), #2b273a calc(20% - 1px) 20%); }
-.workspace-mock-track > span { position: absolute; top: 2px; left: 0; height: 15px; border-radius: 8px; background: linear-gradient(90deg, #13bd87, #32d59f); }
-.workspace-mock-track > span.purple { left: 25%; background: linear-gradient(90deg, #8e3ada, #cc69f6); }
-.workspace-mock-track > span.blue { left: 52%; background: linear-gradient(90deg, #287de8, #5a9cff); }
-.workspace-mock-track > span.teal { left: 72%; background: linear-gradient(90deg, #22b8b4, #4bd5d0); }
-.workspace-mock-track em { position: absolute; top: 2px; left: 36%; width: 32%; height: 15px; border-radius: 8px; color: #1e1727; background: #d377f2; font-size: 8px; font-style: normal; font-weight: 700; line-height: 15px; text-align: center; }
+.workspace-mock-track::after { position: absolute; z-index: 2; top: -12px; bottom: -3px; left: 48%; width: 1px; background: #c55cf0; content: ''; }
+.workspace-mock-track > span { position: absolute; top: 2px; display: flex; height: 15px; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; color: #fff; background: linear-gradient(90deg, #13bd87, #32d59f); font-size: 9px; font-weight: 700; line-height: 1; white-space: nowrap; }
+.workspace-mock-track > span.purple { background: linear-gradient(90deg, #8e3ada, #cc69f6); }
+.workspace-mock-track > span.blue { background: linear-gradient(90deg, #287de8, #5a9cff); }
+.workspace-mock-track > span.teal { background: linear-gradient(90deg, #22b8b4, #4bd5d0); }
 .workspace-mock-objectives { display: grid; gap: 7px; margin-top: 7px; }
 .workspace-mock-objectives > div { display: grid; grid-template-columns: 14px minmax(0, 1fr) 58px 25px; align-items: center; gap: 5px; }
-.workspace-mock-objectives b { overflow: hidden; color: #e9e4f0; font-size: 8px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.workspace-mock-objectives small { color: #d3ceda; font-size: 8px; text-align: right; }
+.workspace-mock-objectives b { overflow: hidden; color: #e9e4f0; font-size: 10px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-mock-objectives small { color: #d3ceda; font-size: 10px; text-align: right; }
 .workspace-mock-objective-status { color: #aaa4b7; font-size: 12px; text-align: center; }
 .workspace-mock-objective-status.done { color: #30d49b; }
 .workspace-mock-objectives .mantine-Progress-root { height: 6px; background: #302c3d; }
@@ -102,37 +116,46 @@
 .workspace-mock-list { display: grid; gap: 3px; margin-top: 3px; }
 .workspace-mock-card.repositories .workspace-mock-list { gap: 1px; margin-top: 1px; }
 .workspace-mock-list > div { display: flex; min-width: 0; align-items: center; gap: 6px; }
-.workspace-mock-list b { min-width: 0; flex: 1; overflow: hidden; color: #e6e1ec; font-size: 8px; font-weight: 500; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
-.workspace-mock-list > small { color: #c4bdcf; font-size: 7px; }
+.workspace-mock-list b { min-width: 0; flex: 1; overflow: hidden; color: #e6e1ec; font-size: 10px; font-weight: 500; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-mock-list > small { color: #c4bdcf; font-size: 8px; }
 .workspace-mock-git-icon { flex: 0 0 auto; color: #f2eef7; }
 .workspace-mock-list > div > span:not(.workspace-mock-run) { color: #a78bd1; }
 .workspace-mock-list > div > span.workspace-mock-run { color: #30d49b; }
 .workspace-mock-list > div > span:last-child:not(.workspace-mock-run) { color: #aaa5b5; }
-.workspace-mock-list > div > em { padding: 2px 6px; border-radius: 8px; color: #c9c1d3; background: #29263a; font-size: 7px; font-style: normal; }
+.workspace-mock-list > div > em { padding: 2px 6px; border-radius: 8px; color: #c9c1d3; background: #29263a; font-size: 8px; font-style: normal; }
 .workspace-mock-list.status-list { gap: 6px; }
-.workspace-mock-state { min-height: 15px; padding: 0 5px; border: 0; border-radius: 8px; color: #3cdaa1; background: #14392e; font-size: 7px; }
+.workspace-mock-state { min-height: 15px; padding: 0 5px; border: 0; border-radius: 8px; color: #3cdaa1; background: #14392e; font-size: 8px; text-transform: none; }
 .workspace-mock-state.scheduled, .workspace-mock-state.pending { color: #e8bb56; background: #392b13; }
 .workspace-mock-state.in-progress { color: #a9d4ff; background: #152f51; }
 .workspace-mock-list.files { gap: 6px; }
+.workspace-mock-list.files > div > span { display: grid; width: 16px; place-items: center; color: #c898ff; }
 .workspace-mock-list.files em { color: #d3cbe0; background: #29263b; }
 .workspace-mock-list.people { gap: 5px; }
-.workspace-mock-list.people > div > span { display: grid; width: 18px; height: 18px; place-items: center; border-radius: 50%; color: #fff; background: #564174; font-size: 8px; }
-.workspace-mock-list.people small { color: #aaa3b6; font-size: 7px; white-space: nowrap; }
+.workspace-mock-list.people > div > span { display: grid; width: 18px; height: 18px; place-items: center; border-radius: 50%; color: #fff; background: #564174; font-size: 9px; }
+.workspace-mock-list.people > div > span img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.workspace-mock-list.people small { color: #aaa3b6; font-size: 8px; white-space: nowrap; }
 .workspace-mock-list.release-list { gap: 5px; }
 .workspace-mock-release-icon { color: #43d8a0; font-size: 15px; }
 .workspace-mock-release-icon.blue { color: #79adff; }.workspace-mock-release-icon.purple { color: #c28cff; }
-.workspace-mock-list.release-list > div { display: grid; grid-template-columns: 15px minmax(0, 1fr) auto 74px 50px; }
+.workspace-mock-list.release-list > div { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto 74px 50px; }
 .workspace-mock-list.release-list .mantine-Progress-root { height: 6px; background: #302d40; }
 .workspace-mock-list.release-list .mantine-Progress-section { background: #2ecb92; }
 .workspace-mock-list.decision-list { gap: 5px; }
 .workspace-mock-list.decision-list > div > svg { flex: 0 0 auto; color: #c4a0f4; }
-.workspace-mock-list.decision-list > div > small { color: #aaa4b7; font-size: 7px; white-space: nowrap; }
-.workspace-mock-analytics { display: grid; grid-template-columns: minmax(135px, 1fr) minmax(160px, 1.5fr); gap: 6px 10px; margin-top: 6px; }
-.workspace-mock-analytics > div { display: grid; grid-template-columns: 1fr auto; gap: 2px; color: #b7b0c2; font-size: 8px; }
-.workspace-mock-analytics > div b { color: #e8e3ee; font-size: 8px; font-weight: 500; white-space: nowrap; }
-.workspace-mock-analytics > div small { margin-left: 3px; color: #37d79e; font-size: 7px; }
-.workspace-mock-analytics svg { grid-column: 2; grid-row: 1 / span 3; width: 100%; height: 74px; }
-.workspace-mock-analytics svg path { fill: none; stroke: #ca7aff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.workspace-mock-list.decision-list > div > small { color: #aaa4b7; font-size: 8px; white-space: nowrap; }
+.workspace-mock-range { display: flex; align-items: center; gap: 4px; padding: 4px 7px; border: 1px solid #38324b; border-radius: 7px; }
+.workspace-mock-analytics { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 6px 10px; margin-top: 6px; }
+.workspace-mock-analytics > div { display: grid; grid-column: 1; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px; color: #b7b0c2; font-size: 9px; white-space: nowrap; }
+.workspace-mock-analytics > div:nth-of-type(1) { grid-row: 1; }
+.workspace-mock-analytics > div:nth-of-type(2) { grid-row: 2; }
+.workspace-mock-analytics > div:nth-of-type(3) { grid-row: 3; }
+.workspace-mock-analytics > div b { color: #e8e3ee; font-size: 9px; font-weight: 500; white-space: nowrap; }
+.workspace-mock-analytics > div small { margin-left: 3px; color: #37d79e; font-size: 8px; }
+.workspace-mock-analytics svg { grid-column: 2; grid-row: 1 / span 3; width: 100%; height: 84px; overflow: visible; }
+.workspace-mock-analytics .workspace-mock-grid path { fill: none; stroke: #302b43; stroke-width: .7; vector-effect: non-scaling-stroke; }
+.workspace-mock-analytics .workspace-mock-area { fill: url(#workspace-mock-chart-fill); stroke: none; }
+.workspace-mock-analytics .workspace-mock-line { fill: none; stroke: #ca7aff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.workspace-mock-analytics .workspace-mock-axis { fill: #8e899f; font-size: 5px; }
 @media (max-width: 1450px) {
   .workspace-mock { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
   .workspace-mock-grid { grid-template-rows: 174px 166px 154px; }

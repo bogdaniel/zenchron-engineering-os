@@ -9,7 +9,7 @@ test('dashboard displays the connected control plane and local worker', async ({
     const response = await page.request.get(upstream);
     await route.fulfill({ response });
   });
-  await page.goto('/?preview=live');
+  await page.goto('/');
   await expect(page.locator('.search-box')).toBeVisible();
   const overviewIconsLeadLabels = await page.locator('.metric-card .metric-top').evaluateAll((headers) =>
     headers.every((header) => {
@@ -89,7 +89,7 @@ test('Overview PR queue and CI health use complete GitHub history', async ({ pag
     ] }),
   }));
 
-  await page.goto('/?preview=live');
+  await page.goto('/');
   const queue = page.locator('.metric-card.pr-queue-metric');
   await expect(queue.locator('strong')).toHaveText('2');
   await expect(queue.locator('small')).toHaveText('2 open GitHub pull requests');
@@ -100,16 +100,17 @@ test('Overview PR queue and CI health use complete GitHub history', async ({ pag
   await expect(page.locator('.overview-delivery-summary')).toContainText('1');
 });
 
-test('anonymous users can open the Overview design preview from sign-in', async ({ page }) => {
+test('unauthenticated local users can review the latest Overview and reach sign-in', async ({ page }) => {
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
-  await page.goto('/?preview=login');
-  await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
-  await page.getByRole('link', { name: 'Open dashboard preview' }).click();
+  await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.locator('.overview-design-preview')).toBeVisible();
+  await page.getByRole('link', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL('/#login');
+  await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
 });
 
-test('local root opens the latest Overview design by default for authenticated sessions', async ({ page }) => {
+test('local root keeps the approved Overview mock for authenticated sessions without a preview query', async ({ page }) => {
   await page.route('**/api/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
     body: route.request().url().endsWith('/api/v1/auth/session')
       ? JSON.stringify({ authenticated: true, local: false, login: 'engineer' }) : '[]' }));
@@ -117,16 +118,18 @@ test('local root opens the latest Overview design by default for authenticated s
   await expect(page).toHaveURL('/');
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.locator('.overview-design-preview')).toBeVisible();
+  await expect(page.locator('.metric-grid .metric-card').first()).toContainText('12');
+  await expect(page.getByRole('navigation', { name: 'Main navigation' })).toHaveCount(1);
 });
 
 test('Overview design preview renders the supplied mock content without replacing live data', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
-  await page.goto('/?preview=mock');
+  await page.goto('/');
   await expect(page.locator('.design-preview-label')).toHaveCount(0);
   await expect(page.locator('.sidebar-bottom')).toContainText('The AI-native engineering operating system.');
-  await expect(page.locator('.sidebar-bottom .brand-mark')).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Preview sign-in' })).toHaveCount(0);
+  await expect(page.locator('.sidebar-bottom .brand-mark')).toHaveCount(1);
+  await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   expect((await page.locator('.greeting h1').boundingBox())?.x).toBe(266);
   await expect(page.getByRole('button', { name: 'Core Product' })).toBeVisible();
@@ -197,7 +200,7 @@ test('Overview design preview renders the supplied mock content without replacin
   expect((await page.locator('.nav-link.active .nav-label').boundingBox())?.x).toBe(80);
   expect((await page.locator('.nav-link[href="#settings"]').boundingBox())?.y).toBeCloseTo(456, 0);
   const sidebarFooterBrand = await page.locator('.sidebar-bottom strong').boundingBox();
-  expect(sidebarFooterBrand?.x).toBe(39);
+  expect(sidebarFooterBrand?.x).toBe(71);
   expect(sidebarFooterBrand?.y).toBeCloseTo(816, 0);
   await expect(page.locator('.metric-grid .metric-card')).toHaveCount(5);
   await expect(page.locator('.metric-grid .metric-card').nth(0)).toContainText('12');
@@ -508,7 +511,7 @@ test('Overview design preview renders the supplied mock content without replacin
 
 test('Overview matches the supplied tall desktop mockup proportions', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/?preview=mock');
+  await page.goto('/');
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {
@@ -563,7 +566,7 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
 
 test('Overview matches the supplied desktop display crop', async ({ page }) => {
   await page.setViewportSize({ width: 1522, height: 856 });
-  await page.goto('/?preview=mock');
+  await page.goto('/');
   await expect(page.locator('.metric-grid')).toBeVisible();
   const sidebarBackground = await page.locator('.sidebar').evaluate((sidebar) => getComputedStyle(sidebar).backgroundPosition);
   expect(sidebarBackground).toContain('91px');
@@ -608,7 +611,7 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, local: true, login: '' }),
   }));
-  await page.goto('/?preview=mock');
+  await page.goto('/');
   await expect(page.locator('.metric-grid .metric-card:visible')).toHaveCount(4);
   expect(await page.locator('.metric-card:visible .metric-top > span').evaluateAll((labels) =>
     labels.every((label) => getComputedStyle(label).whiteSpace === 'nowrap'))).toBe(true);

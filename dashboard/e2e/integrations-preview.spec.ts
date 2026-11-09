@@ -8,7 +8,7 @@ test('local Integrations mock uses static content and keeps controls read only',
     await route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"preview fixture expected"}' });
   });
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/?preview=mock#integrations');
+  await page.goto('/#integrations');
 
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Settings & Integrations' })).toBeVisible();

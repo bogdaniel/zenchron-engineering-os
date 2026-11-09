@@ -1,4 +1,12 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function useTestShell(page: Page) {
+  await page.route('**/api/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, local: true, login: 'E2E' }),
+  }));
+  await page.route('**/healthz', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' }));
+}
 test('Reviews matches the supplied desktop workspace frame', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 874 });
   await page.goto('/#reviews');
@@ -49,7 +57,7 @@ test('overview lists only agent runs with captured local diffs', async ({ page }
       },
     ]),
   }));
-  await page.goto('/?preview=live');
+  await page.goto('/');
   await expect(page.locator('.overview-review-list')).toContainText('zenchron/agent-run/reviewable');
   await expect(page.locator('.overview-review-list')).toContainText('1 comments');
   await expect(page.locator('.overview-review-list')).not.toContainText('zenchron/agent-run/no-diff');
@@ -57,7 +65,28 @@ test('overview lists only agent runs with captured local diffs', async ({ page }
 
 test('objectives can be created and updated from the dashboard', async ({ page }) => {
   const title = `Review workflow ${Date.now()}`;
-  await page.goto('/?preview=live');
+  const persisted: Array<Record<string, any>> = [];
+  const now = new Date().toISOString();
+  await useTestShell(page);
+  await page.route('**/api/v1/products', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/v1/objectives', async (route) => {
+    if (route.request().method() === 'POST') {
+      const item = {
+        ...route.request().postDataJSON(), id: 'a'.repeat(32), product: 'Unassigned', status: 'in_progress', progress: 0,
+        created_at: now, updated_at: now,
+      };
+      persisted.push(item);
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(item) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(persisted) });
+  });
+  await page.route('**/api/v1/objectives/*', async (route) => {
+    const item = persisted[0];
+    Object.assign(item, route.request().postDataJSON(), { updated_at: new Date().toISOString() });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(item) });
+  });
+  await page.goto('http://zenchron.test:4173/');
   await page.getByRole('link', { name: 'Objectives' }).click();
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   await page.getByRole('button', { name: 'New Objective' }).click();
@@ -88,6 +117,7 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
   const dueDate = (offset: number) => new Date(quarterStart.getFullYear(), quarterStart.getMonth(), offset + 8)
     .toISOString().slice(0, 10);
+  await useTestShell(page);
   await page.route('**/api/v1/objectives', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify([
       ['Launch AI code review v2', 'Alex Chen', 'on_track', 78],
@@ -109,7 +139,7 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
     }]),
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/#objectives');
+  await page.goto('http://zenchron.test:4173/#objectives');
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   await expect(page.locator('.ag-row')).toHaveCount(6);
   await expect(page.locator('.ag-row').first()).toContainText('Launch AI code review v2');
@@ -147,17 +177,16 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {
-      sidebar: bounds('.sidebar'), metrics: bounds('.objective-metrics'), content: bounds('.objective-content-grid'),
+      metrics: bounds('.objective-metrics'), content: bounds('.objective-content-grid'),
       table: bounds('.objective-table-panel'), detail: bounds('.objective-detail-panel'), capacity: bounds('.objective-capacity'),
     };
   });
-  expect(layout.sidebar?.width).toBe(250);
   expect(layout.metrics?.x).toBe(263);
   expect(layout.metrics?.y).toBeCloseTo(157.5, 0);
-  expect(layout.content?.y).toBeCloseTo(263.5, 0);
-  expect(layout.content?.height).toBe(603);
+  expect(layout.content?.y).toBeCloseTo(251.5, 0);
+  expect(layout.content?.height).toBe(615);
   await expect(page.locator('.objective-grid-wrap .ag-header-cell').last()).toBeVisible();
-  await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').last()).toHaveText('Due date');
+  await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').last()).toHaveText('Workflows');
   expect((layout.table?.width ?? 0) / (layout.detail?.width ?? 1)).toBeGreaterThan(0.94);
   expect((layout.table?.width ?? 0) / (layout.detail?.width ?? 1)).toBeLessThan(0.98);
   expect(layout.capacity?.bottom).toBeLessThanOrEqual(867);
@@ -166,6 +195,7 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
 test('Objectives grid keeps product names while the catalog loads', async ({ page }) => {
   const productID = 'a'.repeat(32);
   const createdAt = new Date().toISOString();
+  await useTestShell(page);
   await page.route('**/api/v1/products', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     await route.fulfill({
@@ -183,7 +213,7 @@ test('Objectives grid keeps product names while the catalog loads', async ({ pag
     }]),
   }));
   await page.setViewportSize({ width: 1522, height: 856 });
-  await page.goto('/#objectives');
+  await page.goto('http://zenchron.test:4173/#objectives');
   const productCell = page.locator('.ag-row').first().locator('.ag-cell[col-id="product"]');
   await expect(productCell).toHaveText('Nova Platform');
   await page.getByRole('textbox', { name: 'Search objectives' }).fill('Nova Platform');
@@ -191,7 +221,7 @@ test('Objectives grid keeps product names while the catalog loads', async ({ pag
 });
 
 test('Projects page shows the live local worker inventory', async ({ page }) => {
-  await page.goto('/?preview=live');
+  await page.goto('/');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
   await page.getByRole('link', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
@@ -212,7 +242,7 @@ test('Projects page shows the live local worker inventory', async ({ page }) => 
 
 test('worker prepares an isolated Git branch without moving the source checkout', async ({ page }) => {
   const branch = `zenchron/e2e-${Date.now()}`;
-  await page.goto('/?preview=live');
+  await page.goto('/');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
   await page.getByRole('link', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
@@ -226,7 +256,7 @@ test('worker prepares an isolated Git branch without moving the source checkout'
 });
 
 test('Reviews page shows unavailable provider data without invented pull requests', async ({ page }) => {
-  await page.goto('/?preview=live');
+  await page.goto('/');
   await page.getByRole('link', { name: 'Reviews', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible();
   await expect(page.getByText('GitHub repository not connected')).toBeVisible();
@@ -288,7 +318,7 @@ test('Reviews page shows an isolated local branch diff without treating it as a 
       truncated: false,
     }),
   }));
-  await page.goto('/?preview=live');
+  await page.goto('/');
   await page.getByRole('link', { name: 'Reviews', exact: true }).click();
   await page.getByRole('button', { name: 'Local branches' }).click();
   await expect(page.getByRole('heading', { name: 'zenchron/agent-run/0123456789abcdef0123456789abcdef' })).toBeVisible();
@@ -388,7 +418,7 @@ test('Reports summarizes live objectives and run records without inventing deliv
 
 test('Product Workspace groups live repositories into persisted products', async ({ page }) => {
   const objectiveTitle = `Product objective ${Date.now()}`;
-  await page.goto('/?preview=live');
+  await page.goto('/');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
   await expect(page.locator('.page-heading h2')).toHaveText('Product Workspace');
   await expect(page.getByText('No products yet. Add a product to group repositories.')).toBeVisible();

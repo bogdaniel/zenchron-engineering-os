@@ -9,7 +9,7 @@ test('shows GitHub sign-in and keeps dashboard data gated without a session', as
     dashboardRequests += 1;
     return route.continue();
   });
-  await page.goto('/?preview=login');
+  await page.goto('/#login');
   await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
   const signIn = page.getByRole('link', { name: 'Continue with GitHub' });
   await expect(signIn).toHaveAttribute('href', '/auth/github');
@@ -28,7 +28,7 @@ test('keeps the dashboard shell visible until a failed session check can be retr
     protectedRequests += 1;
     return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
   });
-  await page.goto('/?preview=live');
+  await page.goto('/');
   await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Session check unavailable' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry session check' })).toBeVisible();
@@ -41,10 +41,12 @@ test('keeps the dashboard shell visible until a failed session check can be retr
   expect(protectedRequests).toBeGreaterThan(0);
 });
 
-test('local preview has a direct sign-in screen preview and explains that OAuth is unconfigured', async ({ page }) => {
-  await page.goto('/?preview=live');
-  await page.getByRole('link', { name: 'Preview sign-in' }).click();
-  await expect(page).toHaveURL('/?preview=login');
+test('local dashboard has a direct sign-in screen and explains when OAuth is unconfigured', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }) }));
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL('/#login');
   await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeDisabled();
   await expect(page.getByText('GitHub sign-in is not configured in this local preview.')).toBeVisible();

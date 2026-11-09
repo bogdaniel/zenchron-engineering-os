@@ -8,7 +8,7 @@ test('local Reports mock renders its fixture without protected reads or exports'
     await route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"preview fixture expected"}' });
   });
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/?preview=mock#reports');
+  await page.goto('/#reports');
 
   await expect(page.getByText('Mock data')).toBeVisible();
   await expect(page.locator('.reports-metric')).toHaveCount(7);
@@ -16,7 +16,21 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await expect(page.locator('.reports-metric').nth(6)).toContainText('68.4%');
   await expect(page.locator('.reports-empty-chart')).toHaveCount(0);
   await expect(page.locator('.report-outcome-legend > div')).toHaveCount(4);
-  await expect(page.locator('.reports-outcomes-layout .report-chart-label')).toHaveText('17,842');
+  await expect(page.locator('.reports-outcomes-label b')).toHaveText('17,842');
+  await expect(page.locator('.reports-outcomes-label')).toContainText('Work Items');
+  const insightsHeading = page.locator('.reports-summary .reports-panel-heading h3');
+  await expect(insightsHeading).toHaveCSS('white-space', 'nowrap');
+  await expect(page.getByRole('combobox', { name: 'Insights view' })).toHaveCSS('width', '122px');
+  const widths = await page.evaluate(() => Object.fromEntries(
+    ['delivery-velocity-panel', 'ci-distribution-panel', 'review-latency-panel', 'agent-spend-panel',
+      'acceptance-panel', 'reports-summary', 'product-summary-panel', 'inventory-panel', 'downloadable-reports-panel']
+      .map((name) => [name, document.querySelector(`.${name}`)!.getBoundingClientRect().width]),
+  ));
+  expect(widths['delivery-velocity-panel']! / widths['ci-distribution-panel']!).toBeCloseTo(1.25, 1);
+  expect(widths['review-latency-panel']! / widths['agent-spend-panel']!).toBeCloseTo(6 / 7, 1);
+  expect(widths['reports-summary']! / widths['acceptance-panel']!).toBeCloseTo(5 / 6, 1);
+  expect(widths['product-summary-panel']).toBeCloseTo(widths['inventory-panel'], 0);
+  expect(widths['downloadable-reports-panel']! / widths['inventory-panel']!).toBeCloseTo(5 / 7, 1);
   await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(5);
   await expect(page.locator('.inventory-panel tbody tr')).toHaveCount(5);
   await expect(page.locator('.reports-insight')).toHaveCount(5);

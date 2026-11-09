@@ -9,12 +9,12 @@ and the installed AG Grid Community table.
 ```mermaid
 flowchart LR
     User[Engineering user] -->|Create / update| Dashboard[Objectives dashboard]
-    LocalPreview[Local ?preview=mock#objectives] -->|Read only| Fixture[Supplied objective mock data]
+    LocalPreview[Local unauthenticated Objectives state] -->|Read only| Fixture[Supplied objective mock data]
     Fixture --> Dashboard
     Dashboard -->|Validate form| Zod[Zod schema]
     Dashboard -->|GET /api/v1/objectives + /api/v1/products| API[Go control plane]
     Dashboard -->|POST /api/v1/objectives with product_id| API
-    Dashboard -->|PATCH /api/v1/objectives/{id} with product_id| API
+    Dashboard -->|PATCH /api/v1/objectives/{id} with editable fields| API
     API --> Store[(Versioned JSON snapshot)]
     API --> Products[(products.json)]
     Products -->|Validate product id and resolve current name| API
@@ -30,7 +30,7 @@ flowchart LR
     Roadmap --> Detail
     Grid --> Detail
     Detail --> Tabs[Overview milestones pull requests activity tabs]
-    Detail -->|Edit objective| Editor[Objective status progress and product editor]
+    Detail -->|Edit objective| Editor[Objective fields editor]
 ```
 
 ## Behavior
@@ -38,15 +38,17 @@ flowchart LR
 - `GET /api/v1/objectives` returns workspace objectives, newest first.
 - `POST /api/v1/objectives` validates title, description, owner, an optional saved `product_id`, and optional
   `YYYY-MM-DD` due date; new objectives start `in_progress` at 0%.
-- `PATCH /api/v1/objectives/{id}` accepts status, progress, and/or product assignment. Progress is limited to 0–100;
-  marking an objective `completed` sets progress to 100.
-- The dashboard filters by text, product, owner, status, and due-date quarter. The default is This Quarter; All due dates includes unscheduled objectives.
-- The local `?preview=mock#objectives` route uses the same Objectives page with sample KPI, approval, workflow, and milestone data. Its local fixture is read only and does not call protected objective or product APIs.
+- `PATCH /api/v1/objectives/{id}` accepts title, description, owner, due date, status, progress, and/or product assignment.
+  It validates field lengths and date format; progress is limited to 0–100, and marking an objective `completed` sets
+  progress to 100.
+- The dashboard searches title, description, owner, and product, and filters by product, owner, status, and due-date
+  quarter. The default is This Quarter; All due dates includes unscheduled objectives.
+- An unauthenticated localhost session at `/#objectives` uses the same Objectives page with sample KPI, approval, workflow, and milestone data. The fixture is read only and does not call protected objective or product APIs.
 - The mock KPI row keeps the success-rate change beside its value and omits extra captions from the four compact count cards, matching the supplied layout. Live objective cards retain their explanatory details.
 - The mock preview uses larger table and detail text than the dense live table. Its title, status, product, and due-date columns fit the sample rows at the reference viewport without horizontal clipping.
 - Approval and linked-workflow counts in the mock preview are illustrative fields; they remain unavailable in live mode until their sources are part of the objective API.
 - Empty workspaces prompt the user to create the first objective. When filters hide all records, the table and toolbar say no objectives match instead of implying the workspace is empty.
-- Table, Cards, and Kanban views render the same filtered records; selecting any record opens the read-only objective overview. The status, progress, and product editor appears only after choosing **Edit objective**. Kanban groups by the saved objective status.
+- Table, Cards, and Kanban views render the same filtered records; selecting any record opens the read-only objective overview. The title, description, owner, due date, status, progress, and product editor appears only after choosing **Edit objective**. Kanban groups by the saved objective status.
 - The overview, milestones, related pull requests, and activity tabs switch the detail panel. Tabs without supported data show an unavailable state.
 - The overview lays out description, blockers, acceptance criteria, related pull requests, plan summary, activity feed, and progress; fields absent from the current objective data are labeled unavailable rather than populated with sample records.
 - Planning sorts the filtered objectives by due date, with undated records last. Roadmap groups those same records by calendar quarter and places missing or invalid dates under Unscheduled. Both views use saved objective data and open the overview panel when a card is selected.
@@ -62,9 +64,9 @@ flowchart LR
 
 ## Verification
 
-`go test ./cmd/zenchron -run 'TestObjective|TestPersistentMuxRestoresObjectivesAndWorkflows'` covers the objective API,
-product linking, and restart persistence. Focused dashboard E2E flows cover creating/updating objectives, product names
-while the catalog loads, and the six-record planning view with a selected objective at the reference viewport. They
-also cover assigning an objective to a Product Workspace record:
-`cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Objectives dashboard|Objectives grid|objectives can be created'`.
-The `e2e/objectives-views.spec.ts` flow also covers due-date ordering in Planning and quarter grouping in Roadmap.
+`go test ./cmd/zenchron` covers objective API updates, product linking, validation, and persistence. The focused E2E
+suite covers the read-only mock preview, empty/error states, search and filters, table/cards/Kanban/planning/roadmap
+views, full objective create/edit payloads, and responsive layouts:
+`cd dashboard && npm run test:e2e -- e2e/objectives-views.spec.ts`.
+
+Playwright review captures at the mock viewport are in `docs/screenshots/`.

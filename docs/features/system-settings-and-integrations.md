@@ -6,14 +6,14 @@ policy, permission, budget, notification, and audit panels are read-only status 
 labelled instead of shown as configured. GitHub.com repositories support open issue and pull-request sync, plus
 top-level pull-request comments and request-changes when a control-plane token has Pull requests write permission.
 Workers that have not sent the endpoint-status field are shown as needing an update; their configuration is not guessed.
-The local `?preview=mock#integrations` route uses the same dashboard shell with a static, read-only sample of the supplied
+An unauthenticated localhost session at `/#integrations` uses the same dashboard shell with a static, read-only sample of the supplied
 Integrations mock; it does not query protected provider settings or save changes.
 
 ## Feature diagram
 
 ```mermaid
 flowchart LR
-    Preview[Local ?preview=mock#integrations<br/>static sample only] -->|Read only| Mock[Integrations mock layout]
+    Preview[Local unauthenticated Integrations state<br/>static sample only] -->|Read only| Mock[Integrations mock layout]
     Browser[Dashboard route] --> APIHealth[GET /healthz]
     Browser --> Workers[GET /api/v1/workers]
     Browser --> Projects[GET /api/v1/projects]
