@@ -2,6 +2,7 @@ import { Badge, Button, Card } from '@mantine/core';
 import { PageHeading } from './PageHeading';
 import { PanelHeading } from './PanelHeading';
 import { PanelCard } from './PanelCard';
+import { SystemIntegrationsPreview } from './SystemIntegrationsPreview';
 import {
   IconActivity,
   IconBell,
@@ -19,12 +20,15 @@ import {
   IconUsers,
 } from '@tabler/icons-react';
 import './system.css';
+import './system-preview.css';
 
 type SystemSection = 'integrations' | 'settings';
 
 interface SystemPageProps {
   section: SystemSection;
+  designPreview?: boolean;
   apiOnline: boolean;
+  githubLogin: boolean;
   workerCount: number;
   onlineWorkerCount: number;
   modelRuntimeWorkerCount: number;
@@ -34,7 +38,7 @@ interface SystemPageProps {
 }
 
 export function SystemPage({
-  section, apiOnline, workerCount, onlineWorkerCount, modelRuntimeWorkerCount, modelRuntimeUnknownWorkerCount,
+  section, designPreview = false, apiOnline, githubLogin, workerCount, onlineWorkerCount, modelRuntimeWorkerCount, modelRuntimeUnknownWorkerCount,
   projectCount, gitHubProjectCount,
 }: SystemPageProps) {
   const modelEndpointDetail = modelRuntimeWorkerCount
@@ -53,7 +57,9 @@ export function SystemPage({
     {
       title: 'Control plane API',
       category: 'Runtime',
-      detail: 'Local HTTP service for workspace state and worker commands.',
+      detail: githubLogin
+        ? 'Authenticated API for workspace state and worker commands.'
+        : 'Loopback HTTP service for workspace state and worker commands.',
       status: apiOnline ? 'Online' : 'Offline',
       icon: <IconActivity size={19} />,
       healthy: apiOnline,
@@ -100,13 +106,15 @@ export function SystemPage({
       <div className="system-heading">
         <div className="system-page-title">
           <IconSettings size={25} aria-hidden="true" />
-          <PageHeading title="Settings & Integrations" description="Review connected runtime services and the current control-plane boundary." />
+          <PageHeading title="Settings & Integrations" description={designPreview
+            ? 'Manage your organization, connect integrations, set policies, and control platform behavior.'
+            : 'Review connected runtime services and the current control-plane boundary.'} />
         </div>
         <div className="system-page-actions">
           <Button className="system-quiet-button" variant="default" disabled><IconHistory size={14} /> Audit log</Button>
           <Button className="system-quiet-button" variant="default" disabled><IconDatabase size={14} /> Import / Export</Button>
           <Badge className="system-health" variant="light">
-            <i />{apiOnline ? 'API online' : 'API offline'}
+            <i />{designPreview ? 'All Systems Operational' : apiOnline ? 'API online' : 'API offline'}
           </Badge>
         </div>
       </div>
@@ -123,23 +131,23 @@ export function SystemPage({
         </button>
       </nav>
 
-      {section === 'integrations' ? (
+      {designPreview ? <SystemIntegrationsPreview section={section} /> : section === 'integrations' ? (
         <div className="system-workspace">
           <nav className="system-config-nav" aria-label="Configuration categories">
             <b>Configuration</b>
             <small>INTEGRATIONS</small>
-            <a className="active" href="#integrations">Connected integrations</a>
-            <span>Model providers<small>Worker status</small></span>
-            <span>Runners &amp; infrastructure<small>Worker status</small></span>
-            <span>Storage &amp; evidence<small>Unavailable</small></span>
+            <a className="active" href="#integrations"><IconActivity size={12} />Connected integrations</a>
+            <span><IconRobot size={12} />Model providers</span>
+            <span><IconCloud size={12} />Runners &amp; infrastructure</span>
+            <span><IconDatabase size={12} />Storage &amp; evidence</span>
             <small>SETTINGS</small>
-            <span><IconBuilding size={14} />Organization profile<small>Unavailable</small></span>
-            <span><IconChecklist size={14} />Policies<small>Unavailable</small></span>
-            <span><IconUsers size={14} />Permissions<small>Unavailable</small></span>
-            <span><IconCurrencyDollar size={14} />Budgets<small>Unavailable</small></span>
-            <span><IconKey size={14} />Secrets<small>Worker managed</small></span>
-            <span><IconSettings size={14} />Controller configuration<small>Read only</small></span>
-            <span><IconBell size={14} />Notification rules<small>Unavailable</small></span>
+            <span><IconBuilding size={12} />Organization profile</span>
+            <span><IconChecklist size={12} />Policies</span>
+            <span><IconUsers size={12} />Permissions</span>
+            <span><IconCurrencyDollar size={12} />Budgets</span>
+            <span><IconKey size={12} />Secrets</span>
+            <span><IconSettings size={12} />Controller configuration</span>
+            <span><IconBell size={12} />Notification rules</span>
           </nav>
 
           <div className="system-workspace-main">
@@ -199,13 +207,13 @@ export function SystemPage({
               </PanelCard>
               <PanelCard className="system-operation-card" withBorder>
                 <PanelHeading title="Secrets" icon={<IconKey size={16} />} />
-                <p>Model credentials stay on workers; the GitHub token stays on the control plane.</p>
+                <p>Model credentials stay on workers; GitHub credentials stay on the control plane.</p>
                 <Badge className="system-status healthy" variant="light">Boundary enforced</Badge>
               </PanelCard>
               <PanelCard className="system-operation-card" withBorder>
                 <PanelHeading title="Controller configuration" icon={<IconSettings size={16} />} />
                 <div className="system-setting-values">
-                  <span>API exposure<b>Loopback only</b></span>
+                  <span>Dashboard auth<b>{githubLogin ? 'GitHub OAuth' : 'Local preview'}</b></span>
                   <span>Online workers<b>{onlineWorkerCount} of {workerCount}</b></span>
                   <span>Local checkouts<b>{projectCount}</b></span>
                 </div>
@@ -217,7 +225,7 @@ export function SystemPage({
               </PanelCard>
               <PanelCard className="system-operation-card system-audit-card" withBorder>
                 <PanelHeading title="Recent audit log" icon={<IconHistory size={16} />} />
-                <p>Actor-bound audit history is unavailable until user identity and audit storage are implemented.</p>
+                <p>Audit history is unavailable until audit storage is implemented.</p>
                 <Badge className="system-status unavailable" variant="light">Unavailable</Badge>
               </PanelCard>
             </div>
@@ -235,10 +243,12 @@ export function SystemPage({
               title="Local control plane"
               icon={<span className="system-setting-icon"><IconActivity size={19} /></span>} />
             <dl>
-              <div><dt>API exposure</dt><dd>Loopback only</dd></div>
+              <div><dt>Dashboard auth</dt><dd>{githubLogin ? 'GitHub OAuth' : 'Local preview'}</dd></div>
               <div><dt>State storage</dt><dd>Versioned JSON snapshots</dd></div>
             </dl>
-            <p>Remote access stays disabled until authentication is implemented.</p>
+            <p>{githubLogin
+              ? 'Remote API access requires HTTPS and the configured worker bearer token.'
+              : 'Remote access requires GitHub sign-in and worker authentication to be configured.'}</p>
           </PanelCard>
           <PanelCard className="system-setting-card" withBorder>
             <PanelHeading className="system-setting-heading" eyebrow="Workers & projects" title="Live inventory"
@@ -250,13 +260,15 @@ export function SystemPage({
             <p>Checkout names are visible; local filesystem paths stay on each worker.</p>
           </PanelCard>
           <PanelCard className="system-setting-card" withBorder>
-            <PanelHeading className="system-setting-heading" eyebrow="Access & policy" title="Not configured"
+            <PanelHeading className="system-setting-heading" eyebrow="Access & policy" title={githubLogin ? 'GitHub sign-in' : 'Local preview'}
               icon={<span className="system-setting-icon"><IconShieldCheck size={19} /></span>} />
             <dl>
-              <div><dt>User accounts</dt><dd>Unavailable</dd></div>
+              <div><dt>User accounts</dt><dd>{githubLogin ? 'Allowlisted GitHub users' : 'Local workspace'}</dd></div>
               <div><dt>Roles and permissions</dt><dd>Unavailable</dd></div>
             </dl>
-            <p>The preview has no identity or authorization layer.</p>
+            <p>{githubLogin
+              ? 'GitHub OAuth identifies users; organization roles and permissions are not enforced.'
+              : 'Local preview has no sign-in or organization authorization.'}</p>
           </PanelCard>
           <PanelCard className="system-setting-card" withBorder>
             <PanelHeading className="system-setting-heading" eyebrow="Secrets" title="No provider secrets"
@@ -287,7 +299,7 @@ export function SystemPage({
               <div><dt>Actor history</dt><dd>Unavailable</dd></div>
               <div><dt>Run artifacts</dt><dd>Unavailable</dd></div>
             </dl>
-            <p>Audit events require identity; artifacts require agent runs.</p>
+            <p>Audit events require audit storage; artifacts require agent runs.</p>
           </PanelCard>
         </div>
       )}

@@ -6,11 +6,18 @@ import type { Project } from './projects';
 const workflowRunHistorySchema = z.object({
   complete: z.boolean(),
   items: z.array(z.object({
-    created_at: z.string(), status: z.string(), run_started_at: z.string().nullable(), updated_at: z.string(),
+    created_at: z.string(), status: z.string(), conclusion: z.string().nullable().optional(),
+    run_started_at: z.string().nullable(), updated_at: z.string(),
   })),
 });
-type TimeRange = '30d' | '90d' | '365d' | 'all';
-const rangeDurations: Record<Exclude<TimeRange, 'all'>, number> = {
+export type WorkflowRunHistoryItem = z.infer<typeof workflowRunHistorySchema>['items'][number];
+export type WorkflowRunRepositoryHistory = {
+  remote: string;
+  complete: boolean;
+  items: WorkflowRunHistoryItem[];
+};
+export type ReportTimeRange = '30d' | '90d' | '365d' | 'all';
+const rangeDurations: Record<Exclude<ReportTimeRange, 'all'>, number> = {
   '30d': 30 * 24 * 60 * 60 * 1000,
   '90d': 90 * 24 * 60 * 60 * 1000,
   '365d': 365 * 24 * 60 * 60 * 1000,
@@ -21,7 +28,7 @@ const durationBuckets = [
   { label: '15–20', max: 20 }, { label: '20–30', max: 30 }, { label: '>30', max: Infinity },
 ];
 
-export function useReportWorkflowRunMetrics(projects: Project[] | undefined, range: TimeRange) {
+export function useReportWorkflowRunMetrics(projects: Project[] | undefined, range: ReportTimeRange) {
   const githubProjects = [...new Map((projects ?? [])
     .filter((project) => project.git_remote.startsWith('github.com/'))
     .map((project) => [project.git_remote, project])).values()];
@@ -36,23 +43,29 @@ export function useReportWorkflowRunMetrics(projects: Project[] | undefined, ran
         const query = since ? `?since=${encodeURIComponent(since)}` : '';
         const response = await fetch(`/api/v1/projects/${project.id}/workflow-run-history${query}`);
         if (!response.ok) throw new Error(`GitHub workflow-run history unavailable (${response.status})`);
-        return workflowRunHistorySchema.parse(await response.json());
+        return { remote: project.git_remote, ...workflowRunHistorySchema.parse(await response.json()) };
       }));
-      return { items: histories.flatMap((result) => result.items), complete: histories.every((result) => result.complete) };
+      return {
+        items: histories.flatMap((result) => result.items),
+        repositories: histories,
+        complete: histories.every((result) => result.complete),
+      };
     },
   });
   const complete = githubProjects.length > 0 && history.isSuccess && history.data.complete;
   const now = Date.now();
-  const samples = (history.data?.items ?? []).flatMap((run) => {
-    if (run.status !== 'completed' || !run.run_started_at) return [];
+  const samples = summarizeWorkflowRunSamples(history.data?.items ?? [], range, now);
+  const concludedRuns = (history.data?.items ?? []).filter((run) => {
     const created = Date.parse(run.created_at);
-    const start = Date.parse(run.run_started_at);
-    const end = Date.parse(run.updated_at);
-    if (!Number.isFinite(created) || created > now || !Number.isFinite(start) || !Number.isFinite(end) ||
-      start > end || end > now || (range !== 'all' && created < now - rangeDurations[range])) return [];
-    return [{ created, duration: (end - start) / 60_000 }];
+    return run.status === 'completed' && run.conclusion !== null && run.conclusion !== undefined &&
+      Number.isFinite(created) && created <= now && (range === 'all' || created >= now - rangeDurations[range]);
   });
+  const successfulRuns = concludedRuns.filter((run) => run.conclusion === 'success').length;
   const durations = samples.map((sample) => sample.duration);
+  const sortedDurations = [...durations].sort((a, b) => a - b);
+  const percentile = (rank: number) => complete && sortedDurations.length
+    ? Math.round(sortedDurations[Math.ceil(sortedDurations.length * rank) - 1] * 10) / 10
+    : undefined;
   const averageMinutes = complete && durations.length
     ? Math.round(durations.reduce((sum, duration) => sum + duration, 0) / durations.length * 10) / 10
     : undefined;
@@ -72,5 +85,33 @@ export function useReportWorkflowRunMetrics(projects: Project[] | undefined, ran
     trendBuckets[index].count++;
   }
   const trend = trendBuckets.map(({ total, count }) => count ? Math.round(total / count * 10) / 10 : null);
-  return { ...history, githubProjectCount: githubProjects.length, complete, averageMinutes, distribution, runCount: durations.length, trend };
+  return {
+    ...history,
+    repositories: history.data?.repositories,
+    githubProjectCount: githubProjects.length,
+    complete,
+    averageMinutes,
+    p50Minutes: percentile(0.5),
+    p95Minutes: percentile(0.95),
+    completedRunCount: concludedRuns.length,
+    successfulRuns,
+    successRate: complete && concludedRuns.length
+      ? Math.round(successfulRuns / concludedRuns.length * 100)
+      : undefined,
+    distribution,
+    runCount: durations.length,
+    trend,
+  };
+}
+
+export function summarizeWorkflowRunSamples(items: WorkflowRunHistoryItem[], range: ReportTimeRange, now = Date.now()) {
+  return items.flatMap((run) => {
+    if (run.status !== 'completed' || !run.run_started_at) return [];
+    const created = Date.parse(run.created_at);
+    const start = Date.parse(run.run_started_at);
+    const end = Date.parse(run.updated_at);
+    if (!Number.isFinite(created) || created > now || !Number.isFinite(start) || !Number.isFinite(end) ||
+      start > end || end > now || (range !== 'all' && created < now - rangeDurations[range])) return [];
+    return [{ created, duration: (end - start) / 60_000 }];
+  });
 }

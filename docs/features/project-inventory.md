@@ -1,11 +1,14 @@
 # Project inventory
 
-The Projects page turns the local worker's Git checkout heartbeat into a searchable repository inventory. It follows the repository list and detail pattern in the supplied Product Workspace mockup and uses the installed AG Grid Community package.
+The Projects page turns the local worker's Git checkout heartbeat into a searchable repository inventory. It follows the
+repository list and detail pattern in the supplied Product Workspace mockup, is reached from Product Workspace, and uses
+the installed AG Grid Community package.
 
 ## Feature diagram
 
 ```mermaid
 flowchart LR
+    Workspace[Product Workspace] -->|Open repository inventory| Inventory[Projects page]
     Worker[Local Go worker] -->|Checkout name, branch, opaque ID + sanitized origin locator| Registry[(Control-plane registry)]
     Registry -->|GET /api/v1/projects| API[Projects API]
     API -->|5 second refresh| Query[TanStack Query]

@@ -45,6 +45,29 @@ func TestObjectiveCreateListAndComplete(t *testing.T) {
 	}
 }
 
+func TestObjectiveUpdateEditableFields(t *testing.T) {
+	server := newMux()
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
+		`{"title":"Ship review workflow","description":"Draft","owner":"Alex","due_date":"2026-12-15"}`,
+	)))
+	var created objective
+	if err := json.NewDecoder(response.Body).Decode(&created); err != nil || response.Code != http.StatusCreated {
+		t.Fatalf("create objective = %#v, decode error = %v, HTTP %d", created, err, response.Code)
+	}
+
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPatch, "/api/v1/objectives/"+created.ID,
+		strings.NewReader(`{"title":"Ship review v2","description":"Final plan","owner":"Priya","due_date":"2027-01-20"}`)))
+	var updated objective
+	if err := json.NewDecoder(response.Body).Decode(&updated); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("update objective = %#v, decode error = %v, HTTP %d", updated, err, response.Code)
+	}
+	if updated.Title != "Ship review v2" || updated.Description != "Final plan" || updated.Owner != "Priya" || updated.DueDate != "2027-01-20" {
+		t.Fatalf("updated editable fields = %#v", updated)
+	}
+}
+
 func TestObjectivesLinkProductsByID(t *testing.T) {
 	server := newMux()
 	response := httptest.NewRecorder()
@@ -119,6 +142,8 @@ func TestObjectiveEndpointsRejectInvalidInput(t *testing.T) {
 		{http.MethodPatch, "/api/v1/objectives/not-hex", `{"status":"blocked"}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/objectives/0123456789abcdef0123456789abcdef", `{"status":"unknown"}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/objectives/0123456789abcdef0123456789abcdef", `{"progress":101}`, http.StatusBadRequest},
+		{http.MethodPatch, "/api/v1/objectives/0123456789abcdef0123456789abcdef", `{"title":" "}`, http.StatusBadRequest},
+		{http.MethodPatch, "/api/v1/objectives/0123456789abcdef0123456789abcdef", `{"due_date":"tomorrow"}`, http.StatusBadRequest},
 		{http.MethodPatch, "/api/v1/objectives/0123456789abcdef0123456789abcdef", `{"progress":50}`, http.StatusNotFound},
 	} {
 		response := httptest.NewRecorder()

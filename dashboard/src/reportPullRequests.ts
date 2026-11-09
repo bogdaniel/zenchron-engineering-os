@@ -9,20 +9,27 @@ const pullRequestHistorySchema = z.object({
     created_at: z.string(), closed_at: z.string().nullable(), merged_at: z.string().nullable(),
   })),
 });
-type TimeRange = '30d' | '90d' | '365d' | 'all';
-const rangeDurations: Record<Exclude<TimeRange, 'all'>, number> = {
+export type PullRequestHistoryItem = z.infer<typeof pullRequestHistorySchema>['items'][number];
+export type PullRequestRepositoryHistory = {
+  remote: string;
+  complete: boolean;
+  items: PullRequestHistoryItem[];
+};
+export type ReportTimeRange = '30d' | '90d' | '365d' | 'all';
+const rangeDurations: Record<Exclude<ReportTimeRange, 'all'>, number> = {
   '30d': 30 * 24 * 60 * 60 * 1000,
   '90d': 90 * 24 * 60 * 60 * 1000,
   '365d': 365 * 24 * 60 * 60 * 1000,
 };
 const days = 24 * 60 * 60 * 1000;
+const outcomeColors = { merged: '#40d9a3', closed: '#fa668b', open: '#b177ff' };
 
-function inRange(timestamp: string, range: TimeRange, now = Date.now()) {
+function inRange(timestamp: string, range: ReportTimeRange, now = Date.now()) {
   const date = Date.parse(timestamp);
   return Number.isFinite(date) && date <= now && (range === 'all' || date >= now - rangeDurations[range]);
 }
 
-function pullRequestTrend(items: z.infer<typeof pullRequestHistorySchema>['items'], range: TimeRange, now = Date.now()) {
+function pullRequestTrend(items: PullRequestHistoryItem[], range: ReportTimeRange, now = Date.now()) {
   const earliest = items.flatMap((item) => item.merged_at ? [Date.parse(item.merged_at)] : [])
     .filter((timestamp) => Number.isFinite(timestamp) && timestamp <= now);
   const span = range === 'all'
@@ -65,7 +72,7 @@ function pullRequestTrend(items: z.infer<typeof pullRequestHistorySchema>['items
   }));
 }
 
-export function useReportPullRequestMetrics(projects: Project[] | undefined, range: TimeRange) {
+export function useReportPullRequestMetrics(projects: Project[] | undefined, range: ReportTimeRange) {
   const githubProjects = [...new Map((projects ?? [])
     .filter((project) => project.git_remote.startsWith('github.com/'))
     .map((project) => [project.git_remote, project])).values()];
@@ -81,13 +88,53 @@ export function useReportPullRequestMetrics(projects: Project[] | undefined, ran
         const query = since ? `?since=${encodeURIComponent(since)}` : '';
         const response = await fetch(`/api/v1/projects/${project.id}/pull-request-history${query}`);
         if (!response.ok) throw new Error(`GitHub PR history unavailable (${response.status})`);
-        return pullRequestHistorySchema.parse(await response.json());
+        return { remote: project.git_remote, ...pullRequestHistorySchema.parse(await response.json()) };
       }));
-      return { items: histories.flatMap((result) => result.items), complete: histories.every((result) => result.complete) };
+      return {
+        items: histories.flatMap((result) => result.items),
+        repositories: histories,
+        complete: histories.every((result) => result.complete),
+      };
     },
   });
   const complete = githubProjects.length > 0 && history.isSuccess && history.data.complete;
   const items = history.data?.items ?? [];
+  const outcomes = [
+    {
+      name: 'Merged',
+      value: items.filter((item) => item.merged_at && inRange(item.merged_at, range)).length,
+      color: outcomeColors.merged,
+    },
+    {
+      name: 'Closed unmerged',
+      value: items.filter((item) => item.closed_at && !item.merged_at && inRange(item.closed_at, range)).length,
+      color: outcomeColors.closed,
+    },
+    {
+      name: 'Open',
+      value: items.filter((item) => !item.closed_at && inRange(item.created_at, range)).length,
+      color: outcomeColors.open,
+    },
+  ];
+  const summary = summarizePullRequestMetrics(items, range);
+  return {
+    ...history,
+    repositories: history.data?.repositories,
+    githubProjectCount: githubProjects.length,
+    configuredRemoteCount,
+    unsupportedRemoteCount: Math.max(0, configuredRemoteCount - githubProjects.length),
+    unconfiguredCheckoutCount: projects?.filter((project) => !project.git_remote).length ?? 0,
+    complete,
+    mergedCount: summary.mergedCount,
+    outcomes,
+    deliveryVelocity: complete ? summary.deliveryVelocity : undefined,
+    cycleTime: complete ? summary.cycleTime : undefined,
+    acceptanceRate: complete ? summary.acceptanceRate : undefined,
+    trend: pullRequestTrend(items, range),
+  };
+}
+
+export function summarizePullRequestMetrics(items: PullRequestHistoryItem[], range: ReportTimeRange) {
   const merged = items.filter((item) => item.merged_at && inRange(item.merged_at, range));
   const closed = items.filter((item) => item.closed_at && inRange(item.closed_at, range));
   const cycleTimes = merged.flatMap((pull) => {
@@ -95,23 +142,15 @@ export function useReportPullRequestMetrics(projects: Project[] | undefined, ran
     const mergedAt = Date.parse(pull.merged_at!);
     return Number.isFinite(created) && created <= mergedAt ? [(mergedAt - created) / 3_600_000] : [];
   });
-  const cycleTime = cycleTimes.length
-    ? Math.round(cycleTimes.reduce((total, value) => total + value, 0) / cycleTimes.length * 10) / 10
-    : undefined;
   const spanDays = range === 'all'
     ? Math.max(7, (Date.now() - Math.min(...merged.map((pull) => Date.parse(pull.merged_at!)))) / days)
     : rangeDurations[range] / days;
   return {
-    ...history,
-    githubProjectCount: githubProjects.length,
-    configuredRemoteCount,
-    unsupportedRemoteCount: Math.max(0, configuredRemoteCount - githubProjects.length),
-    unconfiguredCheckoutCount: projects?.filter((project) => !project.git_remote).length ?? 0,
-    complete,
     mergedCount: merged.length,
-    deliveryVelocity: complete ? Math.round(merged.length / spanDays * 7 * 10) / 10 : undefined,
-    cycleTime: complete ? cycleTime : undefined,
-    acceptanceRate: complete && closed.length ? Math.round(merged.length / closed.length * 100) : undefined,
-    trend: pullRequestTrend(items, range),
+    deliveryVelocity: Math.round(merged.length / spanDays * 7 * 10) / 10,
+    cycleTime: cycleTimes.length
+      ? Math.round(cycleTimes.reduce((total, value) => total + value, 0) / cycleTimes.length * 10) / 10
+      : undefined,
+    acceptanceRate: closed.length ? Math.round(merged.length / closed.length * 100) : undefined,
   };
 }

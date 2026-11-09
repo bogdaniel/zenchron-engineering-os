@@ -1,4 +1,4 @@
-@media (min-width: 1260px) and (min-height: 820px) {
+@media (min-width: 1260px) and (min-height: 700px) {
   .agents-page { padding-top: 3px; }
   .agents-title-row { margin-bottom: 1px; }
   .agents-metrics { margin-top: 4px; }
@@ -7,7 +7,7 @@
     padding: 5px 11px 4px;
   }
   .agents-content-grid {
-    height: 670px;
+    height: min(670px, calc(100vh - 244px));
     grid-template-columns: 426px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) 140px;
     gap: 10px;

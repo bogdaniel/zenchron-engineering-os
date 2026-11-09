@@ -4,10 +4,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
+import { createHmac, randomBytes } from 'node:crypto';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const temporary = mkdtempSync(join(tmpdir(), 'zenchron-agent-runtime-'));
 const children = [];
+let sessionCookie = '';
 
 function freePort() {
   return new Promise((resolvePort, reject) => {
@@ -57,7 +59,10 @@ async function waitFor(url, child) {
 }
 
 async function request(base, path, options) {
-  const response = await fetch(`${base}${path}`, options);
+  const response = await fetch(`${base}${path}`, {
+    ...options,
+    headers: { ...options?.headers, Cookie: sessionCookie },
+  });
   const body = await response.text();
   if (!response.ok) throw new Error(`${options?.method ?? 'GET'} ${path}: HTTP ${response.status}: ${body}`);
   return body ? JSON.parse(body) : undefined;
@@ -67,6 +72,13 @@ try {
   const [apiPort, modelPort] = await Promise.all([freePort(), freePort()]);
   const apiURL = `http://127.0.0.1:${apiPort}`;
   const modelURL = `http://127.0.0.1:${modelPort}`;
+  const workerToken = randomBytes(32).toString('hex');
+  const sessionSecret = randomBytes(32).toString('hex');
+  const session = Buffer.from(JSON.stringify({
+    login: 'process-e2e', avatar_url: '', expires_at: Math.floor(Date.now() / 1000) + 3600,
+  })).toString('base64url');
+  const signature = createHmac('sha256', sessionSecret).update(session).digest('base64url');
+  sessionCookie = `zenchron_session=${session}.${signature}`;
   const project = join(temporary, 'projects', 'sample');
   const worktrees = join(temporary, 'worktrees');
   mkdirSync(project, { recursive: true });
@@ -84,6 +96,8 @@ try {
   execFileSync('go', ['build', '-o', workerBinary, './cmd/zenchron-worker'], { cwd: repository, stdio: 'inherit' });
 
   const baseEnv = { ...process.env };
+  for (const name of ['ZENCHRON_GITHUB_TOKEN', 'ZENCHRON_GITHUB_APP_ID', 'ZENCHRON_GITHUB_INSTALLATION_ID',
+    'ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH']) delete baseEnv[name];
   const model = start('model', 'node', ['dashboard/e2e/mock-llm.mjs'], {
     ...baseEnv, MOCK_LLM_PORT: String(modelPort),
   });
@@ -91,11 +105,26 @@ try {
   const api = start('control plane', apiBinary, [], {
     ...baseEnv, ZENCHRON_LISTEN_ADDR: `127.0.0.1:${apiPort}`,
     ZENCHRON_DATA_DIR: join(temporary, 'state'),
+    ZENCHRON_GITHUB_CLIENT_ID: 'process-e2e-client', ZENCHRON_GITHUB_CLIENT_SECRET: 'process-e2e-secret',
+    ZENCHRON_SESSION_SECRET: sessionSecret, ZENCHRON_WORKER_TOKEN: workerToken,
+    ZENCHRON_GITHUB_ALLOWED_USERS: 'process-e2e', ZENCHRON_PUBLIC_URL: apiURL,
   });
   await waitFor(`${apiURL}/healthz`, api);
+  const anonymousAPI = await fetch(`${apiURL}/api/v1/projects`);
+  if (anonymousAPI.status !== 401) throw new Error(`unauthenticated API returned HTTP ${anonymousAPI.status}`);
+  const unauthorizedWorker = await fetch(`${apiURL}/api/v1/workers/ffffffffffffffffffffffffffffffff/heartbeat`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'unauthorized' }),
+  });
+  if (unauthorizedWorker.status !== 401) throw new Error(`worker request without token returned HTTP ${unauthorizedWorker.status}`);
+  const invalidWorkerToken = await fetch(`${apiURL}/api/v1/workers/ffffffffffffffffffffffffffffffff/heartbeat`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer invalid-worker-token' },
+    body: JSON.stringify({ name: 'unauthorized' }),
+  });
+  if (invalidWorkerToken.status !== 401) throw new Error(`worker request with wrong token returned HTTP ${invalidWorkerToken.status}`);
   const worker = start('worker', workerBinary, [], {
     ...baseEnv, ZENCHRON_CONTROL_PLANE_URL: apiURL, ZENCHRON_WORKER_NAME: 'process-e2e-worker',
     ZENCHRON_PROJECTS_ROOT: join(temporary, 'projects'), ZENCHRON_WORKTREES_ROOT: worktrees,
+    ZENCHRON_WORKER_TOKEN: workerToken,
     ZENCHRON_LLM_BASE_URL: `${modelURL}/v1`, ZENCHRON_LLM_API_KEY: 'e2e-test-key',
   });
 
@@ -147,7 +176,7 @@ try {
       writtenFile !== 'Created by the E2E model.\n') {
     throw new Error('agent output escaped its isolated branch or was not committed');
   }
-  console.log(`PASS: worker ${completed.worker_name} ran model ${profile.model} on ${checkout.name}, committed ${completed.branch}, and returned its diff.`);
+  console.log(`PASS: allowlisted dashboard session and authenticated worker ran ${profile.model} on ${checkout.name}, committed ${completed.branch}, and returned its diff.`);
 } catch (error) {
   console.error(error);
   for (const { name, child } of children) if (child.output) console.error(`${name} log:\n${child.output}`);

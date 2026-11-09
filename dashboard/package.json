@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "sh ./dev.sh",
-    "build": "mkdir -p dist && cp index.html dist/index.html && esbuild src/main.tsx --bundle --splitting --format=esm --minify --sourcemap --outdir=dist --loader:.css=css",
+    "build": "mkdir -p dist && cp index.html dist/index.html && cp -R public/. dist/ && esbuild src/main.tsx --bundle --splitting --format=esm --minify --sourcemap --outdir=dist --loader:.css=css --external:/sidebar-wave.png",
     "typecheck": "tsc --noEmit",
     "test:e2e:agent-runtime": "node e2e/agent-runtime-process.mjs",
     "test:e2e": "playwright test"

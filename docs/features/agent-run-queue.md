@@ -73,13 +73,14 @@ claims runs only when `ZENCHRON_LLM_BASE_URL` is configured. It creates a worktr
 `<UserCacheDir>/zenchron/worktrees/<project-id>/<run-id>` and sends the selected model, profile prompts, task prompt,
 and enabled-tool results to that OpenAI-compatible Chat Completions endpoint. Set
 `ZENCHRON_LLM_API_KEY` on the worker when the endpoint needs a bearer key. HTTPS is required except for loopback HTTP
-endpoints. The optional GitHub token is separate and stays on the control plane; it reads private provider items and
-submits PR comments or request-changes when it has Pull requests write permission.
+endpoints. GitHub App credentials or the optional personal-token fallback stay on the control plane; they read private
+provider items and submit PR comments or request-changes when the installation has Pull requests write permission.
 
 Run `cd dashboard && npm run test:e2e:agent-runtime` for the process-level smoke check. It builds and launches the real
-control plane and worker against a temporary Git checkout and the loopback Chat Completions stub, queues a profile with
-`code.write`, then verifies the committed branch, captured diff, and unchanged source checkout. The check uses temporary
-state and removes it when it exits.
+control plane and worker with auth enabled, verifies anonymous dashboard and invalid worker requests are rejected,
+then uses an allowlisted test session while the worker discovers a temporary Git checkout and runs against the loopback
+Chat Completions stub. It verifies the committed branch, captured diff, and unchanged source checkout. The check uses
+temporary state and removes it when it exits.
 
 Queued runs can be cancelled immediately. For a running run, the control plane persists a cancellation request and the
 assigned worker polls that run's cancellation state while its model call is active. The worker cancels the request,
@@ -112,7 +113,7 @@ provider. Agent run requests and their prompts are stored locally with the rest 
 
 Workers that have not reported the current runtime status cannot claim profiles with `code.write`; this keeps older
 worker processes from applying edits to the original checkout. The branch name is visible in run history. When the
-control plane has `ZENCHRON_GITHUB_TOKEN` and the project has a supported GitHub.com origin, successful non-empty runs
+control plane has GitHub App authentication or the `ZENCHRON_GITHUB_TOKEN` fallback and the project has a supported GitHub.com origin, successful non-empty runs
 push only their `zenchron/agent-run/<id>` branch using the worker's local Git credentials, then create or reuse an open
 pull request under the configured token owner. The pull-request link appears in Reviews. A push failure leaves the local
 branch and diff reviewable and records a bounded status message. Automatic publication is skipped without the token or

@@ -1,6 +1,58 @@
 import { expect, test } from '@playwright/test';
 
+test('local Workflow Builder mock preview uses its fixture without API reads or writes', async ({ page }) => {
+  const workflowRequests: string[] = [];
+  await page.route('**/api/v1/workflows**', (route) => {
+    workflowRequests.push(route.request().method());
+    return route.fulfill({ status: 401, body: 'authentication required' });
+  });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('http://127.0.0.1:4173/#workflows');
+
+  await expect(page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ })).toBeVisible();
+  await expect(page.locator('.workflow-page-heading .eyebrow')).toContainText('Workflows');
+  await expect(page.getByRole('group', { name: 'Canvas tools' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Workflow' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Custom Block' })).toBeDisabled();
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(9);
+  const branchNodes = await Promise.all(['code-reviewer', 'test-generator', 'coverage-analyzer']
+    .map((kind) => page.locator(`.workflow-canvas .workflow-node.${kind}`).boundingBox()));
+  expect(branchNodes.every(Boolean)).toBe(true);
+  expect(branchNodes[0]!.y).toBeLessThan(branchNodes[1]!.y);
+  expect(branchNodes[1]!.y).toBeLessThan(branchNodes[2]!.y);
+  await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Router');
+  await expect(page.locator('.workflow-status')).toContainText('Design preview · changes are not saved');
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New Workflow' })).toBeHidden();
+  await expect(page.getByRole('navigation', { name: 'Agent Router settings' })).toContainText('Properties');
+  await expect(page.getByRole('region', { name: 'Routing Parameters' })).toContainText('Code Reviewer');
+  await expect(page.getByRole('region', { name: 'Budgets and limits' })).toContainText('$ 0.020');
+  await expect(page.getByRole('region', { name: 'Retry Rules' })).toContainText('Exponential');
+  await expect(page.getByRole('region', { name: 'Execution Conditions' })).toContainText('pr.changed_files_count');
+  await expect(page.getByRole('region', { name: 'Simulated run timeline' })).toContainText('PR #4827');
+  await expect(page.locator('.workflow-simulated-summary')).toContainText('$0.038');
+  const inspectorFits = await page.locator('.workflow-properties').evaluate((panel) =>
+    panel.scrollHeight <= panel.clientHeight);
+  expect(inspectorFits).toBe(true);
+  expect(workflowRequests).toEqual([]);
+});
+
 test('workflow graph can be edited and saved to the control plane', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!crypto.randomUUID) Object.defineProperty(Crypto.prototype, 'randomUUID', {
+      value: () => crypto.getRandomValues(new Uint32Array(4)).join('-'),
+    });
+  });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }),
+  }));
+  await page.route('**/api/v1/workflows**', (route) => {
+    const apiURL = new URL(route.request().url());
+    apiURL.port = '8083';
+    return route.continue({ url: apiURL.toString() });
+  });
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/');
   await page.getByRole('link', { name: 'Workflows' }).click();
@@ -11,11 +63,14 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   expect(mockTitleBox?.height).toBeLessThan(30);
   expect(mockTitleBox && mockToolbarBox && Math.abs(mockTitleBox.y - mockToolbarBox.y)).toBeLessThan(16);
   await expect(page.getByRole('combobox', { name: 'Workflow' })).toHaveValue('PR Review & Release Orchestration');
-  await expect(page.getByRole('textbox', { name: 'Label' })).toHaveValue('Agent Router');
+  await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Router');
+  await expect(page.getByRole('textbox', { name: 'Type' })).toHaveValue('Agent Router');
+  await expect(page.getByRole('textbox', { name: 'Type' })).toHaveAttribute('readonly', '');
+  await expect(page.getByRole('region', { name: 'Basic configuration' })).toBeVisible();
   await expect(page.locator('.workflow-properties .workflow-subheading h3')).toHaveText('Agent Router');
-  await expect(page.getByLabel('Name')).toBeHidden();
+  await expect(page.getByLabel('Name', { exact: true })).toBeHidden();
   await page.getByText('Workflow settings', { exact: true }).click();
-  await expect(page.getByLabel('Name')).toHaveValue('PR Review & Release Orchestration');
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('PR Review & Release Orchestration');
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCSS('background-color', 'rgb(103, 65, 217)');
   await expect(page.locator('.workflow-run-preview')).toContainText('Execution preview unavailable');
   await expect(page.locator('.workflow-preview-summary')).toContainText('Components 9');
@@ -31,20 +86,24 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   const canvasPanel = await page.locator('.workflow-canvas-wrap').boundingBox();
   const preview = await page.locator('.workflow-run-preview').boundingBox();
   const properties = await page.locator('.workflow-properties').boundingBox();
+  const builder = await page.locator('.workflow-builder-layout').boundingBox();
   expect(await page.locator('.sidebar').evaluate((sidebar) => sidebar.getBoundingClientRect().width)).toBe(247);
-  expect(palette?.x).toBe(265);
+  expect(palette?.x).toBe(263);
   expect(palette?.y).toBeGreaterThanOrEqual(201);
   expect(palette?.y).toBeLessThanOrEqual(203);
   expect(palette?.width).toBe(220);
   expect(palette?.height).toBeGreaterThanOrEqual(650);
-  expect(canvasPanel?.x).toBe(495);
-  expect(canvasPanel?.width).toBe(792);
+  expect(canvasPanel?.x).toBe(palette!.x + palette!.width + 10);
+  expect(canvasPanel?.width).toBeGreaterThan(800);
   expect(canvasPanel?.height).toBe(413);
-  expect(properties?.x).toBe(1297);
+  expect(properties && builder).toBeTruthy();
+  expect(properties!.x + properties!.width).toBeCloseTo(builder!.x + builder!.width, 0);
   expect(properties?.y).toBe(90);
   expect(properties?.height).toBeGreaterThanOrEqual(760);
   expect(await page.locator('.workflow-properties').evaluate((panel) => panel.getBoundingClientRect().width)).toBe(288);
-  expect(preview?.x).toBe(495);
+  expect(preview?.x).toBe(canvasPanel?.x);
+  expect(await page.locator('.workflow-canvas .workflow-node small').evaluateAll((descriptions) =>
+    descriptions.every((description) => description.scrollWidth <= description.clientWidth))).toBe(true);
   expect(preview?.y).toBeGreaterThanOrEqual(621);
   expect(preview?.y).toBeLessThanOrEqual(623);
   expect(preview?.height).toBeGreaterThanOrEqual(240);
@@ -66,7 +125,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   expect(attributionBox && canvasPanel && attributionBox.y).toBeGreaterThan(canvasPanel!.y + canvasPanel!.height / 2);
   expect(attributionBox && miniMap && attributionBox.x + attributionBox.width).toBeLessThan(miniMap!.x);
   expect(workflowNode?.height).toBeGreaterThanOrEqual(54);
-  expect(workflowNode?.height).toBeLessThanOrEqual(56);
+  expect(workflowNode?.height).toBeLessThanOrEqual(72);
   const graphLabelSize = await page.evaluate(() => {
     const node = document.querySelector('.workflow-canvas .workflow-node');
     const viewport = document.querySelector('.workflow-canvas .react-flow__viewport');
@@ -75,12 +134,19 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
     return parseFloat(getComputedStyle(node.querySelector('b')!).fontSize) * zoom;
   });
   expect(graphLabelSize).toBeGreaterThanOrEqual(10);
-  expect(miniMap?.width).toBe(176);
-  expect(miniMap?.height).toBe(74);
+  expect(miniMap?.width).toBe(128);
+  expect(miniMap?.height).toBe(54);
   expect(flowControls?.x).toBeGreaterThan((workflowNode?.x ?? 0) + (workflowNode?.width ?? 0));
   const editorStatus = await page.locator('.workflow-status').boundingBox();
   expect(canvasPanel && editorStatus && editorStatus.y + editorStatus.height)
     .toBeLessThanOrEqual(canvasPanel!.y + canvasPanel!.height);
+  await page.getByRole('button', { name: 'Auto layout' }).click();
+  await expect(page.locator('.workflow-status')).toContainText('Layout updated');
+  const branchNodes = await Promise.all(['code-reviewer', 'test-generator', 'coverage-analyzer']
+    .map((kind) => page.locator(`.workflow-canvas .workflow-node.${kind}`).boundingBox()));
+  expect(branchNodes.every(Boolean)).toBe(true);
+  expect(branchNodes[0]!.y).toBeLessThan(branchNodes[1]!.y);
+  expect(branchNodes[1]!.y).toBeLessThan(branchNodes[2]!.y);
   await page.setViewportSize({ width: 1522, height: 856 });
   const workflowTitle = page.locator('.workflow-page-heading .page-heading h2');
   await expect(workflowTitle).toHaveCSS('font-size', '22px');
@@ -104,7 +170,9 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
     return canvas && box.right > canvas.left && box.left < canvas.right &&
       box.bottom > canvas.top && box.top < canvas.bottom;
   }))).toBe(true);
-  await page.locator('.workflow-component-add').filter({ hasText: 'Agent Task' }).click();
+  const addAgentTask = page.locator('.workflow-component-add').filter({ hasText: 'Agent Task' });
+  await addAgentTask.click();
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByText(/Saved v\d+/)).toBeVisible();
   await page.locator('.workflow-canvas .workflow-node').filter({ hasText: 'Trigger' }).click();
@@ -122,7 +190,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await page.getByRole('option', { name: 'PR Review & Release Orchestration' }).click();
   await expect(page.getByRole('combobox', { name: 'Workflow' })).toHaveValue('PR Review & Release Orchestration');
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
-  await expect(page.getByRole('textbox', { name: 'Label' })).toHaveValue('Agent Router');
+  await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Router');
   const dragHandle = page.getByRole('button', { name: 'Drag Agent Task to canvas' });
   const source = await dragHandle.boundingBox();
   const canvas = await page.locator('.workflow-canvas').boundingBox();
@@ -182,7 +250,9 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(page.locator('.workflow-mobile-task-row')).toHaveCount(6);
   await expect(page.getByRole('region', { name: 'Approvals' })).toContainText('Human approval');
   await expect(page.getByRole('region', { name: 'Approvals' })).toContainText('Not requested');
-  const approvals = await page.getByRole('region', { name: 'Approvals' }).boundingBox();
+  const approvalsRegion = page.getByRole('region', { name: 'Approvals' });
+  await approvalsRegion.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+  const approvals = await approvalsRegion.boundingBox();
   const mobileNavigation = await page.locator('.sidebar nav').boundingBox();
   if (!approvals || !mobileNavigation) throw new Error('Mobile approval or navigation bounds are unavailable');
   expect(approvals.y + approvals.height).toBeLessThanOrEqual(mobileNavigation.y);

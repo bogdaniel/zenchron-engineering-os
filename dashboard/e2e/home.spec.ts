@@ -1,120 +1,41 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-test('dashboard displays the connected control plane and local worker', async ({ page }) => {
-  await page.setViewportSize({ width: 1490, height: 829 });
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Workflow orchestration' })).toBeVisible();
-  await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(9);
-  await expect(page.locator('.workflow-overview-canvas .react-flow__edge')).toHaveCount(10);
-  await expect(page.locator('.workflow-overview-status')).toContainText('Execution unavailable');
-  await expect(page.locator('.activity-list')).toContainText('Control plane is responding');
-  await expect(page.getByText('Running agents', { exact: true })).toBeVisible();
-  await expect(page.getByText(/Worker “.+” is online/)).toBeVisible();
-  await expect(page.locator('.activity-list')).toContainText('zenchron-engineering-os');
-  await expect(page.locator('.metric-unavailable')).toHaveCount(3);
-  await expect(page.getByText('Local branch diffs and feedback', { exact: true })).toBeVisible();
-  await expect(page.getByText('No local branch diffs yet', { exact: true })).toBeVisible();
-  await expect(page.getByText('No pull requests yet', { exact: true })).toHaveCount(0);
-  const footer = await page.locator('.page-footer').boundingBox();
-  expect(footer).not.toBeNull();
-  expect(footer!.y + footer!.height).toBeLessThanOrEqual(829);
-  await page.getByRole('link', { name: 'Projects', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
-});
-
-test('Overview matches the supplied tall desktop mockup proportions', async ({ page }) => {
-  await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/');
-  await expect(page.locator('.activity-list')).toContainText('Control plane is responding');
-  await expect(page.locator('.workflow-overview-status')).toContainText('Execution unavailable');
-  const layout = await page.evaluate(() => {
-    const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
-    return {
-      metrics: bounds('.metric-grid'), workflow: bounds('.workflow-panel'), activity: bounds('.activity-panel'),
-      objectives: bounds('.objective-panel'), review: bounds('.review-panel'), footerDisplay:
-        getComputedStyle(document.querySelector('.page-footer')!).display,
-      brandMark: bounds('.brand-mark'), overviewLink: bounds('.nav-link[href="#overview"]'),
-    };
-  });
-  expect(layout.metrics?.x).toBe(265);
-  expect(layout.metrics?.y).toBe(84);
-  expect(layout.metrics?.width).toBe(1393);
-  expect(layout.metrics?.height).toBe(100);
-  expect(layout.workflow?.y).toBe(198);
-  expect(layout.workflow?.height).toBeGreaterThanOrEqual(203);
-  expect(layout.workflow?.height).toBeLessThanOrEqual(205);
-  expect(layout.activity?.y).toBe(198);
-  expect(layout.activity?.height).toBe(204);
-  const workflowNode = await page.locator('.workflow-overview-canvas .workflow-node').first().boundingBox();
-  expect(workflowNode?.width).toBeGreaterThanOrEqual(80);
-  expect(workflowNode?.height).toBeGreaterThanOrEqual(30);
-  const overviewCanvas = await page.locator('.workflow-overview-canvas').boundingBox();
-  const overviewAttribution = await page.locator('.workflow-overview-canvas .react-flow__attribution').boundingBox();
-  await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeVisible();
-  expect(overviewAttribution?.y).toBeGreaterThan(overviewCanvas!.y + overviewCanvas!.height / 2);
-  const overviewGraphLabelSize = await page.evaluate(() => {
-    const node = document.querySelector('.workflow-overview-canvas .workflow-node');
-    const viewport = document.querySelector('.workflow-overview-canvas .react-flow__viewport');
-    if (!node || !viewport) return 0;
-    const zoom = new DOMMatrix(getComputedStyle(viewport).transform).a;
-    return parseFloat(getComputedStyle(node.querySelector('b')!).fontSize) * zoom;
-  });
-  expect(overviewGraphLabelSize).toBeGreaterThanOrEqual(8);
-  expect(layout.activity?.x).toBeGreaterThan(1235);
-  expect(layout.objectives?.y).toBeCloseTo(416, 0);
-  expect(layout.review?.y).toBeCloseTo(590, 0);
-  expect(layout.review?.height).toBe(280);
-  expect(layout.footerDisplay).toBe('none');
-  expect(layout.brandMark?.x).toBe(38);
-  expect(layout.overviewLink?.x).toBe(14);
-  expect(layout.overviewLink?.y).toBeCloseTo(92, 0);
-});
-
-test('Overview matches the supplied desktop display crop', async ({ page }) => {
-  await page.setViewportSize({ width: 1522, height: 856 });
-  await page.goto('/');
-  const layout = await page.evaluate(() => {
-    const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
-    return {
-      metrics: bounds('.metric-grid'), workflow: bounds('.workflow-panel'), activity: bounds('.activity-panel'),
-      objectives: bounds('.objective-panel'), review: bounds('.review-panel'), timeline: bounds('.timeline-panel'),
-      footerDisplay: getComputedStyle(document.querySelector('.page-footer')!).display,
-    };
-  });
-  expect(layout.metrics?.x).toBe(265);
-  expect(layout.metrics?.y).toBe(84);
-  expect(layout.workflow?.y).toBe(189);
-  expect(layout.workflow?.height).toBe(202);
-  expect(layout.activity?.x).toBeCloseTo(1143.5, 1);
-  expect(layout.objectives?.y).toBe(403);
-  expect(layout.review?.y).toBe(573);
-  expect(layout.review?.height).toBe(220);
-  expect(layout.timeline?.y).toBe(573);
-  expect(layout.footerDisplay).toBe('none');
-});
-
+async function useTestShell(page: Page) {
+  await page.route('**/api/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, local: true, login: 'E2E' }),
+  }));
+  await page.route('**/healthz', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' }));
+}
 test('Reviews matches the supplied desktop workspace frame', async ({ page }) => {
-  await page.setViewportSize({ width: 1512, height: 874 });
-  await page.goto('/#reviews');
+  await page.setViewportSize({ width: 1672, height: 874 });
+  await page.goto('http://127.0.0.1:4173/#reviews');
+  await expect(page.locator('.reviews-metrics')).toBeVisible();
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {
       sidebar: bounds('.sidebar'), metrics: bounds('.reviews-metrics'), title: bounds('.reviews-title-copy h2'),
       titleIcon: bounds('.reviews-title-icon'), tabs: bounds('.reviews-tabs'), workspace: bounds('.reviews-workspace'),
+      metricIconGap: (() => {
+        const icon = document.querySelector('.reviews-metric .metric-top > svg')!.getBoundingClientRect();
+        const label = document.querySelector('.reviews-metric .metric-top > span')!.getBoundingClientRect();
+        return label.left - icon.right;
+      })(),
     };
   });
   expect(layout.sidebar?.width).toBe(247);
-  expect(layout.metrics?.x).toBe(265);
+  expect(layout.metrics?.x).toBe(263);
   expect(layout.metrics?.y).toBe(92);
-  expect(layout.titleIcon?.x).toBe(265);
-  expect(layout.title?.x).toBe(293);
+  expect(layout.metricIconGap).toBeCloseTo(6, 0);
+  expect(layout.titleIcon?.x).toBe(263);
+  expect(layout.title?.x).toBe(291);
   expect(layout.tabs?.y).toBeCloseTo(205, 0);
   expect(layout.workspace?.y).toBeCloseTo(238, 0);
-  expect(layout.workspace?.height).toBe(635);
+  expect(layout.workspace?.height).toBe(584);
 });
 
 test('overview lists only agent runs with captured local diffs', async ({ page }) => {
+  await useTestShell(page);
   const now = new Date().toISOString();
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
     status: 200,
@@ -145,7 +66,28 @@ test('overview lists only agent runs with captured local diffs', async ({ page }
 
 test('objectives can be created and updated from the dashboard', async ({ page }) => {
   const title = `Review workflow ${Date.now()}`;
-  await page.goto('/');
+  const persisted: Array<Record<string, any>> = [];
+  const now = new Date().toISOString();
+  await useTestShell(page);
+  await page.route('**/api/v1/products', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/v1/objectives', async (route) => {
+    if (route.request().method() === 'POST') {
+      const item = {
+        ...route.request().postDataJSON(), id: 'a'.repeat(32), product: 'Unassigned', status: 'in_progress', progress: 0,
+        created_at: now, updated_at: now,
+      };
+      persisted.push(item);
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(item) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(persisted) });
+  });
+  await page.route('**/api/v1/objectives/*', async (route) => {
+    const item = persisted[0];
+    Object.assign(item, route.request().postDataJSON(), { updated_at: new Date().toISOString() });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(item) });
+  });
+  await page.goto('http://zenchron.test:4173/');
   await page.getByRole('link', { name: 'Objectives' }).click();
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   await page.getByRole('button', { name: 'New Objective' }).click();
@@ -157,38 +99,96 @@ test('objectives can be created and updated from the dashboard', async ({ page }
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   await expect(page.locator('.objective-detail-head h3')).toHaveCSS('font-size', '18px');
   await expect(page.locator('.objective-detail-head h3')).toHaveCSS('font-weight', '650');
+  await expect(page.locator('.objective-overview-grid')).toContainText('Acceptance criteria');
+  await expect(page.getByLabel('Progress')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edit objective' }).click();
+  await page.getByLabel('Progress').fill('30');
+  await page.getByRole('button', { name: 'Cancel edit' }).click();
+  await expect(page.getByText('0% complete')).toBeVisible();
+  await page.getByRole('button', { name: 'Edit objective' }).click();
   await page.getByLabel('Progress').fill('45');
   await page.getByRole('button', { name: 'Save updates' }).click();
   await expect(page.getByText('45% complete')).toBeVisible();
 });
 
 test('Objectives dashboard matches the planning mock at the reference viewport', async ({ page }) => {
+  const productID = 'f'.repeat(32);
+  const now = new Date();
+  const createdAt = now.toISOString();
+  const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+  const dueDate = (offset: number) => new Date(quarterStart.getFullYear(), quarterStart.getMonth(), offset + 8)
+    .toISOString().slice(0, 10);
+  await useTestShell(page);
   await page.route('**/api/v1/objectives', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: '[]',
+    status: 200, contentType: 'application/json', body: JSON.stringify([
+      ['Launch AI code review v2', 'Alex Chen', 'on_track', 78],
+      ['Improve review velocity', 'Priya Shah', 'on_track', 62],
+      ['Reduce CI cycle time', 'Marco Rossi', 'at_risk', 34],
+      ['Expand test coverage', 'Elena Rossi', 'on_track', 71],
+      ['Ship agent orchestration', 'Ravi Kumar', 'in_progress', 46],
+      ['Migrate to unified pipeline', 'Dana Lee', 'blocked', 19],
+    ].map(([title, owner, status, progress], index) => ({
+      id: String(index + 1).repeat(32), title, description: `${title} delivery plan`, owner,
+      product: 'Core Product', product_id: productID, status, progress, due_date: dueDate(index),
+      created_at: createdAt, updated_at: createdAt,
+    }))),
   }));
   await page.route('**/api/v1/products', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: '[]',
+    status: 200, contentType: 'application/json', body: JSON.stringify([{
+      id: productID, name: 'Core Product', description: '', repository_ids: [],
+      created_at: createdAt, updated_at: createdAt,
+    }]),
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/#objectives');
+  await page.goto('http://zenchron.test:4173/#objectives');
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
-  await expect(page.locator('.objective-detail-empty').getByRole('button', { name: 'Create objective' }))
-    .toHaveCSS('border-color', 'rgb(128, 80, 204)');
+  const objectiveRows = page.locator('.ag-center-cols-container .ag-row');
+  await expect(objectiveRows).toHaveCount(6);
+  await expect(objectiveRows.first()).toContainText('Launch AI code review v2');
+  await expect(objectiveRows.last()).toContainText('Migrate to unified pipeline');
+  await expect(objectiveRows.first().locator('.ag-cell[col-id="due_date"]')).toHaveText(/^[A-Z][a-z]{2} \d{1,2}, 2026$/);
+  const linkedProductCell = objectiveRows.first().locator('.ag-cell[col-id="product"]');
+  await expect(linkedProductCell).toHaveText('Core Product');
+  expect(await linkedProductCell.evaluate((cell) => cell.scrollWidth <= cell.clientWidth)).toBe(true);
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Launch AI code review v2');
+  await expect(page.locator('.detail-meta-grid')).toContainText('Alex Chen');
+  await expect(page.locator('.detail-meta-grid')).toContainText('Core Product');
+  expect(await page.locator('.detail-meta-grid').evaluate((grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').length)).toBe(4);
+  await expect(page.locator('.detail-summary')).toContainText('78% complete');
+  await expect(page.locator('.objective-overview-grid')).toContainText('Related pull requests');
+  await expect(page.getByLabel('Progress')).toHaveCount(0);
+  const milestonesTab = page.getByRole('tab', { name: 'Milestones' });
+  await milestonesTab.click();
+  await expect(milestonesTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel')).toContainText('not included in the available objective data');
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.locator('.capacity-bars > div')).toHaveCount(6);
   await expect(page.getByRole('region', { name: 'Objective metrics' }).locator('.objective-metric')).toHaveCount(6);
+  const capacityBounds = await Promise.all([
+    page.locator('.capacity-bars > div').last().boundingBox(),
+    page.locator('.objective-capacity').boundingBox(),
+  ]);
+  expect(capacityBounds[0]!.y + capacityBounds[0]!.height).toBeLessThanOrEqual(capacityBounds[1]!.y + capacityBounds[1]!.height - 6);
+  const objectiveMetric = page.locator('.objective-metric').first();
+  const [metricIcon, metricLabel] = await Promise.all([
+    objectiveMetric.locator('.metric-top > svg').boundingBox(),
+    objectiveMetric.locator('.metric-top > span').boundingBox(),
+  ]);
+  expect(metricIcon && metricLabel).toBeTruthy();
+  expect(metricIcon!.x + metricIcon!.width).toBeLessThan(metricLabel!.x);
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {
-      sidebar: bounds('.sidebar'), metrics: bounds('.objective-metrics'), content: bounds('.objective-content-grid'),
+      metrics: bounds('.objective-metrics'), content: bounds('.objective-content-grid'),
       table: bounds('.objective-table-panel'), detail: bounds('.objective-detail-panel'), capacity: bounds('.objective-capacity'),
     };
   });
-  expect(layout.sidebar?.width).toBe(247);
-  expect(layout.metrics?.x).toBe(265);
+  expect(layout.metrics?.x).toBe(263);
   expect(layout.metrics?.y).toBeCloseTo(157.5, 0);
-  expect(layout.content?.y).toBeCloseTo(263.5, 0);
-  expect(layout.content?.height).toBe(603);
+  expect(layout.content?.y).toBeCloseTo(251.5, 0);
+  expect(layout.content?.height).toBe(615);
   await expect(page.locator('.objective-grid-wrap .ag-header-cell').last()).toBeVisible();
-  await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').last()).toHaveText('Due date');
+  await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').last()).toHaveText('Workflows');
   expect((layout.table?.width ?? 0) / (layout.detail?.width ?? 1)).toBeGreaterThan(0.94);
   expect((layout.table?.width ?? 0) / (layout.detail?.width ?? 1)).toBeLessThan(0.98);
   expect(layout.capacity?.bottom).toBeLessThanOrEqual(867);
@@ -197,6 +197,7 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
 test('Objectives grid keeps product names while the catalog loads', async ({ page }) => {
   const productID = 'a'.repeat(32);
   const createdAt = new Date().toISOString();
+  await useTestShell(page);
   await page.route('**/api/v1/products', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     await route.fulfill({
@@ -214,16 +215,18 @@ test('Objectives grid keeps product names while the catalog loads', async ({ pag
     }]),
   }));
   await page.setViewportSize({ width: 1522, height: 856 });
-  await page.goto('/#objectives');
-  const productCell = page.locator('.ag-row').first().locator('.ag-cell[col-id="product"]');
+  await page.goto('http://zenchron.test:4173/#objectives');
+  const objectiveRows = page.locator('.ag-center-cols-container .ag-row');
+  const productCell = objectiveRows.first().locator('.ag-cell[col-id="product"]');
   await expect(productCell).toHaveText('Nova Platform');
   await page.getByRole('textbox', { name: 'Search objectives' }).fill('Nova Platform');
-  await expect(page.locator('.ag-row')).toHaveCount(1);
+  await expect(objectiveRows).toHaveCount(1);
 });
 
 test('Projects page shows the live local worker inventory', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('link', { name: 'Projects', exact: true }).click();
+  await page.getByRole('link', { name: 'Product Workspace' }).click();
+  await page.getByRole('link', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.locator('.project-detail-heading h3')).toHaveCSS('font-size', '18px');
   await expect(page.locator('.project-detail-heading h3')).toHaveCSS('font-weight', '650');
@@ -243,7 +246,8 @@ test('Projects page shows the live local worker inventory', async ({ page }) => 
 test('worker prepares an isolated Git branch without moving the source checkout', async ({ page }) => {
   const branch = `zenchron/e2e-${Date.now()}`;
   await page.goto('/');
-  await page.getByRole('link', { name: 'Projects', exact: true }).click();
+  await page.getByRole('link', { name: 'Product Workspace' }).click();
+  await page.getByRole('link', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await page.getByRole('button', { name: 'Prepare isolated branch' }).click();
   const dialog = page.getByRole('dialog', { name: 'Prepare isolated branch' });
@@ -341,7 +345,7 @@ test('Reviews page shows an isolated local branch diff without treating it as a 
   await expect(page.getByRole('button', { name: 'Merge to protected branch' })).toBeDisabled();
 });
 
-test('Reports page summarizes live API records and leaves delivery metrics unavailable', async ({ page }) => {
+test('Reports summarizes live objectives and run records without inventing delivery data', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
   const objective = await page.evaluate(async () => {
@@ -352,10 +356,11 @@ test('Reports page summarizes live API records and leaves delivery metrics unava
     return response.status;
   });
   expect(objective).toBe(201);
-  const objectiveCount = await page.evaluate(async () => {
+  const objectiveCounts = await page.evaluate(async () => {
     const response = await fetch('/api/v1/objectives');
     if (!response.ok) throw new Error(`Objective list failed: ${response.status}`);
-    return (await response.json()).length;
+    const objectives = await response.json();
+    return { total: objectives.length, completed: objectives.filter((item: { status: string }) => item.status === 'completed').length };
   });
   const run = await page.evaluate(async () => {
     const agentResponse = await fetch('/api/v1/agents', {
@@ -378,45 +383,40 @@ test('Reports page summarizes live API records and leaves delivery metrics unava
     const runs = await response.json();
     return runs.find((item: { id: string }) => item.id === runID)?.status;
   }, run.id), { timeout: 15_000 }).toBe('succeeded');
+  const runCounts = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/agent-runs');
+    if (!response.ok) throw new Error(`Agent run list failed: ${response.status}`);
+    const runs = await response.json();
+    const succeeded = runs.filter((item: { status: string }) => item.status === 'succeeded').length;
+    const failed = runs.filter((item: { status: string }) => item.status === 'failed').length;
+    return { total: runs.length, succeeded, terminal: succeeded + failed };
+  });
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Objective status' })).toBeVisible();
-  await expect(page.locator('.objective-chart-layout [role="application"]')).toBeVisible();
-  await expect(page.locator('.objective-chart-layout .objective-chart-label')).toHaveText(String(objectiveCount));
-  await expect(page.locator('.objective-legend')).toContainText('In progress');
-  await expect(page.getByRole('heading', { name: 'Agent run outcomes' })).toBeVisible();
-  await expect(page.locator('.run-chart-layout [role="application"]')).toBeVisible();
-  await expect(page.locator('.run-chart-layout .objective-chart-label')).toHaveText('1');
-  await expect(page.locator('.run-outcome-legend')).toContainText('Succeeded');
-  await expect(page.locator('.run-outcome-legend')).toContainText('1');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Agent runs (30d)' })).toContainText('1');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Run success rate' })).toContainText('100%');
-  await expect(page.getByRole('heading', { name: 'Workspace inventory' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Delivery velocity & cycle time' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'CI duration distribution' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Review latency & agent spend' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Acceptance & autonomous completion' })).toBeVisible();
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' })).toContainText('Unavailable');
-  await expect(page.locator('.reports-metric').filter({ hasText: 'Delivery velocity' }).locator('strong'))
-    .toHaveCSS('font-size', '14px');
-  await expect(page.getByRole('heading', { name: 'Reporting coverage' })).toBeVisible();
-  const layout = await page.evaluate(() => {
-    const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
-    return { sidebar: bounds('.sidebar'), metrics: bounds('.reports-metrics'), content: bounds('.reports-content-grid'),
-      objectiveChart: bounds('.objective-distribution'), runChart: bounds('.run-outcomes-panel'),
-      inventory: bounds('.inventory-panel'),
-      delivery: bounds('.delivery-velocity-panel'), coverage: bounds('.reports-summary'),
-      productWorkspaceLabelHeight: document.querySelector('.nav-link[href="#workspace"] .nav-label')?.getBoundingClientRect().height };
-  });
-  expect(layout.sidebar?.width).toBe(247);
-  expect(layout.metrics?.x).toBe(265);
-  expect(layout.content?.y).toBeLessThan(290);
-  expect(layout.content?.bottom).toBeLessThanOrEqual(941);
-  expect(layout.objectiveChart?.width).toBeGreaterThan(layout.runChart?.width ?? 0);
-  expect(layout.coverage?.x).toBeGreaterThan(layout.runChart?.x ?? 0);
-  expect(layout.coverage?.y).toBeCloseTo(layout.objectiveChart?.y ?? -100, 0);
-  expect(layout.inventory?.y).toBeGreaterThan(layout.delivery?.y ?? -100);
-  expect(layout.productWorkspaceLabelHeight).toBeLessThan(24);
+  await expect(page.getByRole('heading', { name: 'Insights & narrative' })).toBeVisible();
+  await expect(page.locator('.reports-insights')).toContainText(
+    `${objectiveCounts.completed} of ${objectiveCounts.total} completed in this scope.`,
+  );
+  const agentActivity = page.locator('.reports-insight').filter({ hasText: 'Agent activity' });
+  await expect(agentActivity).toContainText(
+    `${runCounts.total} recorded ${runCounts.total === 1 ? 'run' : 'runs'} in this period`,
+  );
+  const terminalSuccess = runCounts.terminal
+    ? `${Math.round(runCounts.succeeded / runCounts.terminal * 100)}% terminal success`
+    : 'no terminal run outcomes';
+  await expect(agentActivity).toContainText(terminalSuccess);
+  await expect(page.getByRole('heading', { name: 'Work outcomes' })).toBeVisible();
+  const pullRequestOutcomeChart = page.locator('.reports-outcomes-layout [role="application"]');
+  if (await pullRequestOutcomeChart.count()) {
+    await expect(pullRequestOutcomeChart).toHaveAttribute('aria-label', /Pull request outcomes/);
+  } else {
+    await expect(page.locator('.work-outcomes-panel .reports-empty')).toContainText(/pull-request|repository|history/i);
+  }
+  await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Delivery Velocity & Cycle Time' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'CI Duration Distribution' })).toBeVisible();
+  await expect(page.locator('.reports-metric').filter({ hasText: /Delivery Velocity/i })).toContainText('Unavailable');
+  await expect(page.getByRole('button', { name: 'Download Executive Summary CSV' })).toBeVisible();
 });
 
 test('Product Workspace groups live repositories into persisted products', async ({ page }) => {

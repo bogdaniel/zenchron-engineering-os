@@ -1,5 +1,5 @@
-import { Badge, Button } from '@mantine/core';
-import { IconDownload } from '@tabler/icons-react';
+import { Button } from '@mantine/core';
+import { IconDownload, IconFileTypeCsv, IconFileTypePdf, IconFileTypeXls } from '@tabler/icons-react';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
 
@@ -13,17 +13,19 @@ export interface DownloadableReport {
 export function DownloadableReports({ reports }: { reports: DownloadableReport[] }) {
   return (
     <PanelCard className="reports-panel downloadable-reports-panel" withBorder>
-      <PanelHeading className="reports-panel-heading" icon={<IconDownload size={15} />} title="Downloadable reports"
-        description="Current filters · CSV format" />
+      <PanelHeading className="reports-panel-heading" icon={<IconDownload size={15} />} title="Downloadable Reports" />
       <div className="downloadable-report-list">
         {reports.map((report) => (
           <div className="downloadable-report" key={report.name}>
-            <Badge className={`downloadable-report-format ${report.download ? '' : 'unavailable'}`} variant="light">
-              {report.format}
-            </Badge>
+            <span className={`downloadable-report-format format-${report.format.toLowerCase()}${report.download ? '' : ' unavailable'}`}
+              role="img" aria-label={`${report.format} file`}>
+              {report.format === 'PDF' ? <IconFileTypePdf size={22} aria-hidden="true" />
+                : report.format === 'XLSX' ? <IconFileTypeXls size={22} aria-hidden="true" />
+                  : <IconFileTypeCsv size={22} aria-hidden="true" />}
+            </span>
             <div className="downloadable-report-copy"><b>{report.name}</b><span>{report.detail}</span></div>
             <Button className="downloadable-report-button" variant="subtle" disabled={!report.download}
-              aria-label={report.download ? `Download ${report.name} CSV` : `${report.name} unavailable`}
+              aria-label={report.download ? `Download ${report.name} ${report.format}` : `${report.name} unavailable`}
               onClick={report.download}>
               <IconDownload size={14} />
             </Button>

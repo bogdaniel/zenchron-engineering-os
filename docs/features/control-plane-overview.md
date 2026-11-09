@@ -3,35 +3,54 @@
 The overview dashboard is the live entry point for the local control plane. It follows the supplied Zenchron overview
 mockup: workspace navigation, status metrics, workflow visualization, recent activity, plan approvals, run status,
 evidence health, local branch reviews, timeline, and analytics. Control-plane health, workers, discovered projects,
-objectives, workflow definitions, and agent-run history are backed by the Go API. CI, budget, evidence, timeline, and
-analytics values remain unavailable until their services exist.
+objectives, workflow definitions, agent-run history, GitHub pull-request counts, and GitHub Actions health are backed
+by current API/provider records. Budget, approvals, evidence, and timeline remain unavailable until their sources
+exist. On localhost, an unauthenticated session shows the supplied screen fixtures as sample data in the same dashboard
+shell; a verified session uses live APIs. Sample data does not fetch protected dashboard records or perform writes.
+The **Sign in** link opens `/#login`; Workflow Builder and Reviews use the same local sample-data state.
 
 ## Feature diagram
 
 ```mermaid
 flowchart LR
     Browser[Desktop or mobile browser] --> Shell[Shared React app shell<br/>Navigation + type scale]
-    Shell --> Dashboard[React overview<br/>Mantine + Tabler]
+    Shell --> Dashboard[Single OverviewPage layout<br/>Mantine + Tabler]
     Shell --> Theme[Shared Mantine theme<br/>Dark scheme · violet primary]
     Shell --> Pages[Objectives · Agents · Workflows<br/>Projects · Workspace · Reviews · Reports · Settings]
     Pages --> Heading[Shared PageHeading<br/>Eyebrow · title · description]
     Pages --> Metrics[Shared MetricCard<br/>Summary values and labels]
     Pages --> PanelHeading[Shared PanelHeading<br/>Panel + detail titles · descriptions · actions]
     Shell --> TypeScale[Shared CSS type scale<br/>Page title + panel heading tokens]
+    Sample[Local unauthenticated session<br/>frontend sample data only] --> Dashboard
+    Sample --> ObjectivesPreview[Objectives sample data<br/>KPI · table · details · milestones]
+    Sample --> WorkflowPreview[Workflow Builder sample data<br/>Canvas · router settings · sample run timeline · phone run detail]
+    Sample --> ReviewsPreview[Reviews sample data<br/>PR queue · diff · evidence summary]
+    Sample --> ReportsPreview[Reports sample data<br/>metrics · charts · summaries]
+    Sample --> IntegrationsPreview[Integrations sample data<br/>providers · policies · settings]
+    Sample --> ProductWorkspacePreview[Product Workspace sample data<br/>roadmap · repositories · releases · decisions]
+    LiveSources[Existing API and provider queries] -->|Live mode| Dashboard
     Dashboard -->|GET /healthz| Health[Go health endpoint]
+    Dashboard --> MobileShortcuts[Mobile shortcuts<br/>Overview · My Work · Alerts]
+    MobileShortcuts -->|My Work| Objectives
+    MobileShortcuts -->|Alerts| Activity[Recent activity]
     Dashboard -->|GET /api/v1/workers<br/>every 5s| Workers[Worker status API]
     Dashboard -->|GET /api/v1/projects<br/>every 5s| Projects[Project inventory API]
     Dashboard -->|GET /api/v1/objectives| Objectives[Objective API]
     Dashboard -->|GET /api/v1/workflows| Workflows[Workflow API]
     Workflows -->|Saved definition| Graph[React Flow + ELK graph]
     Dashboard -->|GET /api/v1/agent-runs<br/>every 3s| Runs[Agent run API]
+    Dashboard -->|GET /api/v1/projects/{id}/pull-request-history| PRHistory[GitHub PR history]
+    Dashboard -->|GET /api/v1/projects/{id}/workflow-run-history<br/>last 30 days| ActionRuns[GitHub Actions history]
+    PRHistory --> PRQueue[Open PR queue count<br/>all history · complete only]
+    ActionRuns --> CIHealth[Completed-run success rate<br/>last 30 days · complete only]
+    PRHistory --> DeliveryChart[Overview delivery chart<br/>merged PRs · complete history only]
     Worker[Local Go worker] -->|Heartbeat + checkout names/opaque IDs| Registry[(Transient worker registry)]
     Registry --> Workers
     Registry --> Projects
     Objectives --> ObjectiveState[(Versioned JSON snapshot)]
     Workflows --> WorkflowState[(Versioned JSON snapshot)]
     Runs --> RunState[(Versioned JSON snapshot)]
-    Dashboard --> Empty[Aggregate PR counts, CI, budgets,<br/>approvals, evidence, timeline,<br/>analytics: not wired yet]
+    Dashboard --> Empty[Budgets, approvals, evidence,<br/>timeline: not wired yet]
 ```
 
 ## Live data and empty states
@@ -41,6 +60,10 @@ flowchart LR
 - Project inventory comes from `GET /api/v1/projects`; worker status and the sanitized Git `origin` locator are shown with each project. Local paths and remote credentials stay on the worker.
 - Objective status is loaded from `GET /api/v1/objectives`.
 - Running-agent count and the Agents/Overview run history come from `GET /api/v1/agent-runs`, polled every 3 seconds.
+- The Overview PR queue count uses complete GitHub pull-request history across supported checkouts; incomplete or
+  missing provider history stays unavailable. The CI health KPI is the share of completed GitHub Actions runs with a
+  `success` conclusion in the last 30 days; its detail shows the passed and completed counts. Both reuse the Reports
+  history endpoints and their completeness limits.
 - Objectives and workflow definitions persist as versioned JSON snapshots; worker presence remains transient.
 - Workflow definitions can be edited and saved on the Workflows page; workflow execution is not connected.
 - The overview workflow panel renders the saved workflow definition with React Flow and ELK. It labels the graph as a
@@ -52,29 +75,40 @@ flowchart LR
 - Reviews can inspect actual diffs from completed or partially completed agent runs, read open GitHub issues and pull
   requests, and load a bounded diff for a selected pull request. It can submit top-level PR comments and request changes
   using the configured control-plane token; provider approvals, checks, and merge remain unavailable.
-- CI health, budget usage, approval records, evidence artifacts, delivery timeline, and analytics do not have backend
-  sources yet. The UI uses unavailable or empty states instead of sample values.
+- Overview delivery analytics uses the same complete GitHub pull-request history as Reports and charts merged PRs over
+  the available history. It shows an empty state when there are no merged records or the history is incomplete.
+- Budget usage, approval records, evidence artifacts, and delivery timeline do not have backend sources yet. The live
+  Overview uses unavailable or empty states instead of sample values.
+- The local unauthenticated Overview uses the same OverviewPage layout as live mode, populated with frontend
+  sample content and the sample avatar. Objectives, Workflow Builder, Reviews, Reports, Integrations, and Product
+  Workspace load their fixtures in the same shell; unauthenticated samples do not query protected records or perform writes.
 - The overview Reviews card lists only agent runs with captured local diffs and links to the Reviews page for comments
   and request-changes; provider-sourced pull requests and issues appear in their own Reviews queues.
-- The Overview PR metric remains unavailable until aggregate provider data is wired. Local branch runs and their
-  diffs/comments are available in Reviews alongside provider-sourced open items.
+- Local branch runs and their diffs/comments are available in Reviews alongside provider-sourced open items.
 
 ## Responsive behavior
 
-At desktop widths the overview uses a fixed left navigation rail, five summary cards, a workflow/activity row, four
-operational panels, and a three-panel delivery row. At the tall desktop mockup size, the first row stays 204px tall as
+At desktop widths the overview uses a fixed left navigation rail, five summary cards with leading icons, a workflow/activity
+row, four operational panels, and a three-panel delivery row. At the tall desktop mockup size, the first row stays 204px tall as
 live events arrive; compact activity rows keep project and worker updates from pushing the lower panels down. The
-operational panels show objective status, approval availability, run history, and trusted-branch/evidence availability.
+operational panels show objective status, approval availability in the empty-state copy, run history, and trusted-branch/evidence availability.
 At mobile widths the navigation becomes a five-item bottom tab bar (Home, Workflows, Agents, Reviews, and Profile).
-The overview keeps the four cards shown in the phone mock (objectives, agents, CI, and budget) in two columns, and
-Recent Activity follows those cards without the desktop workflow canvas; the Workflows tab opens the full workflow view.
-The compact header keeps notifications and hides disabled search/workspace placeholders. Other content panels stack
-vertically. Profile opens the existing Settings route.
+The overview keeps the four cards shown in the phone mock (objectives, agents, CI, and budget) in two columns, followed
+by Recent Activity. Its compact view selector links to Overview, Objectives (My Work), and Recent Activity (Alerts).
+Desktop-only operational panels stay off the mobile Overview; their full pages remain available from the bottom tabs.
+The desktop greeting names the signed-in GitHub account and uses the overview mock’s subtitle; the phone view
+uses its shorter mission subtitle. The compact header keeps notifications and hides disabled search/workspace
+placeholders. Profile opens the existing Settings route.
 
-The React app shell owns the navigation markup and shared desktop rail and top bar. Mantine's shared theme uses a dark color scheme and violet primary actions. Page routes share `PageHeading` for the eyebrow, title, and description; `MetricCard` is reused for summary metrics and automatically compacts `Unavailable` values; `PanelHeading` supplies recurring panel and selected-detail headings, including the workspace directory and workflow editor sections, with shared title typography, descriptions, icons, and actions. Shared CSS tokens set page titles to 24px/650 on desktop and 20px on mobile; panel titles use 15px/650 on desktop and 13px/650 on mobile. Metric cards use 12px labels, 26px values, and 11px detail text on desktop, adjusting to 11px/21px/10px on mobile. Page components retain their own content layouts.
+The React app shell owns the navigation markup, 247px desktop rail matching the supplied mockups, and top bar; desktop navigation uses 16px medium-weight labels that stay on one line, and mobile switches the rail to a bottom tab bar. Mantine's shared theme uses a dark color scheme and violet primary actions. Page routes share `PageHeading` for the eyebrow, title, and description; `MetricCard` is reused for summary metrics and automatically compacts `Unavailable` values; `PanelHeading` supplies recurring panel and selected-detail headings, including the workspace directory and workflow editor sections, with shared title typography, descriptions, icons, and actions. Shared CSS tokens set page titles to 22px/650 on desktop and 20px on mobile; regular panel titles use 14px/600 on desktop and 13px/600 on mobile. Regular metric cards use 12px labels, 26px values, and 11px detail text on desktop, adjusting to 11px/21px/10px on mobile. The wide desktop Overview follows the supplied mock with 16px panel titles, 14px metric labels, and 30px metric values. Page components retain their own content layouts.
+
+The one OverviewPage preserves the desktop mock's panel widths and vertical spacing at wide viewport heights. Code Review and Sprint Timeline both use the shared PanelCard and PanelHeading components, with their rendered title/icon gaps aligned despite the larger calendar glyph. In the workflow preview, a low-opacity glow spans the upper-left and top edge, fading toward the middle over the dotted dark surface; the play glyph stays centered and inside its circular icon, sample completion marks align with node titles, and connector glow stays restrained. The Sprint Timeline subtitle sits tightly below its title, date labels use the mock's brighter text color, its icon centers on the title at tall and compact desktop heights, and task bars align to their day columns. The Analytics metric keeps visible padding before its trend text. Sample and live modes change the card data only; they do not select separate page markup. Shorter windows scroll through the same layout instead of rearranging panels.
 
 ## Verification
 
-`cd dashboard && npm run test:e2e -- e2e/shell.spec.ts` checks shared page and panel title sizes across desktop and mobile routes. `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'dashboard displays|Overview matches|mobile overview|overview lists only agent runs'`
+`cd dashboard && npx playwright test e2e/overview.spec.ts` checks the wide-desktop Overview, including workflow title/status alignment and glow, Analytics trend spacing, and Sprint Timeline heading and day-column alignment at 941px, 856px, and 749px desktop heights.
+
+`cd dashboard && npm run test:e2e -- e2e/shell.spec.ts` checks shared page and panel title sizes across desktop and mobile routes. `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'dashboard displays the connected control plane|Overview|overview lists only agent runs'`
 verifies live control-plane health, desktop fit at the reference viewport, the connected worker and repository, the
-five-item mobile tab bar, two-column status cards, and filtering the overview to runs with captured diffs.
+five-item mobile tab bar, two-column status cards, trigger-glyph containment, sample status/title alignment, and filtering
+the overview to runs with captured diffs.

@@ -25,6 +25,13 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatalf("create objective = %#v, decode error = %v, HTTP %d", createdObjective, err, response.Code)
 	}
 	response = httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPatch, "/api/v1/objectives/"+createdObjective.ID,
+		strings.NewReader(`{"title":"Persist edited goal","description":"Updated plan","owner":"Review team","due_date":"2027-01-20"}`)))
+	var editedObjective objective
+	if err := json.NewDecoder(response.Body).Decode(&editedObjective); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("update objective = %#v, decode error = %v, HTTP %d", editedObjective, err, response.Code)
+	}
+	response = httptest.NewRecorder()
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(
 		`{"name":"Persisted reviewer","provider":"custom","model":"review-v1","tools":["git.read"]}`,
 	)))
@@ -114,7 +121,9 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 	restarted.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/objectives", nil))
 	var objectives []objective
 	if err := json.NewDecoder(response.Body).Decode(&objectives); err != nil || response.Code != http.StatusOK ||
-		len(objectives) != 2 || objectives[1].ID != createdObjective.ID || objectives[0].ID != linkedObjective.ID {
+		len(objectives) != 2 || objectives[1].ID != createdObjective.ID || objectives[0].ID != linkedObjective.ID ||
+		objectives[1].Title != editedObjective.Title || objectives[1].Description != editedObjective.Description ||
+		objectives[1].Owner != editedObjective.Owner || objectives[1].DueDate != editedObjective.DueDate {
 		t.Fatalf("restored objectives = %#v, decode error = %v, HTTP %d", objectives, err, response.Code)
 	}
 	response = httptest.NewRecorder()
@@ -145,7 +154,9 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 	var restoredObjectives []objective
 	if err := json.NewDecoder(response.Body).Decode(&restoredObjectives); err != nil || response.Code != http.StatusOK ||
 		len(restoredObjectives) != 2 || restoredObjectives[0].ID != linkedObjective.ID ||
-		restoredObjectives[0].ProductID != createdProduct.ID || restoredObjectives[0].Product != createdProduct.Name {
+		restoredObjectives[0].ProductID != createdProduct.ID || restoredObjectives[0].Product != createdProduct.Name ||
+		restoredObjectives[1].Title != editedObjective.Title || restoredObjectives[1].Description != editedObjective.Description ||
+		restoredObjectives[1].Owner != editedObjective.Owner || restoredObjectives[1].DueDate != editedObjective.DueDate {
 		t.Fatalf("restored objectives = %#v, decode error = %v, HTTP %d", restoredObjectives, err, response.Code)
 	}
 	response = httptest.NewRecorder()

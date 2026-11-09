@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -30,6 +31,13 @@ func run() error {
 	baseURL, err := url.ParseRequestURI(controlPlaneURL)
 	if err != nil || (baseURL.Scheme != "http" && baseURL.Scheme != "https") || baseURL.Host == "" {
 		return fmt.Errorf("ZENCHRON_CONTROL_PLANE_URL must be an http or https URL")
+	}
+	workerToken := strings.TrimSpace(os.Getenv("ZENCHRON_WORKER_TOKEN"))
+	if !isLoopbackWorkerHost(baseURL.Hostname()) && workerToken == "" {
+		return fmt.Errorf("ZENCHRON_WORKER_TOKEN is required for a remote control plane")
+	}
+	if !isLoopbackWorkerHost(baseURL.Hostname()) && baseURL.Scheme != "https" {
+		return fmt.Errorf("remote control plane URLs must use https")
 	}
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -57,7 +65,7 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := newWorkerHTTPClient(workerToken)
 	ticker := time.NewTicker(workerHeartbeatInterval)
 	defer ticker.Stop()
 	for {
@@ -78,6 +86,27 @@ func run() error {
 		case <-ticker.C:
 		}
 	}
+}
+
+func isLoopbackWorkerHost(host string) bool {
+	return strings.EqualFold(host, "localhost") || (net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback())
+}
+
+type workerAuthTransport struct {
+	token string
+}
+
+func (transport workerAuthTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if transport.token != "" {
+		request = request.Clone(request.Context())
+		request.Header.Set("Authorization", "Bearer "+transport.token)
+	}
+	return http.DefaultTransport.RoundTrip(request)
+}
+
+func newWorkerHTTPClient(token string) *http.Client {
+	return &http.Client{Transport: workerAuthTransport{token: token}, Timeout: 5 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
 func sendHeartbeat(

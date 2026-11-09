@@ -8,6 +8,7 @@ configured; the other delivery and usage measures remain unavailable until their
 
 ```mermaid
 flowchart LR
+    MockPreview[Local unauthenticated Reports state<br/>static frontend fixtures] -->|Read-only sample data| Reports
     Reports[Reports route] --> Objectives[GET /api/v1/objectives]
     Reports --> Workflows[GET /api/v1/workflows]
     Reports --> Agents[GET /api/v1/agents]
@@ -27,19 +28,23 @@ flowchart LR
     PRs --> Velocity[Delivery velocity and cycle time]
     PRs --> Acceptance[Acceptance rate]
     WorkflowRunHistory --> Actions[GitHub Actions workflow runs]
-    Actions --> Duration[CI duration distribution]
+    Actions --> Duration[CI duration distribution and p50/p95]
+    Actions --> CIHealth[CI success rate from completed conclusions]
     Scope[Time · product · owner · repository] --> Objectives
     Products --> Scope
     Scope --> Projects
     Scope --> Runs
     Scope -. workflow filter disabled until runs have workflow IDs .-> Workflows
-    Runs --> OutcomeChart[Work outcomes · selected time range]
+    PRHistory --> OutcomeChart[Work outcomes · selected time range]
     Products --> ProductSummary[Product summary table]
+    Projects -. no products configured .-> ProductSummary
+    PRHistory --> ProductSummary
+    WorkflowRunHistory --> ProductSummary
     Scope --> ProductSummary
-    Workflows --> Inventory[Current inventory bars]
-    Agents --> Inventory
-    Projects --> Inventory
-    Workers --> Inventory
+    PRHistory --> WorkspaceSummary[Workspace delivery summary]
+    WorkflowRunHistory --> WorkspaceSummary
+    Objectives --> WorkspaceSummary
+    Scope --> WorkspaceSummary
     Reviews[Provider review events] -. not available .-> Latency[Review latency]
     Usage[Model usage and run evidence] -. not available .-> Autonomy[Agent spend and autonomous completion]
     PRs -. not available .-> Autonomy
@@ -47,7 +52,8 @@ flowchart LR
     Snapshot --> ExecutiveCSV[Executive summary CSV]
     Snapshot --> MetricsCSV[Detailed metrics CSV]
     Snapshot --> WorkspaceCSV[Product and workspace CSV]
-    Usage[Model usage and run evidence] -. unavailable .-> SpendCSV[Agent spend export]
+    Snapshot --> SpendCSV[Agent spend and utilization CSV]
+    SpendCSV -. usage fields unavailable until provider data exists .-> Usage[Model usage records]
 ```
 
 ## Data rules
@@ -55,12 +61,19 @@ flowchart LR
 - Summary counts use named fields from the control-plane APIs and represent current snapshots, not historical trends.
 - Time range filters objective creation and agent-run creation; invalid and future timestamps are excluded. Product filters use product repository links, owner filters apply to objectives, and repository filters apply to checkout and run records.
 - The workflow selector stays disabled because agent-run records do not contain a workflow ID; the UI does not claim to filter data that has no workflow relationship.
-- Desktop layout follows the supplied report mock's 3/4/3 panel rhythm: a report-scope toolbar and seven delivery/autonomy KPI cards; delivery velocity, CI duration, and work outcomes on the first chart row; review latency, agent spend, acceptance/autonomy, and data-driven insights on the second; then product summary, workspace inventory, and CSV download panels. KPI values use live source records when available and otherwise stay marked unavailable. Current objective, workflow, run, and checkout counts remain in the insights, product summary, and workspace inventory. The grid collapses at tablet and phone widths.
-- Product summary rows join persisted product repository IDs to current scoped checkout, objective, and run records. The Downloads panel offers separate executive summary, detailed metrics, and product/workspace CSV files using the applied scope. Unsupported delivery measures remain explicitly unavailable; agent spend export stays disabled until usage records exist.
-- The Insights & Narrative panel derives its statements from current scoped snapshots and GitHub PR history. It does not infer status history or delivery trends from objective/run `updated_at`. Delivery source status reports missing remotes, unsupported remotes, provider errors, and incomplete history.
-- Agent-run counts and status distribution use recorded queue records from the selected time range, including cancelled
-  runs. Success rate includes only terminal succeeded or failed runs; queued, running, and cancelled records are not
-  counted as successful work.
+- Desktop layout follows the supplied report mock's panel proportions: a report-scope toolbar and seven delivery/autonomy KPI cards; delivery velocity, CI duration, and work outcomes on the first chart row; review latency, agent spend, acceptance/autonomy, and a narrower insights rail on the second; then product summary, workspace summary, and CSV download panels, with downloads directly beside the insights rail. The Insights heading uses the shared panel-title scale and keeps its filter readable. Metric chart legends stay visible when their source data is unavailable; Work outcomes shows an explicit status until complete PR history is available. Insights can be filtered by executive summary, delivery, execution, or objectives. KPI values use live source records when available and otherwise stay marked unavailable. Product summary shows linked GitHub delivery measures. If no products are configured but checkouts exist, it shows one `Unassigned repositories` row with delivery metrics aggregated from the scoped checkouts; exports label it the same way. With no checkouts, it explains how many are available to group. Workspace summary uses the selected scope and objective count. The grid collapses at tablet and phone widths.
+- An unauthenticated localhost session at `/#reports` reuses these Reports components with static sample values, disables filters and downloads, and does not query protected report APIs. Its PDF/XLSX labels match the reference image; live downloads remain CSV.
+- At the 1672×941 mock viewport, the preview omits the extra Insights subtitle and tightens only the sample Insights and download typography/spacing so the takeaway and all four report cards remain inside their panels.
+- At widths above 1600px, the report grid uses 24 proportional tracks to match the reference mock's wider delivery chart, narrower Insights rail, and compact Downloads panel. The preview keeps the Insights heading on one line and renders the Work Items donut label as HTML over the SVG chart. The 1201–1600px layout remains unchanged.
+- Product summary rows use PR and GitHub Actions history attributed to unique supported GitHub remotes linked to each product. Velocity, cycle time, and acceptance rate follow the same formulas and completeness limits as the workspace KPIs; CI duration is the average of qualifying completed runs. Missing or incomplete history stays unavailable. The workspace summary applies the active report scope and counts objectives as work items. Autonomous completion remains unavailable because agent-run records do not record whether a person had to intervene. The Downloads panel offers executive summary, detailed metrics, agent spend/utilization, and product/workspace CSV files using the applied scope. The product/workspace export includes the same delivery metrics as the summary tables alongside repository and objective counts. Each row shows a 30px CSV file icon, a 12px report name, 10px source detail, and a 24px download action; details wrap and the bottom row can grow at narrower desktop widths. The spend export includes scoped run records while marking spend and usage unavailable until provider usage records exist.
+- The Insights & Narrative panel derives its statements and key takeaway from current scoped snapshots and GitHub PR history. The takeaway summarizes merged, closed-unmerged, and open PR counts when history is complete; otherwise it reports the source or completeness state. It does not infer status history or delivery trends from objective/run `updated_at`. Delivery source status reports missing remotes, unsupported remotes, provider errors, and incomplete history.
+- The Work outcomes chart uses complete GitHub pull-request history and counts merged PRs by merge time, closed
+  unmerged PRs by close time, and still-open PRs by creation time within the selected range. It does not infer review
+  decisions from PR state. Incomplete history or a missing GitHub source produces an explicit status instead of a
+  partial or fabricated chart.
+- Agent-run counts use recorded queue records from the selected time range, including cancelled runs. The execution
+  insight and export show success only for terminal succeeded or failed runs; queued, running, and cancelled records
+  are not counted as successful work.
 - Workflow and agent totals are definition counts; agent definitions do not imply agent execution.
 - Delivery velocity, cycle time, and acceptance rate use actual GitHub pull-request history from configured GitHub
   checkouts. Velocity is merged PRs per week over the selected window, cycle time is average creation-to-merge hours,
@@ -70,9 +83,11 @@ flowchart LR
   of a blank chart. Duplicate checkouts for one GitHub remote are fetched once.
 - CI duration uses completed GitHub Actions workflow runs created in the selected window from configured GitHub
   checkouts. It measures `updated_at - run_started_at`, excludes missing or invalid timestamps and non-completed runs,
-  and only reports metrics when provider history is complete. Histories are capped at 1,000 runs per repository; larger
+  and only reports metrics when provider history is complete. The same history exposes conclusion values so the Overview
+  can report the last-30-day completed-run success rate. Histories are capped at 1,000 runs per repository; larger
   histories are marked incomplete. The average is shown in the KPI and runs are grouped into minute ranges in the
   distribution chart. Complete history with no qualifying events shows an explicit empty state instead of a blank chart.
+  The distribution header shows nearest-rank p50 and p95 durations from the same scoped completed runs when samples exist.
 - Provider chart labels use the dashboard's light text palette so axes remain readable against the dark chart surface.
 - KPI sparklines summarize the selected-window PR merge, PR cycle-time, PR acceptance, and completed Actions duration
   buckets. They are shown only when the underlying metric has events; unavailable measures do not get invented trends.
@@ -81,7 +96,7 @@ flowchart LR
   chart panels retain a grid plot area and explain the missing connection instead of implying that the source was
   queried and returned no events.
 - Work outcomes use Mantine Charts `DonutChart`, with its keyboard-accessible chart surface and tooltip; the adjacent
-  legend repeats run statuses and counts for quick scanning. The inventory bars use Mantine `Progress`.
+  legend repeats PR outcomes and counts for quick scanning. The inventory bars use Mantine `Progress`.
 
 ## Verification
 
@@ -94,7 +109,11 @@ cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep "Reports page"
 ```
 
 `cd dashboard && npm run test:e2e -- e2e/reports.spec.ts` checks date-window validation, product-scope apply/reset,
-product counts, complete and truncated GitHub PR and Actions histories, derived delivery metrics, and downloaded CSV
-contents against isolated API responses.
+product counts, complete and truncated GitHub PR and Actions histories, derived delivery metrics, and all four downloaded
+CSV reports against isolated API responses.
+`cd dashboard && npm run test:e2e -- e2e/report-summary-metrics.spec.ts` checks per-product and workspace metric
+attribution from distinct GitHub PR and Actions histories.
+`cd dashboard && npm run test:e2e -- e2e/reports-preview.spec.ts` checks that the local mock route uses frontend fixtures
+without protected reads or exports.
 `GOCACHE=/tmp/zenchron-gocache go test ./cmd/zenchron -run 'TestGitHub(WorkflowRunHistory|PullRequestHistory)' -count=1`
 checks both history endpoints' pagination, cutoffs, limits, and timestamp validation.

@@ -180,16 +180,48 @@ func (store *objectiveStore) create(w http.ResponseWriter, r *http.Request) {
 
 func (store *objectiveStore) update(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Status    *string `json:"status"`
-		Progress  *int    `json:"progress"`
-		ProductID *string `json:"product_id"`
+		Title       *string `json:"title"`
+		Description *string `json:"description"`
+		Owner       *string `json:"owner"`
+		DueDate     *string `json:"due_date"`
+		Status      *string `json:"status"`
+		Progress    *int    `json:"progress"`
+		ProductID   *string `json:"product_id"`
 	}
 	if !decodeJSONBody(w, r, &input) {
 		return
 	}
-	if input.Status == nil && input.Progress == nil && input.ProductID == nil {
+	if input.Title == nil && input.Description == nil && input.Owner == nil && input.DueDate == nil &&
+		input.Status == nil && input.Progress == nil && input.ProductID == nil {
 		http.Error(w, "at least one objective field is required", http.StatusBadRequest)
 		return
+	}
+	if input.Title != nil {
+		*input.Title = strings.TrimSpace(*input.Title)
+		if *input.Title == "" || len(*input.Title) > 200 {
+			http.Error(w, "title must be between 1 and 200 bytes", http.StatusBadRequest)
+			return
+		}
+	}
+	if input.Description != nil {
+		*input.Description = strings.TrimSpace(*input.Description)
+		if len(*input.Description) > 5000 {
+			http.Error(w, "description exceeds its maximum length", http.StatusBadRequest)
+			return
+		}
+	}
+	if input.Owner != nil {
+		*input.Owner = strings.TrimSpace(*input.Owner)
+		if len(*input.Owner) > 128 {
+			http.Error(w, "owner exceeds its maximum length", http.StatusBadRequest)
+			return
+		}
+	}
+	if input.DueDate != nil && *input.DueDate != "" {
+		if _, err := time.Parse("2006-01-02", *input.DueDate); err != nil {
+			http.Error(w, "due_date must use YYYY-MM-DD format", http.StatusBadRequest)
+			return
+		}
 	}
 	if input.Status != nil && !validObjectiveStatus(*input.Status) {
 		http.Error(w, "invalid objective status", http.StatusBadRequest)
@@ -228,6 +260,18 @@ func (store *objectiveStore) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	previous := item
+	if input.Title != nil {
+		item.Title = *input.Title
+	}
+	if input.Description != nil {
+		item.Description = *input.Description
+	}
+	if input.Owner != nil {
+		item.Owner = *input.Owner
+	}
+	if input.DueDate != nil {
+		item.DueDate = *input.DueDate
+	}
 	if input.Status != nil {
 		item.Status = *input.Status
 	}

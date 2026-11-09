@@ -1,17 +1,32 @@
 import { expect, test } from '@playwright/test';
 
 test('Agents populated desktop layout matches the reference panel geometry', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'E2E' }),
+  }));
   await page.setViewportSize({ width: 1672, height: 941 });
   const profileID = 'ab'.repeat(16);
   const projectID = 'ef'.repeat(16);
   const workerID = 'cd'.repeat(16);
+  const updatedAt = new Date().toISOString();
+  const profile = (id: string, name: string, description: string, model: string, tools: string[], status = 'active') => ({
+    id, name, description, provider: 'anthropic', model, status,
+    system_prompt: `System prompt for ${name}.`, goal_prompt: `Goal prompt for ${name}.`,
+    tools, version: 3, updated_at: updatedAt,
+  });
   await page.route('**/api/v1/agents', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify([{
-      id: profileID, name: 'Code Reviewer', description: 'Review code for quality and safety.',
-      provider: 'anthropic', model: 'claude-3.7-sonnet', status: 'active',
-      system_prompt: 'Review code changes.', goal_prompt: 'Return actionable findings.',
-      tools: ['code.search', 'code.write', 'git.diff', 'git.read'], version: 3, updated_at: new Date().toISOString(),
-    }]),
+    status: 200, contentType: 'application/json', body: JSON.stringify([
+      { ...profile(profileID, 'Code Reviewer', 'Review code for quality and safety.', 'claude-3.7-sonnet',
+        ['code.search', 'code.write', 'git.diff', 'git.read']),
+      system_prompt: 'Review code changes.', goal_prompt: 'Return actionable findings.' },
+      profile('02'.repeat(16), 'Test Generator', 'Generate comprehensive tests.', 'gpt-4o', ['code.search', 'tests.run']),
+      profile('03'.repeat(16), 'Planner', 'Break objectives into executable plans.', 'claude-3.5-haiku', ['docs.search']),
+      profile('04'.repeat(16), 'Release Manager', 'Coordinate releases and rollout plans.', 'claude-3.5-haiku', ['git.read']),
+      profile('05'.repeat(16), 'Research Analyst', 'Research and summarize technical information.', 'gemini-1.5-pro',
+        ['docs.search'], 'disabled'),
+      profile('06'.repeat(16), 'Coverage Analyzer', 'Identify test coverage gaps.', 'gpt-4o', ['git.diff', 'tests.run']),
+    ]),
   }));
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify([{
@@ -24,6 +39,25 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   }));
   await page.goto('/#agents');
   await expect(page.getByRole('heading', { name: 'Code Reviewer' })).toBeVisible();
+  await expect(page.locator('.agent-row')).toHaveCount(6);
+  await expect(page.locator('.agent-row').nth(4)).toContainText('disabled');
+  await expect(page.locator('.agents-metric').nth(0).locator('strong')).toHaveText('6');
+  await expect(page.locator('.agents-metric').nth(1).locator('strong')).toHaveText('5');
+  await expect(page.locator('.agents-metric').filter({ hasText: 'Total Cost (30d)' }))
+    .toContainText('Provider usage records are unavailable');
+  const firstMetric = page.locator('.agents-metric').first();
+  const [metricIcon, metricLabel] = await Promise.all([
+    firstMetric.locator('.metric-top > svg').boundingBox(),
+    firstMetric.locator('.metric-top > span').boundingBox(),
+  ]);
+  expect(metricIcon && metricLabel).toBeTruthy();
+  expect(metricIcon!.x + metricIcon!.width).toBeLessThan(metricLabel!.x);
+  for (const metric of await page.locator('.agents-metric').all()) {
+    const icon = await metric.locator('.metric-top > svg').boundingBox();
+    const value = await metric.locator('strong').boundingBox();
+    expect(icon && value).toBeTruthy();
+    expect(icon!.y + icon!.height).toBeLessThanOrEqual(value!.y);
+  }
   const profileRow = page.locator('.agent-row').filter({ hasText: 'Code Reviewer' });
   await expect(profileRow).toContainText('Last run 5m ago');
   await expect(profileRow).toContainText('1 completed · 100% success');
@@ -56,7 +90,7 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   const noteCount = await page.locator('.agents-runtime-note').count();
   expect(list && detail && runs && sidebar && metrics).toBeTruthy();
   expect(sidebar!.width).toBe(247);
-  expect(metrics!.x).toBe(265);
+  expect(metrics!.x).toBe(263);
   expect(Math.abs(metrics!.y - 136.5)).toBeLessThanOrEqual(1);
   expect(Math.abs(metrics!.height - 65)).toBeLessThanOrEqual(1);
   expect(Math.abs(list!.y - 213.5)).toBeLessThanOrEqual(1);
@@ -66,7 +100,23 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   expect(runs!.x).toBeCloseTo(detail!.x, 0);
   expect(runs!.y).toBeGreaterThan(detail!.y);
   expect(runs!.y + runs!.height).toBeLessThanOrEqual((list!.y + list!.height) + 1);
-  await expect(page.locator('.agents-panel-heading h3').first()).toHaveCSS('font-size', '14px');
+  await expect(page.locator('.agents-panel-heading h3').first()).toHaveCSS('font-size', '16px');
+
+  await page.setViewportSize({ width: 1672, height: 749 });
+  const compact = await page.evaluate(() => Object.fromEntries(
+    ['.agents-content-grid', '.agents-list-panel', '.agents-detail-panel', '.agents-runs-panel']
+      .map((selector) => {
+        const { x, y, width, height, bottom } = document.querySelector(selector)!.getBoundingClientRect();
+        return [selector, { x, y, width, height, bottom }];
+      }),
+  ));
+  const compactList = compact['.agents-list-panel'];
+  const compactDetail = compact['.agents-detail-panel'];
+  const compactRuns = compact['.agents-runs-panel'];
+  expect(compactList.height).toBeGreaterThan(compactDetail.height);
+  expect(compactRuns.x).toBeCloseTo(compactDetail.x, 0);
+  expect(compactRuns.bottom).toBeLessThanOrEqual(compactList.bottom + 1);
+  expect(compact['.agents-content-grid'].bottom).toBeLessThanOrEqual(749);
 });
 
 test('Agents layout fits tablet and phone widths without panel overlap', async ({ page }) => {
@@ -101,6 +151,9 @@ test('Agents empty state uses the primary create action', async ({ page }) => {
   await page.route('**/api/v1/agents', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',
   }));
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
   await page.goto('/#agents');
   const unavailableMetrics = page.locator('.agents-metric strong.metric-unavailable');
   await expect(unavailableMetrics).toHaveCount(2);
@@ -114,7 +167,7 @@ test('Agents empty state uses the primary create action', async ({ page }) => {
 
 test('Agents queue dialog explains when a worker has no model runtime', async ({ page }) => {
   await page.route('**/api/v1/workers', async (route) => {
-    const response = await route.fetch();
+    const response = await route.fetch({ url: route.request().url().replace('zenchron.test:4173', '127.0.0.1:4173') });
     const workers = await response.json() as { agent_runtime_enabled?: boolean }[];
     await route.fulfill({ response, body: JSON.stringify(workers.map((worker) => ({
       ...worker, agent_runtime_enabled: false,
@@ -267,7 +320,7 @@ test('Agents dashboard completes a run and resumes requested review changes on t
   expect(followUp.diff.diff).toContain('Created by the E2E model.');
   expect(followUp.diff.diff).toContain('Review feedback addressed by the E2E worker.');
   await page.getByRole('link', { name: 'Overview' }).click();
-  await expect(page.locator('.metric-card.blue')).toContainText('Running agents');
+  await expect(page.locator('.metric-card.blue')).toContainText('Running Agents');
   await expect(page.locator('.metric-card.blue')).toContainText('0');
   await expect(page.locator('.agents-panel')).toContainText('E2E Reviewer');
 });

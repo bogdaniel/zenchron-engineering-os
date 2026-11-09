@@ -1,9 +1,15 @@
 # Product workspace
 
 The Product Workspace manages durable products and links them to repositories reported by local workers. Its directory
-search filters products by name; creating a workspace uses the existing product record and editor. Objectives can be
+shows full product names in 12px medium text, wrapping within the 260px rail; repository counts remain secondary at 10px.
+Search filters products by name; creating a workspace uses the existing product record and editor. Objectives can be
 assigned to products by stable ID; reusable workflow and agent definitions remain workspace-wide. Files, decisions,
 stakeholders, and release streams remain unavailable without their source services.
+
+An unauthenticated localhost session renders the supplied Product Workspace overview at `/#workspace` in the existing
+dashboard shell. Its product list, roadmap, objective progress, connected services, people, releases, decisions, and
+delivery metrics are illustrative and read only; this state makes no protected product, objective, workflow, agent, or
+repository requests.
 
 ## Feature diagram
 
@@ -27,6 +33,8 @@ flowchart LR
     Agents --> Templates[Reusable agent profiles]
     Missing[Files, decisions, stakeholders,<br/>and release streams: unavailable]
     Browser --> Missing
+    Preview[Local unauthenticated session] -->|Static, read-only fixture| Mock[Product Workspace mock overview]
+    Mock --> MockData[Roadmap · objectives · repositories · workflows<br/>files · stakeholders · releases · decisions · metrics]
 ```
 
 ## Data boundaries
@@ -55,4 +63,10 @@ the product directory and objective roadmap using isolated API fixtures, then ex
 ```sh
 go test ./cmd/zenchron -run 'TestProducts|TestPersistentMuxRestoresObjectivesAndWorkflows'
 cd dashboard && npm run test:e2e -- e2e/workspace.spec.ts
+```
+
+The mock overview has its own read-only route check:
+
+```sh
+cd dashboard && npm run test:e2e -- e2e/workspace-preview.spec.ts
 ```

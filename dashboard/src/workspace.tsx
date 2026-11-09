@@ -5,6 +5,7 @@ import { Badge, Button, Progress, TextInput } from '@mantine/core';
 import {
   IconActivity,
   IconAlertTriangle,
+  IconChartBar,
   IconCode,
   IconFileText,
   IconGitBranch,
@@ -12,6 +13,7 @@ import {
   IconLayersIntersect,
   IconRoute,
   IconSearch,
+  IconTarget,
   IconUsers,
 } from '@tabler/icons-react';
 import { agentsSchema } from './agents';
@@ -25,10 +27,12 @@ import { PanelHeading } from './PanelHeading';
 import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
 import './workspace.css';
+import { WorkspaceDesignPreview } from './WorkspaceDesignPreview';
 
 type WorkspaceTab = 'overview' | 'objectives' | 'repositories' | 'files' | 'decisions' | 'templates';
 
 interface WorkspacePageProps {
+  designPreview?: boolean;
   projects: Project[] | undefined;
   objectives: Objective[] | undefined;
   projectsLoading: boolean;
@@ -58,7 +62,12 @@ async function loadAgents() {
   return agentsSchema.parse(await response.json());
 }
 
-export function WorkspacePage({
+export function WorkspacePage(props: WorkspacePageProps) {
+  if (props.designPreview) return <WorkspaceDesignPreview />;
+  return <LiveWorkspacePage {...props} />;
+}
+
+function LiveWorkspacePage({
   projects,
   objectives,
   projectsLoading,
@@ -191,18 +200,22 @@ export function WorkspacePage({
               detail={selected ? `${healthyRepositories} of ${selected.repository_ids.length} repositories online`
                 : 'No product selected'}
               healthy={Boolean(healthyRepositories)}
+              icon={<IconActivity size={16} />}
             />
             <WorkspaceMetric
               label="Open objectives"
               value={objectivesLoading ? 'Loading' : objectivesError ? 'Unavailable' : openObjectives.length}
               detail="Assigned to this product"
+              icon={<IconTarget size={16} />}
             />
             <WorkspaceMetric
               label="Workflow definitions"
               value={workflows.isLoading ? 'Loading' : workflows.isError ? 'Unavailable' : workflows.data?.length ?? 0}
               detail="Reusable workflow definitions"
+              icon={<IconRoute size={16} />}
             />
-            <WorkspaceMetric label="Delivery metrics" value="Unavailable" detail="Requires PR and run history" />
+            <WorkspaceMetric label="Delivery metrics" value="Unavailable" detail="Requires PR and run history"
+              icon={<IconChartBar size={16} />} />
           </div>
 
           <nav className="workspace-tabs" aria-label="Workspace sections">
@@ -432,13 +445,15 @@ function ProductRoadmap({ objectives, hasProduct, isLoading, isError }: {
   );
 }
 
-function WorkspaceMetric({ label, value, detail, healthy = false }: {
+function WorkspaceMetric({ label, value, detail, healthy = false, icon }: {
   label: string;
   value: string | number;
   detail: string;
   healthy?: boolean;
+  icon: ReactNode;
 }) {
-  return <MetricCard className="workspace-metric" valueClassName={healthy ? 'healthy' : undefined} label={label} value={value} detail={detail} />;
+  return <MetricCard className="workspace-metric" valueClassName={healthy ? 'healthy' : undefined}
+    label={label} value={value} detail={detail} icon={icon} />;
 }
 
 function WorkspacePanelHeading({ title, note, icon }: { title: string; note: string; icon: ReactNode }) {

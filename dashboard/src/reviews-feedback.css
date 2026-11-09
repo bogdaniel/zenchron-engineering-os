@@ -48,6 +48,15 @@
 .reviews-pr-diff .reviews-code-editor {
   height: 300px;
 }
+.reviews-pr-diff-empty {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  padding: 12px;
+  color: #9992aa;
+  font-size: 11px;
+  text-align: center;
+}
 .reviews-comments {
   max-height: 82px;
   overflow-y: auto;
@@ -106,7 +115,11 @@
   padding: 10px;
   border-top: 1px solid #302d42;
 }
+.reviews-github-composer .mantine-Textarea-wrapper {
+  width: 100%;
+}
 .reviews-github-composer .mantine-Textarea-input {
+  width: 100%;
   min-height: 48px;
   border-color: #353149;
   color: #ddd7e6;
@@ -132,3 +145,19 @@
   color: #6ce4ad;
   font-size: 11px;
 }
+
+.reviews-markdown { overflow-wrap: anywhere; }
+.reviews-markdown > :first-child { margin-top: 0; }
+.reviews-markdown > :last-child { margin-bottom: 0; }
+.reviews-markdown :is(p, ul, ol, blockquote, table, pre) { margin: 5px 0; }
+.reviews-markdown :is(h1, h2, h3, h4) { margin: 8px 0 4px; color: #ddd5e9; font-size: 12px; }
+.reviews-markdown a { color: #c49bff; text-decoration: underline; }
+.reviews-markdown code { border-radius: 3px; color: #d9c7f4; background: #272334; }
+.reviews-markdown details > summary { color: #d9c7f4; cursor: pointer; }
+.reviews-markdown table { border-collapse: collapse; }
+.reviews-markdown th, .reviews-markdown td { padding: 3px 5px; border: 1px solid #302d42; }
+.reviews-summary-copy { max-height: 132px; overflow: auto; }
+.reviews-provider-detail .reviews-pr-description { padding: 8px 10px; }
+
+.reviews-conversation-panel { display: grid; align-content: start; gap: 8px; }
+.reviews-conversation-panel .reviews-comments { max-height: 150px; }

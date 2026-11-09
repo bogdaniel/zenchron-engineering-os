@@ -29,8 +29,15 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("invalid listen address %q: %w", addr, err)
 	}
-	if !isLoopbackHost(host) {
-		return fmt.Errorf("listen address %q must use a loopback host until API authentication is added", addr)
+	auth, configured, err := loadAuthConfig()
+	if err != nil {
+		return err
+	}
+	if !isLoopbackHost(host) && !configured {
+		return fmt.Errorf("non-loopback listen address requires GitHub authentication and worker credentials")
+	}
+	if !isLoopbackHost(host) && !auth.https {
+		return fmt.Errorf("ZENCHRON_PUBLIC_URL must use https for a non-loopback control plane")
 	}
 	dataDir, err := controlPlaneDataDirectory()
 	if err != nil {
@@ -40,6 +47,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("initialize control-plane state: %w", err)
 	}
+	handler = authHandler(handler, auth)
 
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
