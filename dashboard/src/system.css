@@ -72,6 +72,11 @@
   background: transparent;
   font-size: 12px;
 }
+@media (max-width:620px) {
+  .system-tabs { gap: 0; }
+  .system-tabs a, .system-tabs button { flex: 1; justify-content: center; gap: 4px; padding: 0 4px; font-size: 10px; white-space: nowrap; }
+  .system-tabs svg { width: 14px; flex: 0 0 auto; }
+}
 .system-section-heading { margin-bottom: 11px; }
 .system-add-button.mantine-Button-root {
   min-height: 31px;

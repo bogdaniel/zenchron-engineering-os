@@ -1,8 +1,10 @@
 import { Badge, Progress, Switch, TextInput } from '@mantine/core';
 import {
   IconBrandDocker, IconBrandGithub, IconBrandGitlab, IconBrandGoogle, IconBrandJira, IconBrandOpenai,
-  IconBrandSlack, IconBell, IconBuilding, IconCloud, IconDatabase, IconKey, IconSettings, IconShieldCheck, IconUsers,
+  IconBrandSlack, IconBell, IconBuilding, IconChevronDown, IconCloud, IconDatabase, IconDots,
+  IconExternalLink, IconEye, IconKey, IconSettings, IconShieldCheck, IconUsers,
 } from '@tabler/icons-react';
+import type { ReactNode } from 'react';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
 
@@ -12,9 +14,9 @@ const providers = [
   { name: 'Slack', detail: 'Alerts, reviews, updates', link: '#eng-agents, #run-alerts', color: 'slack', icon: <IconBrandSlack /> },
   { name: 'Linear / Jira', detail: 'Issues, roadmap, work tracking', link: 'zenchron.linear.app', color: 'jira', icon: <IconBrandJira /> },
   { name: 'Docker / Registry', detail: 'Build, run, and artifact registry', link: 'registry.zenchron.io', color: 'docker', icon: <IconBrandDocker /> },
-  { name: 'OpenAI', detail: 'Model provider (GPT, o-series)', link: 'sk-••••••••••a9f2', color: 'openai', icon: <IconBrandOpenai /> },
-  { name: 'Anthropic', detail: 'Model provider (Claude)', link: 'sk-ant-••••••••d3e8', color: 'anthropic', icon: <span>AI</span> },
-  { name: 'Google (Vertex AI)', detail: 'Model provider (Gemini)', link: '••••••••••9b2e', color: 'google', icon: <IconBrandGoogle /> },
+  { name: 'OpenAI', detail: 'Model provider (GPT, o-series)', link: 'sk-••••••••••a9f2', color: 'openai', icon: <IconBrandOpenai />, secret: true },
+  { name: 'Anthropic', detail: 'Model provider (Claude)', link: 'sk-ant-••••••••d3e8', color: 'anthropic', icon: <span>AI</span>, secret: true },
+  { name: 'Google (Vertex AI)', detail: 'Model provider (Gemini)', link: '••••••••••9b2e', color: 'google', icon: <IconBrandGoogle />, secret: true },
   { name: 'Cloud Runners', detail: 'Scalable, isolated execution', link: 'aws (us-east-1) · 32 max', color: 'cloud', icon: <IconCloud /> },
   { name: 'Storage / Evidence', detail: 'Artifacts, logs, evidence, reviews', link: 's3://zenchron-evidence-prod', color: 'storage', icon: <IconDatabase /> },
 ];
@@ -43,6 +45,10 @@ function Status({ children, healthy = true }: { children: string; healthy?: bool
 function StaticField({ label, value, select = false }: { label: string; value: string; select?: boolean }) {
   return <label className="system-preview-field"><span>{label}</span><TextInput aria-label={label} value={value} readOnly
     rightSection={select ? <span className="system-preview-chevron">⌄</span> : undefined} /></label>;
+}
+
+function SettingsHeading({ title, icon }: { title: string; icon: ReactNode }) {
+  return <PanelHeading title={<>{title}<span className="system-preview-settings-badge">Settings</span></>} icon={icon} />;
 }
 
 export function SystemIntegrationsPreview({ section }: { section: 'integrations' | 'settings' }) {
@@ -74,6 +80,7 @@ export function SystemIntegrationsPreview({ section }: { section: 'integrations'
           {categories.map(([name, count], index) => <span className={index === 0 ? 'active' : ''} key={name}>
             {name} <b>{count}</b>
           </span>)}
+          <button className="system-preview-category-more" type="button" disabled aria-label="More integration categories unavailable"><IconChevronDown size={12} /></button>
         </div>
       </div>
 
@@ -82,7 +89,9 @@ export function SystemIntegrationsPreview({ section }: { section: 'integrations'
           <span className={`system-preview-provider-icon ${provider.color}`}>{provider.icon}</span>
           <div className="system-service-copy">
             <h4>{provider.name}</h4><p>{provider.detail}</p>
-            <small className="system-preview-provider-link">{provider.link}</small>
+            <div className="system-preview-provider-link-row"><small className="system-preview-provider-link"><IconExternalLink size={10} />{provider.link}</small>
+              {provider.secret && <button type="button" disabled aria-label={`Reveal ${provider.name} key unavailable`}><IconEye size={12} /></button>}
+              <button type="button" disabled aria-label={`${provider.name} options unavailable`}><IconDots size={13} /></button></div>
           </div>
           <div className="system-preview-provider-control"><Status>Connected</Status><Toggle label={`${provider.name} connected`} /></div>
         </PanelCard>)}
@@ -94,7 +103,7 @@ export function SystemIntegrationsPreview({ section }: { section: 'integrations'
 
       <div className="system-preview-settings-grid">
         <PanelCard className="system-preview-card system-preview-profile" withBorder>
-          <PanelHeading title="Organization Profile" icon={<IconBuilding size={15} />} />
+          <SettingsHeading title="Organization Profile" icon={<IconBuilding size={15} />} />
           <div className="system-preview-profile-fields">
             <StaticField label="Organization Name" value="Zenchron Engineering" />
             <StaticField label="Organization Slug" value="zenchron-eng" />
@@ -103,22 +112,22 @@ export function SystemIntegrationsPreview({ section }: { section: 'integrations'
           </div>
         </PanelCard>
         <PanelCard className="system-preview-card system-preview-policy" withBorder>
-          <PanelHeading title="Policies" icon={<IconShieldCheck size={15} />} />
+          <SettingsHeading title="Policies" icon={<IconShieldCheck size={15} />} />
           <div className="system-preview-policies">{policies.map((policy) => <span key={policy}>{policy}<b>×</b></span>)}</div>
           <button className="system-preview-add-policy" disabled>＋ Add Policy</button>
         </PanelCard>
         <PanelCard className="system-preview-card system-preview-permissions" withBorder>
-          <PanelHeading title="Permissions" icon={<IconUsers size={15} />} />
+          <SettingsHeading title="Permissions" icon={<IconUsers size={15} />} />
           <div className="system-preview-card-action">Manage Roles →</div>
-          <table><thead><tr><th>Role</th><th>Members</th><th>Access</th></tr></thead><tbody>
-            <tr><td>Admin</td><td>3</td><td>Full platform access</td></tr>
-            <tr><td>Maintainer</td><td>12</td><td>Configure, run, manage agents</td></tr>
-            <tr><td>Viewer</td><td>27</td><td>Read-only access and audit logs</td></tr>
-          </tbody></table>
+          <div className="system-preview-table-scroll"><table><thead><tr><th>Role</th><th>Members</th><th>Access</th><th aria-label="Actions" /></tr></thead><tbody>
+            <tr><td>Admin</td><td>3</td><td>Full platform access</td><td><button disabled aria-label="Admin role options unavailable"><IconDots size={13} /></button></td></tr>
+            <tr><td>Maintainer</td><td>12</td><td>Configure, run, manage agents</td><td><button disabled aria-label="Maintainer role options unavailable"><IconDots size={13} /></button></td></tr>
+            <tr><td>Viewer</td><td>27</td><td>Read-only access and audit logs</td><td><button disabled aria-label="Viewer role options unavailable"><IconDots size={13} /></button></td></tr>
+          </tbody></table></div>
         </PanelCard>
 
         <PanelCard className="system-preview-card system-preview-budget" withBorder>
-          <PanelHeading title="Budgets" icon={<span className="system-preview-dollar">$</span>} />
+          <SettingsHeading title="Budgets" icon={<span className="system-preview-dollar">$</span>} />
           <div className="system-preview-card-action">View Usage →</div>
           <div className="system-preview-budget-value"><strong>$13.6k</strong><span> / $20k</span><b>68%</b></div>
           <Progress value={68} color="violet" />
@@ -128,15 +137,15 @@ export function SystemIntegrationsPreview({ section }: { section: 'integrations'
           </div>
         </PanelCard>
         <PanelCard className="system-preview-card system-preview-secrets" withBorder>
-          <PanelHeading title="Secrets" icon={<IconKey size={15} />} />
+          <SettingsHeading title="Secrets" icon={<IconKey size={15} />} />
           <div className="system-preview-card-action">Manage Secrets →</div>
-          <table><thead><tr><th>Name</th><th>Type</th><th>Last Rotated</th><th>Status</th></tr></thead><tbody>
-            {secrets.map(([name, type, date]) => <tr key={name}><td><IconKey size={11} />{name}</td><td>{type}</td><td>{date}</td><td><Status>Active</Status></td></tr>)}
-          </tbody></table>
+          <div className="system-preview-table-scroll"><table><thead><tr><th>Name</th><th>Type</th><th>Last Rotated</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>
+            {secrets.map(([name, type, date]) => <tr key={name}><td><IconKey size={11} />{name}</td><td>{type}</td><td>{date}</td><td><Status>Active</Status></td><td><button disabled aria-label={`${name} options unavailable`}><IconDots size={13} /></button></td></tr>)}
+          </tbody></table></div>
           <button className="system-preview-add-policy" disabled>＋ Add Secret</button>
         </PanelCard>
         <PanelCard className="system-preview-card system-preview-controller" withBorder>
-          <PanelHeading title="Controller Configuration" icon={<IconSettings size={15} />} />
+          <SettingsHeading title="Controller Configuration" icon={<IconSettings size={15} />} />
           <div className="system-preview-controller-values"><span>Agent Controller</span><b>v2.4.0 (Stable)</b><Status>Healthy</Status></div>
           <div className="system-preview-slider"><span>Max Concurrent Runs</span><b>12</b><i><em /></i></div>
           <div className="system-preview-controller-values"><span>Default Run Timeout</span><b>2 hours</b></div>
@@ -145,20 +154,21 @@ export function SystemIntegrationsPreview({ section }: { section: 'integrations'
         </PanelCard>
 
         <PanelCard className="system-preview-card system-preview-notifications" withBorder>
-          <PanelHeading title="Notification Rules" icon={<IconBell size={15} />} />
+          <SettingsHeading title="Notification Rules" icon={<IconBell size={15} />} />
           <button className="system-preview-card-action system-preview-add-rule" disabled>＋ Add Rule</button>
-          <table><thead><tr><th>Event</th><th>Channel</th><th>Recipients</th><th>Status</th></tr></thead><tbody>
-            <tr><td>◉ Run Failed</td><td>◉ Slack</td><td>#eng-alerts</td><td><Toggle label="Run failed notification" /></td></tr>
-            <tr><td>◉ Awaiting Review</td><td>◉ Slack</td><td>#eng-reviews</td><td><Toggle label="Awaiting review notification" /></td></tr>
-            <tr><td>◉ Budget Threshold (≥ 80%)</td><td>✉ Email</td><td>platform@zenchron.dev</td><td><Toggle label="Budget threshold notification" /></td></tr>
-          </tbody></table>
+          <div className="system-preview-table-scroll"><table><thead><tr><th>Event</th><th>Channel</th><th>Recipients</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>
+            <tr><td>◉ Run Failed</td><td>◉ Slack</td><td>#eng-alerts</td><td><Toggle label="Run failed notification" /></td><td><button disabled aria-label="Run failed rule options unavailable"><IconDots size={13} /></button></td></tr>
+            <tr><td>◉ Awaiting Review</td><td>◉ Slack</td><td>#eng-reviews</td><td><Toggle label="Awaiting review notification" /></td><td><button disabled aria-label="Awaiting review rule options unavailable"><IconDots size={13} /></button></td></tr>
+            <tr><td>◉ Budget Threshold (≥ 80%)</td><td>✉ Email</td><td>platform@zenchron.dev</td><td><Toggle label="Budget threshold notification" /></td><td><button disabled aria-label="Budget threshold rule options unavailable"><IconDots size={13} /></button></td></tr>
+          </tbody></table></div>
         </PanelCard>
         <PanelCard className="system-preview-card system-preview-audit" withBorder>
           <PanelHeading title="Recent Audit Log" icon={<IconDatabase size={15} />} />
           <div className="system-preview-card-action">View Full Audit Log →</div>
-          <table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead><tbody>
+          <button className="system-preview-audit-range" disabled>Last 24 hours <IconChevronDown size={10} /></button>
+          <div className="system-preview-table-scroll"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead><tbody>
             {auditEvents.map(([time, actor, action, detail]) => <tr key={time}><td>{time}</td><td>{actor}</td><td>{action}</td><td>{detail}</td></tr>)}
-          </tbody></table>
+          </tbody></table></div>
         </PanelCard>
       </div>
       <div className="system-preview-actions">
