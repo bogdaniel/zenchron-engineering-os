@@ -589,7 +589,9 @@ button:disabled, input:disabled {
 }
 .app-shell .main-content .shared-metric-card strong.metric-unavailable { font-size: 14px; }
 .shared-panel-heading { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 10px; }
-.shared-panel-heading > div:first-child { display: flex; min-width: 0; align-items: flex-start; gap: 9px; }
+.shared-panel-heading > div:first-child { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.shared-panel-heading.has-description > div:first-child { align-items: flex-start; }
+.shared-panel-heading.has-description .section-icon { margin-top: 4px; }
 .section-icon { display: grid; width: 31px; height: 31px; flex: 0 0 auto; place-items: center; border: 1px solid #3a3153; border-radius: 9px; color: #c59bff; background: #2a2139; }
 .blue-icon { border-color: #2c3e58; color: #92c7ff; background: #1a2939; }
 .teal-icon { border-color: #28505a; color: #7ddde1; background: #172b30; }
