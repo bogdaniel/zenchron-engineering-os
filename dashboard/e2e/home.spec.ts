@@ -142,7 +142,7 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('http://zenchron.test:4173/#objectives');
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
-  const objectiveRows = page.locator('.ag-center-cols-container .ag-row');
+  const objectiveRows = page.locator('.ag-grid-scrolling-cells .ag-row');
   await expect(objectiveRows).toHaveCount(6);
   await expect(objectiveRows.first()).toContainText('Launch AI code review v2');
   await expect(objectiveRows.last()).toContainText('Migrate to unified pipeline');
@@ -216,7 +216,7 @@ test('Objectives grid keeps product names while the catalog loads', async ({ pag
   }));
   await page.setViewportSize({ width: 1522, height: 856 });
   await page.goto('http://zenchron.test:4173/#objectives');
-  const objectiveRows = page.locator('.ag-center-cols-container .ag-row');
+  const objectiveRows = page.locator('.ag-grid-scrolling-cells .ag-row');
   const productCell = objectiveRows.first().locator('.ag-cell[col-id="product"]');
   await expect(productCell).toHaveText('Nova Platform');
   await page.getByRole('textbox', { name: 'Search objectives' }).fill('Nova Platform');
