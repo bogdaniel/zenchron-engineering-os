@@ -63,6 +63,8 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   await expect(profileRow).toContainText('1 completed · 100% success');
   await expect(profileRow).toContainText('code.search');
   await expect(profileRow).toContainText('+1');
+  await expect(profileRow.locator('.agent-row-body small').first()).toHaveCSS('font-size', '10px');
+  await expect(profileRow.locator('.agent-tool-badge').first()).toHaveCSS('font-size', '9px');
   const performance = page.locator('.agents-profile-metrics');
   await expect(performance).toContainText('Runs');
   await expect(performance).toContainText('Avg latency');
@@ -120,6 +122,10 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
 });
 
 test('Agents layout fits tablet and phone widths without panel overlap', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'E2E' }),
+  }));
   for (const [width, height, expectedColumns] of [[1024, 768, 2], [390, 844, 1]]) {
     await page.setViewportSize({ width, height });
     await page.goto('/#agents');
@@ -145,6 +151,22 @@ test('Agents layout fits tablet and phone widths without panel overlap', async (
     expect(layout.panels.every(({ width, height }) => width > 0 && height > 0)).toBe(true);
     expect(layout.overlaps).toBe(false);
   }
+});
+
+test('Agents phone preview shows all profiles without a nested list scroll', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('http://127.0.0.1:4173/#agents');
+  await expect(page.locator('.agents-design-preview')).toBeVisible();
+  await expect(page.locator('.agent-row')).toHaveCount(6);
+  await expect(page.locator('.agent-row-body small').first()).toHaveCSS('font-size', '10px');
+  await expect(page.locator('.agent-tool-badge').first()).toHaveCSS('font-size', '9px');
+  const profileList = await page.locator('.agents-list-panel').evaluate((panel) => ({
+    clientHeight: panel.clientHeight,
+    scrollHeight: panel.scrollHeight,
+    overflowY: getComputedStyle(panel).overflowY,
+  }));
+  expect(profileList.scrollHeight).toBeLessThanOrEqual(profileList.clientHeight);
+  expect(profileList.overflowY).toBe('visible');
 });
 
 test('Agents empty state uses the primary create action', async ({ page }) => {

@@ -20,8 +20,11 @@ test('phone Workflow mock shows the sample run, task progress, and approvals wit
   await expect(page.locator('.workflow-mobile-run-task')).toHaveCount(5);
   await expect(page.locator('.workflow-mobile-run-task.complete')).toHaveCount(2);
   await expect(page.locator('.workflow-mobile-run-task.active')).toHaveCount(1);
+  await expect(page.locator('.workflow-mobile-run-task b').first()).toHaveCSS('font-size', '10px');
+  await expect(page.locator('.workflow-mobile-run-task small').first()).toHaveCSS('font-size', '10px');
   await expect(page.locator('.workflow-mobile-approval-row')).toHaveCount(2);
   await expect(page.locator('.workflow-mobile-approval-row').last()).toContainText('Awaiting approval');
+  await expect(page.locator('.workflow-mobile-approval-row small').last()).toHaveCSS('font-size', '10px');
   await expect(page.getByRole('button', { name: 'Review' })).toBeDisabled();
   await expect(page.locator('.sidebar nav')).toBeVisible();
 
