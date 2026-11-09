@@ -15,7 +15,7 @@ import { ChartLegend, ReportOutcomeLegend, UnavailableChart, UnavailableMetricsP
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
-import { workflowsSchema } from './workflows';
+import { workflowsSchema } from './workflowModel';
 import { useReportPullRequestMetrics } from './reportPullRequests';
 import { useReportWorkflowRunMetrics } from './reportWorkflowRuns';
 import { summarizeProductDelivery } from './reportSummaryMetrics';

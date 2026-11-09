@@ -21,6 +21,7 @@ import { PanelCard } from './PanelCard';
 import { MonacoEditor } from './MonacoEditor';
 import { reviewPreviewDiff, reviewPreviewProject, reviewPreviewPullRequests } from './review-preview';
 import './reviews.css';
+import './reviews-detail.css';
 import './reviews-preview.css';
 import './reviews-feedback.css';
 import type { AgentRun } from './agents';

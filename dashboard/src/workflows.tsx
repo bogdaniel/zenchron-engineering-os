@@ -1,20 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Badge, Button, Card, Menu, Modal, Select, TextInput, Textarea } from '@mantine/core';
+import { Badge, Button, Menu, Modal, Select, TextInput, Textarea } from '@mantine/core';
 import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  addEdge, Background, Controls, Handle, MarkerType, MiniMap, Position, ReactFlow, useEdgesState, useNodesState,
+  addEdge, Background, Controls, Handle, MiniMap, Position, ReactFlow, useEdgesState,
+  useNodesState,
 } from '@xyflow/react';
-import type { Connection, Edge, Node, NodeProps, ReactFlowInstance } from '@xyflow/react';
-import ELK from 'elkjs/lib/elk.bundled.js';
-import { z } from 'zod';
+import type { Connection, Edge, NodeProps, ReactFlowInstance } from '@xyflow/react';
 import {
-  IconBolt, IconCheck, IconChecklist, IconChevronDown, IconChevronRight, IconCirclePlus, IconCode, IconDeviceFloppy, IconDots,
-  IconFileText, IconFlask, IconGitBranch, IconGitMerge, IconGripVertical, IconHierarchy, IconInfoCircle, IconLayoutBoard, IconMaximize, IconMessage2, IconStack2,
-  IconPlayerPlay, IconPlayerPlayFilled, IconRepeat, IconRobot, IconRoute, IconSearch, IconSettings, IconTestPipe, IconChartBar, IconUserCheck,
+  IconCheck, IconChecklist, IconChevronDown, IconChevronRight, IconCirclePlus, IconDeviceFloppy, IconDots, IconGripVertical,
+  IconHierarchy, IconInfoCircle, IconLayoutBoard, IconMaximize, IconPlayerPlay, IconRoute, IconSearch, IconUserCheck,
 } from '@tabler/icons-react';
 import '@xyflow/react/dist/style.css';
 import { PageHeading } from './PageHeading';
@@ -24,127 +22,12 @@ import './workflows.css';
 import { WorkflowDesignRouterSettings, WorkflowDesignRunPreview } from './WorkflowDesignPreview';
 import { WorkflowMobileRunPreview } from './WorkflowMobileRunPreview';
 import { WorkflowSectionPreview, WorkflowSectionTabs } from './WorkflowSectionsPreview';
-
-const nodeTypes = [
-  'trigger', 'planner', 'agent-router', 'agent-task', 'code-reviewer', 'test-generator',
-  'coverage-analyzer', 'human-approval', 'merge-gate', 'publish-report', 'condition', 'loop',
-] as const;
-const nodeDataSchema = z.object({ label: z.string(), description: z.string() });
-const nodeSchema = z.object({
-  id: z.string(), type: z.enum(nodeTypes),
-  position: z.object({ x: z.number(), y: z.number() }), data: nodeDataSchema,
-});
-const edgeSchema = z.object({ id: z.string(), source: z.string(), target: z.string(), label: z.string() });
-const workflowSchema = z.object({
-  id: z.string(), name: z.string(), description: z.string(), status: z.enum(['draft', 'active']), version: z.number(),
-  nodes: z.array(nodeSchema), edges: z.array(edgeSchema), updated_at: z.string(),
-});
-export const workflowsSchema = z.array(workflowSchema);
-type WorkflowData = z.infer<typeof nodeDataSchema>;
-type WorkflowNode = Node<WorkflowData & { kind: ComponentType; previewIcon?: typeof IconRoute }>;
-type Workflow = z.infer<typeof workflowSchema>;
-const workflowNodeWidth = 190;
-const workflowNodeHeight = 110;
-const overviewNodeLayout = { width: 190, height: 54, spacing: 8 };
-const designPreviewPositions: Record<string, { x: number; y: number }> = {
-  trigger: { x: 10, y: 72 }, plan: { x: 252, y: 72 }, build: { x: 461, y: 72 },
-  test: { x: 666, y: 24 }, review: { x: 666, y: 112 }, merge: { x: 911, y: 72 },
-};
-const mobileOverviewStages: {
-  id: string; label: string; description: string; kind: ComponentType; types: ComponentType[];
-  position: { x: number; y: number }; previewIcon?: typeof IconRoute;
-}[] = [
-  {
-    id: 'trigger', label: 'Trigger', description: 'PR or objective update', kind: 'trigger', types: ['trigger'],
-    position: { x: 0, y: 36 }, previewIcon: IconPlayerPlayFilled,
-  },
-  { id: 'plan', label: 'Plan', description: 'Generate plan', kind: 'planner', types: ['planner'],
-    position: { x: 54, y: 36 }, previewIcon: IconStack2 },
-  {
-    id: 'build', label: 'Build', description: 'Run agents', kind: 'agent-router', types: ['agent-router', 'agent-task'],
-    position: { x: 108, y: 36 }, previewIcon: IconCode,
-  },
-  {
-    id: 'test', label: 'Test', description: 'Run test suite', kind: 'test-generator',
-    types: ['test-generator', 'coverage-analyzer', 'condition', 'loop'], position: { x: 162, y: 10 },
-    previewIcon: IconFlask,
-  },
-  {
-    id: 'review', label: 'Review', description: 'AI + human review', kind: 'code-reviewer', types: ['code-reviewer'],
-    position: { x: 162, y: 62 }, previewIcon: IconMessage2,
-  },
-  {
-    id: 'merge', label: 'Merge', description: 'Gated release', kind: 'merge-gate',
-    types: ['human-approval', 'merge-gate', 'publish-report'], position: { x: 216, y: 36 },
-    previewIcon: IconGitBranch,
-  },
-];
-const designPreviewWorkflow: Workflow = {
-  id: 'overview-design-preview', name: 'PR Review & Release Orchestration',
-  description: 'Automate code review, test generation, coverage analysis, approval, and release reporting.',
-  status: 'active', version: 1,
-  updated_at: '',
-  nodes: [
-    ['trigger', 'trigger', 'Trigger', 'PR or objective update'],
-    ['plan', 'planner', 'Planner', 'Create an execution plan'],
-    ['build', 'agent-router', 'Agent Router', 'Route work to specialized agents'],
-    ['review', 'code-reviewer', 'Code Reviewer', 'Analyze changes and provide review'],
-    ['tests', 'test-generator', 'Test Generator', 'Generate and update tests'],
-    ['coverage', 'coverage-analyzer', 'Coverage Analyzer', 'Compute test coverage and quality'],
-    ['approval', 'human-approval', 'Human Approval', 'Review results and approve'],
-    ['merge', 'merge-gate', 'Merge Gate', 'Conditional merge with policies'],
-    ['publish', 'publish-report', 'Publish Report', 'Generate and publish release report'],
-  ].map(([id, type, label, description]) => ({
-    id, type: type as ComponentType, position: { x: 0, y: 0 }, data: { label, description },
-  })),
-  edges: [
-    ['trigger', 'plan'], ['plan', 'build'], ['build', 'review'], ['build', 'tests'], ['build', 'coverage'],
-    ['review', 'approval'], ['tests', 'approval'], ['coverage', 'approval'], ['approval', 'merge'], ['merge', 'publish'],
-  ].map(([source, target]) => ({ id: `${source}-${target}`, source, target, label: '' })),
-};
-
-const components = [
-  ['Core', 'trigger', 'Trigger'], ['Core', 'planner', 'Planner'],
-  ['Core', 'agent-router', 'Agent Router'], ['Core', 'agent-task', 'Agent Task'],
-  ['Quality & Validation', 'code-reviewer', 'Code Reviewer'],
-  ['Quality & Validation', 'test-generator', 'Test Generator'],
-  ['Quality & Validation', 'coverage-analyzer', 'Coverage Analyzer'],
-  ['Control & Human-in-the-loop', 'human-approval', 'Human Approval'],
-  ['Control & Human-in-the-loop', 'merge-gate', 'Merge Gate'],
-  ['Control & Human-in-the-loop', 'condition', 'Condition'],
-  ['Control & Human-in-the-loop', 'loop', 'Loop'],
-  ['Control & Human-in-the-loop', 'publish-report', 'Publish Report'],
-] as const;
-type ComponentType = typeof components[number][1];
-const workflowNodeIcons: Record<ComponentType, typeof IconRoute> = {
-  trigger: IconBolt,
-  planner: IconChecklist,
-  'agent-router': IconHierarchy,
-  'agent-task': IconRobot,
-  'code-reviewer': IconCode,
-  'test-generator': IconTestPipe,
-  'coverage-analyzer': IconChartBar,
-  'human-approval': IconUserCheck,
-  'merge-gate': IconGitMerge,
-  'publish-report': IconFileText,
-  condition: IconGitBranch,
-  loop: IconRepeat,
-};
-const componentGroups = [...new Set(components.map(([group]) => group))];
-const defaultDescriptions: Record<ComponentType, string> = {
-  trigger: 'Start on a pull request or event', planner: 'Create an execution plan',
-  'agent-router': 'Route work to specialized agents', 'agent-task': 'Run a configured agent',
-  'code-reviewer': 'Review changes and report findings', 'test-generator': 'Generate and run focused tests',
-  'coverage-analyzer': 'Analyze test coverage', 'human-approval': 'Request reviewer approval',
-  'merge-gate': 'Apply repository and policy checks', condition: 'Continue when conditions pass',
-  loop: 'Repeat for each item', 'publish-report': 'Publish a release report',
-};
-
-async function loadWorkflows(): Promise<Workflow[]> {
-  const response = await fetch('/api/v1/workflows');
-  if (!response.ok) throw new Error(`Workflow list failed: ${response.status}`);
-  return workflowsSchema.parse(await response.json());
-}
+import {
+  components, componentGroups, defaultDescriptions, designPreviewWorkflow, layoutNodes, loadWorkflows,
+  mobileWorkflowGraph, overviewNodeLayout, workflowGraph, workflowNodeHeight, workflowNodeIcons, workflowNodeWidth,
+  workflowSchema,
+} from './workflowModel';
+import type { ComponentType, Workflow, WorkflowData, WorkflowNode } from './workflowModel';
 
 function WorkflowBlock({ data }: NodeProps<WorkflowNode>) {
   const Icon = data.previewIcon ?? workflowNodeIcons[data.kind];
@@ -188,72 +71,6 @@ function WorkflowDropCanvas({ children }: { children: ReactNode }) {
 }
 
 const flowNodeTypes = { workflow: WorkflowBlock };
-
-async function layoutNodes(
-  nodes: WorkflowNode[], edges: Edge[],
-  size = { width: workflowNodeWidth, height: workflowNodeHeight, spacing: 15 },
-): Promise<WorkflowNode[]> {
-  const elk = new ELK();
-  const graph = await elk.layout({
-    id: 'workflow',
-    layoutOptions: {
-      'elk.algorithm': 'layered', 'elk.direction': 'RIGHT', 'elk.spacing.nodeNode': String(size.spacing),
-      'elk.layered.spacing.nodeNodeBetweenLayers': String(size.spacing),
-      'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-    },
-    children: nodes.map((node) => ({ id: node.id, width: size.width, height: size.height })),
-    edges: edges.map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
-  });
-  return nodes.map((node) => {
-    const position = graph.children?.find((child) => child.id === node.id);
-    return position ? { ...node, position: { x: position.x ?? 0, y: position.y ?? 0 } } : node;
-  });
-}
-
-function mobileWorkflowGraph(workflow: Workflow, designPreview = false) {
-  const stageByType = new Map<ComponentType, string>();
-  for (const stage of mobileOverviewStages) {
-    for (const type of stage.types) stageByType.set(type, stage.id);
-  }
-  const stageByNode = new Map<string, string>();
-  for (const node of workflow.nodes) {
-    const stage = stageByType.get(node.type);
-    if (!stage) continue;
-    stageByNode.set(node.id, stage);
-  }
-  const configuredStages = new Set(stageByNode.values());
-  const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id));
-  const nodes: WorkflowNode[] = stages.map(({ id, label, description, kind, previewIcon, position }) => ({
-    id, type: 'workflow', position: designPreview ? designPreviewPositions[id] ?? position : position,
-    data: {
-      kind, label, ...(designPreview ? { previewIcon } : {}),
-      description: designPreview && id === 'trigger' ? 'Objective updated'
-        : designPreview && id === 'merge' ? 'To trusted-main' : description,
-    },
-  }));
-  const stageIDs = new Set(stages.map(({ id }) => id));
-  const edgeIDs = new Set<string>();
-  const edges = workflow.edges.flatMap((edge) => {
-    const source = stageByNode.get(edge.source);
-    const target = stageByNode.get(edge.target);
-    if (!source || !target || source === target || !stageIDs.has(source) || !stageIDs.has(target)) return [];
-    const id = `${source}-${target}`;
-    if (edgeIDs.has(id)) return [];
-    edgeIDs.add(id);
-    return [{ id, source, target, type: 'smoothstep' as const, animated: false,
-      ...(designPreview ? { markerEnd: { type: MarkerType.ArrowClosed, color: '#c4d8ff' } } : {}) }];
-  });
-  return { nodes, edges };
-}
-
-function workflowGraph(workflow: Workflow) {
-  return {
-    nodes: workflow.nodes.map((node) => ({
-      ...node, type: 'workflow', data: { ...node.data, kind: node.type },
-    })),
-    edges: workflow.edges.map((edge) => ({ ...edge, type: 'smoothstep', animated: false })),
-  };
-}
 
 export function WorkflowOverview({ mobile = false, workflowID, designPreview = false }: {
   mobile?: boolean;

@@ -19,7 +19,7 @@ import {
 import { agentsSchema } from './agents';
 import type { Objective } from './objectives';
 import type { Project } from './projects';
-import { workflowsSchema } from './workflows';
+import { workflowsSchema } from './workflowModel';
 import { loadProducts, ProductEditor, productSchema } from './productEditor';
 import type { Product, ProductInput } from './productEditor';
 import { MetricCard } from './MetricCard';

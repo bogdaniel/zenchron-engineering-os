@@ -318,6 +318,8 @@ Before you say a task is complete:
   it passed without evidence. Report any failed, unavailable, or unresolved required local checks and do not claim
   completion while they remain unresolved.
 - UI and design work meets every item in §14.3, with the screenshots actually inspected.
+- The feature has a doc under `docs/features/` with a current `## Feature diagram` Mermaid block (§14.8), created if
+  it did not exist and updated if the change altered the flow.
 - If available, `/ponytail-review` was run on the diff; apply its delete-list only where consistent with this file and
   the task, and justify each skipped item.
 - Your summary lists every `ponytail:` corner you added.
@@ -419,8 +421,9 @@ stops at "it compiles and renders something". The bar is: it matches the referen
 required state, and the agent has looked at it.
 
 - **Reference first.** Identify the reference the human supplied (screenshot, design export, written spec, or an
-  existing page to match). If there is none and the task is visual, ask for one before building; do not invent a
-  design. Keep the reference open while working and compare against it, not against memory.
+  existing page to match). Page mockups usually live in `mocks/` at the repository root; open the one for the page
+  you are changing. If there is none and the task is visual, ask for one before building; do not invent a design.
+  Keep the reference open while working and compare against it, not against memory.
 - **Reuse the design system.** Typography, spacing, and color tokens live in `dashboard/src/style.css` under `:root`.
   Page and panel structure comes from `PageHeading`, `PanelHeading`, `PanelCard`, and `MetricCard`. UI primitives come
   from Mantine, icons from Tabler, grids from AG Grid, graphs from xyflow, and code editing from Monaco, all already
@@ -511,3 +514,25 @@ passing, or matching unless you observed it in this session.
   better than three that summarize it to each other.
 - Keep the plan short and current. A plan that lists work already done or no longer needed is a drift source; prune it
   when the task changes.
+
+### 14.8 Every feature leaves a doc and a diagram
+
+Feature behavior lives in `docs/features/<feature-name>.md`, one file per feature, linked from the "Feature docs" list
+in `README.md`. Architecture-level decisions live in `docs/architecture/`. These docs are part of the deliverable, not
+an optional extra.
+
+- Before building, read the existing doc for the feature you are changing. It states the accepted behavior and the
+  evidence that verified it; treat it as part of the acceptance list.
+- When the task implements or changes a feature and no doc exists, create one. Follow the shape of the existing
+  files: a one-paragraph summary, a `## Feature diagram` section, a `## Behavior` section listing the observable
+  rules, and a verification section naming the focused checks that prove them.
+- The `## Feature diagram` is a Mermaid block (`flowchart LR` or `sequenceDiagram`) that shows the real mechanism as
+  implemented: the actors, the dashboard pages and components, the control-plane and worker endpoints by path, the
+  stores they touch, and the boundaries between them. Draw what the code does, not what the mockup suggested. Label
+  edges with the action or the HTTP method and path.
+- When the change alters the flow, update the diagram and the behavior list in the same change. A diagram that no
+  longer matches the code is worse than none; do not leave it for later.
+- Keep docs factual. Do not describe behavior that is not implemented or verified, and mark unfinished parts
+  explicitly as outstanding, as the roadmap does.
+- Add the README link when creating a doc. Do not create a doc for a bug fix or a pure refactor unless the human
+  asks; update the existing one if the fix changes documented behavior.
