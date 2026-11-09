@@ -60,7 +60,7 @@ test('local Objectives mock preview renders the supplied screen without protecte
     await expect(page.locator('.objective-metric').nth(index).locator('small')).toBeHidden();
   }
   await expect(page.getByRole('combobox', { name: 'Filter by due quarter' })).toHaveValue('This Quarter');
-  const objectiveRows = page.locator('.objective-grid-wrap .ag-row');
+  const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(6);
   await expect(objectiveRows.first()).toHaveClass(/ag-row-selected/);
   await expect(page.locator('.objective-grid-wrap .ag-cell').first()).toHaveCSS('font-size', '11px');
@@ -128,7 +128,7 @@ test('Objectives mock layout stays within desktop, tablet, and mobile viewports'
     await page.goto('http://127.0.0.1:4173/#objectives');
     await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Objective' })).toBeVisible();
-    await expect(page.locator('.objective-grid-wrap .ag-row')).toHaveCount(6);
+    await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(6);
     if (width === 390) {
       const tabButtonsFit = await page.locator('.objectives-tabs').evaluate((tabs) => {
         const bounds = tabs.getBoundingClientRect();
@@ -226,7 +226,7 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await page.goto('http://zenchron.test:4173/#objectives');
 
   await expect(page.getByRole('button', { name: 'Table', pressed: true })).toBeVisible();
-  const objectiveRows = page.locator('.objective-grid-wrap .ag-row');
+  const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Filter by owner' }).click();
   await page.getByRole('option', { name: 'Alex Chen' }).click();
@@ -245,7 +245,7 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await page.getByRole('option', { name: 'All products' }).click();
   await expect(objectiveRows.first()).toHaveCSS('height', '42px');
   await page.locator('.objective-grid-wrap .ag-cell[col-id=title]').filter({ hasText: 'Reduce CI time' }).click();
-  await expect(page.locator('.objective-grid-wrap .ag-row-selected')).toContainText('Reduce CI time');
+  await expect(page.locator('.objective-grid-wrap [role="row"].ag-row-selected')).toContainText('Reduce CI time');
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Reduce CI time');
   await expect(page.locator('.objective-grid-wrap .ag-cell').first()).toHaveCSS('font-size', '11px');
   await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').first()).toHaveCSS('font-size', '10px');
