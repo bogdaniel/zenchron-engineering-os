@@ -154,8 +154,13 @@ test('Agents layout fits tablet and phone widths without panel overlap', async (
 });
 
 test('Agents phone preview shows all profiles without a nested list scroll', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 401, body: 'authentication required',
+  }));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('http://127.0.0.1:4173/#agents');
+  const previewURL = new URL('/#agents', test.info().project.use.baseURL as string);
+  previewURL.hostname = '127.0.0.1';
+  await page.goto(previewURL.toString());
   await expect(page.locator('.agents-design-preview')).toBeVisible();
   await expect(page.locator('.agent-row')).toHaveCount(6);
   await expect(page.locator('.agent-row-body small').first()).toHaveCSS('font-size', '10px');
@@ -189,7 +194,9 @@ test('Agents empty state uses the primary create action', async ({ page }) => {
 
 test('Agents queue dialog explains when a worker has no model runtime', async ({ page }) => {
   await page.route('**/api/v1/workers', async (route) => {
-    const response = await route.fetch({ url: route.request().url().replace('zenchron.test:4173', '127.0.0.1:4173') });
+    const url = new URL(route.request().url());
+    url.hostname = '127.0.0.1';
+    const response = await route.fetch({ url: url.toString() });
     const workers = await response.json() as { agent_runtime_enabled?: boolean }[];
     await route.fulfill({ response, body: JSON.stringify(workers.map((worker) => ({
       ...worker, agent_runtime_enabled: false,
