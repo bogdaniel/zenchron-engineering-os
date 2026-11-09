@@ -63,7 +63,7 @@ test('local Objectives mock preview renders the supplied screen without protecte
   const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(6);
   await expect(objectiveRows.first()).toHaveClass(/ag-row-selected/);
-  await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="title"]')).toHaveCSS('font-size', '11px');
+  await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="title"]').first()).toHaveCSS('font-size', '11px');
   await expect(page.locator('.objective-grid-wrap .objective-status').first()).toHaveCSS('font-size', '9px');
   await expect(page.locator('.objective-preview-overview .objective-overview-card b').first())
     .toHaveCSS('font-size', '12px');
