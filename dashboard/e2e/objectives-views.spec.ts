@@ -83,10 +83,6 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await page.getByRole('button', { name: 'Copy objective link' }).click();
   const objectiveLink = await page.evaluate(() => navigator.clipboard.readText());
   expect(objectiveLink).toContain('?objective=OBJ-1492#objectives');
-  const sharedObjective = await page.context().newPage();
-  await sharedObjective.goto(objectiveLink);
-  await expect(sharedObjective.locator('.objective-detail-panel')).toContainText('Improve review velocity');
-  await sharedObjective.close();
   await page.getByRole('button', { name: 'More objective actions' }).click();
   await page.getByRole('menuitem', { name: 'View activity' }).click();
   await expect(page.locator('.objective-detail-activity > div')).toHaveCount(4);
@@ -145,6 +141,14 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await page.getByRole('button', { name: 'Create objective' }).click();
   await expect(page.getByText('The mock preview is read-only.')).toBeVisible();
   expect(objectiveRequests).toEqual([]);
+});
+
+test('Objectives preview deep link selects the referenced objective', async ({ page }) => {
+  await page.route('**/api/v1/**', (route) => route.fulfill({ status: 401, body: 'preview fixture expected' }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('http://127.0.0.1:4173/?objective=OBJ-1492#objectives');
+  await expect(page.locator('.objective-detail-panel')).toContainText('Improve review velocity');
+  await expect(page.locator('.objective-grid-wrap [role="row"].ag-row-selected')).toContainText('Improve review velocity');
 });
 
 test('Objectives mock layout stays within desktop, tablet, and mobile viewports', async ({ page }) => {

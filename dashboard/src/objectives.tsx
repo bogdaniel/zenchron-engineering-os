@@ -396,7 +396,10 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                   rowSelection={{ mode: 'multiRow', checkboxes: true, headerCheckbox: true, selectAll: 'filtered', enableClickSelection: 'enableSelection' }}
                   selectionColumnDef={{ width: 32, minWidth: 32, maxWidth: 32, pinned: 'left', resizable: false, sortable: false, suppressMovable: true }}
                   onRowDataUpdated={({ api }) => {
-                    if (!api.getSelectedRows().length) api.getDisplayedRowAtIndex(0)?.setSelected(true);
+                    if (!api.getSelectedRows().length) {
+                      const linkedObjective = selectedID ? api.getRowNode(selectedID) : null;
+                      (linkedObjective ?? api.getDisplayedRowAtIndex(0))?.setSelected(true);
+                    }
                   }}
                   onSelectionChanged={({ api }) => {
                     const item = api.getSelectedRows()[0];
