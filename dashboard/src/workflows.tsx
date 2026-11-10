@@ -88,7 +88,7 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
   useEffect(() => {
     if (!workflow) return;
     if (mobile) {
-      const graph = mobileWorkflowGraph(workflow, designPreview);
+      const graph = mobileWorkflowGraph(workflow, designPreview, mobile);
       setLayoutError(false);
       setNodes(graph.nodes);
       setEdges(graph.edges);

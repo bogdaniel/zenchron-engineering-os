@@ -54,8 +54,9 @@ flowchart LR
 - Palette search filters the existing component labels and descriptions, leaving the current groups and node types intact.
 - On desktop the component palette spans the canvas and run-preview rows, while the inspector spans the header through the
   preview. The Overview and phone summaries group configured node types into six readable workflow stages with concise
-  action captions; component and connection totals still report the full saved graph. On phones, the compact heading,
-  save action, and read-only graph overview match the supplied mobile hierarchy. Live mode keeps honest empty run states
+  action captions; component and connection totals still report the full saved graph. On phones, the preview uses compact
+  stage coordinates so all six stages fit the read-only graph overview beneath the compact heading and save action. Live
+  mode keeps honest empty run states
   when no execution exists; the local mock route uses a static run fixture for the supplied run-detail design. The
   editor stays desktop-only.
 - The builder content stays within the supplied desktop frame width while the shared app shell provides the same rail and

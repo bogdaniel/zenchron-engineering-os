@@ -14,6 +14,17 @@ test('phone Workflow mock shows the sample run, task progress, and approvals wit
 
   await expect(page.getByRole('heading', { name: 'Workflow Orchestration' })).toBeVisible();
   await expect(page.locator('.workflow-mobile-overview .workflow-overview-canvas')).toBeVisible();
+  const overviewNodes = page.locator('.workflow-mobile-overview .workflow-node');
+  await expect(overviewNodes).toHaveCount(6);
+  expect(await overviewNodes.locator('b').allTextContents()).toEqual(
+    ['Trigger', 'Plan', 'Build', 'Test', 'Review', 'Merge']);
+  expect(await overviewNodes.evaluateAll((nodes) => {
+    const canvas = nodes[0].closest('.workflow-overview-canvas')!.getBoundingClientRect();
+    const boxes = nodes.map((node) => node.getBoundingClientRect());
+    return boxes.every((box, index) => box.left >= canvas.left && box.right <= canvas.right &&
+      box.top >= canvas.top && box.bottom <= canvas.bottom && boxes.slice(index + 1).every((other) =>
+        box.right <= other.left || box.left >= other.right || box.bottom <= other.top || box.top >= other.bottom));
+  })).toBe(true);
   await expect(page.locator('.workflow-mobile-run-preview')).toBeVisible();
   await expect(page.locator('.workflow-mobile-run-summary')).toContainText('Run #8821 · Started 8m ago');
   await expect(page.locator('.workflow-mobile-run-progress')).toContainText('78%');

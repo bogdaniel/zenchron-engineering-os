@@ -159,7 +159,7 @@ export async function layoutNodes(
   });
 }
 
-export function mobileWorkflowGraph(workflow: Workflow, designPreview = false) {
+export function mobileWorkflowGraph(workflow: Workflow, designPreview = false, mobile = false) {
   const stageByType = new Map<ComponentType, string>();
   for (const stage of mobileOverviewStages) {
     for (const type of stage.types) stageByType.set(type, stage.id);
@@ -175,7 +175,7 @@ export function mobileWorkflowGraph(workflow: Workflow, designPreview = false) {
   const configuredStages = new Set(stageByNode.values());
   const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id));
   const nodes: WorkflowNode[] = stages.map(({ id, label, description, kind, previewIcon, position }) => ({
-    id, type: 'workflow', position: designPreview ? designPreviewPositions[id] ?? position : position,
+    id, type: 'workflow', position: designPreview && !mobile ? designPreviewPositions[id] ?? position : position,
     data: {
       kind, label, ...(designPreview ? { previewIcon } : {}),
       description: designPreview && id === 'trigger' ? 'Objective updated'
