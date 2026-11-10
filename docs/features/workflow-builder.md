@@ -83,6 +83,7 @@ flowchart LR
 - The desktop Versions preview follows the reference's 43/57 history/compare split. Schedules uses its 32/68
   trigger/calendar split and ~90 px schedule cards; tablet and phone retain the stacked layout.
 - Settings lifecycle states use labeled, accessible ON pills matching the reference.
+- The desktop Permissions matrix uses compact rows so both columns fit inside the mock's 941 px frame.
 - Opening a saved workflow selects its Agent Router so the inspector starts with real graph data. Workflows without
   an Agent Router leave the inspector unselected.
 - Run and Publish remain disabled because there is no workflow execution runner or publish service yet.

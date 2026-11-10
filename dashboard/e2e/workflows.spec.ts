@@ -172,6 +172,11 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
       await expect(lifecycleStates.first()).toHaveCSS('width', '82px');
       await expect(lifecycleStates.first()).toHaveCSS('height', '25px');
     }
+    if (section === 'Permissions') {
+      const permissionPanels = await page.locator('.workflow-permission-columns').boundingBox();
+      expect(permissionPanels!.height).toBeLessThanOrEqual(523);
+      expect(permissionPanels!.y + permissionPanels!.height).toBeLessThanOrEqual(931);
+    }
     if (section === 'Permissions') await expect(page.locator('.workflow-collaborator')).toHaveCount(4);
   }
   await page.setViewportSize({ width: 390, height: 844 });

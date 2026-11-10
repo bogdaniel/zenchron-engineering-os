@@ -145,6 +145,7 @@
 @media (min-width: 1051px) {
   .workflow-run-columns { height: 404px; }
   .workflow-version-columns, .workflow-schedule-columns { min-height: 518px; }
+  .workflow-matrix > div { min-height: 33px; }
   .workflow-schedule-row { margin-top: 10px; padding-block: 17px; }
   .workflow-calendar-day { min-height: 144px; }
   .workflow-collaborator { min-height: 39px; }
