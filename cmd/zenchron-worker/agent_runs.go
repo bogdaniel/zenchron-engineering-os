@@ -21,6 +21,7 @@ const (
 	agentRunTimeout       = 2 * time.Minute
 	maxAgentRunOutputSize = 20_000
 	maxAgentRunDiffSize   = 128 << 10
+	maxClaimResponseSize  = 1 << 20
 )
 
 type agentRuntime struct {
@@ -288,7 +289,7 @@ func claimAgentRun(
 		return agentRunCommand{}, false, fmt.Errorf("agent run claim returned HTTP %d", response.StatusCode)
 	}
 	var command agentRunCommand
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&command); err != nil {
+	if err := json.NewDecoder(io.LimitReader(response.Body, maxClaimResponseSize)).Decode(&command); err != nil {
 		return agentRunCommand{}, false, fmt.Errorf("decode agent run claim: %w", err)
 	}
 	return command, true, nil

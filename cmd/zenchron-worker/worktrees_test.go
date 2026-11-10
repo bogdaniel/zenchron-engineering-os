@@ -57,7 +57,7 @@ func TestClaimWorktreeCommandRejectsOversizedResponse(t *testing.T) {
 	client := &http.Client{Transport: workerRoundTripper(func(request *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"id":"` + strings.Repeat("a", 1<<20) + `"}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"id":"` + strings.Repeat("a", maxClaimResponseSize) + `"}`)),
 			Header:     make(http.Header),
 			Request:    request,
 		}, nil
