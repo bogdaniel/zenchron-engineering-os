@@ -171,6 +171,7 @@
   padding: 8px;
 }
 .agent-row {
+  position: relative;
   display: flex;
   width: 100%;
   align-items: center;
@@ -181,8 +182,39 @@
   color: inherit;
   background: #171622;
   text-align: left;
+}
+.agent-row-select {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
+.agent-row-select:focus-visible,
+.agent-row-options:focus-visible { outline: 2px solid #c291ff; outline-offset: 2px; }
+.agent-row-options {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  width: 23px;
+  height: 22px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: #b7adc8;
+  background: transparent;
+  cursor: pointer;
+}
+.agent-row-options:hover { color: #f0e8fa; background: #ffffff12; }
 .agent-row.selected {
   border-color: #8a50c7;
   background: linear-gradient(110deg, #302044, #191622);
@@ -458,6 +490,7 @@
 .agents-design-preview .agents-panel-heading { min-height: 54px; }
 .agents-design-preview .agents-list { gap: 5px; padding: 8px; }
 .agents-design-preview .agent-row { min-height: 82px; gap: 7px; padding: 6px; }
+.agents-design-preview .agent-row-select { padding-right: 23px; }
 .agents-design-preview .agent-row-icon { width: 36px; height: 36px; }
 .agents-design-preview .agent-status.active { border-color: #246448; color: #51dba5; background: #143327; }
 .agents-design-preview .agent-row:nth-child(2) .agent-row-icon { border-color: #245e53; color: #4bd9af; background: #14332d; }

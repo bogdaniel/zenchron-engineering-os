@@ -251,6 +251,10 @@ test('Agents preview actions update only the local fixture', async ({ page }) =>
   await page.goto(previewURL.toString());
 
   await expect(page.locator('.agent-row')).toHaveCount(6);
+  await expect(page.getByRole('button', { name: 'Code Reviewer options' })).toBeVisible();
+  await page.getByRole('button', { name: 'Test Generator options' }).click();
+  await page.getByRole('menuitem', { name: 'Open profile' }).click();
+  await expect(page.getByRole('heading', { name: 'Test Generator' })).toBeVisible();
   await page.getByRole('button', { name: 'Create Agent' }).click();
   const create = page.getByRole('dialog', { name: 'Create agent profile' });
   await create.getByLabel('Profile name').fill('Preview Writer');
@@ -296,6 +300,10 @@ test('Agents preview actions update only the local fixture', async ({ page }) =>
   }, importedProfile);
   await expect(page.locator('.agent-row')).toHaveCount(1);
   await expect(page.locator('.agent-row').first()).toContainText('Imported Reviewer');
+  await page.getByRole('button', { name: 'Imported Reviewer options' }).click();
+  await page.getByRole('menuitem', { name: 'Duplicate profile' }).click();
+  await expect(page.locator('.agent-row')).toHaveCount(2);
+  await expect(page.getByRole('heading', { name: 'Imported Reviewer Copy' })).toBeVisible();
   expect(requests).toEqual([]);
 });
 

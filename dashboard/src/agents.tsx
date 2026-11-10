@@ -196,6 +196,13 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
       tools: selected.tools,
     });
   }
+  function duplicatePreviewProfile(agent: Agent) {
+    const copy = agentSchema.parse({ ...agent, id: crypto.randomUUID(), name: `${agent.name} Copy`,
+      version: 1, updated_at: new Date().toISOString() });
+    setPreviewItems((current) => [...current, copy]);
+    setSelectedID(copy.id);
+    setDetailTab('overview');
+  }
   useEffect(() => {
     if (!selected) return;
     resetEditForm();
@@ -379,24 +386,33 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
               const successRate = completedRuns.length
                 ? Math.round(successCount / completedRuns.length * 100)
                 : undefined;
-              return <button
-                className={`agent-row${selected?.id === agent.id ? ' selected' : ''}`}
-                key={agent.id}
-                onClick={() => { setSelectedID(agent.id); setSubmitError(''); setDetailTab('overview'); }}
-              >
-                <span className="agent-row-icon"><AgentProfileIcon name={agent.name} size={17} /></span>
-                <span className="agent-row-body">
-                  <b>{agent.name}</b><small>{agent.description || 'No description'}</small>
-                  <small>{agent.provider} · {agent.model}</small>
-                  <small>{sampleMode ? agentsPreviewListMetrics[agent.id]?.lastRun ?? 'No runs yet'
-                    : runsLoading ? 'Run history loading' : runsError ? 'Run history unavailable'
-                      : latestRun ? `Last run ${relativeRunTime(latestRun.updated_at)}` : 'No runs yet'}</small>
-                  <small>{sampleMode ? `Cost: ${agentsPreviewListMetrics[agent.id]?.cost ?? '—'} · Success: ${agentsPreviewListMetrics[agent.id]?.success ?? '—'}`
-                    : successRate !== undefined ? `${completedRuns.length} completed · ${successRate}% success` : ''}</small>
-                  <AgentToolBadges tools={sampleMode ? agentsPreviewTags[agent.id] ?? agent.tools : agent.tools} limit={3} />
-                </span>
-                <Badge className={`agent-status ${agent.status}`} variant="light">{agent.status}</Badge>
-              </button>;
+              return <div className={`agent-row${selected?.id === agent.id ? ' selected' : ''}${sampleMode ? ' has-options' : ''}`}
+                key={agent.id}>
+                <button className="agent-row-select" type="button"
+                  onClick={() => { setSelectedID(agent.id); setSubmitError(''); setDetailTab('overview'); }}>
+                  <span className="agent-row-icon"><AgentProfileIcon name={agent.name} size={17} /></span>
+                  <span className="agent-row-body">
+                    <b>{agent.name}</b><small>{agent.description || 'No description'}</small>
+                    <small>{agent.provider} · {agent.model}</small>
+                    <small>{sampleMode ? agentsPreviewListMetrics[agent.id]?.lastRun ?? 'No runs yet'
+                      : runsLoading ? 'Run history loading' : runsError ? 'Run history unavailable'
+                        : latestRun ? `Last run ${relativeRunTime(latestRun.updated_at)}` : 'No runs yet'}</small>
+                    <small>{sampleMode ? `Cost: ${agentsPreviewListMetrics[agent.id]?.cost ?? '—'} · Success: ${agentsPreviewListMetrics[agent.id]?.success ?? '—'}`
+                      : successRate !== undefined ? `${completedRuns.length} completed · ${successRate}% success` : ''}</small>
+                    <AgentToolBadges tools={sampleMode ? agentsPreviewTags[agent.id] ?? agent.tools : agent.tools} limit={3} />
+                  </span>
+                  <Badge className={`agent-status ${agent.status}`} variant="light">{agent.status}</Badge>
+                </button>
+                {sampleMode && <Menu position="bottom-end" withinPortal>
+                  <Menu.Target><button className="agent-row-options" type="button" aria-label={`${agent.name} options`}>
+                    <IconDots size={15} />
+                  </button></Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Item onClick={() => { setSelectedID(agent.id); setDetailTab('overview'); }}>Open profile</Menu.Item>
+                    <Menu.Item onClick={() => duplicatePreviewProfile(agent)}>Duplicate profile</Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>}
+              </div>;
             })}
           </div>
         ) : items.length ? <div className="agents-empty"><b>No profiles match this search.</b></div>
@@ -424,11 +440,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                     }, ...current]);
                     setDetailTab('history');
                   }}>Run Agent</Button>
-                <Button variant="default" onClick={() => {
-                  const copy = agentSchema.parse({ ...selected, id: crypto.randomUUID(), name: `${selected.name} Copy`,
-                    version: 1, updated_at: new Date().toISOString() });
-                  setPreviewItems((current) => [...current, copy]); setSelectedID(copy.id); setDetailTab('overview');
-                }}>Duplicate Profile</Button>
+                <Button variant="default" onClick={() => duplicatePreviewProfile(selected)}>Duplicate Profile</Button>
                 <Button variant="default" onClick={() => setPreviewItems((current) => current.map((item) =>
                   item.id === selected.id ? { ...item, status: item.status === 'active' ? 'disabled' : 'active' } : item))}>
                   {selected.status === 'active' ? 'Disable' : 'Enable'}
