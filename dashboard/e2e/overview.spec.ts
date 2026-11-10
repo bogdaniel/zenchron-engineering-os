@@ -670,6 +670,11 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
 test('Overview activity and delivery analytics actions open their details', async ({ page }) => {
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
   await page.goto('http://127.0.0.1:4173/#overview');
+  await page.getByRole('button', { name: 'User profile menu' }).click();
+  await page.getByRole('menuitem', { name: 'Open Settings' }).click();
+  await expect(page).toHaveURL(/#settings$/);
+  await expect(page.getByRole('heading', { name: 'Settings & Integrations' })).toBeVisible();
+  await page.getByRole('link', { name: 'Overview' }).first().click();
   await page.getByRole('button', { name: 'All Activity' }).click();
   const activityDialog = page.getByRole('dialog', { name: 'All Activity' });
   await expect(activityDialog).toBeVisible();

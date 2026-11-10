@@ -223,14 +223,18 @@ function App() {
                 <Menu.Dropdown><Menu.Label>{previewPage ? 'Core Product' : 'Workspace'}</Menu.Label>
                   <Menu.Item onClick={() => goToPage('#workspace')}>Open Product Workspace</Menu.Item></Menu.Dropdown>
               </Menu>
-              <div className="user-chip">
-                {previewPage ? <img className="avatar avatar-image" src="/alex-chen-avatar.jpg" alt="" /> : auth.data?.avatar_url
-                  ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" />
-                  : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?'}</span>}
-                <span>{previewPage ? 'Alex Chen' : auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}
-                  <small>{previewPage ? 'Engineering Lead' : auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Preview only'}</small></span>
-                {previewPage && <IconChevronDown className="user-profile-chevron" size={15} aria-hidden="true" />}
-              </div>
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target><button className="user-chip" type="button" aria-label="User profile menu">
+                  {previewPage ? <img className="avatar avatar-image" src="/alex-chen-avatar.jpg" alt="" /> : auth.data?.avatar_url
+                    ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" />
+                    : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?'}</span>}
+                  <span>{previewPage ? 'Alex Chen' : auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}
+                    <small>{previewPage ? 'Engineering Lead' : auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Preview only'}</small></span>
+                  {previewPage && <IconChevronDown className="user-profile-chevron" size={15} aria-hidden="true" />}
+                </button></Menu.Target>
+                <Menu.Dropdown><Menu.Label>{previewPage ? 'Alex Chen' : auth.data?.login ?? 'Account'}</Menu.Label>
+                  <Menu.Item onClick={() => goToPage('#settings')}>Open Settings</Menu.Item></Menu.Dropdown>
+              </Menu>
             </div>
           </header>
 

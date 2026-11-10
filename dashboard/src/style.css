@@ -305,10 +305,16 @@ button:disabled, input:disabled {
   align-items: center;
   gap: 9px;
   margin-left: 5px;
+  padding: 0;
+  border: 0;
   color: #eae7f2;
+  background: transparent;
   font-size: 11px;
   white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
 }
+.user-chip:focus-visible { outline: 2px solid #a855f7; outline-offset: 3px; border-radius: 4px; }
 .avatar {
   display: grid;
   width: 32px;
