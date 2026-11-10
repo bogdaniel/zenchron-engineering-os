@@ -51,6 +51,7 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await page.goto('http://127.0.0.1:4173/#objectives');
 
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
+  await expect(page.locator('.objective-filters .mantine-Select-section[data-position="left"]')).toHaveCount(4);
   await expect(page.locator('.objective-metric').nth(0)).toContainText('Objective Throughput');
   await expect(page.locator('.objective-metric').nth(0)).toContainText('Completed this quarter');
   await expect(page.locator('.objective-metric').nth(1)).toContainText('Objective Success Rate86.7%');

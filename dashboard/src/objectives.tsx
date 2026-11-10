@@ -311,11 +311,16 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
         </div>
         <div className="objectives-title-actions">
           <div className="objective-filters">
-            <Select aria-label="Filter by product" data={productOptions} value={productFilter}
+            <Select aria-label="Filter by product" leftSection={sampleData && <IconCube size={13} />}
+              data={productOptions} value={productFilter}
               onChange={(value) => setProductFilter(value ?? 'all')} />
-            <Select aria-label="Filter by owner" data={[{ value: 'all', label: 'All owners' }, ...Array.from(new Set(items.map((item) => item.owner).filter(Boolean))).map((owner) => ({ value: owner, label: owner }))]} value={ownerFilter} onChange={(value) => setOwnerFilter(value ?? 'all')} />
-            <Select aria-label="Filter by status" data={[{ value: 'all', label: 'All statuses' }, ...statusOptions]} value={statusFilter} onChange={(value) => setStatusFilter(value ?? 'all')} />
-            <Select aria-label="Filter by due quarter" data={[
+            <Select aria-label="Filter by owner" leftSection={sampleData && <IconUser size={13} />}
+              data={[{ value: 'all', label: 'All owners' }, ...Array.from(new Set(items.map((item) => item.owner).filter(Boolean))).map((owner) => ({ value: owner, label: owner }))]}
+              value={ownerFilter} onChange={(value) => setOwnerFilter(value ?? 'all')} />
+            <Select aria-label="Filter by status" leftSection={sampleData && <IconActivity size={13} />}
+              data={[{ value: 'all', label: 'All statuses' }, ...statusOptions]} value={statusFilter}
+              onChange={(value) => setStatusFilter(value ?? 'all')} />
+            <Select aria-label="Filter by due quarter" leftSection={sampleData && <IconCalendar size={13} />} data={[
               { value: 'this', label: 'This Quarter' }, { value: 'last', label: 'Last Quarter' },
               { value: 'all', label: 'All due dates' },
             ]} value={dueQuarter} onChange={(value) => setDueQuarter(value ?? 'this')} />
