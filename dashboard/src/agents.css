@@ -148,7 +148,7 @@
   border-bottom: 1px solid #302d42;
 }
 .agents-profile-search { width: 145px; }
-.agents-design-preview .agents-profile-search { width: 138px; }
+.agents-design-preview .agents-profile-search { width: 160px; }
 .agents-design-preview .agents-list-tool.mantine-Button-root { width: 26px; min-width: 26px; min-height: 27px; padding: 0; border-color: #353149; color: #c7bfd5; background: #171622; }
 .agents-profile-search input { min-height: 28px; border-color: #353149; color: #e1dcea; background: #171622; font-size: 10px; }
 .agents-count,

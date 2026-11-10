@@ -191,6 +191,9 @@ test('Agents local design preview labels illustrative metadata without API reads
   await page.goto(previewURL.toString());
   await expect(page.locator('.agents-design-preview')).toBeVisible();
   await expect(page.locator('.agents-preview-notice')).toHaveText('ILLUSTRATIVE DATA');
+  await expect(page.getByRole('heading', { name: 'Agent Profiles (6)' })).toBeVisible();
+  await expect(page.locator('.agents-list-panel .agents-count')).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Search agents' })).toHaveCSS('width', '160px');
   const summary = page.locator('.agents-profile-summary');
   await expect(summary).toContainText('Model');
   await expect(summary).toContainText('Provider');

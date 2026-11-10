@@ -356,7 +356,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
               </Menu.Dropdown>
             </Menu>
           </>}
-          <Badge className="agents-count" variant="light">{visibleItems.length}</Badge></>} />
+          {!sampleMode && <Badge className="agents-count" variant="light">{visibleItems.length}</Badge>}</>} />
         {profilesError ? <div className="agents-empty">Agent profiles could not be loaded.</div> : profilesLoading ? (
           <div className="agents-empty">Loading agent profiles…</div>
         ) : items.length && visibleItems.length ? (
