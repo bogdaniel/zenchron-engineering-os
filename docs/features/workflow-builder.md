@@ -80,8 +80,8 @@ flowchart LR
   downloads a clearly named sample log for the selected illustrative run. Prompt and
   variable examples are labeled illustrative and are not saved. In live mode, secondary section tabs stay disabled until
   their services exist.
-- The desktop Schedules preview gives the trigger list and execution calendar the reference's wider 32/68 split and
-  90 px schedule cards; tablet and phone retain the stacked layout.
+- The desktop Versions preview follows the reference's 43/57 history/compare split. Schedules uses its 32/68
+  trigger/calendar split and ~90 px schedule cards; tablet and phone retain the stacked layout.
 - Opening a saved workflow selects its Agent Router so the inspector starts with real graph data. Workflows without
   an Agent Router leave the inspector unselected.
 - Run and Publish remain disabled because there is no workflow execution runner or publish service yet.

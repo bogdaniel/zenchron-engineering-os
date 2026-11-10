@@ -53,7 +53,7 @@
 .workflow-run-step.pending i { color: #888194; background: #282434; }
 .workflow-run-step small, .workflow-version-row small, .workflow-collaborator small, .workflow-service-row small { display: block; margin-top: 2px; color: #9992a6; font-size: 9px; }
 .workflow-section-bottom-action { position: absolute; right: 13px; bottom: 12px; min-height: 34px; font-size: 10px; }
-.workflow-version-columns { display: grid; grid-template-columns: minmax(255px, .33fr) minmax(0, 1fr); gap: 12px; }
+.workflow-version-columns { display: grid; grid-template-columns: minmax(255px, .43fr) minmax(0, 1fr); gap: 12px; }
 .workflow-version-history { display: flex; flex-direction: column; }
 .workflow-version-row { display: flex; align-items: flex-start; gap: 10px; margin: 5px 10px 0; padding: 10px; border-bottom: 1px solid #302b40; }
 .workflow-version-row.selected { border: 1px solid #8751c0; border-radius: 8px; background: #372449; }

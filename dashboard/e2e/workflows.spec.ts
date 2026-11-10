@@ -161,6 +161,11 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
       expect(scheduleList!.width / scheduleCalendar!.width).toBeCloseTo(0.47, 1);
       expect(firstSchedule!.height).toBeGreaterThanOrEqual(88);
     }
+    if (section === 'Versions') {
+      const versionHistory = await page.locator('.workflow-version-history').boundingBox();
+      const versionCompare = await page.locator('.workflow-version-compare').boundingBox();
+      expect(versionHistory!.width / versionCompare!.width).toBeCloseTo(0.43, 1);
+    }
     if (section === 'Permissions') await expect(page.locator('.workflow-collaborator')).toHaveCount(4);
   }
   await page.setViewportSize({ width: 390, height: 844 });
