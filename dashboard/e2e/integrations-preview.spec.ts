@@ -15,6 +15,13 @@ test('local Integrations mock filters and updates its fixture without provider w
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Settings & Integrations' })).toBeVisible();
   await expect(page.getByText('All Systems Operational')).toBeVisible();
+  const desktopFit = await page.evaluate(() => ({
+    documentHeight: document.documentElement.scrollHeight,
+    actionsBottom: document.querySelector('.system-preview-actions')!.getBoundingClientRect().bottom,
+    viewportHeight: window.innerHeight,
+  }));
+  expect(desktopFit.documentHeight).toBeLessThanOrEqual(desktopFit.viewportHeight);
+  expect(desktopFit.actionsBottom).toBeLessThanOrEqual(desktopFit.viewportHeight);
   await page.getByRole('button', { name: 'Audit log', exact: true }).click();
   const auditDialog = page.getByRole('dialog', { name: 'Activity & audit · preview' });
   await expect(auditDialog.locator('tbody tr')).toHaveCount(3);
