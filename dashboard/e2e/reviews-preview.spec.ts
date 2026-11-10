@@ -50,6 +50,10 @@ test('local Reviews mock uses its fixture without provider reads or review write
   const previewDiffBounds = await page.locator('.reviews-pr-diff').boundingBox();
   expect(previewDiffBounds!.height).toBeGreaterThanOrEqual(130);
   await expect(page.locator('.reviews-summary-stats')).toContainText('+427');
+  await expect(page.locator('.reviews-summary-stats > div')).toHaveCount(6);
+  await expect(page.locator('.reviews-summary-stats')).toContainText('−68');
+  await expect(page.locator('.reviews-summary-stats')).toContainText('12');
+  await expect(page.locator('.reviews-preview-checks span')).toHaveCount(8);
   await expect(page.locator('.reviews-detail-tabs button')).toHaveCount(6);
   await expect(page.locator('.reviews-context-card')).toHaveCount(6);
   await expect(page.locator('.reviews-context-panels')).toContainText('Trusted-main Readiness');
@@ -104,5 +108,11 @@ test('local Reviews mock uses its fixture without provider reads or review write
   const lastMobileCheck = page.locator('.reviews-preview-checklist li').last();
   await lastMobileCheck.scrollIntoViewIfNeeded();
   await expect(lastMobileCheck).toBeInViewport();
+  const lastMobileRequiredCheck = page.locator('.reviews-preview-checks span').last();
+  await lastMobileRequiredCheck.scrollIntoViewIfNeeded();
+  await expect(lastMobileRequiredCheck).toBeInViewport();
+  const mobileMerge = page.locator('.reviews-merge-button');
+  await mobileMerge.scrollIntoViewIfNeeded();
+  await expect(mobileMerge).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });

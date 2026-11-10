@@ -80,7 +80,8 @@
 .reviews-preview-checks span { display: flex; justify-content: space-between; gap: 5px; font-size: 9px; }
 .reviews-preview-checks b { color: #a59caf; font-weight: 500; }
 .reviews-design-preview .reviews-summary-stats b { color: #ef635f; }
-.reviews-design-preview .reviews-summary-stats > div:nth-child(4) b { color: #56dfa8; }
+.reviews-design-preview .reviews-summary-stats > div:nth-child(2) b,
+.reviews-design-preview .reviews-summary-stats > div:nth-child(6) b { color: #56dfa8; }
 .reviews-design-preview .reviews-summary-actions .mantine-Button-root { opacity: 1; }
 .reviews-design-preview .reviews-summary-copy { max-height: 66px; margin: 7px 9px; overflow: hidden; }
 .reviews-design-preview .reviews-summary-stats { gap: 4px; padding: 0 8px 6px; }
@@ -169,4 +170,7 @@
   .reviews-design-preview .reviews-context-panels { flex-basis: auto; grid-template-columns: 1fr; grid-template-rows: none; grid-auto-rows: auto; overflow: visible; }
   .reviews-design-preview .reviews-context-card,
   .reviews-design-preview .reviews-preview-card-list { overflow: visible; }
+}
+@media (max-width: 760px) {
+  .reviews-design-preview .reviews-summary { overflow-y: auto; }
 }

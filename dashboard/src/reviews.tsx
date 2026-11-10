@@ -20,6 +20,7 @@ import { PanelCard } from './PanelCard';
 import { CodeDiff, ReviewPreviewDiff } from './reviews-preview-diff';
 import { GitHubMarkdown } from './reviews-markdown';
 import { ReviewPreviewContext } from './reviews-preview-context';
+import { ReviewPreviewSummary } from './reviews-preview-summary';
 import { reviewPreviewDiff, reviewPreviewProject, reviewPreviewPullRequests } from './review-preview';
 import './reviews.css';
 import './reviews-detail.css';
@@ -638,18 +639,16 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
           <GitHubMarkdown className="reviews-summary-copy reviews-markdown" value={section === 'local-branches'
             ? selected?.output ?? selected?.error ?? 'Select a local branch to review its agent run.'
             : selectedProviderItem?.body ?? 'Select a GitHub item to review its description.'} />
-          <div className="reviews-summary-stats">
-            <div><span>Files changed</span><b>{designPreview ? '6' : section === 'local-branches' && diffStats ? `${diffStats.files}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
-            <div><span>Lines added</span><b>{designPreview ? '+427' : section === 'local-branches' && diffStats ? `+${diffStats.added}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
-            <div><span>{designPreview ? 'Risk score' : 'Lines removed'}</span><b>{designPreview ? '78/100 · High' : section === 'local-branches' && diffStats ? `−${diffStats.removed}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
-            <div><span>Evidence completeness</span><b>{designPreview ? '94%' : 'Unavailable'}</b></div>
-          </div>
-          <div className="reviews-checks-heading"><b>Required checks</b><span>{designPreview ? '8/8 All Passed' : 'Unavailable'}</span></div>
-          <div className={`reviews-check-empty${designPreview ? ' reviews-preview-checks' : ''}`}>
-            {designPreview ? <><span>✓ CI / Build (8 jobs) <b>3m 41s</b></span><span>✓ Tests (1,284) <b>4m 07s</b></span>
-              <span>✓ Coverage (87.6% ≥ 85%) <b>28s</b></span><span>✓ Security Scan (SAST/SCA) <b>1m 32s</b></span>
-              <span>✓ Evidence Completeness (≥ 90%) <b>94%</b></span></> : <><IconLock size={16} /> Checks and policy results need provider data.</>}
-          </div>
+          {designPreview ? <ReviewPreviewSummary /> : <>
+            <div className="reviews-summary-stats">
+              <div><span>Files changed</span><b>{section === 'local-branches' && diffStats ? `${diffStats.files}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
+              <div><span>Lines added</span><b>{section === 'local-branches' && diffStats ? `+${diffStats.added}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
+              <div><span>Lines removed</span><b>{section === 'local-branches' && diffStats ? `−${diffStats.removed}${diff.data?.truncated ? '+' : ''}` : 'Unavailable'}</b></div>
+              <div><span>Evidence completeness</span><b>Unavailable</b></div>
+            </div>
+            <div className="reviews-checks-heading"><b>Required checks</b><span>Unavailable</span></div>
+            <div className="reviews-check-empty"><IconLock size={16} /> Checks and policy results need provider data.</div>
+          </>}
           <div className="reviews-summary-actions">
             <Button variant="default" disabled fullWidth><IconDownload size={14} /> Export evidence</Button>
             <div className="reviews-summary-review-actions">
