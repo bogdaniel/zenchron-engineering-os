@@ -322,7 +322,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
   if (query.isError || !activeWorkflow) {
     return <div className="workflow-page"><p role="alert">{query.error?.message ?? 'No workflows available'}</p></div>;
   }
-  return <section className="workflow-page">
+  return <section className={`workflow-page${designPreview && section === 'Builder' ? ' workflow-run-mock' : ''}`}>
     <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="New Workflow">
       <TextInput
         label="Workflow name" value={createName} onChange={(event) => setCreateName(event.currentTarget.value)}
@@ -342,16 +342,22 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     <div className={`workflow-builder-layout${designPreview ? ' workflow-design-preview' : ''}${sectionPreview ? ' workflow-section-view' : ''}`}>
       <div className={`workflow-page-heading${sectionPreview ? ' workflow-section-heading' : ''}`}>
         <PageHeading
-          eyebrow={designPreview ? <>Workflows <IconChevronRight size={10} /> Workflow Builder</> : 'ORCHESTRATION'}
+          eyebrow={designPreview ? <>
+            <span className="workflow-desktop-eyebrow">Workflows <IconChevronRight size={10} /> Workflow Builder</span>
+            <span className="workflow-mobile-eyebrow">Objective</span>
+          </> : 'ORCHESTRATION'}
           title={<>
             <span className="workflow-desktop-title">Workflow Builder — {activeWorkflow.name}</span>
             <span className="workflow-mobile-title">Workflow Orchestration</span>
           </>}
-          titleAdornment={<Badge color={status === 'active' ? 'green' : 'gray'}>{status}</Badge>}
+          titleAdornment={<Badge color={status === 'active' ? 'green' : 'gray'}>{designPreview ? <>
+            <span className="workflow-desktop-status">Active</span>
+            <span className="workflow-mobile-status">Running</span>
+          </> : status}</Badge>}
           titleClassName="workflow-title-line"
           description={<>
             <span className="workflow-desktop-description">{activeWorkflow.description}</span>
-            <span className="workflow-mobile-description">{activeWorkflow.name}</span>
+            <span className="workflow-mobile-description">Ship AI code review v2</span>
           </>}
         />
         {sectionPreview ? <div className="workflow-toolbar workflow-section-meta" aria-label="Workflow summary">

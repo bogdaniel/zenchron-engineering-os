@@ -55,8 +55,10 @@ flowchart LR
 - On desktop the component palette spans the canvas and run-preview rows, while the inspector spans the header through the
   preview. The Overview and phone summaries group configured node types into six readable workflow stages with concise
   action captions; component and connection totals still report the full saved graph. On phones, the preview uses compact
-  stage coordinates so all six stages fit the read-only graph overview beneath the compact heading and save action. Live
-  mode keeps honest empty run states
+  stage coordinates so all six stages fit the read-only graph overview. The local phone run mock uses the Objective,
+  Workflow Orchestration, Ship AI code review v2, and Running labels from the reference; it hides the desktop builder
+  toolbar and section tabs, keeps the four run-detail tabs, and fits the status, task, and approval panels above the fixed
+  phone navigation. Live mode keeps honest empty run states
   when no execution exists; the local mock route uses a static run fixture for the supplied run-detail design. The
   editor stays desktop-only.
 - The builder content stays within the supplied desktop frame width while the shared app shell provides the same rail and

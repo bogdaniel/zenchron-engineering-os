@@ -12,7 +12,13 @@ test('phone Workflow mock shows the sample run, task progress, and approvals wit
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#workflows');
 
+  await expect(page.locator('.workflow-mobile-eyebrow')).toHaveText('Objective');
+  await expect(page.locator('.workflow-desktop-eyebrow')).toBeHidden();
   await expect(page.getByRole('heading', { name: 'Workflow Orchestration' })).toBeVisible();
+  await expect(page.locator('.workflow-mobile-description')).toHaveText('Ship AI code review v2');
+  await expect(page.locator('.workflow-mobile-status')).toHaveText('Running');
+  await expect(page.getByRole('navigation', { name: 'Workflow sections' })).toBeHidden();
+  await expect(page.locator('.workflow-toolbar')).toBeHidden();
   await expect(page.locator('.workflow-mobile-overview .workflow-overview-canvas')).toBeVisible();
   const overviewNodes = page.locator('.workflow-mobile-overview .workflow-node');
   await expect(overviewNodes).toHaveCount(6);
@@ -36,6 +42,12 @@ test('phone Workflow mock shows the sample run, task progress, and approvals wit
   await expect(page.locator('.workflow-mobile-approval-row')).toHaveCount(2);
   await expect(page.locator('.workflow-mobile-approval-row').last()).toContainText('Awaiting approval');
   await expect(page.locator('.workflow-mobile-approval-row small').last()).toHaveCSS('font-size', '10px');
+  const approvalsFitInitialViewport = await page.evaluate(() => {
+    const approval = document.querySelector('.workflow-mobile-run-approvals')!.getBoundingClientRect();
+    const navigation = document.querySelector('.sidebar nav')!.getBoundingClientRect();
+    return approval.top >= 0 && approval.bottom <= navigation.top;
+  });
+  expect(approvalsFitInitialViewport, 'the full approval card should fit above the fixed phone navigation').toBe(true);
   await expect(page.getByRole('button', { name: 'Review' })).toBeEnabled();
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   await expect(page.locator('#workflow-mobile-run-tasks')).toBeInViewport();
