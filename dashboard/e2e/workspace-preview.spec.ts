@@ -18,6 +18,18 @@ test('local Product Workspace mock matches the supplied overview without protect
   await expect(page.getByText('Release Streams')).toBeVisible();
   await expect(page.getByText('Stakeholders (8)')).toBeVisible();
   await expect(page.locator('.workspace-mock-product')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Filter products: All' }).click();
+  await page.getByRole('menuitem', { name: 'Planning' }).click();
+  await expect(page.locator('.workspace-mock-product')).toHaveCount(1);
+  await expect(page.locator('.workspace-mock-product')).toContainText('Atlas Workspace');
+  await page.getByRole('button', { name: 'Filter products: Planning' }).click();
+  await page.getByRole('menuitem', { name: 'All', exact: true }).click();
+  await expect(page.locator('.workspace-mock-product')).toHaveCount(5);
+  const favorite = page.getByRole('button', { name: 'Add Nova Platform to favorites' });
+  await favorite.click();
+  await expect(page.getByRole('button', { name: 'Remove Nova Platform from favorites' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Remove Nova Platform from favorites' }).click();
+  await expect(page.getByRole('button', { name: 'Add Nova Platform to favorites' })).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.workspace-mock-card')).toHaveCount(9);
   await expect(page.locator('.workspace-mock-roadmap-row')).toHaveCount(4);
   await expect(page.locator('.workspace-mock-objectives > div')).toHaveCount(5);

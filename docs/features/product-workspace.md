@@ -9,8 +9,9 @@ stakeholders, and release streams remain unavailable without their source servic
 An unauthenticated localhost session renders the supplied Product Workspace overview at `/#workspace` in the existing
 dashboard shell. Its roadmap, objective progress, connected services, people, releases, decisions, and delivery metrics
 are illustrative. Selecting a product updates its roadmap, objectives, repository names, decisions, and preview metrics.
-Search, product selection, section tabs, card links, roadmap view and quarter controls, and delivery time range work
-locally; adding a product changes only preview state, and sharing does not send invitations. This state
+Search, All/Active/Planning status filters, per-product favorites, product selection, section tabs, card links, roadmap
+view and quarter controls, and delivery time range work locally; adding a product changes only preview state, and
+sharing does not send invitations. This state
 makes no protected product, objective, workflow, agent, or repository writes.
 
 ## Feature diagram
@@ -36,7 +37,7 @@ flowchart LR
     Missing[Files, decisions, stakeholders,<br/>and release streams: unavailable]
     Browser --> Missing
     Preview[Local unauthenticated session] -->|Illustrative fixture and local UI state| Mock[Product Workspace mock overview]
-    Mock -->|Search, selection, tabs, temporary add| Local[Browser component state only]
+    Mock -->|Search, status filter, favorites, selection, tabs, temporary add| Local[Browser component state only]
     Mock --> MockData[Roadmap · objectives · repositories · workflows<br/>files · stakeholders · releases · decisions · metrics]
 ```
 

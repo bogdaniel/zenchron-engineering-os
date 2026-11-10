@@ -3,9 +3,9 @@ import { Badge, Button, Menu, Modal, Progress, TextInput } from '@mantine/core';
 import type { ReactNode } from 'react';
 import {
   IconActivity, IconApps, IconBook, IconBrandFigma, IconBrandGithub, IconCalendarTime, IconChartBar,
-  IconChevronDown, IconChevronRight, IconCode, IconCube, IconDots, IconFileText, IconFolder,
+  IconChevronDown, IconChevronRight, IconCode, IconCube, IconDots, IconFileText, IconFilter, IconFolder,
   IconGitBranch, IconHierarchy, IconHistory, IconHome, IconLink, IconMap2,
-  IconPlayerPlay, IconRobot, IconRocket, IconSearch, IconShare, IconStack2, IconTarget, IconUsers,
+  IconPlayerPlay, IconRobot, IconRocket, IconSearch, IconShare, IconStack2, IconStar, IconTarget, IconUsers,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
@@ -73,6 +73,8 @@ function Card({ title, description, icon, action, onAction, hidden, className, c
 export function WorkspaceDesignPreview() {
   const [search, setSearch] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<string>(products[0][0]);
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Planning'>('All');
+  const [favoriteProducts, setFavoriteProducts] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<PreviewTab>('Overview');
   const [roadmapView, setRoadmapView] = useState<'Roadmap' | 'Timeline'>('Roadmap');
   const [roadmapQuarter, setRoadmapQuarter] = useState(quarterOptions[1]);
@@ -83,12 +85,14 @@ export function WorkspaceDesignPreview() {
   const [shareOpen, setShareOpen] = useState(false);
   const [stakeholdersOpen, setStakeholdersOpen] = useState(false);
   const productNames = [...products.map(([name]) => name), ...addedProducts];
-  const visibleProducts = productNames.filter((name) => name.toLowerCase().includes(search.trim().toLowerCase()));
+  const visibleProducts = productNames.filter((name) => name.toLowerCase().includes(search.trim().toLowerCase()) &&
+    (statusFilter === 'All' || (products.find(([productName]) => productName === name)?.[2] ?? 'Active') === statusFilter));
   const isDuplicateProduct = productNames.some((name) => name.toLowerCase() === newProductName.trim().toLowerCase());
   const productDetails = products.find(([name]) => name === selectedProduct);
   const productDescription = productDetails?.[1] ?? 'Product workspace preview';
   const productIndex = Math.max(0, products.findIndex(([name]) => name === selectedProduct)) % products.length;
   const productSlug = selectedProduct.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const isFavorite = favoriteProducts.includes(selectedProduct);
   const selectedInitiatives = initiatives.map((initiative, index) => selectedProduct === products[0][0] ? initiative : [
     `${selectedProduct} ${['v2.0', 'SDK', 'Controls', 'Developer Experience'][index]}`,
     initiative[1], initiative[2], initiative[3], initiative[4],
@@ -125,8 +129,15 @@ export function WorkspaceDesignPreview() {
     <aside className="workspace-mock-directory" aria-label="Product workspaces">
       <PanelHeading title="Product Workspace" description="Organize engineering work by product, roadmap, and delivery." />
       <button className="workspace-mock-new" onClick={() => setNewProductOpen(true)} type="button">＋ New Workspace</button>
-      <TextInput aria-label="Search products" placeholder="Search products…" leftSection={<IconSearch size={14} />}
-        value={search} onChange={(event) => setSearch(event.currentTarget.value)} />
+      <div className="workspace-mock-search-row">
+        <TextInput aria-label="Search products" placeholder="Search products…" leftSection={<IconSearch size={14} />}
+          value={search} onChange={(event) => setSearch(event.currentTarget.value)} />
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target><button className="workspace-mock-filter" type="button" aria-label={`Filter products: ${statusFilter}`}><IconFilter size={13} /></button></Menu.Target>
+          <Menu.Dropdown>{(['All', 'Active', 'Planning'] as const).map((filter) => <Menu.Item key={filter}
+            onClick={() => setStatusFilter(filter)}>{filter}</Menu.Item>)}</Menu.Dropdown>
+        </Menu>
+      </div>
       <div className="workspace-mock-products">
         {visibleProducts.map((name) => {
           const product = products.find(([productName]) => productName === name);
@@ -142,14 +153,19 @@ export function WorkspaceDesignPreview() {
         </button>;
         })}
         {!visibleProducts.length && <p className="workspace-mock-empty">No products match your search.</p>}
-        <button className="workspace-mock-all" onClick={() => setSearch('')} type="button"><IconApps size={15} /> All Products ({products.length + addedProducts.length}) <IconChevronRight size={13} /></button>
+        <button className="workspace-mock-all" onClick={() => { setSearch(''); setStatusFilter('All'); }} type="button"><IconApps size={15} /> All Products ({products.length + addedProducts.length}) <IconChevronRight size={13} /></button>
       </div>
     </aside>
 
     <div className="workspace-mock-detail">
       <header className="workspace-mock-heading">
         <span className="workspace-mock-product-icon large"><IconStack2 size={25} /></span>
-        <div><h1>{selectedProduct}</h1><p>{selectedProduct === products[0][0] ? 'Developer platform, APIs, and core services for building on Zenchron.' : productDescription}</p>
+        <div><div className="workspace-mock-name-row"><h1>{selectedProduct}</h1><button className="workspace-mock-favorite" type="button"
+          aria-label={`${isFavorite ? 'Remove' : 'Add'} ${selectedProduct} ${isFavorite ? 'from' : 'to'} favorites`}
+          aria-pressed={isFavorite} onClick={() => setFavoriteProducts((current) => current.includes(selectedProduct)
+            ? current.filter((name) => name !== selectedProduct) : [...current, selectedProduct])}>
+          <IconStar size={17} fill={isFavorite ? 'currentColor' : 'none'} /></button></div>
+          <p>{selectedProduct === products[0][0] ? 'Developer platform, APIs, and core services for building on Zenchron.' : productDescription}</p>
           <span className="workspace-mock-meta"><b>● Active</b><i /> Product <i /> Owner: Platform Eng <i /> Updated 2m ago</span></div>
         <button onClick={() => setShareOpen(true)} type="button"><IconShare size={13} /> Share</button>
         <Menu position="bottom-end" withinPortal>
