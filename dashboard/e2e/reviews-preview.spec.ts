@@ -55,7 +55,7 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(pagination.getByRole('button')).toHaveCount(8);
   await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
   await expect(pagination.locator('button:not([disabled])')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'New PR' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'New PR' })).toBeEnabled();
   await expect(page.locator('.reviews-detail-heading')).toContainText('#4827 Add AI feedback signals and evidence capture');
   await expect(page.locator('.reviews-pr-diff')).toContainText('collectArtifacts');
   await expect(page.locator('.reviews-design-diff')).toContainText('evidence_capture.ts');
@@ -88,7 +88,7 @@ test('local Reviews mock uses its fixture without provider reads or review write
   expect(await page.locator('.reviews-preview-suggestions button').isDisabled()).toBe(true);
   await expect(page.locator('.reviews-summary')).toContainText('Squash & Merge');
   await expect(page.locator('.reviews-summary')).toContainText('trusted-main');
-  await expect(page.getByRole('switch', { name: 'Auto-merge when ready' })).toBeDisabled();
+  await expect(page.getByRole('switch', { name: 'Auto-merge when ready' })).toBeChecked();
   const workspaceBounds = await page.locator('.reviews-workspace').boundingBox();
   expect(workspaceBounds!.y + workspaceBounds!.height).toBeLessThanOrEqual(900);
   const summaryLayout = await page.evaluate(() => {
@@ -105,13 +105,36 @@ test('local Reviews mock uses its fixture without provider reads or review write
     return checks.bottom <= actions.top && merge.bottom <= summary.bottom;
   });
   expect(checksFit).toBe(true);
-  await expect(page.locator('.reviews-summary-review-actions').getByRole('button', { name: 'Approve' })).toBeDisabled();
-  await expect(page.locator('.reviews-summary-review-actions').getByRole('button', { name: 'Request changes' })).toBeDisabled();
+  await expect(page.locator('.reviews-summary-review-actions').getByRole('button', { name: 'Approve' })).toBeEnabled();
+  await expect(page.locator('.reviews-summary-review-actions').getByRole('button', { name: 'Request changes' })).toBeEnabled();
+
+  await page.getByRole('button', { name: 'New PR' }).click();
+  const newPR = page.getByRole('dialog', { name: 'New pull request · preview only' });
+  await newPR.getByRole('textbox', { name: 'Pull request title' }).fill('Preview evidence improvements');
+  await newPR.getByRole('textbox', { name: 'Source branch' }).fill('feature/preview-evidence');
+  await newPR.getByRole('button', { name: 'Create preview PR' }).click();
+  await expect(page.locator('.reviews-provider-card')).toHaveCount(6);
+  await expect(page.locator('.reviews-detail-heading')).toContainText('#4828 Preview evidence improvements');
+  const basePR = page.locator('.reviews-provider-card').filter({ hasText: '#4827' });
+  await basePR.click();
+  await page.getByRole('button', { name: 'Approve', exact: true }).click();
+  await expect(page.locator('.reviews-detail-heading .reviews-required')).toHaveText('Approved');
+  await page.getByRole('button', { name: 'Request changes' }).click();
+  await expect(page.locator('.reviews-detail-tab-panel')).toContainText('Changes requested on PR #4827');
+  const autoMerge = page.getByRole('switch', { name: 'Auto-merge when ready' });
+  await page.locator('.reviews-governance-row').filter({ hasText: 'Auto-merge (when ready)' }).locator('label').click();
+  await expect(autoMerge).not.toBeChecked();
+  const evidenceDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export evidence' }).click();
+  expect((await evidenceDownload).suggestedFilename()).toBe('pr-4827-preview-evidence.json');
+  await page.getByRole('button', { name: 'Merge to Trusted-main' }).click();
+  await expect(page.locator('.reviews-detail-heading .reviews-required')).toHaveText('Merged');
+  await expect(page.getByRole('button', { name: 'Merged to Trusted-main' })).toBeVisible();
   expect(apiRequests.filter(({ path }) => path !== '/api/v1/auth/session')).toEqual([]);
   expect(apiRequests.filter(({ method }) => method !== 'GET')).toEqual([]);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/#reviews');
+  await page.reload();
   const mobileMetrics = await page.locator('.reviews-metric').evaluateAll((cards) => cards.map((card) => ({
     height: card.clientHeight,
     contentHeight: card.scrollHeight,

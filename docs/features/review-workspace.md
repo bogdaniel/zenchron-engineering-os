@@ -76,9 +76,10 @@ supplied visual can be reviewed without a GitHub session. The fixture is read-on
 requests, and is never used in the authenticated Reviews route.
 Its mock also shows six metric values with illustrative trend badges and sparklines, approval and policy context,
 trusted-main readiness, and merge strategy details. The six top navigation tabs switch to their corresponding local
-detail panels, and the queue status chips filter the five sample PRs without provider reads or writes. The repository/date
-scope, New PR, provider review and merge actions, and pagination beyond the local fixture remain disabled because the
-preview has no backing operations or additional records.
+detail panels, and the queue status chips filter the sample PRs without provider reads or writes. Creating a preview PR, approving,
+requesting changes, exporting fixture evidence, toggling auto-merge, and merging update local preview state only. The
+repository/date scope and pagination beyond the local fixture remain unavailable because the preview has no additional
+repository metadata or page records. The authenticated route still needs provider operations for protected review actions.
 
 ## Verification
 

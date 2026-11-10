@@ -2,7 +2,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, colorSchemeDark, themeQuartz } from 'ag-grid-community';
 import type { ColDef } from 'ag-grid-community';
 import { Sparkline } from '@mantine/charts';
-import { Badge, Button, Select, Switch, Textarea, TextInput } from '@mantine/core';
+import { Badge, Button, Modal, Select, Switch, Textarea, TextInput } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -124,6 +124,13 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
   const [providerSearch, setProviderSearch] = useState('');
   const [providerFilter, setProviderFilter] = useState<ProviderQueueFilter>('all');
   const [previewQueueFilter, setPreviewQueueFilter] = useState<PreviewQueueFilter>('all');
+  const [previewQueueStatuses, setPreviewQueueStatuses] = useState<Record<number, Exclude<PreviewQueueFilter, 'all'>>>({});
+  const [previewMergedNumbers, setPreviewMergedNumbers] = useState<number[]>([]);
+  const [previewAutoMerge, setPreviewAutoMerge] = useState(true);
+  const [previewPullRequests, setPreviewPullRequests] = useState(reviewPreviewPullRequests);
+  const [newPreviewPROpen, setNewPreviewPROpen] = useState(false);
+  const [newPreviewPRTitle, setNewPreviewPRTitle] = useState('');
+  const [newPreviewPRBranch, setNewPreviewPRBranch] = useState('');
   const [previewSection, setPreviewSection] = useState<'pull-requests' | 'code-review' | 'evidence' | 'governance' | 'policies' | 'trusted-main'>('pull-requests');
   const [comment, setComment] = useState('');
   const [providerReviewBody, setProviderReviewBody] = useState('');
@@ -147,10 +154,11 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
   });
   const localBranches = runs.filter((run) => run.diff_available || ['queued', 'running', 'cancelled'].includes(run.status));
   const selected = localBranches.find((run) => run.id === selectedID) ?? localBranches[0];
-  const providerItems = section === 'pull-requests' ? pullRequests.data ?? [] : issues.data ?? [];
+  const providerItems = section === 'pull-requests' ? designPreview ? previewPullRequests : pullRequests.data ?? [] : issues.data ?? [];
   const searchTerm = providerSearch.trim().toLowerCase();
   const previewStatusByNumber: Record<number, Exclude<PreviewQueueFilter, 'all'>> = {
     4827: 'in-review', 4819: 'changes-requested', 4816: 'approved', 4812: 'blocked', 4808: 'approved',
+    ...previewQueueStatuses,
   };
   const visibleProviderItems = providerItems.filter((item) => {
     if (!`${item.number} ${item.title} ${item.user.login}`.toLowerCase().includes(searchTerm)) return false;
@@ -176,6 +184,10 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
   const selectedProviderItem = visibleProviderItems.find((item) => item.number === selectedProviderNumber) ?? visibleProviderItems[0];
   const selectedPullRequest = section === 'pull-requests' ? selectedProviderItem as GitHubPullRequest | undefined : undefined;
   const selectedIssue = section === 'issues' ? selectedProviderItem as GitHubIssue | undefined : undefined;
+  const selectedPreviewStatus = selectedPullRequest ? previewQueueStatuses[selectedPullRequest.number]
+    ?? previewStatusByNumber[selectedPullRequest.number] ?? 'in-review' : 'all';
+  const selectedPreviewStatusLabel = selectedPreviewStatus.replaceAll('-', ' ').replace(/^./, (char) => char.toUpperCase());
+  const selectedPreviewMerged = Boolean(selectedPullRequest && previewMergedNumbers.includes(selectedPullRequest.number));
   const providerQuery = section === 'issues' ? issues : pullRequests;
   const pullRequestDiff = useQuery({
     queryKey: ['github-pull-request-diff', designPreview ? 'mock' : selectedProject?.id, selectedPullRequest?.number],
@@ -349,7 +361,7 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
           <PanelHeading className="reviews-panel-heading"
             title={designPreview ? 'Pull Requests (428)' : section === 'pull-requests' ? 'Pull requests' : section === 'issues' ? 'Open issues' : 'Agent runs & local branches'}
             description={section === 'local-branches' ? 'Active requests and isolated agent changes' : selectedProject?.git_remote ?? 'GitHub project data'}
-            actions={designPreview ? <Button className="reviews-new-pr" disabled><IconPlus size={13} /> New PR</Button>
+            actions={designPreview ? <Button className="reviews-new-pr" onClick={() => { setNewPreviewPRTitle(''); setNewPreviewPRBranch(''); setNewPreviewPROpen(true); }}><IconPlus size={13} /> New PR</Button>
               : <Badge className="reviews-required" variant="light">
                 {section === 'local-branches' ? `${localBranches.length} runs` : `${providerItems.length} items`}
               </Badge>} />
@@ -459,7 +471,7 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
               ? selected ? `${selected.project_name} · ${selected.agent_name} · ${selected.worker_name}` : 'Agent-run diffs will appear when a worker completes a run.'
               : selectedProviderItem && selectedProject ? `${selectedProject.name} · opened by ${selectedProviderItem.user.login}`
                 : selectedProject?.git_remote ?? 'GitHub items will appear when a repository is selected.'}
-            actions={<Badge className="reviews-required" variant="light">{designPreview ? 'In Review' : section === 'local-branches'
+            actions={<Badge className="reviews-required" variant="light">{designPreview ? selectedPreviewMerged ? 'Merged' : selectedPreviewStatusLabel : section === 'local-branches'
               ? selected?.status ?? 'Waiting for changes' : selectedProviderItem?.state ?? 'No open item'}</Badge>}
           />
           <div className="reviews-stage-row" aria-label="Review pipeline">
@@ -472,7 +484,10 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
                   )}
                 </span>
                 <b>{stage}</b>
-                <small>{designPreview ? ['2/3 approved', '94% complete', 'All passed', '8/8 passed', 'Ready'][index]
+                <small>{designPreview ? index === 0 && selectedPreviewStatus === 'approved' ? '3/3 approved'
+                    : index === 0 && selectedPreviewStatus === 'changes-requested' ? '1/3 approved'
+                      : index === 4 && selectedPreviewMerged ? 'Merged to trusted-main'
+                        : ['2/3 approved', '94% complete', 'All passed', '8/8 passed', 'Ready'][index]
                     : index === 0 && selectedPullRequest ? (selectedPullRequest.draft ? 'Draft' : 'Open') : 'Unavailable'}</small>
               </div>
             ))}
@@ -493,9 +508,11 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
                     <b>{item.request_changes ? 'Changes requested' : 'Comment'}</b><span>{item.body}</span>
                   </div>)}
                 </div>
-              ) : <p className="reviews-provider-readonly">{section === 'local-branches'
+              ) : <p className="reviews-provider-readonly" role={designPreview && selectedPreviewStatus === 'changes-requested' ? 'status' : undefined}>{section === 'local-branches'
                 ? 'No review comments are attached to this run yet.'
-                : 'Existing GitHub conversation history is not synchronized yet.'}</p>}
+                : designPreview && previewQueueStatuses[selectedPullRequest?.number ?? 0] === 'changes-requested'
+                  ? `Changes requested on PR #${selectedPullRequest?.number} · simulated locally for this preview.`
+                  : 'Existing GitHub conversation history is not synchronized yet.'}</p>}
               {selectedIssue && <div className="reviews-github-composer">
                 <Textarea aria-label="GitHub issue comment" placeholder="Add a comment to this issue…"
                   value={issueCommentBody} onChange={(event) => setIssueCommentBody(event.currentTarget.value)}
@@ -675,10 +692,22 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             <div className="reviews-check-empty"><IconLock size={16} /> Checks and policy results need provider data.</div>
           </>}
           <div className="reviews-summary-actions">
-            <Button variant="default" disabled fullWidth><IconDownload size={14} /> Export evidence</Button>
+            <Button variant="default" disabled={!designPreview || !selectedPullRequest} fullWidth onClick={() => {
+              if (!selectedPullRequest) return;
+              const url = URL.createObjectURL(new Blob([JSON.stringify({ pullRequest: selectedPullRequest, diff: reviewPreviewDiff }, null, 2)], { type: 'application/json' }));
+              const link = document.createElement('a');
+              link.href = url; link.download = `pr-${selectedPullRequest.number}-preview-evidence.json`; link.click();
+              window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }}><IconDownload size={14} /> Export evidence</Button>
             <div className="reviews-summary-review-actions">
-              <Button color="green" disabled>Approve</Button>
-              {selectedPullRequest && <Button color="violet" disabled={designPreview} onClick={() => setDetailTab('conversations')}>Request changes</Button>}
+              <Button color="green" disabled={!designPreview || !selectedPullRequest} onClick={() => {
+                if (!selectedPullRequest) return;
+                setPreviewQueueStatuses((current) => ({ ...current, [selectedPullRequest.number]: 'approved' }));
+              }}>{selectedPreviewStatus === 'approved' ? 'Approved' : 'Approve'}</Button>
+              {selectedPullRequest && <Button color="violet" onClick={() => {
+                if (designPreview) setPreviewQueueStatuses((current) => ({ ...current, [selectedPullRequest.number]: 'changes-requested' }));
+                setDetailTab('conversations');
+              }}>{selectedPreviewStatus === 'changes-requested' ? 'Changes requested' : 'Request changes'}</Button>}
               {selectedIssue && <Button variant="default" onClick={() => setDetailTab('conversations')}>Add comment</Button>}
             </div>
           </div>
@@ -688,12 +717,37 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             ? selected?.base_branch || 'Unavailable' : selectedPullRequest?.base.ref || 'Unavailable'}</b></div>
           {designPreview && <>
             <div className="reviews-governance-row"><span>Policy</span><b>Core Product v2.4</b></div>
-            <div className="reviews-governance-row"><span>Auto-merge (when ready)</span><Switch checked disabled size="xs" aria-label="Auto-merge when ready" /></div>
+            <div className="reviews-governance-row"><span>Auto-merge (when ready)</span><Switch checked={previewAutoMerge} onChange={(event) => setPreviewAutoMerge(event.currentTarget.checked)} size="xs" aria-label="Auto-merge when ready" /></div>
           </>}
-          <Button className="reviews-merge-button" disabled fullWidth>{designPreview ? 'Merge to Trusted-main' : 'Merge to protected branch'}</Button>
+          <Button className="reviews-merge-button" disabled={!designPreview || !selectedPullRequest} fullWidth onClick={() => {
+            if (!selectedPullRequest) return;
+            setPreviewMergedNumbers((current) => current.includes(selectedPullRequest.number) ? current : [...current, selectedPullRequest.number]);
+            setPreviewQueueStatuses((current) => ({ ...current, [selectedPullRequest.number]: 'approved' }));
+          }}>{designPreview ? selectedPreviewMerged ? 'Merged to Trusted-main' : 'Merge to Trusted-main' : 'Merge to protected branch'}</Button>
           </PanelCard>
         </Panel>
       </Group>
+      <Modal opened={newPreviewPROpen} onClose={() => setNewPreviewPROpen(false)} title="New pull request · preview only" centered>
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          const title = newPreviewPRTitle.trim();
+          const branch = newPreviewPRBranch.trim();
+          if (!title || !branch) return;
+          const number = Math.max(...previewPullRequests.map((item) => item.number), 4827) + 1;
+          const item = { ...reviewPreviewPullRequests[0], number, title, draft: true, updated_at: new Date().toISOString(),
+            user: { login: 'Alex Chen' }, head: { ref: branch }, body: 'Illustrative pull request created in the local preview.' };
+          setPreviewPullRequests((current) => [item, ...current]);
+          setPreviewQueueStatuses((current) => ({ ...current, [number]: 'draft' }));
+          setPreviewQueueFilter('all'); setSelectedProviderNumber(number); setPreviewSection('pull-requests'); setDetailTab('code-changes');
+          setNewPreviewPROpen(false);
+        }}>
+          <TextInput label="Pull request title" aria-label="Pull request title" required value={newPreviewPRTitle}
+            onChange={(event) => setNewPreviewPRTitle(event.currentTarget.value)} />
+          <TextInput mt="sm" label="Source branch" aria-label="Source branch" required value={newPreviewPRBranch}
+            onChange={(event) => setNewPreviewPRBranch(event.currentTarget.value)} />
+          <Button mt="md" type="submit" disabled={!newPreviewPRTitle.trim() || !newPreviewPRBranch.trim()}>Create preview PR</Button>
+        </form>
+      </Modal>
     </div>
   );
 }
