@@ -175,6 +175,9 @@ test('Agents local design preview labels illustrative metadata without API reads
   await expect(page.getByRole('heading', { name: 'Agent Profiles (6)' })).toBeVisible();
   await expect(page.locator('.agents-list-panel .agents-count')).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: 'Search agents' })).toHaveCSS('width', '160px');
+  expect(await page.locator('.agent-row-body small').evaluateAll((details) =>
+    details.every((detail) => detail.scrollWidth <= detail.clientWidth)),
+  'desktop preview profile metadata is not ellipsized').toBe(true);
   const summary = page.locator('.agents-profile-summary');
   await expect(summary).toContainText('Model');
   await expect(summary).toContainText('Provider');

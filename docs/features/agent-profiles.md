@@ -29,7 +29,7 @@ exclusive to that preview. Search, status filtering, and name sorting operate on
 duplicate, disable, simulated run, library selection, import/export, and version/history controls update or inspect
 preview data only; they never call the agent APIs.
 Each desktop preview profile also has an options menu to select or duplicate that profile locally; live profile rows do
-not show this preview-only menu.
+not show this preview-only menu. Desktop preview profile metadata stays on one line without truncating its descriptions.
 
 At phone width, the local preview switches to the supplied Agents & Reviews summary: the Agents tab shows recent runs,
 pull request reviews, evidence health, and quick actions; Reviews and Evidence tabs focus their matching panels. Run
