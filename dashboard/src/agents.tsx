@@ -266,6 +266,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
       <div className="agents-title-heading"><span className="agents-title-icon"><IconRobot size={22} /></span>
         <PageHeading title="Agents" description="Manage AI agents, profiles, prompts, tools, and governance." /></div>
       {sampleMode ? <div className="agents-preview-actions">
+        <Badge className="agents-preview-notice" variant="light">ILLUSTRATIVE DATA</Badge>
         <Button className="agents-create-button" disabled leftSection={<IconPlus size={15} />}
           rightSection={<IconChevronDown size={13} />}>Create Agent</Button>
         <Button variant="default" disabled>Agent Library</Button>
@@ -388,10 +389,19 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
                         <TextInput label="Description" {...editForm.getInputProps('description')} />
                       </div>
                     </> : <div className="agents-profile-summary">
-                      <div><small>Provider</small><b>{selected.provider}</b></div>
-                      <div><small>Model</small><b>{selected.model}</b></div>
-                      <div><small>Version</small><b>{sampleMode ? 'v2.4.1' : `v${selected.version}`}</b></div>
-                      <div><small>{sampleMode ? 'Owner' : 'Updated'}</small><b>{sampleMode ? 'Platform Engineering' : new Date(selected.updated_at).toLocaleString()}</b></div>
+                      {sampleMode ? <>
+                        <div><small>Model</small><b>{selected.model}</b></div>
+                        <div><small>Provider</small><b>{selected.provider}</b></div>
+                        <div><small>Status</small><b>{selected.status === 'active' ? 'Active' : 'Disabled'}</b></div>
+                        <div><small>Owner</small><b>Platform Engineering</b></div>
+                        <div><small>Created</small><b>Jan 12, 2025</b></div>
+                        <div><small>Last Updated</small><b>Jan 26, 2025, 10:24 AM</b></div>
+                      </> : <>
+                        <div><small>Provider</small><b>{selected.provider}</b></div>
+                        <div><small>Model</small><b>{selected.model}</b></div>
+                        <div><small>Version</small><b>v{selected.version}</b></div>
+                        <div><small>Updated</small><b>{new Date(selected.updated_at).toLocaleString()}</b></div>
+                      </>}
                     </div>}
                   </PanelCard>
                   <PanelCard className="agents-overview-card" withBorder>

@@ -22,6 +22,10 @@ Cancel restores the saved values, and Save persists the profile through the vers
 directly on the selected saved profile. Prompt previews are truncated for display, with the full prompt available on
 hover. Metrics use recorded data only.
 
+The unauthenticated local design preview is fixture-only and makes no agent or run API requests. Its metrics and
+profile history are illustrative and carry a visible `ILLUSTRATIVE DATA` label; fields absent from the live profile
+contract, including owner and creation time, stay exclusive to that preview.
+
 The worker enforces `code.search`, `code.write`, `docs.search`, `git.diff`, and `git.read` when an OpenAI-compatible
 runtime endpoint is configured on that worker. `code.write` is opt-in and applies only to the run's isolated Git
 worktree. `tests.run` remains saved profile metadata but is not exposed to the model. Provider identifiers are labels;

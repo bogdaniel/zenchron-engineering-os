@@ -438,6 +438,7 @@
   font-size: 12px;
 }
 .agents-design-preview .agents-metric { min-height: 70px; padding: 8px 11px; }
+.agents-preview-notice { border: 1px solid #55416e; color: #c9a4eb; background: #241b31; font-size: 8px; letter-spacing: .04em; }
 .agents-design-preview .agents-metric.blue { border-color: #2e5680; background: linear-gradient(145deg, #142238, #12131d 80%); }
 .agents-design-preview .agents-metric .metric-top { font-size: 11px; }
 .agents-design-preview .agents-metric strong { font-size: 22px; }

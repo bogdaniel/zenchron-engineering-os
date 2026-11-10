@@ -174,6 +174,37 @@ test('Agents phone preview shows all profiles without a nested list scroll', asy
   expect(profileList.overflowY).toBe('visible');
 });
 
+test('Agents local design preview labels illustrative metadata without API reads', async ({ page }) => {
+  const requests: string[] = [];
+  for (const endpoint of ['agents', 'agent-runs']) {
+    await page.route(`**/api/v1/${endpoint}`, (route) => {
+      requests.push(endpoint);
+      return route.fulfill({ status: 401, body: 'authentication required' });
+    });
+  }
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 401, body: 'authentication required',
+  }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  const previewURL = new URL('/#agents', test.info().project.use.baseURL as string);
+  previewURL.hostname = '127.0.0.1';
+  await page.goto(previewURL.toString());
+  await expect(page.locator('.agents-design-preview')).toBeVisible();
+  await expect(page.locator('.agents-preview-notice')).toHaveText('ILLUSTRATIVE DATA');
+  const summary = page.locator('.agents-profile-summary');
+  await expect(summary).toContainText('Model');
+  await expect(summary).toContainText('Provider');
+  await expect(summary).toContainText('Status');
+  await expect(summary).toContainText('Owner');
+  await expect(summary).toContainText('Created');
+  await expect(summary).toContainText('Last Updated');
+  expect(requests).toEqual([]);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.agents-preview-notice')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('Agents empty state uses the primary create action', async ({ page }) => {
   await page.route('**/api/v1/agents', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',
