@@ -25,8 +25,9 @@ hover. Metrics use recorded data only.
 The unauthenticated local design preview is fixture-only and makes no agent or run API requests. Its metrics and
 profile history, including performance deltas, sparklines, durations, and costs, are illustrative and carry a visible
 `ILLUSTRATIVE DATA` label; fields absent from the live profile contract, including owner and creation time, stay
-exclusive to that preview. Search, status filtering, and name sorting operate on the local fixture only; the other
-profile actions remain read-only.
+exclusive to that preview. Search, status filtering, and name sorting operate on the local fixture. Create, duplicate,
+disable, simulated run, library selection, import/export, and version/history controls update or inspect preview data
+only; they never call the agent APIs.
 
 The worker enforces `code.search`, `code.write`, `docs.search`, `git.diff`, and `git.read` when an OpenAI-compatible
 runtime endpoint is configured on that worker. `code.write` is opt-in and applies only to the run's isolated Git
@@ -65,7 +66,7 @@ The API validates field lengths and rejects unknown JSON fields, duplicate tools
 
 - `go test ./cmd/zenchron` covers profile validation, create/update behavior, and persistence through control-plane restart.
 - `cd dashboard && npm run test:e2e -- e2e/z_agents.spec.ts` checks runtime readiness, profile search and edits, and a
-  completed worker run against a loopback model stub; the local preview check covers status filtering and name sorting
+  completed worker run against a loopback model stub; local preview checks cover filters, sorting, and actions
   without API calls.
 - The populated desktop layout fixture uses six profiles (five active) plus a completed run; focused tablet and phone
   checks verify that the profile, detail, and run panels do not overlap.

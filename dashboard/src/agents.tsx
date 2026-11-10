@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LineChart, Sparkline } from '@mantine/charts';
@@ -145,6 +145,11 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
 }) {
   const queryClient = useQueryClient();
   const [selectedID, setSelectedID] = useState<string | null>(null);
+  const [previewItems, setPreviewItems] = useState<Agent[]>(previewAgents);
+  const [previewRunItems, setPreviewRunItems] = useState<AgentRun[]>(previewRuns);
+  const [detailTab, setDetailTab] = useState<string | null>('overview');
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const importInput = useRef<HTMLInputElement>(null);
   const [agentSearch, setAgentSearch] = useState('');
   const [agentStatusFilter, setAgentStatusFilter] = useState<'all' | Agent['status']>('all');
   const [agentSort, setAgentSort] = useState<'default' | 'ascending' | 'descending'>('default');
@@ -152,14 +157,15 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
   const [runOpen, setRunOpen] = useState(false);
   const [runProjectID, setRunProjectID] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [previewNotice, setPreviewNotice] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const agents = useQuery({ queryKey: ['agents'], queryFn: loadAgents, enabled: !designPreview });
   const runs = useQuery({
     queryKey: ['agent-runs'], queryFn: loadAgentRuns, refetchInterval: 3_000, enabled: !designPreview,
   });
   const sampleMode = designPreview;
-  const items = sampleMode ? previewAgents : agents.data ?? [];
-  const runItems = sampleMode ? previewRuns : runs.data ?? [];
+  const items = sampleMode ? previewItems : agents.data ?? [];
+  const runItems = sampleMode ? previewRunItems : runs.data ?? [];
   const profilesLoading = !sampleMode && agents.isLoading;
   const runsLoading = !sampleMode && runs.isLoading;
   const profilesError = !sampleMode && agents.isError;
@@ -272,20 +278,45 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
         <PageHeading title="Agents" description="Manage AI agents, profiles, prompts, tools, and governance." /></div>
       {sampleMode ? <div className="agents-preview-actions">
         <Badge className="agents-preview-notice" variant="light">ILLUSTRATIVE DATA</Badge>
-        <Button className="agents-create-button" disabled leftSection={<IconPlus size={15} />}
-          rightSection={<IconChevronDown size={13} />}>Create Agent</Button>
-        <Button variant="default" disabled>Agent Library</Button>
-        <Button variant="default" disabled rightSection={<IconChevronDown size={13} />}>Import / Export</Button>
+        <Button className="agents-create-button" leftSection={<IconPlus size={15} />}
+          rightSection={<IconChevronDown size={13} />} onClick={() => { createForm.reset(); setSubmitError(''); setCreateOpen(true); }}>Create Agent</Button>
+        <Button variant="default" onClick={() => setLibraryOpen(true)}>Agent Library</Button>
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target><Button variant="default" rightSection={<IconChevronDown size={13} />}>Import / Export</Button></Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item onClick={() => {
+              const url = URL.createObjectURL(new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' }));
+              const link = document.createElement('a');
+              link.href = url; link.download = 'agents-preview.json'; link.click();
+              window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+              setPreviewNotice('Exported illustrative profiles');
+            }}>Export profiles as JSON</Menu.Item>
+            <Menu.Item onClick={() => importInput.current?.click()}>Import profiles from JSON</Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+        <input ref={importInput} hidden type="file" accept="application/json,.json" aria-label="Import agent profiles JSON"
+          onChange={async (event) => {
+            const file = event.currentTarget.files?.[0]; event.currentTarget.value = '';
+            if (!file) return;
+            if (file.size > 1_000_000) { setPreviewNotice('Import failed · file exceeds 1 MB'); return; }
+            try {
+              const parsed = agentsSchema.safeParse(JSON.parse(await file.text()));
+              if (!parsed.success) { setPreviewNotice('Import failed · invalid agent profile JSON'); return; }
+              setPreviewItems(parsed.data); setSelectedID(parsed.data[0]?.id ?? null);
+              setPreviewNotice(`Imported ${parsed.data.length} illustrative profiles`);
+            } catch { setPreviewNotice('Import failed · invalid agent profile JSON'); }
+          }} />
+        {previewNotice && <Text className="agents-preview-feedback" role="status">{previewNotice}</Text>}
       </div>
         : <Button className="agents-create-button" leftSection={<IconPlus size={15} />} onClick={() => {
           setSubmitError(''); createForm.reset(); setCreateOpen(true);
         }}>Create Agent</Button>}
     </div>
     <section className="agents-metrics" aria-label="Agent profile metrics">
-      <MetricCard className="agents-metric purple" label="Total Agents" value={sampleMode ? '6' : totalValue}
+      <MetricCard className="agents-metric purple" label="Total Agents" value={sampleMode ? items.length : totalValue}
         detail={sampleMode ? undefined : 'Saved profiles'} trend={sampleMode && <AgentPreviewKpi change="↑ +2" />}
         icon={<IconRobot size={18} />} />
-      <MetricCard className="agents-metric blue" label="Active Agents" value={sampleMode ? '5' : activeValue}
+      <MetricCard className="agents-metric blue" label="Active Agents" value={sampleMode ? activeCount : activeValue}
         detail={sampleMode ? undefined : 'Enabled profiles'} trend={sampleMode && <AgentPreviewKpi change="↑ +1" color="#16cfcb" />}
         icon={<IconActivity size={18} />} />
       <MetricCard className="agents-metric" label="Total Runs (30d)"
@@ -342,16 +373,16 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
               return <button
                 className={`agent-row${selected?.id === agent.id ? ' selected' : ''}`}
                 key={agent.id}
-                onClick={() => { setSelectedID(agent.id); setSubmitError(''); }}
+                onClick={() => { setSelectedID(agent.id); setSubmitError(''); setDetailTab('overview'); }}
               >
                 <span className="agent-row-icon"><AgentProfileIcon name={agent.name} size={17} /></span>
                 <span className="agent-row-body">
                   <b>{agent.name}</b><small>{agent.description || 'No description'}</small>
                   <small>{agent.provider} · {agent.model}</small>
-                  <small>{sampleMode ? agentsPreviewListMetrics[agent.id].lastRun
+                  <small>{sampleMode ? agentsPreviewListMetrics[agent.id]?.lastRun ?? 'No runs yet'
                     : runsLoading ? 'Run history loading' : runsError ? 'Run history unavailable'
                       : latestRun ? `Last run ${relativeRunTime(latestRun.updated_at)}` : 'No runs yet'}</small>
-                  <small>{sampleMode ? `Cost: ${agentsPreviewListMetrics[agent.id].cost} · Success: ${agentsPreviewListMetrics[agent.id].success}`
+                  <small>{sampleMode ? `Cost: ${agentsPreviewListMetrics[agent.id]?.cost ?? '—'} · Success: ${agentsPreviewListMetrics[agent.id]?.success ?? '—'}`
                     : successRate !== undefined ? `${completedRuns.length} completed · ${successRate}% success` : ''}</small>
                   <AgentToolBadges tools={sampleMode ? agentsPreviewTags[agent.id] ?? agent.tools : agent.tools} limit={3} />
                 </span>
@@ -370,7 +401,38 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
             description={selected.description || 'Agent profile'}
             icon={<span className="agent-detail-icon"><AgentProfileIcon name={selected.name} size={20} /></span>}
             actions={<div className="agents-detail-actions"><Badge className={`agent-status ${selected.status}`} variant="light">{selected.status}</Badge>
-              {sampleMode && <><Button className="agents-run-button" disabled leftSection={<IconPlayerPlay size={13} />}>Run Agent</Button><Button variant="default" disabled>Duplicate Profile</Button><Button variant="default" disabled>Disable</Button><Button variant="default" disabled>Compare Versions</Button><Button variant="default" disabled aria-label="More agent actions"><IconDots size={15} /></Button></>}
+              {sampleMode && <>
+                <Button className="agents-run-button" disabled={selected.status !== 'active'} leftSection={<IconPlayerPlay size={13} />}
+                  onClick={() => {
+                    const now = new Date().toISOString();
+                    setPreviewRunItems((current) => [{
+                      id: crypto.randomUUID(), agent_id: selected.id, agent_name: selected.name, project_id: 'preview-project',
+                      project_name: 'Illustrative project', worker_id: 'preview-worker', worker_name: 'Preview worker',
+                      branch: 'preview/simulated-run', prompt: 'SIMULATED · local preview run', output: 'Illustrative run only.',
+                      status: 'succeeded', attempts: 1, created_at: now, updated_at: now, diff_available: false,
+                      diff_attempt: 0, diff_truncated: false, pull_request_enabled: false, can_request_changes: false,
+                      cancel_requested: false, review_comments: [],
+                    }, ...current]);
+                    setDetailTab('history');
+                  }}>Run Agent</Button>
+                <Button variant="default" onClick={() => {
+                  const copy = agentSchema.parse({ ...selected, id: crypto.randomUUID(), name: `${selected.name} Copy`,
+                    version: 1, updated_at: new Date().toISOString() });
+                  setPreviewItems((current) => [...current, copy]); setSelectedID(copy.id); setDetailTab('overview');
+                }}>Duplicate Profile</Button>
+                <Button variant="default" onClick={() => setPreviewItems((current) => current.map((item) =>
+                  item.id === selected.id ? { ...item, status: item.status === 'active' ? 'disabled' : 'active' } : item))}>
+                  {selected.status === 'active' ? 'Disable' : 'Enable'}
+                </Button>
+                <Button variant="default" onClick={() => setDetailTab('versions')}>Compare Versions</Button>
+                <Menu position="bottom-end" withinPortal>
+                  <Menu.Target><Button variant="default" aria-label="More agent actions"><IconDots size={15} /></Button></Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Item onClick={() => setDetailTab('history')}>Open run history</Menu.Item>
+                    <Menu.Item onClick={() => setDetailTab('versions')}>Compare versions</Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
+              </>}
               {sampleMode ? null : <>
               {isEditing ? <Button variant="default" onClick={() => { resetEditForm(); setIsEditing(false); }}>Cancel</Button>
                 : <Button variant="default" onClick={() => setIsEditing(true)}>Edit profile</Button>}
@@ -387,7 +449,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
           <form onSubmit={editForm.onSubmit((values) => updateAgent.mutate({
             ...inputSchema.parse(values), id: selected.id,
           }))}>
-            <Tabs defaultValue="overview" className="agents-detail-tabs">
+            <Tabs value={detailTab} onChange={setDetailTab} className="agents-detail-tabs">
               <Tabs.List aria-label="Agent profile sections">
                 <Tabs.Tab value="overview">Overview</Tabs.Tab>
                 <Tabs.Tab value="prompts">Prompts</Tabs.Tab>
@@ -473,7 +535,8 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
                   </PanelCard>
                 </div> : <AgentExecutionOverview tools={selected.tools} />}
                 {sampleMode && <div className="agents-preview-bottom">
-                  <PanelCard className="agents-overview-card" withBorder><PanelHeading title="Run History (Recent)" actions={<a>View All Runs →</a>} />
+                  <PanelCard className="agents-overview-card" withBorder><PanelHeading title="Run History (Recent)" actions={<button type="button" className="agents-preview-link"
+                    onClick={() => setDetailTab('history')}>View All Runs →</button>} />
                     <div className="agents-preview-run-table-wrap" role="region"
                       aria-label="Recent illustrative agent runs" tabIndex={0}>
                       <table className="agents-preview-run-table">
@@ -530,6 +593,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
               </Tabs.Panel>
               {sampleMode && <Tabs.Panel value="safety" pt="sm"><div className="agents-preview-variable-panel"><h4>Safety &amp; Governance</h4><p>Read-only visual preview of governance controls shown in the design.</p>{['Content Safety', 'PII/Secret Detection', 'Policy Compliance'].map((label) => <div key={label} className="agents-preview-variable"><span>{label}</span><Badge className="agents-permission-enabled" variant="light">Enabled</Badge></div>)}</div></Tabs.Panel>}
               <Tabs.Panel value="history" pt="sm">
+                {sampleMode && <div className="agents-preview-variable-panel">Illustrative local preview · simulated runs are not submitted.</div>}
                 {runsLoading ? <div className="agents-run-empty">Loading agent runs…</div>
                   : runsError ? <div className="agents-run-empty">Agent run history is unavailable.</div>
                     : selectedRuns.length ? <div className="agents-runs-list">
@@ -560,7 +624,14 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
       </div>}
     </div>
     <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="Create agent profile" centered>
-      <form onSubmit={createForm.onSubmit((values) => createAgent.mutate(inputSchema.parse(values)))}>
+      <form onSubmit={createForm.onSubmit((values) => {
+        const profile = inputSchema.parse(values);
+        if (sampleMode) {
+          const item = agentSchema.parse({ ...profile, id: crypto.randomUUID(), version: 1, updated_at: new Date().toISOString() });
+          setPreviewItems((current) => [...current, item]); setSelectedID(item.id); setCreateOpen(false); createForm.reset(); setDetailTab('overview');
+          setPreviewNotice('Agent profile added to this preview only');
+        } else createAgent.mutate(profile);
+      })}>
         <TextInput
           label="Profile name" placeholder="e.g. Code Reviewer" required {...createForm.getInputProps('name')}
         />
@@ -597,6 +668,10 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
           </Button>
         </div>
       </form>
+    </Modal>
+    <Modal opened={libraryOpen} onClose={() => setLibraryOpen(false)} title="Agent Library" centered size="lg">
+      <div className="agents-library-list">{items.map((item) => <Button key={item.id} variant="default"
+        onClick={() => { setSelectedID(item.id); setLibraryOpen(false); setDetailTab('overview'); }}>{item.name} · {item.provider} / {item.model}</Button>)}</div>
     </Modal>
     <Modal opened={runOpen} onClose={() => setRunOpen(false)} title="Queue agent run" centered>
       <form onSubmit={runForm.onSubmit((values) => {

@@ -10,6 +10,8 @@
 }
 .agents-title-heading { display: flex; align-items: center; gap: 10px; }
 .agents-preview-actions { display: flex; align-items: center; gap: 8px; }
+.agents-preview-feedback { width: 100%; color: #bda6d7; font-size: 10px; text-align: right; }
+.agents-library-list { display: grid; gap: 8px; max-height: 60vh; overflow: auto; }
 .agents-preview-actions .mantine-Button-root { min-height: 34px; border-color: #37324a; color: #e4deed; background: #191724; font-size: 10px; }
 .agents-title-icon { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border: 1px solid #594079; border-radius: 10px; color: #d09aff; background: #291d39; }
 .agents-create-button.mantine-Button-root,
@@ -316,6 +318,7 @@
   padding: 10px 11px;
   border-bottom: 1px solid #302d42;
 }
+.agents-preview-link { padding: 0; border: 0; color: #c7a1ff; background: transparent; font: inherit; cursor: pointer; }
 .agents-detail-actions {
   display: flex;
   align-items: center;

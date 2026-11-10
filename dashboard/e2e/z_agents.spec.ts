@@ -255,6 +255,66 @@ test('Agents local preview filters and sorts profiles without API writes', async
   expect(requests).toEqual([]);
 });
 
+test('Agents preview actions update only the local fixture', async ({ page }) => {
+  const requests: string[] = [];
+  for (const endpoint of ['agents', 'agent-runs']) await page.route(`**/api/v1/${endpoint}`, (route) => {
+    requests.push(endpoint); return route.fulfill({ status: 401, body: 'authentication required' });
+  });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  const previewURL = new URL('/#agents', test.info().project.use.baseURL as string);
+  previewURL.hostname = '127.0.0.1';
+  await page.goto(previewURL.toString());
+
+  await expect(page.locator('.agent-row')).toHaveCount(6);
+  await page.getByRole('button', { name: 'Create Agent' }).click();
+  const create = page.getByRole('dialog', { name: 'Create agent profile' });
+  await create.getByLabel('Profile name').fill('Preview Writer');
+  await create.getByLabel('Provider identifier').fill('local-preview');
+  await create.getByLabel('Model identifier').fill('writer-v1');
+  await create.getByRole('button', { name: 'Create profile' }).click();
+  await expect(page.locator('.agent-row')).toHaveCount(7);
+  await expect(page.getByRole('heading', { name: 'Preview Writer' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Agent Library' }).click();
+  await page.getByRole('dialog', { name: 'Agent Library' }).getByRole('button', { name: /Code Reviewer/ }).click();
+  await page.getByRole('button', { name: 'Run Agent' }).click();
+  await expect(page.getByRole('tab', { name: 'Run History' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.agents-runs-list')).toContainText('SIMULATED · local preview run');
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await page.getByRole('button', { name: 'Disable', exact: true }).click();
+  await expect(page.locator('.agents-detail-heading .agent-status')).toHaveText('disabled');
+  await page.getByRole('button', { name: 'Enable', exact: true }).click();
+  await page.getByRole('button', { name: 'Duplicate Profile' }).click();
+  await expect(page.locator('.agent-row')).toHaveCount(8);
+  await expect(page.getByRole('heading', { name: 'Code Reviewer Copy' })).toBeVisible();
+  await page.getByRole('button', { name: 'Compare Versions' }).click();
+  await expect(page.getByRole('tabpanel')).toContainText('Profile versions');
+  await page.locator('.agent-row').first().click();
+  await page.getByRole('button', { name: 'More agent actions' }).click();
+  await page.getByRole('menuitem', { name: 'Open run history' }).click();
+  await expect(page.getByRole('tabpanel')).toContainText('SIMULATED · local preview run');
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Import / Export' }).click();
+  await page.getByRole('menuitem', { name: 'Export profiles as JSON' }).click();
+  expect((await downloadPromise).suggestedFilename()).toBe('agents-preview.json');
+  const importedProfile = [{ id: 'imported-preview', name: 'Imported Reviewer', description: '', provider: 'preview',
+    model: 'review-v1', status: 'active', system_prompt: '', goal_prompt: '', tools: [], version: 1,
+    updated_at: new Date().toISOString() }];
+  await page.getByRole('button', { name: 'Import / Export' }).click();
+  await page.getByRole('menuitem', { name: 'Import profiles from JSON' }).click();
+  await page.getByLabel('Import agent profiles JSON').evaluate((element, data) => {
+    const input = element as HTMLInputElement;
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([JSON.stringify(data)], 'agents.json', { type: 'application/json' }));
+    input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, importedProfile);
+  await expect(page.locator('.agent-row')).toHaveCount(1);
+  await expect(page.locator('.agent-row').first()).toContainText('Imported Reviewer');
+  expect(requests).toEqual([]);
+});
+
 test('Agents empty state uses the primary create action', async ({ page }) => {
   await page.route('**/api/v1/agents', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',
