@@ -171,7 +171,8 @@
 .workflow-overview-status { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; color: #a49cb5; font-size: 9px; }
 .workflow-overview-message { display: grid; min-height: 144px; place-items: center; color: #a49cb5; font-size: 11px; }
 .text-link { color: #c7a1ff; font-size: 10px; white-space: nowrap; }
-.activity-panel .text-link { display: flex; align-items: center; gap: 2px; }
+.activity-panel .text-link { display: flex; align-items: center; gap: 2px; padding: 0; border: 0; color: #c7a1ff; background: transparent; font: inherit; font-size: 10px; font-weight: 500; cursor: pointer; }
+.activity-dialog-list { max-height: 65vh; overflow-y: auto; }
 .activity-list { display: grid; gap: 1px; margin-top: 8px; }
 .activity-list > div {
   display: flex;
@@ -361,7 +362,8 @@
 .overview-layout .mock-health-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; font-size: 11px; }
 .overview-layout .mock-health-tag .mantine-Badge-label, .overview-layout .muted-tag .mantine-Badge-label { display: flex; align-items: center; gap: 5px; }
 .health-status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: currentColor; }
-.mock-analytics-filter { display: flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid #3a3453; border-radius: 9px; color: #d9d3e5; background: #171625; font-size: 12px; font-weight: 500; text-transform: none; white-space: nowrap; }
+.mock-analytics-filter { display: flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid #3a3453; border-radius: 9px; color: #d9d3e5; background: #171625; font-size: 12px; font-weight: 500; text-decoration: none; text-transform: none; white-space: nowrap; }
+.mock-analytics-filter:hover { border-color: #6b4b93; color: #eee4fc; }
 .preview-running-badge { border: 1px solid #276a50; color: #5be0ad; background: #12392e; font-size: 10px; text-transform: none; }
 .preview-review-panel h4 { margin: 13px 0 5px; overflow: hidden; color: #f1edf7; font-size: 15px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .preview-review-meta { display: flex; align-items: center; gap: 5px; margin-top: 6px; }

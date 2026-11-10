@@ -1,4 +1,5 @@
-import { Badge, Progress } from '@mantine/core';
+import { Badge, Modal, Progress } from '@mantine/core';
+import { useState } from 'react';
 import { AreaChart, Sparkline } from '@mantine/charts';
 import {
   IconActivity, IconCalendar, IconChartBar, IconChevronDown, IconCircle,
@@ -53,6 +54,7 @@ export function OverviewPage({ sampleData, projects, projectsLoading, projectsEr
   const runningAgents = agentRuns?.filter((run) => run.status === 'running').length ?? 0;
   const openPullRequests = pullRequests.outcomes.find((item) => item.name === 'Open')?.value ?? 0;
   const workflowHealth = workflows.successRate;
+  const [activityOpen, setActivityOpen] = useState(false);
   const reviewableRuns = agentRuns?.filter((run) => run.diff_available) ?? [];
   const analytics = pullRequests.trend.map(({ date, merged }) => ({ day: date, merged }));
   const pullRequestDetail = projectsLoading ? 'Loading repositories'
@@ -60,6 +62,24 @@ export function OverviewPage({ sampleData, projects, projectsLoading, projectsEr
       : pullRequests.githubProjectCount ? pullRequests.isLoading ? 'Loading GitHub pull-request history'
         : pullRequests.complete ? `${openPullRequests} open GitHub pull requests` : 'GitHub pull-request history unavailable'
         : 'Connect a GitHub repository';
+  const activityRows = (all = false) => sampleData ? <>
+    <div><IconCircleCheck className="activity-green" size={18} /><span>PR #41827 merged to trusted-main</span><time>2m ago</time></div>
+    <div><IconRobot className="activity-blue" size={18} /><span>Agent “Code Reviewer” completed run</span><time>6m ago</time></div>
+    <div><IconFileText className="activity-blue" size={18} /><span>Plan approved: Add usage analytics (v1.3)</span><time>12m ago</time></div>
+    <div><IconCircleCheck className="activity-green" size={18} /><span>CI passed (99.4%)</span><time>16m ago</time></div>
+    <div><IconTarget className="activity-violet" size={18} /><span>Objective “Improve review velocity” updated</span><time>26m ago</time></div>
+  </> : <>
+    <div><IconCircleCheck className={controlPlaneOnline ? 'activity-green' : 'activity-violet'} size={18} /><span>Control plane {controlPlaneOnline ? 'is responding' : 'is unavailable'}</span><time>Live</time></div>
+    {(all ? agentRuns ?? [] : (agentRuns ?? []).slice(0, 2)).map((run) => <div key={run.id}>
+      <IconRobot className="activity-blue" size={18} /><span>Agent “{run.agent_name}” {run.status}</span><time>{run.updated_at}</time>
+    </div>)}
+    {(all ? onlineWorkerNames : onlineWorkerNames.slice(0, 2)).map((name) => <div key={name}>
+      <IconRobot className="activity-blue" size={18} /><span>Worker “{name}” is online<small>Local worker heartbeat</small></span><time>Live</time>
+    </div>)}
+    {(all ? projects ?? [] : (projects ?? []).slice(0, 2)).map((project) => <div key={project.id}>
+      <IconGitBranch className="activity-violet" size={18} /><span>Project “{project.name}” on {project.worker_name}</span><time>Live</time>
+    </div>)}
+  </>;
   const workflowDetail = projectsLoading ? 'Loading repositories'
     : projectsError ? 'Repository inventory unavailable'
       : workflows.isLoading ? 'Loading GitHub Actions history'
@@ -90,22 +110,13 @@ export function OverviewPage({ sampleData, projects, projectsLoading, projectsEr
 
         <PanelCard className="panel activity-panel" id="activity" withBorder>
           <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconActivity size={18} /></span>}
-            title="Recent Activity" actions={<a className="text-link" href="#activity">All Activity <IconChevronDown size={12} /></a>} />
-          <div className="activity-list">
-            {sampleData ? <>
-              <div><IconCircleCheck className="activity-green" size={18} /><span>PR #41827 merged to trusted-main</span><time>2m ago</time></div>
-              <div><IconRobot className="activity-blue" size={18} /><span>Agent “Code Reviewer” completed run</span><time>6m ago</time></div>
-              <div><IconFileText className="activity-blue" size={18} /><span>Plan approved: Add usage analytics (v1.3)</span><time>12m ago</time></div>
-              <div><IconCircleCheck className="activity-green" size={18} /><span>CI passed (99.4%)</span><time>16m ago</time></div>
-              <div><IconTarget className="activity-violet" size={18} /><span>Objective “Improve review velocity” updated</span><time>26m ago</time></div>
-            </> : <>
-              <div><IconCircleCheck className={controlPlaneOnline ? 'activity-green' : 'activity-violet'} size={18} /><span>Control plane {controlPlaneOnline ? 'is responding' : 'is unavailable'}</span><time>Live</time></div>
-              {(agentRuns ?? []).slice(0, 2).map((run) => <div key={run.id}><IconRobot className="activity-blue" size={18} /><span>Agent “{run.agent_name}” {run.status}</span><time>{run.updated_at}</time></div>)}
-              {onlineWorkerNames.slice(0, 2).map((name) => <div key={name}><IconRobot className="activity-blue" size={18} /><span>Worker “{name}” is online<small>Local worker heartbeat</small></span><time>Live</time></div>)}
-              {(projects ?? []).slice(0, 2).map((project) => <div key={project.id}><IconGitBranch className="activity-violet" size={18} /><span>Project “{project.name}” on {project.worker_name}</span><time>Live</time></div>)}
-            </>}
-          </div>
+            title="Recent Activity" actions={<button type="button" className="text-link"
+              onClick={() => setActivityOpen(true)}>All Activity <IconChevronDown size={12} /></button>} />
+          <div className="activity-list">{activityRows()}</div>
         </PanelCard>
+        <Modal opened={activityOpen} onClose={() => setActivityOpen(false)} title="All Activity" centered size="lg">
+          <div className="activity-list activity-dialog-list">{activityRows(true)}</div>
+        </Modal>
       </div>
 
       <div className="overview-middle-grid">
@@ -190,7 +201,8 @@ export function OverviewPage({ sampleData, projects, projectsLoading, projectsEr
 
         <PanelCard className="panel analytics-panel preview-analytics-panel" id="reports" withBorder>
           <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconChartBar size={18} /></span>}
-            title="Analytics" actions={<span className="mock-analytics-filter">Delivery Velocity<IconChevronDown size={13} /></span>} />
+            title="Analytics" actions={<a className="mock-analytics-filter" href="#reports">
+              Delivery Velocity<IconChevronDown size={13} /></a>} />
           <div className="preview-analytics-summary overview-delivery-summary"><span>PRs Merged{sampleData ? ' (7d)' : ' (all history)'}</span><div><strong>{sampleData ? 42 : pullRequests.complete ? pullRequests.mergedCount : '—'}</strong><b>{sampleData ? '↑ +27% vs. prior 7d' : pullRequests.complete ? `${pullRequests.deliveryVelocity} / week` : 'History unavailable'}</b></div></div>
           {sampleData ? <AreaChart h={188} data={sampleAnalytics} dataKey="day" series={[{ name: 'merged', color: '#ad55ff', label: 'Merged PRs' }]}
             curveType="monotone" withDots withTooltip withGradient fillOpacity={0.4} dotProps={{ r: 3, stroke: '#f2edfa', strokeWidth: 1 }}

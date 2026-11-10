@@ -667,3 +667,16 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
   await expect(page.locator('.activity-panel')).toBeVisible();
 });
 
+test('Overview activity and delivery analytics actions open their details', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
+  await page.goto('http://127.0.0.1:4173/#overview');
+  await page.getByRole('button', { name: 'All Activity' }).click();
+  const activityDialog = page.getByRole('dialog', { name: 'All Activity' });
+  await expect(activityDialog).toBeVisible();
+  await expect(activityDialog.locator('.activity-list > div')).toHaveCount(5);
+  await expect(activityDialog).toContainText('PR #41827 merged to trusted-main');
+  await page.keyboard.press('Escape');
+  await page.getByRole('link', { name: 'Delivery Velocity' }).click();
+  await expect(page).toHaveURL(/#reports$/);
+  await expect(page.getByRole('heading', { name: 'Delivery Velocity & Cycle Time' })).toBeVisible();
+});
