@@ -63,6 +63,14 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await expect(page.getByRole('combobox', { name: 'Filter by due quarter' })).toHaveValue('This Quarter');
   const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(6);
+  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 1–6 of 42 objectives');
+  await expect(page.locator('.objective-preview-pagination nav button')).toHaveText(['1', '2', '3', '4', '5', '7']);
+  await page.getByRole('button', { name: 'Page 2' }).click();
+  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 7–12 of 42 objectives');
+  await expect(page.locator('.objective-preview-pagination button[aria-current="page"]')).toHaveText('2');
+  await page.getByRole('button', { name: 'Page 7' }).click();
+  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 37–42 of 42 objectives');
+  await page.getByRole('button', { name: 'Page 1' }).click();
   await expect(page.locator('.objective-grid-wrap .objective-title-cell')).toHaveCount(6);
   await expect(page.locator('.objective-grid-wrap .objective-title-cell small')).toHaveText([
     'OBJ-1487', 'OBJ-1492', 'OBJ-1501', 'OBJ-1506', 'OBJ-1510', 'OBJ-1517',

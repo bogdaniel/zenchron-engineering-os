@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, colorSchemeDark, themeQuartz } from 'ag-grid-community';
-import type { ColDef, ICellRendererParams } from 'ag-grid-community';
+import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 import { AreaChart, Sparkline } from '@mantine/charts';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -127,6 +127,13 @@ function groupObjectivesByQuarter(items: Objective[]) {
   return [...groups].sort((left, right) => left[1].order - right[1].order);
 }
 
+function objectivePageNumbers(current: number, total: number) {
+  if (total <= 6) return Array.from({ length: total }, (_, page) => page);
+  const start = current <= 2 ? 0 : Math.min(current - 2, total - 5);
+  return [...new Set([0, ...Array.from({ length: 5 }, (_, index) => start + index)
+    .filter((page) => page > 0 && page < total - 1), total - 1])];
+}
+
 export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean }) {
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
@@ -146,6 +153,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [dueQuarter, setDueQuarter] = useState<'this' | 'last' | 'all'>('this');
   const [section, setSection] = useState<'objectives' | 'planning' | 'roadmap'>('objectives');
   const [view, setView] = useState<'kanban' | 'table' | 'cards'>('table');
+  const [objectiveGridApi, setObjectiveGridApi] = useState<GridApi<Objective> | null>(null);
+  const [pagination, setPagination] = useState({ page: 0, pages: 1, count: 0 });
   const objectives = useQuery({ queryKey: ['objectives'], queryFn: loadObjectives, enabled: !sampleData,
     initialData: sampleData ? objectivePreviewRecords : undefined, retry: false });
   const products = useQuery({ queryKey: ['products'], queryFn: loadProducts, enabled: !sampleData, retry: false });
@@ -400,6 +409,14 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                   headerHeight={38}
                   pagination
                   paginationPageSize={6}
+                  suppressPaginationPanel={sampleData}
+                  onGridReady={({ api }) => {
+                    setObjectiveGridApi(api);
+                    setPagination({ page: api.paginationGetCurrentPage(), pages: api.paginationGetTotalPages(),
+                      count: api.paginationGetRowCount() });
+                  }}
+                  onPaginationChanged={({ api }) => setPagination({ page: api.paginationGetCurrentPage(),
+                    pages: api.paginationGetTotalPages(), count: api.paginationGetRowCount() })}
                   rowSelection={{ mode: 'multiRow', checkboxes: true, headerCheckbox: true, selectAll: 'filtered', enableClickSelection: 'enableSelection' }}
                   selectionColumnDef={{ width: 32, minWidth: 32, maxWidth: 32, pinned: 'left', resizable: false, sortable: false, suppressMovable: true }}
                   onRowDataUpdated={({ api }) => {
@@ -435,6 +452,18 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                   })}
                 </div>
               )}
+              {sampleData && view === 'table' && <div className="objective-preview-pagination">
+                <span>Showing {pagination.count ? pagination.page * 6 + 1 : 0}–{Math.min((pagination.page + 1) * 6,
+                  pagination.count)} of {pagination.count} objectives</span>
+                <nav aria-label="Objectives pages">
+                  {objectivePageNumbers(pagination.page, pagination.pages).map((page, index, pages) => <React.Fragment key={page}>
+                    {index > 0 && page - pages[index - 1] > 1 && <span aria-hidden="true">…</span>}
+                    <button type="button" aria-label={`Page ${page + 1}`}
+                      aria-current={pagination.page === page ? 'page' : undefined}
+                      onClick={() => objectiveGridApi?.paginationGoToPage(page)}>{page + 1}</button>
+                  </React.Fragment>)}
+                </nav>
+              </div>}
             </div>
             <div className="objective-grid-footer-placeholder" />
           </PanelCard>

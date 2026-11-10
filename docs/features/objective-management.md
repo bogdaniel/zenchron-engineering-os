@@ -43,6 +43,8 @@ flowchart LR
   progress to 100.
 - The dashboard searches title, description, owner, and product, and filters by product, owner, status, and due-date
   quarter. The default is This Quarter; All due dates includes unscheduled objectives.
+- The local read-only table preview uses a numbered footer pager that stays in sync with AG Grid; authenticated data
+  keeps the standard AG Grid pagination panel.
 - An unauthenticated localhost session at `/#objectives` uses the same Objectives page with sample KPI, approval, workflow, and milestone data. The fixture is read only and does not call protected objective or product APIs.
 - The mock KPI row keeps the success-rate change beside its value and omits extra captions from the four compact count cards, matching the supplied layout. Live objective cards retain their explanatory details.
 - The mock preview uses larger table and detail text than the dense live table. Its title, status, product, and due-date columns fit the sample rows at the reference viewport without horizontal clipping.

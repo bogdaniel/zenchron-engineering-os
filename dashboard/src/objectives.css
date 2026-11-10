@@ -79,6 +79,14 @@
 .objective-title-cell > span { overflow: hidden; font-size: 10px; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
 .objective-title-cell small { color: #9690a4; font-size: 8px; line-height: 1; }
 .objective-grid-wrap .ag-paging-panel { min-height: 34px; border-top: 1px solid #292737; color: #8f899f; font-size: 10px; }
+.objective-preview-layout .objective-grid-wrap { display: flex; flex-direction: column; }
+.objective-preview-layout .objective-grid-wrap > .ag-root-wrapper { min-height: 0; flex: 1; }
+.objective-preview-pagination { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 11px; border-top: 1px solid #292737; color: #d7d2e1; font-size: 10px; }
+.objective-preview-pagination nav { display: flex; align-items: center; gap: 4px; }
+.objective-preview-pagination button { min-width: 22px; height: 22px; padding: 0 5px; border: 0; border-radius: 6px; color: #d7d2e1; background: transparent; font: inherit; cursor: pointer; }
+.objective-preview-pagination button[aria-current="page"] { color: #fff; background: #a963e6; }
+.objective-preview-pagination button:focus-visible { outline: 2px solid #c396ff; outline-offset: 2px; }
+.objective-preview-pagination nav > span { color: #a49db4; }
 .objective-status { padding: 4px 6px; border: 1px solid transparent; border-radius: 10px; font-size: 10px; text-transform: capitalize; }
 .objective-status.on_track, .objective-status.completed { border-color: #286347; color: #61dba9; background: #17352b; }
 .objective-status.at_risk { border-color: #66502c; color: #f0c06d; background: #382d1b; }
