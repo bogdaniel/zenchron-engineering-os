@@ -417,7 +417,8 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
 
         <PanelCard className="reports-panel work-outcomes-panel" withBorder>
           <PanelHeading className="reports-panel-heading" icon={<IconRoute size={15} />} title="Work Outcomes"
-            description={designPreview ? 'All Workflows' : `Pull request status · ${selectedRangeLabel}`} />
+            description={designPreview ? `All Workflows · ${selectedRangeLabel}`
+              : `Pull request status · ${selectedRangeLabel}`} />
           {designPreview ? <div className="reports-outcomes-layout reports-outcomes-preview"><div className="reports-outcomes-donut">
             <DonutChart size={120} thickness={15} data={reportPreviewOutcomes}
               aria-label="Mock work outcomes for the last 30 days" />

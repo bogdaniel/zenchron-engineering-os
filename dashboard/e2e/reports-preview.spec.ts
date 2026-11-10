@@ -67,6 +67,8 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await page.getByRole('option', { name: 'Platform', exact: true }).click();
   await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(5);
   await page.getByRole('button', { name: 'Apply filters' }).click();
+  await expect(page.locator('.work-outcomes-panel .shared-panel-heading p'))
+    .toHaveText('All Workflows · last 90 days');
   await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(2);
   await expect(page.locator('.product-summary-panel tbody')).toContainText('Core Product');
   await expect(page.locator('.inventory-panel tbody tr')).toHaveCount(2);
@@ -75,6 +77,8 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await expect(page.getByRole('combobox', { name: 'Time Range' })).toHaveValue('Last 30 Days');
   await expect(page.getByRole('combobox', { name: 'Product' })).toHaveValue('All Products');
   await expect(page.getByRole('combobox', { name: 'Team' })).toHaveValue('All Teams');
+  await expect(page.locator('.work-outcomes-panel .shared-panel-heading p'))
+    .toHaveText('All Workflows · last 30 days');
   await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(5);
   await expect(page.locator('.inventory-panel tbody tr')).toHaveCount(5);
   await expect(page.getByRole('button', { name: 'Executive Summary unavailable' })).toBeDisabled();
