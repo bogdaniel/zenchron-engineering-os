@@ -198,10 +198,31 @@ test('Agents local design preview labels illustrative metadata without API reads
   await expect(summary).toContainText('Owner');
   await expect(summary).toContainText('Created');
   await expect(summary).toContainText('Last Updated');
+  const previewPerformance = page.locator('.agents-profile-metrics');
+  await expect(previewPerformance).toContainText('+21%');
+  await expect(previewPerformance).toContainText('+1.6pp');
+  await expect(previewPerformance).toContainText('-18%');
+  await expect(previewPerformance).toContainText('-14%');
+  await expect(page.getByRole('img', { name: 'Illustrative performance trend' })).toBeVisible();
+  const history = page.locator('.agents-preview-run-table');
+  await expect(history.locator('thead th')).toHaveText([
+    'Run ID', 'Trigger', 'Input', 'Status', 'Duration', 'Cost', 'Time',
+  ]);
+  await expect(history.locator('tbody tr')).toHaveCount(3);
+  await expect(history).toContainText('feat/auth-improvements');
+  const finalPreviewRun = await history.locator('tbody tr').last().boundingBox();
+  const runHistoryPanel = await history.locator(
+    'xpath=ancestor::div[contains(@class,"agents-overview-card")]').boundingBox();
+  expect(finalPreviewRun && runHistoryPanel).toBeTruthy();
+  expect(finalPreviewRun!.y + finalPreviewRun!.height).toBeLessThanOrEqual(runHistoryPanel!.y + runHistoryPanel!.height);
   expect(requests).toEqual([]);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.agents-preview-notice')).toBeVisible();
+  const previewRunTable = page.locator('.agents-preview-run-table-wrap');
+  await expect(previewRunTable).toHaveAttribute('tabindex', '0');
+  const runTableOverflow = await previewRunTable.evaluate((element) => element.scrollWidth > element.clientWidth);
+  expect(runTableOverflow).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 

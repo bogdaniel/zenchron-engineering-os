@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LineChart } from '@mantine/charts';
+import { LineChart, Sparkline } from '@mantine/charts';
 import { Badge, Button, Checkbox, Modal, Select, Tabs, Text, Textarea, TextInput } from '@mantine/core';
 import {
   IconActivity, IconBrandGithub, IconBook2, IconChartBar, IconCode, IconCpu, IconFlask, IconHierarchy,
@@ -407,13 +407,19 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
                   <PanelCard className="agents-overview-card" withBorder>
                     <PanelHeading title="Performance (30d)" />
                     <div className="agents-profile-metrics" aria-label="Selected agent performance">
-                      <div><small>Runs</small><b>{sampleMode ? '482' : runsLoading ? 'Loading…' : runsError ? 'Unavailable' : selectedRuns30d.length}</b></div>
+                      <div><small>Runs</small><b>{sampleMode ? '482' : runsLoading ? 'Loading…' : runsError ? 'Unavailable' : selectedRuns30d.length}</b>
+                        {sampleMode && <i>↑ +21%</i>}</div>
                       <div><small>Success rate</small><b>
                         {sampleMode ? '98.4%' : runsLoading ? 'Loading…' : runsError ? 'Unavailable' : selectedSuccessRate}
-                      </b></div>
-                      <div><small>Avg latency</small><b>{sampleMode ? '8.7s' : 'Unavailable'}</b></div>
-                      <div><small>Total cost</small><b>{sampleMode ? '$203.86' : 'Unavailable'}</b></div>
+                      </b>{sampleMode && <i>↑ +1.6pp</i>}</div>
+                      <div><small>Avg latency</small><b>{sampleMode ? '8.7s' : 'Unavailable'}</b>
+                        {sampleMode && <i>↓ -18%</i>}</div>
+                      <div><small>Total cost</small><b>{sampleMode ? '$203.86' : 'Unavailable'}</b>
+                        {sampleMode && <i>↓ -14%</i>}</div>
                     </div>
+                    {sampleMode && <Sparkline className="agents-profile-sparkline" role="img"
+                      aria-label="Illustrative performance trend" data={previewPerformanceTrend.map(({ success }) => success - 90)}
+                      color="violet.5" h={26} fillOpacity={0.14} withGradient={false} />}
                   </PanelCard>
                 </div>
                 <div className="agents-overview-previews">
@@ -446,7 +452,28 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
                 </div> : <AgentExecutionOverview tools={selected.tools} />}
                 {sampleMode && <div className="agents-preview-bottom">
                   <PanelCard className="agents-overview-card" withBorder><PanelHeading title="Run History (Recent)" actions={<a>View All Runs →</a>} />
-                    <div className="agents-preview-run-table"><div><span>PR #4827</span><span>PR Review</span><b>Success</b><small>2m ago</small></div><div><span>PR #4819</span><span>Scheduled</span><b>Success</b><small>18m ago</small></div><div><span>PR #4812</span><span>Scheduled</span><b>Success</b><small>1h ago</small></div></div>
+                    <div className="agents-preview-run-table-wrap" role="region"
+                      aria-label="Recent illustrative agent runs" tabIndex={0}>
+                      <table className="agents-preview-run-table">
+                        <thead><tr>
+                          <th>Run ID</th><th>Trigger</th><th>Input</th><th>Status</th><th>Duration</th><th>Cost</th><th>Time</th>
+                        </tr></thead>
+                        <tbody>
+                          <tr>
+                            <td>PR #4827</td><td>PR Review</td><td>feat/auth-improvements</td><td><b>Success</b></td>
+                            <td>7.9s</td><td>$0.42</td><td>2m ago</td>
+                          </tr>
+                          <tr>
+                            <td>PR #4819</td><td>PR Review</td><td>fix/rate-limit-edgecase</td><td><b>Success</b></td>
+                            <td>8.4s</td><td>$0.39</td><td>18m ago</td>
+                          </tr>
+                          <tr>
+                            <td>PR #4812</td><td>Scheduled</td><td>main (daily)</td><td><b>Success</b></td>
+                            <td>9.1s</td><td>$0.41</td><td>1h ago</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                   </PanelCard>
                   <PanelCard className="agents-overview-card agents-preview-trend" withBorder><PanelHeading title="Performance Trends" actions={<Badge variant="light">Last 30 Days</Badge>} />
                     <div className="agents-preview-chart-legend"><span><i className="success" />Success Rate</span><span><i className="cost" />Cost (USD)</span><span><i className="latency" />Latency (s)</span></div>

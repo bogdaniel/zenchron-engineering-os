@@ -478,9 +478,11 @@
 .agents-design-preview .agents-overview-previews { gap: 7px; margin-top: 0; }
 .agents-design-preview .agents-overview-card { padding: 8px; }
 .agents-design-preview .agents-profile-metrics { gap: 5px; margin-top: 5px; }
-.agents-design-preview .agents-profile-metrics > div { gap: 3px; padding: 6px; }
+.agents-design-preview .agents-profile-metrics > div { position: relative; gap: 3px; padding: 3px 4px; border: 0; background: transparent; }
 .agents-design-preview .agents-profile-metrics small { font-size: 8px; }
 .agents-design-preview .agents-profile-metrics b { font-size: 12px; }
+.agents-design-preview .agents-profile-metrics i { color: #2dd69e; font-size: 8px; font-style: normal; font-weight: 650; }
+.agents-profile-sparkline { width: 100%; margin-top: 2px; }
 .agents-design-preview .agents-profile-summary { gap: 5px; margin-top: 5px; }
 .agents-design-preview .agents-overview-top .agents-overview-card { min-height: 116px; }
 .agents-design-preview .agents-profile-summary > div { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; padding: 3px 5px; border: 0; background: transparent; }
@@ -507,9 +509,13 @@
 .agents-preview-chart-legend i { width: 6px; height: 6px; border-radius: 50%; background: #55d9a6; }
 .agents-preview-chart-legend i.cost { background: #c45cff; }
 .agents-preview-chart-legend i.latency { background: #58a9ff; }
-.agents-preview-run-table > div { display: grid; grid-template-columns: 1fr 1fr auto auto; align-items: center; gap: 8px; min-height: 22px; border-top: 1px solid #292638; font-size: 9px; }
+.agents-preview-run-table-wrap { overflow-x: auto; }
+.agents-preview-run-table-wrap:focus-visible { outline: 2px solid #a775e8; outline-offset: -2px; }
+.agents-preview-run-table { width: 100%; min-width: 480px; border-collapse: collapse; font-size: 8px; white-space: nowrap; }
+.agents-preview-run-table th, .agents-preview-run-table td { padding: 3px; border-top: 1px solid #292638; text-align: left; }
+.agents-preview-run-table th { color: #9c95ab; font-weight: 500; }
+.agents-preview-run-table td { color: #ddd7e6; }
 .agents-preview-run-table b { color: #4adea6; font-size: 8px; }
-.agents-preview-run-table small { color: #9992a8; }
 .agents-preview-variable-panel { display: grid; gap: 9px; max-width: 620px; padding: 14px; border: 1px solid #302d42; border-radius: 8px; background: #171622; }
 .agents-preview-variable-panel h4, .agents-preview-variable-panel p { margin: 0; }
 .agents-preview-variable-panel h4 { color: #e6e0ee; font-size: 12px; }

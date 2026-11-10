@@ -23,8 +23,9 @@ directly on the selected saved profile. Prompt previews are truncated for displa
 hover. Metrics use recorded data only.
 
 The unauthenticated local design preview is fixture-only and makes no agent or run API requests. Its metrics and
-profile history are illustrative and carry a visible `ILLUSTRATIVE DATA` label; fields absent from the live profile
-contract, including owner and creation time, stay exclusive to that preview.
+profile history, including performance deltas, sparklines, durations, and costs, are illustrative and carry a visible
+`ILLUSTRATIVE DATA` label; fields absent from the live profile contract, including owner and creation time, stay
+exclusive to that preview.
 
 The worker enforces `code.search`, `code.write`, `docs.search`, `git.diff`, and `git.read` when an OpenAI-compatible
 runtime endpoint is configured on that worker. `code.write` is opt-in and applies only to the run's isolated Git
