@@ -7,9 +7,13 @@ export function CodeDiff({ value, label }: { value: string; label: string }) {
   return <MonacoEditor className="reviews-code-editor" label={label} mode="diff" value={value} readOnly />;
 }
 
+function stripFileHeaders(patch: string) {
+  return patch.split('\n').filter((line) => !/^(diff --git |index |--- |\+\+\+ )/.test(line)).join('\n');
+}
+
 function splitRows(patch: string) {
-  return patch.split('\n').flatMap((line) => {
-    if (!line || /^(diff --git |index |--- |\+\+\+ )/.test(line)) return [];
+  return stripFileHeaders(patch).split('\n').flatMap((line) => {
+    if (!line) return [];
     if (line.startsWith('@@')) return [{ kind: 'header', old: line, next: line }];
     if (line.startsWith('-')) return [{ kind: 'removed', old: line.slice(1), next: '' }];
     if (line.startsWith('+')) return [{ kind: 'added', old: '', next: line.slice(1) }];
@@ -30,7 +34,7 @@ export function ReviewPreviewDiff({ loading, error, patch }: { loading: boolean;
     {loading ? <span>Loading pull request diff…</span>
       : error ? <span className="reviews-action-error" role="alert">{error.message}</span>
         : patch && /^@@+ /m.test(patch)
-          ? view === 'unified' ? <CodeDiff label="Pull request diff" value={patch} />
+          ? view === 'unified' ? <CodeDiff label="Pull request diff" value={stripFileHeaders(patch)} />
             : <div className="reviews-preview-split-diff" role="region" aria-label="Split diff view">
               <div className="reviews-preview-split-head"><span>Before</span><span>After</span></div>
               {splitRows(patch).map((row, index) => row.kind === 'header'

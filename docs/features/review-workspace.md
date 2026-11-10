@@ -77,8 +77,9 @@ requests, and is never used in the authenticated Reviews route.
 Its mock also shows six metric values with illustrative trend badges and sparklines, approval and policy context,
 trusted-main readiness, and merge strategy details. The six top navigation tabs switch to their corresponding local
 detail panels, and the queue status chips filter the sample PRs without provider reads or writes. Creating a preview PR, approving,
-requesting changes, exporting fixture evidence, toggling auto-merge, and merging update local preview state only. The
-Split and Unified switch the local diff display, and the queue identifies its single sample page instead of implying
+requesting changes, exporting fixture evidence, toggling auto-merge, and merging update local preview state only.
+Split and Unified views omit raw Git file headers so the change hunk is visible immediately.
+The queue identifies its single sample page instead of implying
 additional provider pages. Repository/date scope and further pagination remain unavailable because the preview has no
 additional repository metadata or page records; the visible scope labels are static. The sample AI suggestion can be marked applied in local preview state;
 this does not modify repository code. The authenticated route still needs provider operations for protected review actions.

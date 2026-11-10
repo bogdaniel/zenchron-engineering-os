@@ -74,6 +74,9 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await diffControls.nth(1).click();
   await expect(diffControls.nth(1)).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByLabel('Pull request diff')).toBeVisible();
+  const unifiedDiffLines = page.locator('.reviews-code-editor .view-lines');
+  await expect(unifiedDiffLines).toContainText('artifacts: await collectArtifacts(ctx),');
+  await expect(unifiedDiffLines).not.toContainText('diff --git');
   await expect(page.locator('.reviews-preview-thread')).toContainText('artifact schema version for traceability');
   const previewThreadVisible = await page.evaluate(() => {
     const thread = document.querySelector('.reviews-preview-thread')!.getBoundingClientRect();
