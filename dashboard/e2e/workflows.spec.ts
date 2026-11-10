@@ -141,11 +141,16 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
     if (section === 'Runs') {
       expect((await page.locator('.workflow-run-columns').boundingBox())?.height).toBe(404);
       const runWorkflow = page.getByRole('button', { name: 'Run Workflow' });
+      const exportLogs = page.getByRole('button', { name: /Export logs/ });
       const reviewApproval = page.getByRole('button', { name: 'Review Approval' });
       await expect(runWorkflow).toBeEnabled();
+      await expect(exportLogs).toBeEnabled();
       await expect(reviewApproval).toBeEnabled();
       await expect(runWorkflow).toHaveCSS('background-image', /linear-gradient/);
       await expect(reviewApproval).toHaveCSS('background-image', /linear-gradient/);
+      const logDownloadPromise = page.waitForEvent('download');
+      await exportLogs.click();
+      expect((await logDownloadPromise).suggestedFilename()).toBe('run-10428-preview.log');
       await runWorkflow.click();
       await expect(page.locator('.workflow-section-concept')).toHaveText('Run Workflow previewed · no workflow changes were saved');
     }

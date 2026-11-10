@@ -76,7 +76,8 @@ flowchart LR
   graph, and switching the simulated run view update local preview state only. Run displays the simulated timeline; Save
   acknowledges the local draft; Publish marks only the preview; and the version menu opens history. None changes persisted
   workflow data. The mock's Runs, Versions, Schedules, Permissions, and Settings actions acknowledge locally and state
-  that no workflow changes were saved; run detail tabs and phone section buttons switch their local view. Prompt and
+  that no workflow changes were saved; run detail tabs and phone section buttons switch their local view. Export logs
+  downloads a clearly named sample log for the selected illustrative run. Prompt and
   variable examples are labeled illustrative and are not saved. In live mode, secondary section tabs stay disabled until
   their services exist.
 - Opening a saved workflow selects its Agent Router so the inspector starts with real graph data. Workflows without

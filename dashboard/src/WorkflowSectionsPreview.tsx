@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Badge, Button } from '@mantine/core';
 import {
-  IconAlertTriangle, IconCalendar, IconCheck, IconClock, IconCloud, IconDatabase, IconFileText,
+  IconAlertTriangle, IconCalendar, IconCheck, IconClock, IconCloud, IconDatabase, IconDownload, IconFileText,
   IconGitBranch, IconLayoutBoard, IconPlayerPlay, IconPlus, IconRepeat, IconSettings, IconUserCheck,
 } from '@tabler/icons-react';
 import { PanelCard } from './PanelCard';
@@ -71,6 +71,12 @@ function RunSection({ onAction }: { onAction: (action: string) => void }) {
     ['09:41:02', 'Run started · v2.4.0', 'done'], ['09:41:10', 'Review stage completed', 'done'],
     ['09:42:18', 'Approval requested', 'waiting'],
   ];
+  const exportLogs = () => {
+    const url = URL.createObjectURL(new Blob(['09:41:02 Trigger received for PR #4827\n09:41:10 Code Reviewer completed\n09:42:18 Awaiting Platform Lead approval\n'], { type: 'text/plain' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = 'run-10428-preview.log'; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
   return <>
     <SectionTitle title="Run History & Execution Monitoring" description="Inspect every execution, trace agent activity, and act on pending reviews." action="Run Workflow" onAction={onAction} />
     <div className="workflow-run-metrics">
@@ -94,7 +100,10 @@ function RunSection({ onAction }: { onAction: (action: string) => void }) {
         <footer>Showing 1–5 of 137 runs <span>‹　1　2　3　…　28　›</span></footer>
       </PanelCard>
       <PanelCard className="workflow-section-card workflow-run-detail">
-        <PanelHeading title="RUN-10428　/　PR #4827" description="Current execution · workflow v2.4.0" actions={<Badge className="workflow-run-status waiting">WAITING</Badge>} />
+        <PanelHeading title="RUN-10428　/　PR #4827" description="Current execution · workflow v2.4.0" actions={<>
+          <Badge className="workflow-run-status waiting">WAITING</Badge>
+          <button className="workflow-section-link" type="button" onClick={exportLogs}><IconDownload size={12} /> Export logs ↗</button>
+        </>} />
         <div className="workflow-run-facts"><span>Elapsed <b>2m 18s</b></span><span>Agent cost <b>$0.38 USD</b></span><span>Artifacts <b>7 verified</b></span></div>
         <nav className="workflow-detail-tabs" aria-label="Run detail views" role="tablist">
           {['STEPS', 'LOGS', 'ARTIFACTS', 'EVENTS'].map((tab) => <button type="button" role="tab" key={tab}
