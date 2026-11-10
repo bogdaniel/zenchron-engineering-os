@@ -101,8 +101,9 @@ export function WorkspaceDesignPreview() {
     `${['Ship', 'Launch', 'Improve', 'Expand', 'Increase'][index]} ${selectedProduct} ${['v2.0', 'Beta', 'reliability', 'adoption', 'delivery'][index]}`,
     objective[1],
   ] as const);
-  const selectedRepositories = [`zenchron/${productSlug}`, `zenchron/${productSlug}-sdk`,
-    `zenchron/${productSlug}-services`, `zenchron/${productSlug}-devtools`];
+  const selectedRepositories = selectedProduct === products[0][0]
+    ? ['zenchron/nova-platform', 'zenchron/agent-sdk', 'zenchron/platform-services', 'zenchron/devtools']
+    : [`zenchron/${productSlug}`, `zenchron/${productSlug}-sdk`, `zenchron/${productSlug}-services`, `zenchron/${productSlug}-devtools`];
   const selectedDecisions = selectedProduct === products[0][0] ? decisions : decisions.map(([name, state, time], index) => [
     [`Adopt layered architecture for ${selectedProduct}`, `Move ${selectedProduct} GA to Jan 27`,
       `Use feature flags for ${selectedProduct}`, `Defer custom permissions for ${selectedProduct}`][index], state, time,

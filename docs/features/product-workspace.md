@@ -9,6 +9,8 @@ stakeholders, and release streams remain unavailable without their source servic
 An unauthenticated localhost session renders the supplied Product Workspace overview at `/#workspace` in the existing
 dashboard shell. Its roadmap, objective progress, connected services, people, releases, decisions, and delivery metrics
 are illustrative. Selecting a product updates its roadmap, objectives, repository names, decisions, and preview metrics.
+The default Nova Platform repository rows match the supplied mock: `nova-platform`, `agent-sdk`, `platform-services`,
+and `devtools`.
 Search, All/Active/Planning status filters, per-product favorites, product selection, section tabs, card links, roadmap
 view and quarter controls, and delivery time range work locally; adding a product changes only preview state, and
 sharing does not send invitations. This state

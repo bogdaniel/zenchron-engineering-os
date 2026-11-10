@@ -17,6 +17,10 @@ test('local Product Workspace mock matches the supplied overview without protect
   await expect(page.getByText('Product Health')).toBeVisible();
   await expect(page.getByText('Release Streams')).toBeVisible();
   await expect(page.getByText('Stakeholders (8)')).toBeVisible();
+  const repositories = page.locator('.workspace-mock-card.repositories');
+  for (const repository of ['zenchron/nova-platform', 'zenchron/agent-sdk', 'zenchron/platform-services', 'zenchron/devtools']) {
+    await expect(repositories).toContainText(repository);
+  }
   await expect(page.locator('.workspace-mock-product')).toHaveCount(5);
   await page.getByRole('button', { name: 'Filter products: All' }).click();
   await page.getByRole('menuitem', { name: 'Planning' }).click();
