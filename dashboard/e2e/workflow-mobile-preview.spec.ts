@@ -42,6 +42,13 @@ test('phone Workflow mock shows the sample run, task progress, and approvals wit
   const clippedPanels = await page.locator('.workflow-mobile-run-preview > .shared-panel-surface').evaluateAll((panels) =>
     panels.filter((panel) => panel.scrollHeight > panel.clientHeight + 1).map((panel) => panel.textContent?.trim()));
   expect(clippedPanels).toEqual([]);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const approvalsClearOfNavigation = await page.evaluate(() => {
+    const approval = document.querySelector('.workflow-mobile-approval-row:last-child')!.getBoundingClientRect();
+    const navigation = document.querySelector('.sidebar nav')!.getBoundingClientRect();
+    return approval.bottom <= navigation.top;
+  });
+  expect(approvalsClearOfNavigation, 'approval controls should be reachable above the fixed phone navigation').toBe(true);
   expect(apiRequests.filter(({ path }) => path !== '/api/v1/auth/session')).toEqual([]);
   expect(apiRequests.filter(({ method }) => method !== 'GET')).toEqual([]);
 });
