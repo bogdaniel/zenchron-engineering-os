@@ -242,12 +242,11 @@ function SettingsSection({ onAction }: { onAction: (action: string) => void }) {
   </>;
 }
 
-export function WorkflowSectionPreview({ section, notice, onAction }: {
-  section: Section; notice: string; onAction: (action: string) => void;
+export function WorkflowSectionPreview({ section, onAction }: {
+  section: Section; onAction: (action: string) => void;
 }) {
   return <section className={`workflow-section-preview workflow-section-${section.toLowerCase()}`}>
     {section === 'Runs' ? <RunSection onAction={onAction} /> : section === 'Versions' ? <VersionsSection onAction={onAction} />
       : section === 'Schedules' ? <SchedulesSection onAction={onAction} /> : section === 'Permissions' ? <PermissionsSection onAction={onAction} /> : <SettingsSection onAction={onAction} />}
-    <div className="workflow-section-concept" role="status">{notice || 'CONCEPT · ILLUSTRATIVE DATA'}</div>
   </section>;
 }

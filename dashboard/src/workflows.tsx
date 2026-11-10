@@ -358,6 +358,9 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
           <Badge className="workflow-section-meta-badge">v2.4.0</Badge>
           <Badge className="workflow-section-meta-badge">{activeWorkflow.nodes.length} Nodes</Badge>
           <Badge className="workflow-section-meta-badge">3 Agent Profiles</Badge>
+          <span className="workflow-section-concept" role="status">
+            {sectionActionNotice || 'CONCEPT · ILLUSTRATIVE DATA'}
+          </span>
         </div> : <div className="workflow-toolbar">
           {designPreview ? <Menu position="bottom-start" withinPortal>
             <Menu.Target><button className="workflow-version-trigger" type="button" aria-label="Workflow version history">
@@ -615,7 +618,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
           <span className="workflow-hint">Version {activeWorkflow.version} · saved to local control plane</span>
         </>}
       </aside>
-      </> : <WorkflowSectionPreview section={section} notice={sectionActionNotice}
+      </> : <WorkflowSectionPreview section={section}
         onAction={(action) => setSectionActionNotice(`${action} previewed · no workflow changes were saved`)} />}
     </div>
   </section>;

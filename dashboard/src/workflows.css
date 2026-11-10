@@ -570,7 +570,7 @@
   .workflow-preview-content { min-height: 0; }
   .workflow-builder-layout.workflow-design-preview.workflow-section-view { grid-template-rows: 180px 60px minmax(340px, min(413px, calc(100vh - 440px))) 248px; }
   .workflow-section-view .workflow-page-heading, .workflow-section-view .workflow-section-tabs { grid-column: 1 / -1; }
-  .workflow-section-view .workflow-section-meta { margin-top: auto; margin-bottom: 18px; }
+  .workflow-section-view .workflow-section-meta { width: 100%; margin-top: auto; margin-bottom: 18px; }
   .workflow-section-view .workflow-section-tabs { min-height: 60px; align-items: center; padding-block: 7px; }
   .workflow-section-view .workflow-section-tabs button { min-height: 44px; }
   .workflow-design-preview .workflow-properties { gap: 6px; padding: 10px 13px; }

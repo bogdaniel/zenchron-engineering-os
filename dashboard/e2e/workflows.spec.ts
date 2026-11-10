@@ -123,6 +123,11 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
     await tab.click();
     await expect(page.locator('.workflow-section-preview-title h2')).toHaveText(title);
     await expect(page.locator('.workflow-section-concept')).toHaveText('CONCEPT · ILLUSTRATIVE DATA');
+    await expect(page.locator('.workflow-section-meta .workflow-section-concept')).toBeVisible();
+    await expect(page.locator('.workflow-section-preview .workflow-section-concept')).toHaveCount(0);
+    const metaBounds = await page.locator('.workflow-section-meta').boundingBox();
+    const conceptBounds = await page.locator('.workflow-section-concept').boundingBox();
+    expect(conceptBounds!.x + conceptBounds!.width).toBeGreaterThan(metaBounds!.x + metaBounds!.width - 8);
     await expect(tab).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.workflow-section-meta')).toContainText('v2.4.0');
     await expect(page.locator('.workflow-section-meta')).toContainText('11 Nodes');
