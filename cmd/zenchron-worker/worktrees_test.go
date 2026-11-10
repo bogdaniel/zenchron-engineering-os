@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,6 +50,22 @@ func TestPrepareWorktreeCreatesIsolatedBranchAndIsIdempotent(t *testing.T) {
 	}
 	if status := strings.TrimSpace(runGit(t, repository, "status", "--porcelain")); status != "" {
 		t.Fatalf("base checkout has changes after worktree preparation: %s", status)
+	}
+}
+
+func TestClaimWorktreeCommandRejectsOversizedResponse(t *testing.T) {
+	client := &http.Client{Transport: workerRoundTripper(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"id":"` + strings.Repeat("a", 1<<20) + `"}`)),
+			Header:     make(http.Header),
+			Request:    request,
+		}, nil
+	})}
+	baseURL := &url.URL{Scheme: "https", Host: "control-plane.invalid"}
+
+	if _, _, err := claimWorktreeCommand(context.Background(), client, baseURL, workerTestID); err == nil {
+		t.Fatal("claimWorktreeCommand() accepted a response larger than 1 MiB")
 	}
 }
 
@@ -118,4 +137,10 @@ func runGit(t *testing.T, directory string, args ...string) string {
 		t.Fatalf("git %v failed: %v: %s", args, err, output)
 	}
 	return string(output)
+}
+
+type workerRoundTripper func(*http.Request) (*http.Response, error)
+
+func (roundTrip workerRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return roundTrip(request)
 }

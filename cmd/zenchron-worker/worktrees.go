@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -78,7 +79,7 @@ func claimWorktreeCommand(
 		return worktreeCommand{}, false, fmt.Errorf("worktree claim returned HTTP %d", response.StatusCode)
 	}
 	var command worktreeCommand
-	if err := json.NewDecoder(response.Body).Decode(&command); err != nil {
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&command); err != nil {
 		return worktreeCommand{}, false, fmt.Errorf("decode worktree command: %w", err)
 	}
 	return command, true, nil
