@@ -133,7 +133,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [editing, setEditing] = useState(false);
   const [detailTab, setDetailTab] = useState<'overview' | 'milestones' | 'pull-requests' | 'activity'>('overview');
   const [selectedID, setSelectedID] = useState<string | null>(() => new URLSearchParams(window.location.search).get('objective'));
-  const [favoriteID, setFavoriteID] = useState<string | null>(null);
+  const [favoriteIDs, setFavoriteIDs] = useState<string[]>([]);
   const [actionNotice, setActionNotice] = useState('');
   const [progressValue, setProgressValue] = useState<number>(0);
   const [statusValue, setStatusValue] = useState<Objective['status']>('in_progress');
@@ -449,8 +449,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                 description={<small>{selected.id.startsWith('OBJ-') ? selected.id : selected.id.slice(0, 8).toUpperCase()}</small>}
                 icon={<span className="detail-objective-icon"><IconTarget size={19} /></span>}
                 actions={sampleData ? <div className="objective-preview-actions">
-                  <button type="button" aria-label={favoriteID === selected.id ? 'Remove objective favorite' : 'Favorite objective'}
-                    aria-pressed={favoriteID === selected.id} onClick={() => setFavoriteID(favoriteID === selected.id ? null : selected.id)}><IconStar size={15} /></button>
+                  <button type="button" aria-label={favoriteIDs.includes(selected.id) ? 'Remove objective favorite' : 'Favorite objective'}
+                    aria-pressed={favoriteIDs.includes(selected.id)} onClick={() => setFavoriteIDs((current) => current.includes(selected.id)
+                      ? current.filter((id) => id !== selected.id) : [...current, selected.id])}><IconStar size={15} /></button>
                   <button type="button" aria-label="Copy objective link" onClick={async () => {
                     const url = new URL(window.location.href);
                     url.searchParams.set('objective', selected.id);
