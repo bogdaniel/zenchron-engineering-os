@@ -122,6 +122,9 @@ func (runner *agentRunner) run(
 	if command.Branch != workerapi.AgentRunBranch(command.ID) {
 		return failedRun(workerapi.TerminationWorkerError, "Run branch is not the branch authorized for this run."), true
 	}
+	if workerapi.IsCLIProvider(command.Profile.Provider) && !modelPattern.MatchString(command.Profile.Model) {
+		return failedRun(workerapi.TerminationWorkerError, "The agent profile's model name is not valid for a CLI provider."), true
+	}
 	executor := runner.executorFor(command.Profile.Provider)
 	if executor == nil {
 		return failedRun(workerapi.TerminationWorkerError, "The agent provider is not ready on this worker."), true
@@ -196,6 +199,20 @@ func (runner *agentRunner) attempt(
 		return fail(execution.reason, executionFailureMessage(execution.reason))
 	}
 	result.Output = truncateText(reporter.redactor.clean(execution.output), maxAgentRunOutputSize)
+	return runner.deliver(ctx, gitCtx, command, project, worktree, result, reporter)
+}
+
+// deliver turns a finished execution into a candidate: commit, verify, and push the run branch.
+// Verification that fails keeps the commit local; nothing unverified is published.
+func (runner *agentRunner) deliver(
+	ctx, gitCtx context.Context, command workerapi.AgentRunCommand, project discoveredProject, worktree string,
+	result workerapi.AgentRunResult, reporter *progressReporter,
+) workerapi.AgentRunResult {
+	fail := func(reason, message string) workerapi.AgentRunResult {
+		result.Status, result.Error, result.TerminationReason = "failed", message, reason
+		return result
+	}
+	var err error
 	result.CommitSHA, err = commitAgentRunChanges(gitCtx, worktree, command.BaseBranch, command.ID, command.Attempts)
 	if err != nil {
 		return fail(workerapi.TerminationWorkerError, "Could not commit isolated branch changes.")

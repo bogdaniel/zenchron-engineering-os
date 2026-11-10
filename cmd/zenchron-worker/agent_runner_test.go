@@ -334,6 +334,22 @@ func TestRunRejectsBranchOtherThanItsOwnRunBranch(t *testing.T) {
 	}
 }
 
+func TestRunRejectsModelNamesThatCouldBeReadAsOptions(t *testing.T) {
+	for _, model := range []string{"--dangerously-bypass-approvals-and-sandbox", "-s danger-full-access", "gpt x", "", "a\nb"} {
+		harness := newRunHarness(t, fakeChangeScript, nil)
+		harness.command.Profile.Model = model
+		if err := harness.process(); err != nil {
+			t.Fatalf("process run: %v", err)
+		}
+		if result := harness.result(); result.Status != "failed" || !strings.Contains(result.Error, "model name is not valid") {
+			t.Fatalf("model %q result = %#v", model, result)
+		}
+		if _, err := os.Stat(harness.worktree); !os.IsNotExist(err) {
+			t.Fatalf("model %q reached worktree preparation: %v", model, err)
+		}
+	}
+}
+
 func TestRunFailsWhenRequestedProviderIsNotReady(t *testing.T) {
 	harness := newRunHarness(t, fakeChangeScript, nil)
 	harness.command.Profile.Provider = workerapi.ProviderClaude
@@ -461,14 +477,14 @@ func TestProviderEventParsersNormalizeRecordedOutput(t *testing.T) {
 func TestProviderArgumentsBoundAgentPermissions(t *testing.T) {
 	write := workerapi.AgentRunCommand{Profile: workerapi.AgentProfile{Model: "gpt-test", Tools: []string{"code.write"}}}
 	read := workerapi.AgentRunCommand{Profile: workerapi.AgentProfile{Model: defaultModel}}
-	if got := strings.Join(codexArguments(write, "/w"), " "); got != "exec --json --color never --sandbox workspace-write --cd /w --model gpt-test -" {
+	if got := strings.Join(codexArguments(write, "/w"), " "); got != "exec --json --color never --sandbox workspace-write --cd /w --model=gpt-test -" {
 		t.Errorf("codex write arguments = %s", got)
 	}
 	if got := strings.Join(codexArguments(read, "/w"), " "); got != "exec --json --color never --sandbox read-only --cd /w -" {
 		t.Errorf("codex read arguments = %s", got)
 	}
 	claudeWrite, claudeRead := strings.Join(claudeArguments(write, ""), " "), strings.Join(claudeArguments(read, ""), " ")
-	if !strings.Contains(claudeWrite, "--permission-mode acceptEdits --tools Read,Edit,Write,Glob,Grep --model gpt-test") ||
+	if !strings.Contains(claudeWrite, "--permission-mode acceptEdits --tools Read,Edit,Write,Glob,Grep --model=gpt-test") ||
 		!strings.Contains(claudeRead, "--permission-mode default --tools Read,Glob,Grep") ||
 		strings.Contains(claudeWrite+claudeRead, "Bash") || strings.Contains(claudeWrite+claudeRead, "dangerously") ||
 		!strings.Contains(claudeRead, "--strict-mcp-config") {

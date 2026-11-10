@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -35,6 +36,9 @@ func newCLIProviders() map[string]*cliProvider {
 	}
 }
 
+// modelPattern keeps a control-plane-supplied model name from being read as a CLI option.
+var modelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/\[\]-]{0,199}$`)
+
 func canWrite(command workerapi.AgentRunCommand) bool {
 	return slices.Contains(command.Profile.Tools, "code.write")
 }
@@ -48,7 +52,7 @@ func codexArguments(command workerapi.AgentRunCommand, worktree string) []string
 	}
 	args := []string{"exec", "--json", "--color", "never", "--sandbox", sandbox, "--cd", worktree}
 	if command.Profile.Model != defaultModel {
-		args = append(args, "--model", command.Profile.Model)
+		args = append(args, "--model="+command.Profile.Model)
 	}
 	return append(args, "-")
 }
@@ -132,7 +136,7 @@ func claudeArguments(command workerapi.AgentRunCommand, _ string) []string {
 	args := []string{"--print", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
 		"--setting-sources", "project", "--strict-mcp-config", "--permission-mode", mode, "--tools", tools}
 	if command.Profile.Model != defaultModel {
-		args = append(args, "--model", command.Profile.Model)
+		args = append(args, "--model="+command.Profile.Model)
 	}
 	return args
 }

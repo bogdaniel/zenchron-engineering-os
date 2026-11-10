@@ -69,10 +69,15 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if len(os.Args) > 1 {
-		if os.Args[1] != "cleanup-worktrees" || len(os.Args) > 2 {
-			return fmt.Errorf("unknown command; the only command is cleanup-worktrees")
+		switch {
+		case len(os.Args) == 2 && os.Args[1] == "cleanup-worktrees":
+			return runWorktreeCleanup(ctx, projectsRoot, workerID, config)
+		case len(os.Args) == 2 && os.Args[1] == "id":
+			// The stable id an operator enrolls in the control plane's access file.
+			fmt.Println(workerID)
+			return nil
 		}
-		return runWorktreeCleanup(ctx, projectsRoot, workerID, config)
+		return fmt.Errorf("unknown command; the commands are id and cleanup-worktrees")
 	}
 	runner := &agentRunner{client: newWorkerHTTPClient(workerToken), baseURL: baseURL, workerID: workerID,
 		token: workerToken, providers: newCLIProviders(), config: config}
