@@ -37,6 +37,14 @@ test('local Integrations mock uses static content and keeps controls read only',
   expect(await githubLink.evaluate((link) => link.scrollWidth <= link.clientWidth), 'GitHub account link is not clipped').toBe(true);
   await page.setViewportSize({ width: 682, height: 844 });
   expect(await githubLink.evaluate((link) => link.scrollWidth <= link.clientWidth), 'GitHub account link stays visible at the reported width').toBe(true);
+  expect(await page.locator('.system-health').evaluate((badge) => badge.scrollWidth <= badge.clientWidth),
+    'the system health badge stays fully visible at the reported width').toBe(true);
+  expect(await page.locator('.system-preview-provider-control').evaluateAll((controls) => controls.every((control) => {
+    const badge = control.querySelector('.system-preview-status')!.getBoundingClientRect();
+    const toggle = control.querySelector('.system-preview-switch')!.getBoundingClientRect();
+    const card = control.closest('.system-preview-provider')!.getBoundingClientRect();
+    return badge.right <= toggle.left && toggle.right <= card.right - 4;
+  })), 'Connected badges and toggles stay inside every provider card').toBe(true);
   await expect(page.locator('.system-preview-provider-control').first()).toBeVisible();
   await page.setViewportSize({ width: 1672, height: 941 });
   await expect(page.getByRole('button', { name: 'More integration categories unavailable' })).toBeDisabled();

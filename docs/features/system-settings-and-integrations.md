@@ -43,7 +43,8 @@ flowchart LR
   settings the service cannot persist or enforce.
 - The Integrations overview uses the mockup's configuration rail and settings-panel layout and the shared dashboard
   panel typography. Its rail uses icon-led category labels; connection status stays in the main cards instead of
-  repeating in the navigation. Panels remain read-only where no backing API exists.
+  repeating in the navigation. At tablet widths, the page title and status/actions stack so the system-health badge and
+  provider status controls stay readable. Panels remain read-only where no backing API exists.
 - GitHub App credentials or the `ZENCHRON_GITHUB_TOKEN` fallback are configured in the control-plane environment,
   never in the worker or dashboard. Public repository reads work without credentials; private reads and PR review
   submissions require repository permissions.
@@ -58,5 +59,5 @@ cd dashboard && npm run test:e2e -- e2e/system.spec.ts --grep "settings and inte
 ```
 
 `cd dashboard && npm run test:e2e -- e2e/integrations-preview.spec.ts` verifies the local mock uses frontend data
-without protected reads or writes, checks provider link visibility at desktop and 682 px, and keeps the Connected
-status dot vertically centered in its badge.
+without protected reads or writes, checks provider link and badge visibility at desktop and 682 px, and keeps the
+Connected status dot vertically centered without badge/toggle overlap.

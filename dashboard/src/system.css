@@ -278,6 +278,8 @@
   .system-workspace { grid-template-columns: 1fr; }
   .system-config-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .system-config-nav > b, .system-config-nav > small { grid-column: 1 / -1; }
+  .system-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .system-page-actions { flex-wrap: wrap; }
   .system-integration-header { align-items: flex-start; flex-direction: column; }
   .system-integration-filters { width: 100%; flex-wrap: wrap; }
   .system-operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
