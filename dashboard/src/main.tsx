@@ -254,7 +254,7 @@ function App() {
             objectives={objectives.data} objectivesLoading={objectives.isLoading} objectivesError={objectives.isError}
             agentRuns={agentRuns.data} agentRunsLoading={agentRuns.isLoading} agentRunsError={agentRuns.isError}
             onlineWorkers={onlineWorkers.length} onlineWorkerNames={onlineWorkers.map((worker) => worker.name)}
-          controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} designPreview={agentsPreview} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} designPreview={reviewPreview} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={workflowPreview} /> : activePage === 'projects' ? (
+          controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} designPreview={agentsPreview} onNavigate={goToPage} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} designPreview={reviewPreview} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={workflowPreview} /> : activePage === 'projects' ? (
             <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} />
           ) : activePage === 'workspace' ? (
             <WorkspacePage

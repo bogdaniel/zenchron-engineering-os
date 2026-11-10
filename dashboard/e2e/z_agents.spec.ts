@@ -153,27 +153,6 @@ test('Agents layout fits tablet and phone widths without panel overlap', async (
   }
 });
 
-test('Agents phone preview shows all profiles without a nested list scroll', async ({ page }) => {
-  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
-    status: 401, body: 'authentication required',
-  }));
-  await page.setViewportSize({ width: 390, height: 844 });
-  const previewURL = new URL('/#agents', test.info().project.use.baseURL as string);
-  previewURL.hostname = '127.0.0.1';
-  await page.goto(previewURL.toString());
-  await expect(page.locator('.agents-design-preview')).toBeVisible();
-  await expect(page.locator('.agent-row')).toHaveCount(6);
-  await expect(page.locator('.agent-row-body small').first()).toHaveCSS('font-size', '10px');
-  await expect(page.locator('.agent-tool-badge').first()).toHaveCSS('font-size', '9px');
-  const profileList = await page.locator('.agents-list-panel').evaluate((panel) => ({
-    clientHeight: panel.clientHeight,
-    scrollHeight: panel.scrollHeight,
-    overflowY: getComputedStyle(panel).overflowY,
-  }));
-  expect(profileList.scrollHeight).toBeLessThanOrEqual(profileList.clientHeight);
-  expect(profileList.overflowY).toBe('visible');
-});
-
 test('Agents local design preview labels illustrative metadata without API reads', async ({ page }) => {
   const requests: string[] = [];
   for (const endpoint of ['agents', 'agent-runs']) {
@@ -190,6 +169,8 @@ test('Agents local design preview labels illustrative metadata without API reads
   previewURL.hostname = '127.0.0.1';
   await page.goto(previewURL.toString());
   await expect(page.locator('.agents-design-preview')).toBeVisible();
+  await expect(page.locator('.agents-mobile-preview')).toBeHidden();
+  await expect(page.locator('.agents-mobile-return')).toBeHidden();
   await expect(page.locator('.agents-preview-notice')).toHaveText('ILLUSTRATIVE DATA');
   await expect(page.getByRole('heading', { name: 'Agent Profiles (6)' })).toBeVisible();
   await expect(page.locator('.agents-list-panel .agents-count')).toHaveCount(0);
@@ -221,12 +202,9 @@ test('Agents local design preview labels illustrative metadata without API reads
   expect(requests).toEqual([]);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('.agents-preview-notice')).toBeVisible();
-  const previewRunTable = page.locator('.agents-preview-run-table-wrap');
-  await expect(previewRunTable).toHaveAttribute('tabindex', '0');
-  const runTableOverflow = await previewRunTable.evaluate((element) => element.scrollWidth > element.clientWidth);
-  expect(runTableOverflow).toBe(true);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect(page.locator('.agents-mobile-preview-label')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Agents & Reviews' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
 test('Agents local preview filters and sorts profiles without API writes', async ({ page }) => {

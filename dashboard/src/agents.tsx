@@ -18,6 +18,7 @@ import { runsInLast30Days } from './runMetrics';
 import { AgentPerformanceTrend } from './AgentPerformanceTrend';
 import { AgentPromptEditor } from './AgentPromptEditor';
 import { AgentExecutionOverview } from './AgentExecutionOverview';
+import { AgentsMobilePreview } from './AgentsMobilePreview';
 import {
   agentsPreviewProfiles as previewAgents,
   agentsPreviewRuns as previewRuns,
@@ -138,10 +139,11 @@ const blankProfile: AgentInput = {
 
 type Worker = { id: string; name: string; agent_runtime_enabled?: boolean };
 
-export function AgentsPage({ projects, workers, designPreview = false }: {
+export function AgentsPage({ projects, workers, designPreview = false, onNavigate }: {
   projects: Project[];
   workers: Worker[];
   designPreview?: boolean;
+  onNavigate: (href: string) => void;
 }) {
   const queryClient = useQueryClient();
   const [selectedID, setSelectedID] = useState<string | null>(null);
@@ -159,6 +161,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
   const [submitError, setSubmitError] = useState('');
   const [previewNotice, setPreviewNotice] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [mobileManagerOpen, setMobileManagerOpen] = useState(false);
   const agents = useQuery({ queryKey: ['agents'], queryFn: loadAgents, enabled: !designPreview });
   const runs = useQuery({
     queryKey: ['agent-runs'], queryFn: loadAgentRuns, refetchInterval: 3_000, enabled: !designPreview,
@@ -272,7 +275,13 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
     ? `${Math.round(selectedFinishedRuns.filter((run) => run.status === 'succeeded').length / selectedFinishedRuns.length * 100)}%`
     : 'Unavailable';
 
-  return <div className={`agents-page${sampleMode ? ' agents-design-preview' : ''}`}>
+  return <div className={`agents-page${sampleMode ? ` agents-design-preview${mobileManagerOpen ? ' mobile-manager-open' : ''}` : ''}`}>
+    {sampleMode && <AgentsMobilePreview onRunAgent={() => setRunOpen(true)}
+      onOpenRunHistory={() => { setMobileManagerOpen(true); setDetailTab('history'); }}
+      onOpenReviews={() => onNavigate('#reviews')} />}
+    {sampleMode && <Button className="agents-mobile-back agents-mobile-return" variant="default"
+      onClick={() => setMobileManagerOpen(false)}>← Agents &amp; Reviews</Button>}
+    <div className="agents-preview-main">
     <div className="agents-title-row">
       <div className="agents-title-heading"><span className="agents-title-icon"><IconRobot size={22} /></span>
         <PageHeading title="Agents" description="Manage AI agents, profiles, prompts, tools, and governance." /></div>
@@ -622,6 +631,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
         </PanelCard>
         <AgentPerformanceTrend runs={selectedRuns30d} isLoading={runsLoading} isError={runsError} />
       </div>}
+    </div>
     </div>
     <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="Create agent profile" centered>
       <form onSubmit={createForm.onSubmit((values) => {

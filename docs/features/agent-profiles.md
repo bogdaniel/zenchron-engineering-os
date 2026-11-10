@@ -29,6 +29,13 @@ exclusive to that preview. Search, status filtering, and name sorting operate on
 disable, simulated run, library selection, import/export, and version/history controls update or inspect preview data
 only; they never call the agent APIs.
 
+At phone width, the local preview switches to the supplied Agents & Reviews summary: the Agents tab shows recent runs,
+pull request reviews, evidence health, and quick actions; Reviews and Evidence tabs focus their matching panels. Run
+Agent opens the existing queue dialog, New Review navigates to the Reviews page, and All Runs opens the existing
+profile workspace with Run History selected. Its back action returns to the summary. The
+phone-only sample counts and review/evidence summaries are illustrative; the desktop profile manager and all live
+Agents behavior remain unchanged.
+
 The worker enforces `code.search`, `code.write`, `docs.search`, `git.diff`, and `git.read` when an OpenAI-compatible
 runtime endpoint is configured on that worker. `code.write` is opt-in and applies only to the run's isolated Git
 worktree. `tests.run` remains saved profile metadata but is not exposed to the model. Provider identifiers are labels;
@@ -70,5 +77,7 @@ The API validates field lengths and rejects unknown JSON fields, duplicate tools
   without API calls.
 - The populated desktop layout fixture uses six profiles (five active) plus a completed run; focused tablet and phone
   checks verify that the profile, detail, and run panels do not overlap.
+- `cd dashboard && npm run test:e2e -- e2e/agents-mobile-preview.spec.ts` verifies the 390×844 summary, local tabs and
+  actions, return to profile management, and absence of agent API reads.
 - On desktop viewports from 700px high, the profile list spans both rows while run history and performance stack under
   the selected profile; the content height contracts to the available viewport and retains the 670px mock height cap.
