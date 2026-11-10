@@ -179,6 +179,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [runPreviewView, setRunPreviewView] = useState<WorkflowDesignRunView>('Execution Graph');
+  const [routerTab, setRouterTab] = useState<'Properties' | 'Prompt' | 'Variables' | 'Advanced'>('Properties');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'draft' | 'active'>('draft');
@@ -531,12 +532,13 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       <aside className="workflow-properties">
         <PanelHeading className="workflow-subheading" title={selected?.data.label ?? 'Selected component'}
           icon={selected && <span className="workflow-inspector-icon" aria-hidden="true"><InspectorIcon size={18} /></span>} />
-        {designPreview && <nav className="workflow-inspector-tabs" aria-label="Agent Router settings">
-          <button className="selected" aria-current="page">Properties</button>
-          <button disabled>Prompt</button><button disabled>Variables</button><button disabled>Advanced</button>
-        </nav>}
+        {designPreview && <div className="workflow-inspector-tabs" role="tablist" aria-label="Agent Router settings">
+          {(['Properties', 'Prompt', 'Variables', 'Advanced'] as const).map((tab) => <button key={tab}
+            type="button" role="tab" aria-selected={routerTab === tab} aria-controls="router-settings-panel"
+            className={routerTab === tab ? 'selected' : ''} onClick={() => setRouterTab(tab)}>{tab}</button>)}
+        </div>}
         {selected ? <>
-          <section className="workflow-basic-configuration" aria-label="Basic configuration">
+          {(!designPreview || routerTab === 'Properties') && <section className="workflow-basic-configuration" aria-label="Basic configuration">
             <h4>Basic Configuration</h4>
             <div className="workflow-basic-fields">
               <TextInput
@@ -551,8 +553,24 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
                 maxLength={500} autosize minRows={2} readOnly={designPreview}
               />
             </div>
-          </section>
-          {designPreview ? <WorkflowDesignRouterSettings /> : <Button color="red" variant="subtle" onClick={() => {
+          </section>}
+          {designPreview ? <div id="router-settings-panel" role="tabpanel" aria-label={`${routerTab} settings`}>
+            {routerTab === 'Prompt' && <section className="workflow-preview-config workflow-router-sample" aria-label="Illustrative router prompt">
+              <header><b>Router Prompt</b><span>ILLUSTRATIVE</span></header>
+              <p>Route each task to the best specialized agent using its changed files, test requirements, and task context.
+                Use the configured rules first, then choose a suitable agent when no rule matches.</p>
+            </section>}
+            {routerTab === 'Variables' && <section className="workflow-preview-config workflow-router-sample" aria-label="Illustrative router variables">
+              <header><b>Available Variables</b><span>ILLUSTRATIVE</span></header>
+              <div className="workflow-router-variable"><code>changed_files</code><span>Files changed by the pull request</span></div>
+              <div className="workflow-router-variable"><code>task_type</code><span>Planner task category</span></div>
+              <div className="workflow-router-variable"><code>repository</code><span>Repository context</span></div>
+              <div className="workflow-router-variable"><code>pr_number</code><span>Pull request identifier</span></div>
+            </section>}
+            <div hidden={routerTab === 'Prompt' || routerTab === 'Variables'}>
+              <WorkflowDesignRouterSettings section={routerTab === 'Advanced' ? 'Advanced' : 'Properties'} />
+            </div>
+          </div> : <Button color="red" variant="subtle" onClick={() => {
             setNodes((current) => current.filter((node) => node.id !== selectedId));
             setEdges((current) => current.filter((edge) => edge.source !== selectedId && edge.target !== selectedId));
             setSelectedId('');

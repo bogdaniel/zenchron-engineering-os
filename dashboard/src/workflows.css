@@ -447,7 +447,14 @@
 .workflow-inspector-tabs { display: flex; justify-content: space-between; gap: 2px; border-bottom: 1px solid #302a46; }
 .workflow-inspector-tabs button { min-height: 28px; padding: 0 5px; border: 0; border-bottom: 2px solid transparent; color: #aaa4b7; background: transparent; font: inherit; font-size: 9px; }
 .workflow-inspector-tabs button.selected { border-color: #a94df2; color: #e7d5ff; }
-.workflow-inspector-tabs button:disabled { opacity: .6; }
+.workflow-inspector-tabs button[aria-selected='true'] { border-color: #a94df2; color: #e7d5ff; }
+.workflow-inspector-tabs button { cursor: pointer; }
+.workflow-router-sample { padding: 9px; border: 1px solid #302a46; border-radius: 8px; background: #171525; }
+.workflow-router-sample > header span { color: #b690e8; font-size: 7px; }
+.workflow-router-sample p { margin: 0; color: #c4bdd3; font-size: 9px; line-height: 1.6; }
+.workflow-router-variable { display: grid; gap: 3px; padding: 6px 0; border-top: 1px solid #302a46; }
+.workflow-router-variable code { color: #d4b6ff; font-size: 8px; }
+.workflow-router-variable span { color: #aaa5b9; font-size: 8px; }
 .workflow-preview-config { display: grid; gap: 7px; color: #aaa5b9; font-size: 9px; }
 .workflow-preview-config > header { display: flex; min-height: 22px; align-items: center; justify-content: space-between; color: #e2ddea; font-size: 10px; }
 .workflow-preview-select,

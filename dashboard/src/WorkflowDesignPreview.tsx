@@ -6,12 +6,12 @@ const designRunSteps = [
   ['Merge Gate', 87, 9], ['Publish Report', 96, 4],
 ] as const;
 
-export function WorkflowDesignRouterSettings() {
+export function WorkflowDesignRouterSettings({ section }: { section: 'Properties' | 'Advanced' }) {
   const [newRuleCount, setNewRuleCount] = useState(0);
   const [retriesEnabled, setRetriesEnabled] = useState(true);
   const [conditionsEnabled, setConditionsEnabled] = useState(true);
   return <>
-    <section className="workflow-preview-config" aria-label="Routing Parameters">
+    {section === 'Properties' && <section className="workflow-preview-config" aria-label="Routing Parameters">
       <header><b>Routing Parameters</b><span>⌄</span></header>
       <label>Routing Strategy<div className="workflow-preview-select">Rule-based (with LLM fallback)<span>⌄</span></div></label>
       <div className="workflow-preview-rules">
@@ -24,7 +24,8 @@ export function WorkflowDesignRouterSettings() {
       </div>
       <button className="workflow-preview-add-rule" type="button" onClick={() => setNewRuleCount((count) => count + 1)}>
         ＋ Add Rule</button>
-    </section>
+    </section>}
+    {section === 'Advanced' && <>
     <section className="workflow-preview-config" aria-label="Budgets and limits">
       <header><b>Budgets &amp; Limits</b><span>⌄</span></header>
       <div className="workflow-preview-budget">
@@ -51,7 +52,7 @@ export function WorkflowDesignRouterSettings() {
         <label>On Failure<span>Retry (then fail)　⌄</span></label>
         <label>On Success<span>Continue　⌄</span></label>
       </div>}
-    </section>
+    </section></>}
   </>;
 }
 

@@ -43,11 +43,22 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   await expect(page.locator('.workflow-status')).toContainText('Design preview · changes are not saved');
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'New Workflow' })).toBeHidden();
-  await expect(page.getByRole('navigation', { name: 'Agent Router settings' })).toContainText('Properties');
+  const routerTabs = page.getByRole('tablist', { name: 'Agent Router settings' });
+  const routerTab = (name: string) => routerTabs.getByRole('tab', { name, exact: true });
+  await expect(routerTab('Properties')).toHaveAttribute('aria-selected', 'true');
+  await expect(routerTab('Prompt')).toBeEnabled();
+  await expect(routerTab('Variables')).toBeEnabled();
+  await expect(routerTab('Advanced')).toBeEnabled();
   await expect(page.getByRole('region', { name: 'Routing Parameters' })).toContainText('Code Reviewer');
+  await routerTab('Prompt').click();
+  await expect(page.getByRole('region', { name: 'Illustrative router prompt' })).toContainText('best specialized agent');
+  await routerTab('Variables').click();
+  await expect(page.getByRole('region', { name: 'Illustrative router variables' })).toContainText('changed_files');
+  await routerTab('Advanced').click();
   await expect(page.getByRole('region', { name: 'Budgets and limits' })).toContainText('$ 0.020');
   await expect(page.getByRole('region', { name: 'Retry Rules' })).toContainText('Exponential');
   await expect(page.getByRole('region', { name: 'Execution Conditions' })).toContainText('pr.changed_files_count');
+  await routerTab('Properties').click();
   await expect(page.getByRole('region', { name: 'Simulated run timeline' })).toContainText('PR #4827');
   await expect(page.locator('.workflow-simulated-summary')).toContainText('$0.038');
   await page.getByRole('tab', { name: 'Logs' }).click();
@@ -60,6 +71,7 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   const inspectorFits = await page.locator('.workflow-properties').evaluate((panel) =>
     panel.scrollHeight <= panel.clientHeight);
   expect(inspectorFits).toBe(true);
+  await routerTab('Advanced').click();
   const retrySwitch = page.getByRole('switch', { name: 'Retry Rules' });
   await retrySwitch.click();
   await expect(retrySwitch).toHaveAttribute('aria-checked', 'false');
@@ -68,12 +80,16 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   await conditionsSwitch.click();
   await expect(conditionsSwitch).toHaveAttribute('aria-checked', 'false');
   await expect(page.locator('.workflow-preview-expression')).toHaveText('Execution conditions disabled');
+  await routerTab('Properties').click();
   const addRule = page.getByRole('button', { name: 'Add Rule' });
   await addRule.click();
   await expect(page.getByRole('textbox', { name: 'New routing condition 1' })).toBeVisible();
   await page.getByRole('textbox', { name: 'New routing condition 1' }).fill('changes.contains("*.ts")');
   await addRule.click();
   await expect(page.getByRole('textbox', { name: 'New routing condition 2' })).toBeVisible();
+  await routerTab('Advanced').click();
+  await expect(page.getByRole('switch', { name: 'Retry Rules' })).toHaveAttribute('aria-checked', 'false');
+  await routerTab('Properties').click();
   await page.getByRole('button', { name: /Custom Block/ }).click();
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(12);
   const sections = [
