@@ -197,11 +197,11 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.workflow-overview-actions .subtle-button')).toHaveCSS('height', '32px');
   await expect(page.locator('.evidence-panel .overview-heading-info')).toBeVisible();
   await expect(page.locator('.user-chip img')).toHaveJSProperty('naturalWidth', 128);
-  await expect(page.locator('.nav-link.active')).toHaveCSS('height', '42px');
-  await expect(page.locator('.nav-link[href="#objectives"]')).toHaveCSS('height', '42px');
+  await expect(page.locator('.nav-link.active')).toHaveCSS('height', '46px');
+  await expect(page.locator('.nav-link[href="#objectives"]')).toHaveCSS('height', '46px');
   expect((await page.locator('.nav-link.active').boundingBox())?.width).toBe(221);
   expect((await page.locator('.nav-link.active .nav-label').boundingBox())?.x).toBe(80);
-  expect((await page.locator('.nav-link[href="#settings"]').boundingBox())?.y).toBeCloseTo(452, 0);
+  expect((await page.locator('.nav-link[href="#settings"]').boundingBox())?.y).toBeCloseTo(460, 0);
   const sidebarFooterBrand = await page.locator('.sidebar-bottom strong').boundingBox();
   expect(sidebarFooterBrand?.x).toBe(71);
   expect(sidebarFooterBrand?.y).toBeCloseTo(816, 0);
