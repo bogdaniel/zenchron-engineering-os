@@ -115,7 +115,11 @@ test('local Objectives mock preview renders the supplied screen without protecte
       .map((card) => card.querySelector('b')?.textContent));
   expect(overflowingCards).toEqual([]);
   const clippedHeaders = await page.locator('.objective-preview-layout .ag-header-cell-text')
-    .evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).map((header) => header.textContent));
+    .evaluateAll((headers) => headers.filter((header) => {
+      const text = document.createRange();
+      text.selectNodeContents(header);
+      return text.getBoundingClientRect().width > header.clientWidth;
+    }).map((header) => header.textContent));
   expect(clippedHeaders).toEqual([]);
   const overflowingGridHeaders = await page.locator('.objective-grid-wrap .ag-header-cell').evaluateAll((headers) => {
     const centerRight = document.querySelector('.objective-grid-wrap .ag-header')!.getBoundingClientRect().right;
@@ -379,22 +383,23 @@ test('objective create and edit submit the expected API payloads', async ({ page
   }]);
 
   await page.getByRole('button', { name: 'Edit objective' }).click();
-  await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability review');
-  await page.getByRole('textbox', { name: 'Description' }).fill('Expand critical-path coverage.');
-  await page.getByRole('textbox', { name: 'Owner' }).fill('Sam Rivera');
-  await page.getByLabel('Due date').fill('2027-01-15');
-  await page.getByRole('combobox', { name: 'Product', exact: true }).click();
+  const editForm = page.locator('.detail-edit-grid');
+  await editForm.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability review');
+  await editForm.getByRole('textbox', { name: 'Description' }).fill('Expand critical-path coverage.');
+  await editForm.getByRole('textbox', { name: 'Owner' }).fill('Sam Rivera');
+  await editForm.getByLabel('Due date').fill('2027-01-15');
+  await editForm.getByRole('combobox', { name: 'Product', exact: true }).click();
   await page.getByRole('option', { name: 'Core Product' }).click();
-  await page.getByRole('combobox', { name: 'Status', exact: true }).click();
+  await editForm.getByRole('combobox', { name: 'Status', exact: true }).click();
   await page.getByRole('option', { name: 'Completed' }).click();
-  await page.getByRole('textbox', { name: 'Progress' }).fill('100');
+  await editForm.getByRole('textbox', { name: 'Progress' }).fill('100');
   await page.getByRole('button', { name: 'Save updates' }).click();
   await expect(page.locator('.detail-summary')).toContainText('100% complete');
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability review');
   await expect(page.locator('.detail-meta-grid')).toContainText('Sam Rivera');
-  await expect(page.locator('.detail-meta-grid')).toContainText('Jan 15, 2027');
   expect(updatedPayloads).toEqual([{
     title: 'Expand reliability review', description: 'Expand critical-path coverage.', owner: 'Sam Rivera',
     due_date: '2027-01-15', status: 'completed', progress: 100, product_id: productID,
   }]);
+  await expect(page.locator('.detail-meta-grid')).toContainText('Jan 15, 2027');
 });
