@@ -74,7 +74,9 @@ search uses the same loaded list. Local branch runs continue to use AG Grid.
 On localhost, an unauthenticated session at `/#reviews` renders this same Reviews page with a fixed sample PR, diff, and summary so the
 supplied visual can be reviewed without a GitHub session. The fixture is read-only, makes no provider or protected-data
 requests, and is never used in the authenticated Reviews route.
-Its mock also shows six review tabs, approval and policy context, trusted-main readiness, and merge strategy details; these remain static and the preview actions stay disabled.
+Its mock also shows six review tabs, approval and policy context, trusted-main readiness, and merge strategy details; these
+remain static and preview actions stay disabled. The queue shows five sample cards with disabled New PR and pagination
+controls.
 
 ## Verification
 

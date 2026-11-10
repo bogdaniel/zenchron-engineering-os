@@ -11,8 +11,9 @@ import { marked } from 'marked';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { Project } from './projects';
 import {
-  IconChecks, IconChevronDown, IconClockHour4, IconCode, IconDownload, IconFileText, IconFilter,
-  IconGitMerge, IconGitPullRequest, IconLock, IconMessageCircle, IconSearch, IconShieldCheck, IconSparkles, IconUserCheck,
+  IconChecks, IconChevronDown, IconChevronLeft, IconChevronRight, IconClockHour4, IconCode, IconDownload, IconFileText,
+  IconFilter, IconGitMerge, IconGitPullRequest, IconLock, IconMessageCircle, IconPlus, IconSearch, IconShieldCheck,
+  IconSparkles, IconUserCheck,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
 import { PanelHeading } from './PanelHeading';
@@ -337,11 +338,16 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
           <PanelHeading className="reviews-panel-heading"
             title={designPreview ? 'Pull Requests (428)' : section === 'pull-requests' ? 'Pull requests' : section === 'issues' ? 'Open issues' : 'Agent runs & local branches'}
             description={section === 'local-branches' ? 'Active requests and isolated agent changes' : selectedProject?.git_remote ?? 'GitHub project data'}
-            actions={designPreview ? undefined : <Badge className="reviews-required" variant="light">{section === 'local-branches' ? `${localBranches.length} runs` : `${providerItems.length} items`}</Badge>} />
+            actions={designPreview ? <Button className="reviews-new-pr" disabled><IconPlus size={13} /> New PR</Button>
+              : <Badge className="reviews-required" variant="light">
+                {section === 'local-branches' ? `${localBranches.length} runs` : `${providerItems.length} items`}
+              </Badge>} />
           <div className="reviews-queue-tools">
             <TextInput
               leftSection={<IconSearch size={14} />}
-              placeholder={section === 'issues' ? 'Search issues…' : section === 'pull-requests' ? 'Search pull requests…' : 'Agent runs and branches'}
+              placeholder={designPreview ? 'Search PRs, branches, authors…'
+                : section === 'issues' ? 'Search issues…'
+                  : section === 'pull-requests' ? 'Search pull requests…' : 'Agent runs and branches'}
               aria-label={section === 'issues' ? 'Search issues' : section === 'pull-requests' ? 'Search pull requests' : 'Local branch diff list'}
               value={section === 'local-branches' ? '' : providerSearch}
               disabled={section === 'local-branches'}
@@ -412,6 +418,17 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
                     : !selectedProject ? 'Connect a local GitHub checkout to see issues and pull requests.'
                       : `No open ${section === 'issues' ? 'issues' : 'pull requests'} in this repository.`}</div>}
           </div>
+          {designPreview && <nav className="reviews-preview-pagination" aria-label="Pull request pages">
+            <button type="button" disabled aria-label="Previous page"><IconChevronLeft size={13} /></button>
+            {[1, 2, 3, 4, 5].map((page) => <button type="button" disabled
+              aria-current={page === 1 ? 'page' : undefined}
+              className={page === 1 ? 'selected' : ''} key={page}>
+              {page}
+            </button>)}
+            <span aria-hidden="true">…</span>
+            <button type="button" disabled>43</button>
+            <button type="button" disabled aria-label="Next page"><IconChevronRight size={13} /></button>
+          </nav>}
           </PanelCard>
         </Panel>
         <Separator id="queue-detail-separator" className="reviews-resize-handle" aria-label="Resize pull request queue and review detail" />

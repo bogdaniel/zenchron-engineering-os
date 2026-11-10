@@ -19,6 +19,18 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(page.getByRole('button', { name: 'All Repos' })).toBeDisabled();
   await expect(page.getByRole('combobox', { name: 'GitHub repository' })).toHaveCount(0);
   await expect(page.locator('.reviews-provider-card')).toHaveCount(5);
+  const queueLayout = await page.evaluate(() => {
+    const viewport = document.querySelector('.reviews-grid-wrap')!.getBoundingClientRect();
+    const cards = [...document.querySelectorAll('.reviews-provider-card')].map((card) => card.getBoundingClientRect());
+    return cards.every((card) => card.top >= viewport.top && card.bottom <= viewport.bottom);
+  });
+  expect(queueLayout).toBe(true);
+  const pagination = page.locator('.reviews-preview-pagination');
+  await expect(pagination).toBeVisible();
+  await expect(pagination.getByRole('button')).toHaveCount(8);
+  await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
+  await expect(pagination.locator('button:not([disabled])')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New PR' })).toBeDisabled();
   await expect(page.locator('.reviews-detail-heading')).toContainText('#4827 Add AI feedback signals and evidence capture');
   await expect(page.locator('.reviews-pr-diff')).toContainText('collectArtifacts');
   await expect(page.locator('.reviews-summary-stats')).toContainText('+427');

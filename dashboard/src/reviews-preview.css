@@ -1,4 +1,45 @@
-.reviews-design-preview .reviews-provider-card { min-height: 105px; padding: 10px; }
+.reviews-design-preview .reviews-provider-card { min-height: 76px; gap: 3px; padding: 5px; }
+.reviews-design-preview .reviews-provider-list { gap: 4px; padding: 6px; }
+.reviews-design-preview .reviews-provider-card > strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reviews-design-preview .reviews-new-pr.mantine-Button-root {
+  min-height: 27px;
+  height: 27px;
+  padding-inline: 7px;
+  border-color: #8050cc;
+  color: #e9dcff;
+  background: #2d2140;
+  font-size: 9px;
+  opacity: 1;
+}
+.reviews-preview-pagination {
+  display: flex;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-top: 1px solid #302d42;
+}
+.reviews-preview-pagination button {
+  display: grid;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #aaa4b8;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+}
+.reviews-preview-pagination button.selected { border-color: #8050cc; color: #f3eaff; background: #4a2b70; }
+.reviews-preview-pagination button:disabled { opacity: 1; }
 .reviews-design-preview .reviews-detail-tabs { flex-wrap: nowrap; overflow-x: auto; }
 .reviews-design-preview .reviews-detail-tabs button { flex: 0 0 auto; gap: 3px; padding: 5px; font-size: 10px; white-space: nowrap; }
 .reviews-design-preview .reviews-detail-tabs button small {
