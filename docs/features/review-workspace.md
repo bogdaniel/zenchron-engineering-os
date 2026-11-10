@@ -78,8 +78,10 @@ Its mock also shows six metric values with illustrative trend badges and sparkli
 trusted-main readiness, and merge strategy details. The six top navigation tabs switch to their corresponding local
 detail panels, and the queue status chips filter the sample PRs without provider reads or writes. Creating a preview PR, approving,
 requesting changes, exporting fixture evidence, toggling auto-merge, and merging update local preview state only. The
-repository/date scope and pagination beyond the local fixture remain unavailable because the preview has no additional
-repository metadata or page records. The authenticated route still needs provider operations for protected review actions.
+Split and Unified switch the local diff display, and the queue identifies its single sample page instead of implying
+additional provider pages. Repository/date scope and further pagination remain unavailable because the preview has no
+additional repository metadata or page records. The sample AI suggestion can be marked applied in local preview state;
+this does not modify repository code. The authenticated route still needs provider operations for protected review actions.
 
 ## Verification
 

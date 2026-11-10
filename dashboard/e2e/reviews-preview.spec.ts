@@ -52,8 +52,9 @@ test('local Reviews mock uses its fixture without provider reads or review write
   expect(queueLayout).toBe(true);
   const pagination = page.locator('.reviews-preview-pagination');
   await expect(pagination).toBeVisible();
-  await expect(pagination.getByRole('button')).toHaveCount(8);
+  await expect(pagination.getByRole('button')).toHaveCount(3);
   await expect(pagination.locator('[aria-current="page"]')).toHaveText('1');
+  await expect(pagination).toContainText('Sample page · 5 pull requests');
   await expect(pagination.locator('button:not([disabled])')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'New PR' })).toBeEnabled();
   await expect(page.locator('.reviews-detail-heading')).toContainText('#4827 Add AI feedback signals and evidence capture');
@@ -62,7 +63,13 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(page.locator('.reviews-preview-diff-controls')).toContainText('+37');
   const diffControls = page.locator('.reviews-preview-diff-controls button');
   await expect(diffControls).toHaveCount(2);
-  expect(await diffControls.evaluateAll((buttons) => buttons.map((button) => (button as HTMLButtonElement).disabled))).toEqual([true, true]);
+  await expect(diffControls.nth(0)).toBeEnabled();
+  await diffControls.nth(0).click();
+  await expect(diffControls.nth(0)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('region', { name: 'Split diff view' })).toContainText('collectArtifacts');
+  await diffControls.nth(1).click();
+  await expect(diffControls.nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('Pull request diff')).toBeVisible();
   await expect(page.locator('.reviews-preview-thread')).toContainText('artifact schema version for traceability');
   const previewThreadVisible = await page.evaluate(() => {
     const thread = document.querySelector('.reviews-preview-thread')!.getBoundingClientRect();
@@ -85,7 +92,11 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(page.locator('.reviews-preview-suggestions li')).toHaveCount(3);
   await expect(page.locator('.reviews-preview-artifacts li')).toHaveCount(7);
   await expect(page.locator('.reviews-preview-checklist li')).toHaveCount(7);
-  expect(await page.locator('.reviews-preview-suggestions button').isDisabled()).toBe(true);
+  const applySuggestion = page.getByRole('button', { name: 'Apply', exact: true });
+  await expect(applySuggestion).toBeEnabled();
+  await expect(applySuggestion).toHaveAttribute('title', /repository code is unchanged/);
+  await applySuggestion.click();
+  await expect(page.getByRole('button', { name: 'Applied · preview' })).toBeVisible();
   await expect(page.locator('.reviews-summary')).toContainText('Squash & Merge');
   await expect(page.locator('.reviews-summary')).toContainText('trusted-main');
   await expect(page.getByRole('switch', { name: 'Auto-merge when ready' })).toBeChecked();
@@ -141,6 +152,11 @@ test('local Reviews mock uses its fixture without provider reads or review write
   })));
   expect(mobileMetrics.every(({ contentHeight, height }) => contentHeight <= height + 1)).toBe(true);
   expect(await page.locator('.reviews-metrics').evaluate((metrics) => metrics.scrollWidth <= metrics.clientWidth)).toBe(true);
+  const mobileDiffControls = page.locator('.reviews-preview-diff-controls button');
+  await mobileDiffControls.nth(0).click();
+  await expect(page.getByRole('region', { name: 'Split diff view' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await mobileDiffControls.nth(1).click();
   await expect(page.locator('.reviews-preview-thread')).toBeVisible();
   const mobileThreadFollowsDiff = await page.evaluate(() => {
     const thread = document.querySelector('.reviews-preview-thread')!;

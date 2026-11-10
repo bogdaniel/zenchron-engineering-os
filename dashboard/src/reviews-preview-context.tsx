@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { IconChecks, IconCircleCheck, IconShieldCheck, IconSparkles, IconUserCheck } from '@tabler/icons-react';
 
 const artifacts = [
@@ -10,10 +11,13 @@ const checks = [
 ];
 
 export function ReviewPreviewContext() {
+  const [suggestionApplied, setSuggestionApplied] = useState(false);
   return <div className="reviews-context-panels" aria-label="Additional review context">
     <section className="reviews-context-card"><h4><IconSparkles size={13} /> AI Suggestions <small>4</small></h4>
       <ul className="reviews-preview-card-list reviews-preview-suggestions">
-        <li><b>Add schema version to evidence artifacts</b><span>Traceability · High</span><button type="button" disabled>Apply</button></li>
+        <li><b>Add schema version to evidence artifacts</b><span>Traceability · High</span><button type="button"
+          title="This only marks the illustrative suggestion in the local preview; repository code is unchanged"
+          onClick={() => setSuggestionApplied(true)}>{suggestionApplied ? 'Applied · preview' : 'Apply'}</button></li>
         <li><b>Handle artifact collection failures</b><span>Reliability · Medium</span></li>
         <li><b>Add tests for evidence builder</b><span>Test coverage · Medium</span></li>
       </ul>

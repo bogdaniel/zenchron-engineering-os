@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { Project } from './projects';
 import {
-  IconChecks, IconChevronDown, IconChevronLeft, IconChevronRight, IconClockHour4, IconCode, IconDownload, IconFileText,
+  IconChecks, IconChevronDown, IconClockHour4, IconCode, IconDownload, IconFileText,
   IconFilter, IconGitMerge, IconGitPullRequest, IconLock, IconMessageCircle, IconPlus, IconSearch, IconShieldCheck,
   IconSparkles, IconUserCheck,
 } from '@tabler/icons-react';
@@ -446,15 +446,10 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
                       : `No open ${section === 'issues' ? 'issues' : 'pull requests'} in this repository.`}</div>}
           </div>
           {designPreview && <nav className="reviews-preview-pagination" aria-label="Pull request pages">
-            <button type="button" disabled aria-label="Previous page"><IconChevronLeft size={13} /></button>
-            {[1, 2, 3, 4, 5].map((page) => <button type="button" disabled
-              aria-current={page === 1 ? 'page' : undefined}
-              className={page === 1 ? 'selected' : ''} key={page}>
-              {page}
-            </button>)}
-            <span aria-hidden="true">…</span>
-            <button type="button" disabled>43</button>
-            <button type="button" disabled aria-label="Next page"><IconChevronRight size={13} /></button>
+            <button type="button" disabled aria-label="Previous page" title="Only one local sample page is available">‹</button>
+            <button type="button" disabled aria-current="page" aria-label="Page 1 of 1, local sample" className="selected">1</button>
+            <span>Sample page · 5 pull requests</span>
+            <button type="button" disabled aria-label="Next page" title="Only one local sample page is available">›</button>
           </nav>}
           </PanelCard>
         </Panel>
