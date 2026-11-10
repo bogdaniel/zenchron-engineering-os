@@ -54,7 +54,29 @@ test('local Reports mock renders its fixture without protected reads or exports'
     formats.map((format) => format.getAttribute('aria-label')))).resolves.toEqual([
     'PDF file', 'XLSX file', 'CSV file', 'PDF file',
   ]);
-  await expect(page.getByRole('button', { name: 'Apply filters' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Apply filters' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Reset' })).toBeEnabled();
+  await expect(page.getByRole('combobox', { name: 'Repository filter unavailable in preview data' })).toBeDisabled();
+  await expect(page.getByRole('combobox', { name: 'Workflow filter unavailable because runs are not linked to workflows' })).toBeDisabled();
+
+  await page.getByRole('combobox', { name: 'Time Range' }).click();
+  await page.getByRole('option', { name: 'Last 90 Days' }).click();
+  await page.getByRole('combobox', { name: 'Product' }).click();
+  await page.getByRole('option', { name: 'Core Product' }).click();
+  await page.getByRole('combobox', { name: 'Team' }).click();
+  await page.getByRole('option', { name: 'Platform', exact: true }).click();
+  await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Apply filters' }).click();
+  await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(2);
+  await expect(page.locator('.product-summary-panel tbody')).toContainText('Core Product');
+  await expect(page.locator('.inventory-panel tbody tr')).toHaveCount(2);
+  await expect(page.locator('.inventory-panel tbody')).toContainText('Platform');
+  await page.getByRole('button', { name: 'Reset' }).click();
+  await expect(page.getByRole('combobox', { name: 'Time Range' })).toHaveValue('Last 30 Days');
+  await expect(page.getByRole('combobox', { name: 'Product' })).toHaveValue('All Products');
+  await expect(page.getByRole('combobox', { name: 'Team' })).toHaveValue('All Teams');
+  await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(5);
+  await expect(page.locator('.inventory-panel tbody tr')).toHaveCount(5);
   await expect(page.getByRole('button', { name: 'Executive Summary unavailable' })).toBeDisabled();
   expect(apiRequests.filter(({ path }) => path !== '/api/v1/auth/session')).toEqual([]);
   expect(apiRequests.filter(({ method }) => method !== 'GET')).toEqual([]);
@@ -73,6 +95,7 @@ test('local Reports mock renders its fixture without protected reads or exports'
     cells.every((cell) => getComputedStyle(cell).whiteSpace === 'nowrap'))).toBe(true);
   const productTableRegion = page.getByRole('region', { name: 'Product delivery summary table' });
   await expect(productTableRegion).toHaveAttribute('tabindex', '0');
+  await page.keyboard.press('Tab');
   await productTableRegion.focus();
   await expect(productTableRegion).toHaveCSS('outline-style', 'solid');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);

@@ -214,7 +214,9 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
     .sort((left, right) => left.localeCompare(right));
   const productOptions = [
     { value: 'all', label: 'All Products' },
-    ...(products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []),
+    ...(designPreview
+      ? reportPreviewProducts.filter((product) => product.id !== 'total').map(({ id, name }) => ({ value: id, label: name }))
+      : products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []),
   ];
   const repositoryOptions = [
     { value: 'all', label: 'All Repositories' },
@@ -222,8 +224,15 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
   ];
   const ownerOptions = [
     { value: 'all', label: designPreview ? 'All Teams' : 'All Objective Owners' },
-    ...objectiveOwners.map((owner) => ({ value: owner, label: owner })),
+    ...(designPreview
+      ? reportPreviewWorkspaces.filter((workspace) => workspace.name !== 'Total / Avg.')
+        .map(({ name }) => ({ value: name, label: name }))
+      : objectiveOwners.map((owner) => ({ value: owner, label: owner }))),
   ];
+  const previewProductRows = appliedScope.product === 'all' ? reportPreviewProducts
+    : reportPreviewProducts.filter((product) => product.id === appliedScope.product || product.id === 'total');
+  const previewWorkspaceRows = appliedScope.objectiveOwner === 'all' ? reportPreviewWorkspaces
+    : reportPreviewWorkspaces.filter((workspace) => workspace.name === appliedScope.objectiveOwner || workspace.name === 'Total / Avg.');
   const downloadCSV = (name: string, rows: (string | number | undefined)[][]) => {
     const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -300,23 +309,23 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
         <div className="reports-scope-label"><IconFilter size={16} /><span>Report Scope</span></div>
         <Select aria-label="Time Range" label="Time Range" data={timeRanges}
           leftSection={<IconCalendar size={13} />} value={scope.timeRange}
-          onChange={(value) => updateScope('timeRange', value)} disabled={designPreview} />
+          onChange={(value) => updateScope('timeRange', value)} />
         <Select aria-label="Product" label="Product" data={productOptions}
           leftSection={<IconStack size={13} />} value={scope.product}
-          onChange={(value) => updateScope('product', value)} disabled={designPreview} />
+          onChange={(value) => updateScope('product', value)} />
         <Select aria-label={designPreview ? 'Team' : 'Objective owner'} label={designPreview ? 'Team' : 'Objective owner'} data={ownerOptions} value={scope.objectiveOwner}
-          leftSection={<IconUsers size={13} />} onChange={(value) => updateScope('objectiveOwner', value)} disabled={designPreview} />
+          leftSection={<IconUsers size={13} />} onChange={(value) => updateScope('objectiveOwner', value)} />
         <Select aria-label="Workflow filter unavailable because runs are not linked to workflows" label="Workflow"
           leftSection={<IconRoute size={13} />} data={[{ value: 'all', label: 'All Workflows' }]} value="all" disabled />
-        <Select aria-label="Repository" label="Repository" data={repositoryOptions}
+        <Select aria-label={designPreview ? 'Repository filter unavailable in preview data' : 'Repository'} label="Repository" data={repositoryOptions}
           leftSection={<IconCode size={13} />} value={scope.repository}
           onChange={(value) => updateScope('repository', value)} disabled={designPreview} />
         <div className="reports-scope-actions">
-          <Button className="reports-apply-filters" disabled={designPreview} onClick={() => setAppliedScope(scope)}>Apply filters</Button>
+          <Button className="reports-apply-filters" onClick={() => setAppliedScope(scope)}>Apply filters</Button>
           <Button className="reports-reset-filters" variant="subtle" onClick={() => {
             setScope(defaultScope);
             setAppliedScope(defaultScope);
-          }} disabled={designPreview}>Reset</Button>
+          }}>Reset</Button>
         </div>
       </div>
 
@@ -497,11 +506,11 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
             {keyTakeaway}</span></div>
         </PanelCard>
 
-        <ProductSummaryPanel rows={designPreview ? reportPreviewProducts : productSummaries} designPreview={designPreview}
+        <ProductSummaryPanel rows={designPreview ? previewProductRows : productSummaries} designPreview={designPreview}
           loading={!designPreview && (products.isLoading || projects === undefined)} error={!designPreview && products.isError}
           checkoutCount={scopedProjects?.length} />
 
-        <WorkspaceSummaryPanel rows={designPreview ? reportPreviewWorkspaces : undefined} designPreview={designPreview} workItems={objectiveCount} metrics={{
+        <WorkspaceSummaryPanel rows={designPreview ? previewWorkspaceRows : undefined} designPreview={designPreview} workItems={objectiveCount} metrics={{
           deliveryVelocity: pullRequests.deliveryVelocity,
           cycleTime: pullRequests.cycleTime,
           ciDuration: workflowRunMetrics.averageMinutes,
