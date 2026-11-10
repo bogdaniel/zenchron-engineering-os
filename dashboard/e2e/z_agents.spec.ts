@@ -226,6 +226,35 @@ test('Agents local design preview labels illustrative metadata without API reads
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('Agents local preview filters and sorts profiles without API writes', async ({ page }) => {
+  const requests: string[] = [];
+  for (const endpoint of ['agents', 'agent-runs']) await page.route(`**/api/v1/${endpoint}`, async (route) => {
+    requests.push(route.request().method());
+    await route.fulfill({ status: 401, body: 'authentication required' });
+  });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  const previewURL = new URL('/#agents', test.info().project.use.baseURL as string);
+  previewURL.hostname = '127.0.0.1';
+  await page.goto(previewURL.toString());
+
+  const rows = page.locator('.agent-row');
+  await expect(rows).toHaveCount(6);
+  await page.getByRole('button', { name: 'Filter agents' }).click();
+  await page.getByRole('menuitem', { name: 'Disabled only' }).click();
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('Research Analyst');
+  await page.getByRole('button', { name: 'Filter agents' }).click();
+  await page.getByRole('menuitem', { name: 'All profiles' }).click();
+  await page.getByRole('button', { name: 'Sort agents' }).click();
+  await page.getByRole('menuitem', { name: 'Name Z–A' }).click();
+  await expect(rows.first()).toContainText('Test Generator');
+  await page.getByRole('textbox', { name: 'Search agents' }).fill('planner');
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('Planner');
+  expect(requests).toEqual([]);
+});
+
 test('Agents empty state uses the primary create action', async ({ page }) => {
   await page.route('**/api/v1/agents', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',

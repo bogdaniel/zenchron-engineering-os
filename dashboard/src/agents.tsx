@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LineChart, Sparkline } from '@mantine/charts';
-import { Badge, Button, Checkbox, Modal, Select, Tabs, Text, Textarea, TextInput } from '@mantine/core';
+import { Badge, Button, Checkbox, Menu, Modal, Select, Tabs, Text, Textarea, TextInput } from '@mantine/core';
 import {
   IconActivity, IconBrandGithub, IconBook2, IconChartBar, IconCode, IconCpu, IconFlask, IconHierarchy,
   IconPlus, IconRobot, IconRocket, IconSearch, IconShieldCheck, IconSparkles, IconChevronDown, IconDots,
@@ -146,6 +146,8 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
   const queryClient = useQueryClient();
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [agentSearch, setAgentSearch] = useState('');
+  const [agentStatusFilter, setAgentStatusFilter] = useState<'all' | Agent['status']>('all');
+  const [agentSort, setAgentSort] = useState<'default' | 'ascending' | 'descending'>('default');
   const [createOpen, setCreateOpen] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
   const [runProjectID, setRunProjectID] = useState('');
@@ -164,9 +166,12 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
   const runsError = !sampleMode && runs.isError;
   const searchTerm = agentSearch.trim().toLowerCase();
   const visibleItems = items.filter((agent) =>
+    (agentStatusFilter === 'all' || agent.status === agentStatusFilter) &&
     `${agent.name} ${agent.description} ${agent.provider} ${agent.model}`.toLowerCase().includes(searchTerm),
   );
-  const selected = items.find((item) => item.id === selectedID) ?? items[0];
+  if (agentSort !== 'default') visibleItems.sort((a, b) =>
+    agentSort === 'ascending' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
+  const selected = visibleItems.find((item) => item.id === selectedID) ?? visibleItems[0] ?? items[0];
   const createForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateInput });
   const editForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateInput });
   const runForm = useForm<{ prompt: string }>({ initialValues: { prompt: '' }, validate: (values) => {
@@ -299,11 +304,28 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
     </section>
     <div className="agents-content-grid">
       <PanelCard className="agents-list-panel" withBorder>
-        <PanelHeading className="agents-panel-heading" title={sampleMode ? 'Agent Profiles (6)' : 'Agent Profiles'} description={sampleMode ? undefined : 'Reusable role and permission definitions'}
+        <PanelHeading className="agents-panel-heading" title={sampleMode ? `Agent Profiles (${visibleItems.length})` : 'Agent Profiles'} description={sampleMode ? undefined : 'Reusable role and permission definitions'}
           actions={<><TextInput className="agents-profile-search" aria-label="Search agents" leftSection={<IconSearch size={13} />}
             placeholder="Search agents…" value={agentSearch} onChange={(event) => setAgentSearch(event.currentTarget.value)} />
-          {sampleMode && <><Button className="agents-list-tool" variant="default" disabled aria-label="Filter agents"><IconFilter size={13} /></Button><Button className="agents-list-tool" variant="default" disabled aria-label="Sort agents"><IconArrowsSort size={13} /></Button></>}
-          <Badge className="agents-count" variant="light">{items.length}</Badge></>} />
+          {sampleMode && <>
+            <Menu position="bottom-end" withinPortal>
+              <Menu.Target><Button className="agents-list-tool" variant="default" aria-label="Filter agents"><IconFilter size={13} /></Button></Menu.Target>
+              <Menu.Dropdown aria-label="Filter agents">
+                <Menu.Item onClick={() => setAgentStatusFilter('all')}>All profiles</Menu.Item>
+                <Menu.Item onClick={() => setAgentStatusFilter('active')}>Active only</Menu.Item>
+                <Menu.Item onClick={() => setAgentStatusFilter('disabled')}>Disabled only</Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+            <Menu position="bottom-end" withinPortal>
+              <Menu.Target><Button className="agents-list-tool" variant="default" aria-label="Sort agents"><IconArrowsSort size={13} /></Button></Menu.Target>
+              <Menu.Dropdown aria-label="Sort agents">
+                <Menu.Item onClick={() => setAgentSort('default')}>Default order</Menu.Item>
+                <Menu.Item onClick={() => setAgentSort('ascending')}>Name A–Z</Menu.Item>
+                <Menu.Item onClick={() => setAgentSort('descending')}>Name Z–A</Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          </>}
+          <Badge className="agents-count" variant="light">{visibleItems.length}</Badge></>} />
         {profilesError ? <div className="agents-empty">Agent profiles could not be loaded.</div> : profilesLoading ? (
           <div className="agents-empty">Loading agent profiles…</div>
         ) : items.length && visibleItems.length ? (
@@ -347,7 +369,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
           <PanelHeading className="agents-detail-heading entity-detail-heading" title={selected.name}
             description={selected.description || 'Agent profile'}
             icon={<span className="agent-detail-icon"><AgentProfileIcon name={selected.name} size={20} /></span>}
-            actions={<div className="agents-detail-actions"><Badge className={`agent-status ${selected.status}`} variant="light">{sampleMode ? 'Active' : selected.status}</Badge>
+            actions={<div className="agents-detail-actions"><Badge className={`agent-status ${selected.status}`} variant="light">{selected.status}</Badge>
               {sampleMode && <><Button className="agents-run-button" disabled leftSection={<IconPlayerPlay size={13} />}>Run Agent</Button><Button variant="default" disabled>Duplicate Profile</Button><Button variant="default" disabled>Disable</Button><Button variant="default" disabled>Compare Versions</Button><Button variant="default" disabled aria-label="More agent actions"><IconDots size={15} /></Button></>}
               {sampleMode ? null : <>
               {isEditing ? <Button variant="default" onClick={() => { resetEditForm(); setIsEditing(false); }}>Cancel</Button>

@@ -23,6 +23,13 @@ test('local Integrations mock uses static content and keeps controls read only',
   await expect(page.locator('.system-preview-settings-badge')).toHaveCount(7);
   await expect(page.locator('.system-preview-provider-link-row button[aria-label*="options unavailable"]')).toHaveCount(10);
   await expect(page.locator('.system-preview-provider-link-row button[aria-label*="Reveal"]')).toHaveCount(3);
+  const githubLink = page.locator('.system-preview-provider').filter({ hasText: 'GitHub' }).locator('.system-preview-provider-link');
+  await expect(githubLink).toContainText('org/zenchron-engineering');
+  expect(await githubLink.evaluate((link) => link.scrollWidth <= link.clientWidth), 'GitHub account link is not clipped').toBe(true);
+  await page.setViewportSize({ width: 682, height: 844 });
+  expect(await githubLink.evaluate((link) => link.scrollWidth <= link.clientWidth), 'GitHub account link stays visible at the reported width').toBe(true);
+  await expect(page.locator('.system-preview-provider-control').first()).toBeVisible();
+  await page.setViewportSize({ width: 1672, height: 941 });
   await expect(page.getByRole('button', { name: 'More integration categories unavailable' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Last 24 hours' })).toBeDisabled();
   await expect(page.locator('.system-preview-add-integration')).toHaveCSS('border-top-style', 'dashed');
