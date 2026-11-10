@@ -1,4 +1,4 @@
-import { Badge, Modal, Progress } from '@mantine/core';
+import { Badge, Menu, Modal, Progress } from '@mantine/core';
 import { useState } from 'react';
 import { AreaChart, Sparkline } from '@mantine/charts';
 import {
@@ -18,10 +18,16 @@ import { useReportPullRequestMetrics } from './reportPullRequests';
 import { useReportWorkflowRunMetrics } from './reportWorkflowRuns';
 
 const sampleAnalytics = [
-  { day: 'Jan 20', merged: 10 }, { day: 'Jan 21', merged: 18 }, { day: 'Jan 22', merged: 19 },
-  { day: 'Jan 23', merged: 26 }, { day: 'Jan 24', merged: 32 }, { day: 'Jan 25', merged: 34 },
-  { day: 'Jan 26', merged: 45 },
+  { day: 'Jan 20', merged: 10, cycle: 31, ci: 12 }, { day: 'Jan 21', merged: 18, cycle: 28, ci: 11 },
+  { day: 'Jan 22', merged: 19, cycle: 24, ci: 10 }, { day: 'Jan 23', merged: 26, cycle: 21, ci: 9 },
+  { day: 'Jan 24', merged: 32, cycle: 17, ci: 8 }, { day: 'Jan 25', merged: 34, cycle: 14, ci: 8 },
+  { day: 'Jan 26', merged: 45, cycle: 12, ci: 7 },
 ];
+const analyticsMetrics = [
+  ['Delivery Velocity', 'merged', 'Merged PRs', 'PRs Merged', '42', '↑ +27% vs. prior 7d'],
+  ['Cycle Time', 'cycle', 'Cycle time (hours)', 'Average Cycle Time', '21.0h', '↓ −34% vs. prior 7d'],
+  ['CI Duration', 'ci', 'CI duration (minutes)', 'Average CI Duration', '9.3m', '↓ −28% vs. prior 7d'],
+] as const;
 
 const sampleObjectives = [
   { title: 'Ship AI code review v2', progress: 78, status: 'On Track' },
@@ -55,6 +61,8 @@ export function OverviewPage({ sampleData, projects, projectsLoading, projectsEr
   const openPullRequests = pullRequests.outcomes.find((item) => item.name === 'Open')?.value ?? 0;
   const workflowHealth = workflows.successRate;
   const [activityOpen, setActivityOpen] = useState(false);
+  const [analyticsMetric, setAnalyticsMetric] = useState<(typeof analyticsMetrics)[number][0]>('Delivery Velocity');
+  const selectedAnalyticsMetric = analyticsMetrics.find(([label]) => label === analyticsMetric)!;
   const reviewableRuns = agentRuns?.filter((run) => run.diff_available) ?? [];
   const analytics = pullRequests.trend.map(({ date, merged }) => ({ day: date, merged }));
   const pullRequestDetail = projectsLoading ? 'Loading repositories'
@@ -201,10 +209,16 @@ export function OverviewPage({ sampleData, projects, projectsLoading, projectsEr
 
         <PanelCard className="panel analytics-panel preview-analytics-panel" id="reports" withBorder>
           <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconChartBar size={18} /></span>}
-            title="Analytics" actions={<a className="mock-analytics-filter" href="#reports">
-              Delivery Velocity<IconChevronDown size={13} /></a>} />
-          <div className="preview-analytics-summary overview-delivery-summary"><span>PRs Merged{sampleData ? ' (7d)' : ' (all history)'}</span><div><strong>{sampleData ? 42 : pullRequests.complete ? pullRequests.mergedCount : '—'}</strong><b>{sampleData ? '↑ +27% vs. prior 7d' : pullRequests.complete ? `${pullRequests.deliveryVelocity} / week` : 'History unavailable'}</b></div></div>
-          {sampleData ? <AreaChart h={188} data={sampleAnalytics} dataKey="day" series={[{ name: 'merged', color: '#ad55ff', label: 'Merged PRs' }]}
+            title="Analytics" actions={sampleData ? <Menu position="bottom-end" withinPortal>
+              <Menu.Target><button className="mock-analytics-filter" type="button" aria-label="Choose analytics metric">
+                {analyticsMetric}<IconChevronDown size={13} /></button></Menu.Target>
+              <Menu.Dropdown>{analyticsMetrics.map(([label]) => <Menu.Item key={label}
+                onClick={() => setAnalyticsMetric(label)}>{label}</Menu.Item>)}</Menu.Dropdown>
+            </Menu> : <a className="mock-analytics-filter" href="#reports">Delivery Velocity<IconChevronDown size={13} /></a>} />
+          <div className="preview-analytics-summary overview-delivery-summary"><span>{sampleData ? `${selectedAnalyticsMetric[3]} (7d)` : 'PRs Merged (all history)'}</span><div><strong>{sampleData ? selectedAnalyticsMetric[4] : pullRequests.complete ? pullRequests.mergedCount : '—'}</strong><b>{sampleData ? selectedAnalyticsMetric[5] : pullRequests.complete ? `${pullRequests.deliveryVelocity} / week` : 'History unavailable'}</b></div></div>
+          {sampleData ? <AreaChart h={188} data={sampleAnalytics} dataKey="day" series={[
+            { name: selectedAnalyticsMetric[1], color: '#ad55ff', label: selectedAnalyticsMetric[2] },
+          ]}
             curveType="monotone" withDots withTooltip withGradient fillOpacity={0.4} dotProps={{ r: 3, stroke: '#f2edfa', strokeWidth: 1 }}
             gridAxis="x" tickLine="none"
             areaChartProps={{ margin: { top: 13, right: 5, bottom: 0, left: 5 } }}

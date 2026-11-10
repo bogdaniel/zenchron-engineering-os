@@ -30,6 +30,9 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   await expect(retryEdges).toHaveCount(4);
   expect(await retryEdges.first().evaluate((path) => getComputedStyle(path).strokeDasharray)).not.toBe('none');
   const canvas = page.locator('.workflow-canvas .react-flow');
+  const palette = await page.locator('.workflow-palette').boundingBox();
+  expect(Math.round(palette!.y)).toBe(202);
+  expect(Math.round((await page.locator('.workflow-properties').boundingBox())!.y)).toBe(90);
   await expect(canvas).toHaveCSS('background-color', 'rgb(11, 11, 20)');
   await expect(canvas).toHaveCSS('background-image', /radial-gradient/);
   await expect(canvas).toHaveCSS('background-size', '20px 20px');
@@ -129,10 +132,12 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
       expect((await page.locator('.workflow-run-columns').boundingBox())?.height).toBe(404);
       const runWorkflow = page.getByRole('button', { name: 'Run Workflow' });
       const reviewApproval = page.getByRole('button', { name: 'Review Approval' });
-      await expect(runWorkflow).toBeDisabled();
-      await expect(reviewApproval).toBeDisabled();
+      await expect(runWorkflow).toBeEnabled();
+      await expect(reviewApproval).toBeEnabled();
       await expect(runWorkflow).toHaveCSS('background-image', /linear-gradient/);
       await expect(reviewApproval).toHaveCSS('background-image', /linear-gradient/);
+      await runWorkflow.click();
+      await expect(page.locator('.workflow-section-concept')).toHaveText('Run Workflow previewed · no workflow changes were saved');
     }
     if (section === 'Permissions') await expect(page.locator('.workflow-collaborator')).toHaveCount(4);
   }

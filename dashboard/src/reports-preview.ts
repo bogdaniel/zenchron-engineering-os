@@ -46,6 +46,22 @@ export const reportPreviewWorkspaces = [
   { name: 'Total / Avg.', workItems: 17842, deliveryVelocity: 42, cycleTime: 13.6, acceptanceRate: 94.8, autonomousCompletion: 68.4 },
 ];
 
+export const reportPreviewWorkflows = ['PR Review & Release Orchestration', 'Nightly Regression Suite', 'Production Deployment'];
+export const reportPreviewRepositories = [
+  'zenchron/engineering-os', 'zenchron/platform-services', 'zenchron/agent-sdk', 'zenchron/devtools',
+];
+export const reportPreviewRepositoryProducts: Record<string, string[]> = {
+  'zenchron/engineering-os': ['core-product'],
+  'zenchron/platform-services': ['core-product', 'integrations'],
+  'zenchron/agent-sdk': ['ai-platform'],
+  'zenchron/devtools': ['developer-tools'],
+};
+export const reportPreviewWorkflowProducts: Record<string, string[]> = {
+  'PR Review & Release Orchestration': ['core-product', 'ai-platform', 'developer-tools'],
+  'Nightly Regression Suite': ['core-product', 'ai-platform'],
+  'Production Deployment': ['core-product', 'integrations'],
+};
+
 export const reportPreviewInsights = [
   { group: 'delivery', title: 'Overall engineering performance is up', detail: 'Delivery velocity increased 27% to 42 PRs/week while cycle time decreased 34% to 13.6h.' },
   { group: 'delivery', title: 'Faster delivery', detail: 'Cycle time (13.6h, −34%) and review latency (4.7h, −41%) show sustained efficiency gains across teams.' },

@@ -224,7 +224,8 @@ button:disabled, input:disabled {
   gap: 10px;
 }
 .reports-greeting > svg { flex: 0 0 auto; color: #ad79ff; }
-.reports-heading-copy { min-width: 0; }
+.reports-greeting { flex: 1 1 0; min-width: 0; }
+.reports-heading-copy { min-width: 0; flex: 1 1 0; }
 .reports-heading-title { display: flex; align-items: baseline; gap: 10px; }
 .reports-heading-title span { color: #c0bacc; font-size: 11px; }
 .app-shell .main-content .reports-greeting .page-heading p {
@@ -235,10 +236,13 @@ button:disabled, input:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.search-box {
+.topbar > .search-box {
   width: min(400px,30vw);
+  flex: 0 1 auto;
   margin: 0 auto;
 }
+.reports-greeting + .search-box { flex: 0 0 300px; margin-inline: 0; }
+.search-box { width: 100%; margin: 0; }
 .greeting-mobile-copy { display: none; }
 @media (min-width: 1201px) {
   .reports-greeting + .search-box { width: 300px; flex: 0 0 300px; }
@@ -267,6 +271,7 @@ button:disabled, input:disabled {
   align-items: center;
   gap: 10px;
 }
+.top-actions > .mantine-Menu-root { display: contents; }
 .icon-button, .workspace-button {
   display: flex;
   height: 36px;
@@ -409,6 +414,7 @@ button:disabled, input:disabled {
   .search-box {
     width:min(300px,25vw);
   }
+  .topbar > .search-box { width:min(300px,25vw); }
   .user-chip {
     display:none;
   }

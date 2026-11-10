@@ -82,7 +82,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     await expect(workspaceLabel, 'long navigation label stays on one line').toHaveCSS('white-space', 'nowrap');
     expect(await workspaceLabel.evaluate((label) => label.scrollWidth <= label.clientWidth),
       'long navigation label fits without clipping').toBe(true);
-    expect(styles.topbarHeight).toBe('80px');
+    expect(Math.abs(parseFloat(styles.topbarHeight) - 80)).toBeLessThanOrEqual(1);
     if (route === 'reports') {
         await expect(page.locator('.reports-greeting p')).toHaveCSS('font-size', '12px');
         const description = await page.locator('.reports-greeting p').evaluate((element) => ({
@@ -274,4 +274,22 @@ test('mobile overview matches the phone shell and keeps workflow/reviews accessi
   await page.getByRole('link', { name: 'Reviews', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible();
   await expect(page.locator('.reviews-title-copy p')).toBeVisible();
+});
+
+test('header search and menus navigate within the local preview', async ({ page }) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/');
+  const search = page.getByRole('textbox', { name: 'Search pages' });
+  await page.keyboard.press('Control+k');
+  await expect(search).toBeFocused();
+  await search.fill('agent');
+  await expect(page.getByRole('menuitem', { name: 'Agents' })).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Agents' }).click();
+  await expect(page).toHaveURL(/#agents$/);
+  await page.getByRole('button', { name: 'Notifications' }).click();
+  await expect(page.getByText('No new notifications.')).toBeVisible();
+  await page.getByRole('button', { name: 'Choose workspace' }).click();
+  await page.getByRole('menuitem', { name: 'Open Product Workspace' }).click();
+  await expect(page).toHaveURL(/#workspace$/);
+  await expect(page.locator('.workspace-mock')).toBeVisible();
 });

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Badge, Button } from '@mantine/core';
 import {
   IconAlertTriangle, IconCalendar, IconCheck, IconClock, IconCloud, IconDatabase, IconFileText,
@@ -45,16 +46,33 @@ const schedules = [
   ['GitHub PR Webhook', 'On pull_request event', 'Event-driven, enabled'],
 ];
 
-function SectionTitle({ title, description, action }: { title: string; description: string; action: string }) {
+function SectionTitle({ title, description, action, onAction }: {
+  title: string; description: string; action: string; onAction: (action: string) => void;
+}) {
   return <div className="workflow-section-preview-title">
     <div><h2>{title}</h2><p>{description}</p></div>
-    <Button disabled leftSection={<IconPlus size={14} />}>{action}</Button>
+    <Button className="workflow-section-primary-action" onClick={() => onAction(action)} leftSection={<IconPlus size={14} />}>{action}</Button>
   </div>;
 }
 
-function RunSection() {
+function RunSection({ onAction }: { onAction: (action: string) => void }) {
+  const [detailTab, setDetailTab] = useState('STEPS');
+  const detailRows = detailTab === 'STEPS' ? [
+    ['Trigger & Plan', 'Completed in 8s', 'done'], ['Agent Router', '3 profiles assigned', 'done'],
+    ['Code Review + Tests', 'Parallel steps passed', 'done'], ['Human Approval', '1 of 2 approvals received', 'waiting'],
+    ['Merge Gate & Publish', 'Waiting on approval', 'pending'],
+  ] : detailTab === 'LOGS' ? [
+    ['09:41:02', 'Trigger received for PR #4827', 'done'], ['09:41:10', 'Code Reviewer completed', 'done'],
+    ['09:42:18', 'Awaiting Platform Lead approval', 'waiting'],
+  ] : detailTab === 'ARTIFACTS' ? [
+    ['review-summary.md', 'Verified · 12 KB', 'done'], ['coverage-summary.json', 'Verified · 4 KB', 'done'],
+    ['test-results.xml', 'Verified · 28 KB', 'done'],
+  ] : [
+    ['09:41:02', 'Run started · v2.4.0', 'done'], ['09:41:10', 'Review stage completed', 'done'],
+    ['09:42:18', 'Approval requested', 'waiting'],
+  ];
   return <>
-    <SectionTitle title="Run History & Execution Monitoring" description="Inspect every execution, trace agent activity, and act on pending reviews." action="Run Workflow" />
+    <SectionTitle title="Run History & Execution Monitoring" description="Inspect every execution, trace agent activity, and act on pending reviews." action="Run Workflow" onAction={onAction} />
     <div className="workflow-run-metrics">
       {[
         ['Running now', '3', '● Live', <IconPlayerPlay />], ['Succeeded', '128', '+8% this month', <IconCheck />],
@@ -65,7 +83,8 @@ function RunSection() {
     </div>
     <div className="workflow-run-columns">
       <PanelCard className="workflow-section-card workflow-section-table">
-        <PanelHeading title="Execution History" description="Select a run to see stage-by-stage output." actions={<span className="workflow-section-link">View all →</span>} />
+        <PanelHeading title="Execution History" description="Select a run to see stage-by-stage output."
+          actions={<button className="workflow-section-link" type="button" onClick={() => onAction('Showing all runs')}>View all →</button>} />
         <div className="workflow-runs-table">
           <div className="workflow-table-head"><span>Run ID</span><span>Version</span><span>Started</span><span>Duration</span><span>Status</span></div>
           {runs.map(([id, version, started, duration, status], index) => <div className={`workflow-table-row${index === 0 ? ' selected' : ''}`} key={id}>
@@ -77,25 +96,24 @@ function RunSection() {
       <PanelCard className="workflow-section-card workflow-run-detail">
         <PanelHeading title="RUN-10428　/　PR #4827" description="Current execution · workflow v2.4.0" actions={<Badge className="workflow-run-status waiting">WAITING</Badge>} />
         <div className="workflow-run-facts"><span>Elapsed <b>2m 18s</b></span><span>Agent cost <b>$0.38 USD</b></span><span>Artifacts <b>7 verified</b></span></div>
-        <nav className="workflow-detail-tabs"><b>STEPS</b><span>LOGS</span><span>ARTIFACTS</span><span>EVENTS</span></nav>
+        <nav className="workflow-detail-tabs" aria-label="Run detail views" role="tablist">
+          {['STEPS', 'LOGS', 'ARTIFACTS', 'EVENTS'].map((tab) => <button type="button" role="tab" key={tab}
+            aria-selected={detailTab === tab} onClick={() => { setDetailTab(tab); onAction(`${tab} view selected`); }}>{tab}</button>)}
+        </nav>
         <div className="workflow-run-steps">
-          {[
-            ['Trigger & Plan', 'Completed in 8s', 'done'], ['Agent Router', '3 profiles assigned', 'done'],
-            ['Code Review + Tests', 'Parallel steps passed', 'done'], ['Human Approval', '1 of 2 approvals received', 'waiting'],
-            ['Merge Gate & Publish', 'Waiting on approval', 'pending'],
-          ].map(([label, detail, state]) => <div className={`workflow-run-step ${state}`} key={label}>
+          {detailRows.map(([label, detail, state]) => <div className={`workflow-run-step ${state}`} key={label}>
             <i>{state === 'done' ? '✓' : state === 'waiting' ? 'Ⅱ' : '○'}</i><span>{label}<small>{detail}</small></span>
           </div>)}
         </div>
-        <Button disabled className="workflow-section-bottom-action">Review Approval</Button>
+        <Button className="workflow-section-bottom-action workflow-section-primary-action" onClick={() => onAction('Review Approval')}>Review Approval</Button>
       </PanelCard>
     </div>
   </>;
 }
 
-function VersionsSection() {
+function VersionsSection({ onAction }: { onAction: (action: string) => void }) {
   return <>
-    <SectionTitle title="Workflow Versions" description="Review draft changes, compare history, and publish known-good definitions." action="Publish Draft" />
+    <SectionTitle title="Workflow Versions" description="Review draft changes, compare history, and publish known-good definitions." action="Publish Draft" onAction={onAction} />
     <div className="workflow-version-columns">
       <PanelCard className="workflow-section-card workflow-version-history">
         <PanelHeading title="Version History" description="6 saved versions · newest first" />
@@ -119,16 +137,17 @@ function VersionsSection() {
           ['~ UPDATED', 'Merge Gate condition', 'Requires 80% coverage and approval'],
           ['→ ROUTED', 'Agent Router outputs', 'Additional test-generation fallback paths'],
         ].map(([kind, title, detail]) => <div className="workflow-change-row" key={title}><Badge>{kind}</Badge><span><b>{title}</b><small>{detail}</small></span></div>)}
-        <div className="workflow-section-actions"><Button disabled variant="default">Restore Draft</Button><Button disabled>Publish v2.4.0</Button></div>
+        <div className="workflow-section-actions"><Button variant="default" onClick={() => onAction('Restore Draft')}>Restore Draft</Button>
+          <Button onClick={() => onAction('Publish v2.4.0')}>Publish v2.4.0</Button></div>
       </PanelCard>
     </div>
   </>;
 }
 
-function SchedulesSection() {
+function SchedulesSection({ onAction }: { onAction: (action: string) => void }) {
   const days = ['MON 9', 'TUE 10', 'WED 11', 'THU 12', 'FRI 13', 'SAT 14', 'SUN 15'];
   return <>
-    <SectionTitle title="Schedules & Triggers" description="Control how and when the workflow starts, and preview upcoming runs." action="New Schedule" />
+    <SectionTitle title="Schedules & Triggers" description="Control how and when the workflow starts, and preview upcoming runs." action="New Schedule" onAction={onAction} />
     <div className="workflow-schedule-columns">
       <PanelCard className="workflow-section-card workflow-schedule-list">
         <PanelHeading title="Active Triggers" description="4 schedules configured" />
@@ -138,7 +157,8 @@ function SchedulesSection() {
         <footer>Timezone: Europe/Bucharest (EET/EEST)</footer>
       </PanelCard>
       <PanelCard className="workflow-section-card workflow-schedule-calendar">
-        <PanelHeading title="Execution Calendar" description="Week of November 9–15, 2026" actions={<span className="workflow-section-link">‹ This week ›</span>} />
+        <PanelHeading title="Execution Calendar" description="Week of November 9–15, 2026"
+          actions={<button className="workflow-section-link" onClick={() => onAction('This week')}>‹ This week ›</button>} />
         <div className="workflow-calendar-grid">{days.map((day, index) => <div className="workflow-calendar-day" key={day}>
           <small>{day}</small>{index < 5 && <span>09:00 PR review</span>}{[1, 3, 5].includes(index) && <span className="test">02:30 Tests</span>}{index === 4 && <span className="release">15:00 Release</span>}
         </div>)}</div>
@@ -147,13 +167,13 @@ function SchedulesSection() {
           <label>Schedule name<output>Weekday PR Quality Check</output></label><label>Timezone<output>Europe/Bucharest</output></label>
           <label>Frequency<output>Weekdays (Monday–Friday)</output></label><label>Run at<output>09:00 local time</output></label>
         </div>
-        <footer>Next: Tue, November 10 at 09:00 <Button disabled>Save Schedule</Button></footer>
+        <footer>Next: Tue, November 10 at 09:00 <Button onClick={() => onAction('Save Schedule')}>Save Schedule</Button></footer>
       </PanelCard>
     </div>
   </>;
 }
 
-function PermissionsSection() {
+function PermissionsSection({ onAction }: { onAction: (action: string) => void }) {
   const roles = [
     ['A', 'Alex Chen', 'Owner', 'All permissions'], ['P', 'Priya Shah', 'Editor', 'Edit & submit reviews'],
     ['M', 'Marco Lee', 'Operator', 'Execute and monitor runs'], ['S', 'Sarah Kim', 'Viewer', 'Read-only access and audit logs'],
@@ -163,7 +183,7 @@ function PermissionsSection() {
     ['Start execution', '✓', '✓', '✓', '–'], ['Approve protected steps', '✓', '–', '–', '–'], ['Publish a version', '✓', '–', '–', '–'],
   ];
   return <>
-    <SectionTitle title="Workflow Permissions" description="Manage collaborators, roles, and approvals for sensitive operations." action="Invite Member" />
+    <SectionTitle title="Workflow Permissions" description="Manage collaborators, roles, and approvals for sensitive operations." action="Invite Member" onAction={onAction} />
     <div className="workflow-permission-columns">
       <div className="workflow-permission-left">
         <PanelCard className="workflow-section-card">
@@ -184,15 +204,15 @@ function PermissionsSection() {
           ['Allow public sharing', 'Disabled for this workflow', false], ['Signed audit trail', 'Immutable event history', true],
         ].map(([name, detail, on]) => <div className="workflow-protection-row" key={name as string}><span>{name}<small>{detail}</small></span><i className={`workflow-static-toggle${on ? '' : ' off'}`} /></div>)}
         <label className="workflow-static-field">Minimum reviewers<output>2 distinct reviewers</output></label>
-        <Button disabled className="workflow-section-bottom-action">Save Permissions</Button>
+        <Button className="workflow-section-bottom-action" onClick={() => onAction('Save Permissions')}>Save Permissions</Button>
       </PanelCard>
     </div>
   </>;
 }
 
-function SettingsSection() {
+function SettingsSection({ onAction }: { onAction: (action: string) => void }) {
   return <>
-    <SectionTitle title="Workflow Settings" description="Configure identity, execution budgets, recovery behavior, and integrations." action="Save Settings" />
+    <SectionTitle title="Workflow Settings" description="Configure identity, execution budgets, recovery behavior, and integrations." action="Save Settings" onAction={onAction} />
     <div className="workflow-settings-columns">
       <div className="workflow-settings-left">
         <PanelCard className="workflow-section-card"><PanelHeading title="General" description="Identity and default execution context" />
@@ -214,17 +234,20 @@ function SettingsSection() {
         <PanelCard className="workflow-section-card"><PanelHeading title="Notifications & Lifecycle" description="Alerts and administrative actions" />
           <div className="workflow-lifecycle-row">Notify on failed execution <i className="workflow-static-toggle" /></div>
           <div className="workflow-lifecycle-row">Notify assigned approvers <i className="workflow-static-toggle" /></div>
-          <footer><Button disabled variant="default">Archive Workflow</Button><Button disabled variant="default">View Audit Log</Button></footer>
+          <footer><Button variant="default" onClick={() => onAction('Archive Workflow')}>Archive Workflow</Button>
+            <Button variant="default" onClick={() => onAction('View Audit Log')}>View Audit Log</Button></footer>
         </PanelCard>
       </div>
     </div>
   </>;
 }
 
-export function WorkflowSectionPreview({ section }: { section: Section }) {
+export function WorkflowSectionPreview({ section, notice, onAction }: {
+  section: Section; notice: string; onAction: (action: string) => void;
+}) {
   return <section className={`workflow-section-preview workflow-section-${section.toLowerCase()}`}>
-    {section === 'Runs' ? <RunSection /> : section === 'Versions' ? <VersionsSection />
-      : section === 'Schedules' ? <SchedulesSection /> : section === 'Permissions' ? <PermissionsSection /> : <SettingsSection />}
-    <div className="workflow-section-concept">CONCEPT · ILLUSTRATIVE DATA</div>
+    {section === 'Runs' ? <RunSection onAction={onAction} /> : section === 'Versions' ? <VersionsSection onAction={onAction} />
+      : section === 'Schedules' ? <SchedulesSection onAction={onAction} /> : section === 'Permissions' ? <PermissionsSection onAction={onAction} /> : <SettingsSection onAction={onAction} />}
+    <div className="workflow-section-concept" role="status">{notice || 'CONCEPT · ILLUSTRATIVE DATA'}</div>
   </section>;
 }

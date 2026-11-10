@@ -36,7 +36,13 @@ test('phone Workflow mock shows the sample run, task progress, and approvals wit
   await expect(page.locator('.workflow-mobile-approval-row')).toHaveCount(2);
   await expect(page.locator('.workflow-mobile-approval-row').last()).toContainText('Awaiting approval');
   await expect(page.locator('.workflow-mobile-approval-row small').last()).toHaveCSS('font-size', '10px');
-  await expect(page.getByRole('button', { name: 'Review' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Review' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await expect(page.locator('#workflow-mobile-run-tasks')).toBeInViewport();
+  await page.getByRole('button', { name: 'Approvals', exact: true }).click();
+  await expect(page.locator('#workflow-mobile-run-approvals')).toBeInViewport();
+  await page.getByRole('button', { name: 'Review' }).click();
+  await expect(page.locator('.workflow-status')).toContainText('Review Approval previewed');
   await expect(page.locator('.sidebar nav')).toBeVisible();
 
   const clippedPanels = await page.locator('.workflow-mobile-run-preview > .shared-panel-surface').evaluateAll((panels) =>

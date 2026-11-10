@@ -540,7 +540,7 @@
   .workflow-builder-layout {
     display: grid;
     grid-template-columns: 220px minmax(320px, 1fr) 288px;
-    grid-template-rows: auto auto minmax(340px, min(413px, calc(100vh - 440px))) 248px;
+    grid-template-rows: 76px 36px minmax(340px, min(413px, calc(100vh - 440px))) 248px;
     column-gap: 10px;
     align-items: stretch;
   }
@@ -568,7 +568,6 @@
   }
   .workflow-run-preview { min-height: 0; }
   .workflow-preview-content { min-height: 0; }
-  .workflow-builder-layout.workflow-design-preview { grid-template-rows: 76px 36px minmax(340px, min(413px, calc(100vh - 440px))) 248px; }
   .workflow-builder-layout.workflow-design-preview.workflow-section-view { grid-template-rows: 180px 60px minmax(340px, min(413px, calc(100vh - 440px))) 248px; }
   .workflow-section-view .workflow-page-heading, .workflow-section-view .workflow-section-tabs { grid-column: 1 / -1; }
   .workflow-section-view .workflow-section-meta { margin-top: auto; margin-bottom: 18px; }

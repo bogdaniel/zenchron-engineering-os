@@ -13,7 +13,7 @@ test('local Product Workspace mock matches the supplied overview without protect
   await page.goto('/#workspace');
 
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Nova Platform' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Nova Platform', exact: true })).toBeVisible();
   await expect(page.getByText('Product Health')).toBeVisible();
   await expect(page.getByText('Release Streams')).toBeVisible();
   await expect(page.getByText('Stakeholders (8)')).toBeVisible();
@@ -27,7 +27,9 @@ test('local Product Workspace mock matches the supplied overview without protect
   await search.fill('Orion');
   await expect(page.locator('.workspace-mock-product')).toHaveCount(1);
   await page.getByRole('button', { name: /Orion Analytics/ }).click();
-  await expect(page.getByRole('heading', { name: 'Orion Analytics' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Orion Analytics', exact: true })).toBeVisible();
+  await expect(page.locator('.workspace-mock-card.repositories')).not.toContainText('nova-platform');
+  await expect(page.locator('.workspace-mock-card.objectives')).toContainText('Orion Analytics');
   await page.getByRole('button', { name: /All Products/ }).click();
   await expect(page.locator('.workspace-mock-product')).toHaveCount(5);
 
@@ -60,7 +62,7 @@ test('local Product Workspace mock matches the supplied overview without protect
   await page.getByRole('menuitem', { name: 'Add another product' }).click();
   await page.getByRole('textbox', { name: 'Product name' }).fill('Local Preview Product');
   await page.getByRole('button', { name: 'Add product', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Local Preview Product' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Local Preview Product', exact: true })).toBeVisible();
   await expect(page.locator('.workspace-mock-product')).toHaveCount(6);
   const addProduct = page.getByRole('button', { name: /Add Product/ });
   await expect(addProduct).toBeEnabled();

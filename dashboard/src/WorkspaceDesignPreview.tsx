@@ -87,6 +87,29 @@ export function WorkspaceDesignPreview() {
   const isDuplicateProduct = productNames.some((name) => name.toLowerCase() === newProductName.trim().toLowerCase());
   const productDetails = products.find(([name]) => name === selectedProduct);
   const productDescription = productDetails?.[1] ?? 'Product workspace preview';
+  const productIndex = Math.max(0, products.findIndex(([name]) => name === selectedProduct)) % products.length;
+  const productSlug = selectedProduct.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const selectedInitiatives = initiatives.map((initiative, index) => selectedProduct === products[0][0] ? initiative : [
+    `${selectedProduct} ${['v2.0', 'SDK', 'Controls', 'Developer Experience'][index]}`,
+    initiative[1], initiative[2], initiative[3], initiative[4],
+  ] as const);
+  const selectedObjectives = selectedProduct === products[0][0] ? objectives : objectives.map((objective, index) => [
+    `${['Ship', 'Launch', 'Improve', 'Expand', 'Increase'][index]} ${selectedProduct} ${['v2.0', 'Beta', 'reliability', 'adoption', 'delivery'][index]}`,
+    objective[1],
+  ] as const);
+  const selectedRepositories = [`zenchron/${productSlug}`, `zenchron/${productSlug}-sdk`,
+    `zenchron/${productSlug}-services`, `zenchron/${productSlug}-devtools`];
+  const selectedDecisions = selectedProduct === products[0][0] ? decisions : decisions.map(([name, state, time], index) => [
+    [`Adopt layered architecture for ${selectedProduct}`, `Move ${selectedProduct} GA to Jan 27`,
+      `Use feature flags for ${selectedProduct}`, `Defer custom permissions for ${selectedProduct}`][index], state, time,
+  ] as const);
+  const selectedReleases = selectedProduct === products[0][0] ? releases : releases.map((release, index) => [
+    ['Stable (v2.x)', 'Beta (v2.1)', 'Next (v2.2)'][index], release[1],
+    ['v2.0.2', 'v2.1.0-rc.2', 'v2.2.0'][index], release[3], release[4],
+  ] as const);
+  const productHealth = ['99.4%', '96.8%', '98.2%', '94.5%', '99.1%'][productIndex];
+  const activeInitiativeCount = ['7', '5', '4', '6', '3'][productIndex];
+  const onTimeDelivery = ['68%', '74%', '62%', '81%', '70%'][productIndex];
 
   function addProduct() {
     const name = newProductName.trim();
@@ -138,11 +161,11 @@ export function WorkspaceDesignPreview() {
       </header>
 
       <div className="workspace-mock-metrics">
-        <MetricCard className="workspace-mock-metric health" label="Product Health" value="99.4%" icon={<IconActivity size={14} />}
+        <MetricCard className="workspace-mock-metric health" label="Product Health" value={productHealth} icon={<IconActivity size={14} />}
           detail={<span className="workspace-mock-health"><b>✓ Healthy</b><svg viewBox="0 0 64 22" aria-hidden="true"><path d="M1 19 12 17 20 18 29 9 39 13 47 6 54 9 63 1" /></svg></span>} />
-        <MetricCard className="workspace-mock-metric initiatives" label="Active Initiatives" value="7" icon={<IconStack2 size={14} />}
+        <MetricCard className="workspace-mock-metric initiatives" label="Active Initiatives" value={activeInitiativeCount} icon={<IconStack2 size={14} />}
           detail={<span className="workspace-mock-growth">↑ +2</span>} />
-        <MetricCard className="workspace-mock-metric delivery" label="Delivery Metrics" value="68%" icon={<IconChartBar size={14} />}
+        <MetricCard className="workspace-mock-metric delivery" label="Delivery Metrics" value={onTimeDelivery} icon={<IconChartBar size={14} />}
           detail={<span>On-time delivery <b className="workspace-mock-growth">↑ +6 pts</b></span>} />
         <MetricCard className="workspace-mock-metric" label="Recent Decisions" value="5" icon={<IconHistory size={14} />}
           detail="Last 7 days" />
@@ -170,16 +193,16 @@ export function WorkspaceDesignPreview() {
             </Menu>
           </span>}>
           {roadmapView === 'Roadmap' ? <div className="workspace-mock-roadmap"><div className="workspace-mock-quarter-labels"><span />{[quarterOptions[Math.max(0, quarterOptions.indexOf(roadmapQuarter) - 1)], roadmapQuarter, 'Today', quarterOptions[Math.min(7, quarterOptions.indexOf(roadmapQuarter) + 1)], quarterOptions[Math.min(7, quarterOptions.indexOf(roadmapQuarter) + 2)]].map((q, index) => <span key={`${q}-${index}`}>{q}</span>)}</div>
-            {initiatives.map(([name, status, start, width, tone]) => <div className="workspace-mock-roadmap-row" key={name}>
+            {selectedInitiatives.map(([name, status, start, width, tone]) => <div className="workspace-mock-roadmap-row" key={name}>
               <span className={`workspace-mock-dot ${tone}`} /> <b>{name}</b><div className="workspace-mock-track"><span className={tone} style={{ left: start, width }}>{status}</span></div>
             </div>)}
-          </div> : <div className="workspace-mock-timeline">{initiatives.map(([name, status, , , tone]) => <div className="workspace-mock-timeline-row" key={name}>
+          </div> : <div className="workspace-mock-timeline">{selectedInitiatives.map(([name, status, , , tone]) => <div className="workspace-mock-timeline-row" key={name}>
             <span className={`workspace-mock-dot ${tone}`} /><b>{name}</b><small>{status}</small></div>)}</div>}
         </Card>
         <Card className="objectives" title="Open Objectives (5)" icon={<IconTarget size={15} />} action="View All"
           onAction={() => setActiveTab('Objectives')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Objectives'}>
-          <div className="workspace-mock-objectives">{objectives.map(([title, progress], index) => <div key={title}>
+          <div className="workspace-mock-objectives">{selectedObjectives.map(([title, progress], index) => <div key={title}>
             <span className={`workspace-mock-objective-status${index < 2 ? ' done' : ''}`}>{index < 2 ? '✓' : '○'}</span><b>{title}</b>
             <Progress value={Number(progress.slice(0, -1))} size="xs" color="teal.5" /><small>{progress}</small>
           </div>)}</div>
@@ -188,7 +211,7 @@ export function WorkspaceDesignPreview() {
         <Card className="repositories" title="Repositories (6)" icon={<IconCode size={15} />} action="View All"
           onAction={() => setActiveTab('Repos')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Repos'}>
-          <div className="workspace-mock-list">{['zenchron/nova-platform', 'zenchron/agent-sdk', 'zenchron/platform-services', 'zenchron/devtools'].map((repo) => <div key={repo}><IconBrandGithub className="workspace-mock-git-icon" size={13} aria-hidden="true" /><b>{repo}</b><span>◌ Main</span></div>)}<small>+ 2 more repositories</small></div>
+          <div className="workspace-mock-list">{selectedRepositories.map((repo) => <div key={repo}><IconBrandGithub className="workspace-mock-git-icon" size={13} aria-hidden="true" /><b>{repo}</b><span>◌ Main</span></div>)}<small>+ 2 more repositories</small></div>
         </Card>
         <Card className="linked-workflows" title={activeTab === 'Templates' ? 'Workflow Templates (4)' : 'Linked Workflows (4)'}
           icon={<IconHierarchy size={15} />} action="View All" onAction={() => setActiveTab('Templates')}
@@ -206,15 +229,15 @@ export function WorkspaceDesignPreview() {
           <div className="workspace-mock-list people">{[['Alex Chen', 'Product Owner'], ['Priya Shah', 'Engineering Manager'], ['Marcus Lee', 'Design Lead'], ['Elena Rossi', 'Product Manager']].map(([name, role]) => <div key={name}><span>{name === 'Alex Chen' ? <img src="/alex-chen-avatar.jpg" alt="" /> : name.slice(0, 1)}</span><b>{name}</b><small>{role}</small></div>)}<small>+ 4 more stakeholders</small></div>
         </Card>
 
-        <Card className="release" title="Release Streams" description="Coordinated release trains and environments" icon={<IconRocket size={15} />} action="View All"
+        <Card className="release" title={`${selectedProduct} Release Streams`} description="Coordinated release trains and environments" icon={<IconRocket size={15} />} action="View All"
           onAction={() => setActiveTab('Templates')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Templates'}>
-          <div className="workspace-mock-list release-list">{releases.map(([name, state, version, progress, tone]) => <div key={name}><IconCube className={`workspace-mock-release-icon ${tone}`} size={16} /><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase().replaceAll(' ', '-')}`} variant="light">{state}</Badge><small>{version}</small><Progress value={Number(progress.slice(0, -1))} size="xs" color={tone === 'green' ? 'teal.5' : tone === 'blue' ? 'blue.5' : 'violet.5'} /></div>)}</div>
+          <div className="workspace-mock-list release-list">{selectedReleases.map(([name, state, version, progress, tone]) => <div key={name}><IconCube className={`workspace-mock-release-icon ${tone}`} size={16} /><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase().replaceAll(' ', '-')}`} variant="light">{state}</Badge><small>{version}</small><Progress value={Number(progress.slice(0, -1))} size="xs" color={tone === 'green' ? 'teal.5' : tone === 'blue' ? 'blue.5' : 'violet.5'} /></div>)}</div>
         </Card>
         <Card className="decisions" title="Recent Decisions" icon={<IconHistory size={15} />} action="View All"
           onAction={() => setActiveTab('Decisions')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Decisions'}>
-          <div className="workspace-mock-list decision-list">{decisions.map(([name, state, time]) => <div key={name}><IconFileText size={13} /><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase()}`} variant="light">{state}</Badge><small>{time}</small></div>)}</div>
+          <div className="workspace-mock-list decision-list">{selectedDecisions.map(([name, state, time]) => <div key={name}><IconFileText size={13} /><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase()}`} variant="light">{state}</Badge><small>{time}</small></div>)}</div>
         </Card>
         <Card className="analytics" title="Delivery Metrics" icon={<IconChartBar size={15} />}
           hidden={activeTab !== 'Overview'}

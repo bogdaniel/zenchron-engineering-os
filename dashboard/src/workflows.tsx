@@ -166,7 +166,14 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
 export function WorkflowsPage({ designPreview = false }: { designPreview?: boolean }) {
   const queryClient = useQueryClient();
   const [section, setSection] = useState<'Builder' | 'Runs' | 'Versions' | 'Schedules' | 'Permissions' | 'Settings'>('Builder');
+  const [sectionActionNotice, setSectionActionNotice] = useState('');
+  const [mobileSection, setMobileSection] = useState('Overview');
   const sectionPreview = designPreview && section !== 'Builder';
+  const selectSection = (next: typeof section) => { setSection(next); setSectionActionNotice(''); };
+  const navigateMobileSection = (name: string, target: string) => {
+    setMobileSection(name);
+    document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const query = useQuery({
     queryKey: ['workflows'], queryFn: loadWorkflows, enabled: !designPreview,
     initialData: designPreview ? [designPreviewWorkflow] : undefined,
@@ -356,7 +363,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
             <Menu.Target><button className="workflow-version-trigger" type="button" aria-label="Workflow version history">
               <Badge className="workflow-version" color="gray">v2.4.0 (Draft) <IconChevronDown size={12} /></Badge>
             </button></Menu.Target>
-            <Menu.Dropdown><Menu.Item onClick={() => setSection('Versions')}>Open version history</Menu.Item></Menu.Dropdown>
+            <Menu.Dropdown><Menu.Item onClick={() => selectSection('Versions')}>Open version history</Menu.Item></Menu.Dropdown>
           </Menu> : <Badge className="workflow-version" color="gray">v{activeWorkflow.version}</Badge>}
           <Button className="workflow-validate" variant="default" leftSection={<IconCheck size={15} />} onClick={validate}>Validate</Button>
           <Button className="workflow-run" variant="default" leftSection={<IconPlayerPlay size={15} />}
@@ -374,17 +381,21 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
             onClick={() => setNotice('Published in preview only · no live workflow changed')}>Publish</Button>
         </div>}
       </div>
-      <WorkflowSectionTabs section={section} designPreview={designPreview} onSelect={setSection} />
+      <WorkflowSectionTabs section={section} designPreview={designPreview} onSelect={selectSection} />
       {section === 'Builder' ? <>
       <nav className="workflow-mobile-tabs" aria-label="Workflow mobile sections">
-        <button className="selected" aria-current="page">Overview</button>
-        <button disabled>Runs</button><button disabled>Tasks</button><button disabled>Approvals</button>
+        {[
+          ['Overview', 'workflow-mobile-overview'], ['Runs', 'workflow-mobile-run-summary'],
+          ['Tasks', 'workflow-mobile-run-tasks'], ['Approvals', 'workflow-mobile-run-approvals'],
+        ].map(([name, target]) => <button key={name} type="button" className={mobileSection === name ? 'selected' : ''}
+          aria-current={mobileSection === name ? 'page' : undefined}
+          onClick={() => navigateMobileSection(name, target)}>{name}</button>)}
       </nav>
-      <div className="workflow-mobile-overview">
+      <div className="workflow-mobile-overview" id="workflow-mobile-overview">
         <WorkflowOverview mobile workflowID={activeWorkflow.id} designPreview={designPreview} />
       </div>
-      {designPreview ? <WorkflowMobileRunPreview /> : <>
-        <div className="workflow-mobile-summary" aria-label="Workflow execution status">
+      {designPreview ? <WorkflowMobileRunPreview onAction={(action) => setNotice(`${action} previewed · no approval was recorded`)} /> : <>
+        <div className="workflow-mobile-summary" id="workflow-mobile-run-summary" aria-label="Workflow execution status">
           <div><small>Run status</small><b>Not run</b></div>
           <div><small>Components</small><b>{activeWorkflow.nodes.length}</b></div>
           <div><small>Connections</small><b>{activeWorkflow.edges.length}</b></div>
@@ -392,7 +403,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         </div>
         <div className="workflow-mobile-details">
           <section aria-label="Task progress">
-            <PanelCard className="workflow-mobile-detail-panel">
+            <PanelCard id="workflow-mobile-run-tasks" className="workflow-mobile-detail-panel">
               <PanelHeading icon={<IconChecklist size={16} />} title="Task progress" />
               <div className="workflow-mobile-task-list">
                 {mobileStages.map((stage) => <div className="workflow-mobile-task-row" key={stage.id}>
@@ -402,7 +413,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
             </PanelCard>
           </section>
           <section aria-label="Approvals">
-            <PanelCard className="workflow-mobile-detail-panel">
+            <PanelCard id="workflow-mobile-run-approvals" className="workflow-mobile-detail-panel">
               <PanelHeading icon={<IconUserCheck size={16} />} title="Approvals" />
               <div className="workflow-mobile-approval-state">
                 <span>{approvalRequired ? 'Human approval' : 'No approval step configured'}</span>
@@ -604,7 +615,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
           <span className="workflow-hint">Version {activeWorkflow.version} · saved to local control plane</span>
         </>}
       </aside>
-      </> : <WorkflowSectionPreview section={section} />}
+      </> : <WorkflowSectionPreview section={section} notice={sectionActionNotice}
+        onAction={(action) => setSectionActionNotice(`${action} previewed · no workflow changes were saved`)} />}
     </div>
   </section>;
 }

@@ -73,11 +73,10 @@ flowchart LR
   Agent Router's Properties, Prompt, Variables, and Advanced tabs, toggling retry and execution conditions, validating the
   graph, and switching the simulated run view update local preview state only. Run displays the simulated timeline; Save
   acknowledges the local draft; Publish marks only the preview; and the version menu opens history. None changes persisted
-  workflow data. Prompt and
-  variable examples are labeled illustrative and are not saved. In the authenticated editor, Run and Publish remain disabled
-  because their execution and publishing services are not connected. Secondary section actions
-  that would start, publish, save, invite, or archive remain disabled for the same reason.
-  In live mode, those tabs stay disabled until their services exist.
+  workflow data. The mock's Runs, Versions, Schedules, Permissions, and Settings actions acknowledge locally and state
+  that no workflow changes were saved; run detail tabs and phone section buttons switch their local view. Prompt and
+  variable examples are labeled illustrative and are not saved. In live mode, secondary section tabs stay disabled until
+  their services exist.
 - Opening a saved workflow selects its Agent Router so the inspector starts with real graph data. Workflows without
   an Agent Router leave the inspector unselected.
 - Run and Publish remain disabled because there is no workflow execution runner or publish service yet.

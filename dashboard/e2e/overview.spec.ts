@@ -32,7 +32,7 @@ test('dashboard displays the connected control plane and local worker', async ({
   await expect(page.locator('.search-box')).toBeHidden();
   await page.setViewportSize({ width: 1490, height: 829 });
   await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Search' })).toHaveAttribute('placeholder', 'Search Zenchron…');
+  await expect(page.getByRole('textbox', { name: 'Search pages' })).toHaveAttribute('placeholder', 'Search pages…');
   await expect(page.getByRole('heading', { name: 'Workflow Orchestration' })).toBeVisible();
   await expect(page.locator('.plan-panel .panel-actions')).toHaveCount(0);
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
@@ -135,7 +135,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   expect((await page.locator('.greeting h1').boundingBox())?.x).toBe(266);
-  await expect(page.getByRole('button', { name: 'Core Product' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Choose workspace' })).toBeVisible();
   await expect(page.locator('.user-chip')).toContainText('Alex Chen');
   await expect(page.locator('.user-profile-chevron')).toBeVisible();
   await expect(page.locator('.workspace-glyph')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
@@ -676,7 +676,8 @@ test('Overview activity and delivery analytics actions open their details', asyn
   await expect(activityDialog.locator('.activity-list > div')).toHaveCount(5);
   await expect(activityDialog).toContainText('PR #41827 merged to trusted-main');
   await page.keyboard.press('Escape');
-  await page.getByRole('link', { name: 'Delivery Velocity' }).click();
-  await expect(page).toHaveURL(/#reports$/);
-  await expect(page.getByRole('heading', { name: 'Delivery Velocity & Cycle Time' })).toBeVisible();
+  await page.getByRole('button', { name: 'Choose analytics metric' }).click();
+  await page.getByRole('menuitem', { name: 'Cycle Time' }).click();
+  await expect(page.locator('.preview-analytics-summary')).toContainText('Average Cycle Time (7d)');
+  await expect(page.locator('.preview-analytics-summary strong')).toHaveText('21.0h');
 });

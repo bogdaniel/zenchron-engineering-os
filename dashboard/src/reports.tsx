@@ -24,7 +24,8 @@ import type { ProductDeliverySummary } from './ReportSummaries';
 import { ProductSummaryPanel, WorkspaceSummaryPanel } from './ReportSummaries';
 import { DownloadableReports } from './DownloadableReports';
 import { reportPreviewCIDistribution, reportPreviewDownloads, reportPreviewInsights, reportPreviewLatency, reportPreviewOutcomes,
-  reportPreviewProducts, reportPreviewSpend, reportPreviewTrend, reportPreviewWorkspaces } from './reports-preview';
+  reportPreviewProducts, reportPreviewRepositories, reportPreviewRepositoryProducts, reportPreviewSpend,
+  reportPreviewTrend, reportPreviewWorkflowProducts, reportPreviewWorkflows, reportPreviewWorkspaces } from './reports-preview';
 import './reports.css';
 import './reports-preview.css';
 
@@ -220,7 +221,13 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
   ];
   const repositoryOptions = [
     { value: 'all', label: 'All Repositories' },
-    ...(projects?.map((project) => ({ value: project.id, label: project.name })) ?? []),
+    ...(designPreview
+      ? reportPreviewRepositories.map((name) => ({ value: name, label: name }))
+      : projects?.map((project) => ({ value: project.id, label: project.name })) ?? []),
+  ];
+  const workflowOptions = [
+    { value: 'all', label: 'All Workflows' },
+    ...(designPreview ? reportPreviewWorkflows.map((name) => ({ value: name, label: name })) : []),
   ];
   const ownerOptions = [
     { value: 'all', label: designPreview ? 'All Teams' : 'All Objective Owners' },
@@ -229,8 +236,22 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
         .map(({ name }) => ({ value: name, label: name }))
       : objectiveOwners.map((owner) => ({ value: owner, label: owner }))),
   ];
-  const previewProductRows = appliedScope.product === 'all' ? reportPreviewProducts
-    : reportPreviewProducts.filter((product) => product.id === appliedScope.product || product.id === 'total');
+  const previewScopeDescription = [
+    appliedScope.timeRange !== defaultScope.timeRange && timeRanges.find(({ value }) => value === appliedScope.timeRange)?.label,
+    appliedScope.product !== 'all' && productOptions.find(({ value }) => value === appliedScope.product)?.label,
+    appliedScope.objectiveOwner !== 'all' && ownerOptions.find(({ value }) => value === appliedScope.objectiveOwner)?.label,
+    appliedScope.workflow !== 'all' && workflowOptions.find(({ value }) => value === appliedScope.workflow)?.label,
+    appliedScope.repository !== 'all' && repositoryOptions.find(({ value }) => value === appliedScope.repository)?.label,
+  ].filter(Boolean).join(' · ');
+  const matchingPreviewProducts = appliedScope.repository !== 'all'
+    ? reportPreviewRepositoryProducts[appliedScope.repository] ?? [] : undefined;
+  const matchingWorkflowProducts = appliedScope.workflow !== 'all'
+    ? reportPreviewWorkflowProducts[appliedScope.workflow] ?? [] : undefined;
+  const previewProductRows = reportPreviewProducts.filter((product) => product.id === 'total' || (
+    (appliedScope.product === 'all' || product.id === appliedScope.product) &&
+    (!matchingPreviewProducts || matchingPreviewProducts.includes(product.id)) &&
+    (!matchingWorkflowProducts || matchingWorkflowProducts.includes(product.id))
+  ));
   const previewWorkspaceRows = appliedScope.objectiveOwner === 'all' ? reportPreviewWorkspaces
     : reportPreviewWorkspaces.filter((workspace) => workspace.name === appliedScope.objectiveOwner || workspace.name === 'Total / Avg.');
   const downloadCSV = (name: string, rows: (string | number | undefined)[][]) => {
@@ -315,11 +336,11 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
           onChange={(value) => updateScope('product', value)} />
         <Select aria-label={designPreview ? 'Team' : 'Objective owner'} label={designPreview ? 'Team' : 'Objective owner'} data={ownerOptions} value={scope.objectiveOwner}
           leftSection={<IconUsers size={13} />} onChange={(value) => updateScope('objectiveOwner', value)} />
-        <Select aria-label="Workflow filter unavailable because runs are not linked to workflows" label="Workflow"
-          leftSection={<IconRoute size={13} />} data={[{ value: 'all', label: 'All Workflows' }]} value="all" disabled />
-        <Select aria-label={designPreview ? 'Repository filter unavailable in preview data' : 'Repository'} label="Repository" data={repositoryOptions}
-          leftSection={<IconCode size={13} />} value={scope.repository}
-          onChange={(value) => updateScope('repository', value)} disabled={designPreview} />
+        <Select aria-label={designPreview ? 'Workflow' : 'Workflow filter unavailable because runs are not linked to workflows'}
+          label="Workflow" leftSection={<IconRoute size={13} />} data={workflowOptions} disabled={!designPreview}
+          value={scope.workflow} onChange={(value) => updateScope('workflow', value)} />
+        <Select aria-label="Repository" label="Repository" data={repositoryOptions}
+          leftSection={<IconCode size={13} />} value={scope.repository} onChange={(value) => updateScope('repository', value)} />
         <div className="reports-scope-actions">
           <Button className="reports-apply-filters" onClick={() => setAppliedScope(scope)}>Apply filters</Button>
           <Button className="reports-reset-filters" variant="subtle" onClick={() => {
@@ -328,6 +349,9 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
           }}>Reset</Button>
         </div>
       </div>
+      {designPreview && previewScopeDescription && <p className="reports-preview-scope-status" role="status">
+        Preview scope applied: {previewScopeDescription}
+      </p>}
 
       <div className="reports-metrics" aria-label="Workspace metrics">
         <Metric tone="velocity" label="Delivery Velocity" value={designPreview ? previewValue('42', '+27%') : pullRequests.deliveryVelocity} detail="PRs / week"
@@ -417,7 +441,8 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
 
         <PanelCard className="reports-panel work-outcomes-panel" withBorder>
           <PanelHeading className="reports-panel-heading" icon={<IconRoute size={15} />} title="Work Outcomes"
-            description={designPreview ? `All Workflows · ${selectedRangeLabel}`
+            description={designPreview
+              ? `${workflowOptions.find(({ value }) => value === appliedScope.workflow)?.label ?? 'All Workflows'} · ${selectedRangeLabel}`
               : `Pull request status · ${selectedRangeLabel}`} />
           {designPreview ? <div className="reports-outcomes-layout reports-outcomes-preview"><div className="reports-outcomes-donut">
             <DonutChart size={120} thickness={15} data={reportPreviewOutcomes}

@@ -3,18 +3,19 @@
 .workflow-section-preview-title h2 { margin: 0; color: #eee9f7; font-size: 17px; line-height: 1.25; }
 .workflow-section-preview-title p { margin: 4px 0 0; color: #9a93a8; font-size: 12px; }
 .workflow-section-preview-title .mantine-Button-root { min-height: 36px; padding-inline: 14px; font-size: 11px; }
-.workflow-design-preview .workflow-section-preview-title .mantine-Button-root:disabled,
-.workflow-design-preview .workflow-run-detail .workflow-section-bottom-action:disabled {
+.workflow-section-primary-action {
   border-color: #9654db;
   color: #fff;
-  background: linear-gradient(135deg, #7542bb, #572f91);
+  background-image: linear-gradient(135deg, #7542bb, #572f91) !important;
+}
+.workflow-design-preview .workflow-section-primary-action:disabled {
   opacity: 1;
 }
 .workflow-section-card { min-width: 0; border: 1px solid #373148; border-radius: 12px; background: #171522; }
 .workflow-section-card .panel-heading { min-height: 50px; padding: 10px 14px; border-bottom: 1px solid #302b40; }
 .workflow-section-card .panel-heading h3 { color: #e9e4f0; font-size: 13px; }
 .workflow-section-card .panel-heading p { margin-top: 2px; font-size: 10px; }
-.workflow-section-link { color: #c387ff; font-size: 10px; white-space: nowrap; }
+.workflow-section-link { padding: 0; border: 0; color: #c387ff; background: transparent; font: inherit; font-size: 10px; white-space: nowrap; cursor: pointer; }
 .workflow-section-icon { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border: 1px solid #68409a; border-radius: 9px; color: #c186ff; background: #2e2040; }
 .workflow-run-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .workflow-run-metric { position: relative; display: grid; min-height: 104px; grid-template-columns: 34px 1fr; align-content: start; align-items: center; gap: 3px 8px; padding: 13px; }
@@ -43,7 +44,8 @@
 .workflow-run-facts b { color: #e5dfed; font-size: 12px; font-weight: 600; }
 .workflow-detail-tabs { display: flex; gap: 20px; margin: 0 13px; border-bottom: 1px solid #302b40; color: #837c93; font-size: 9px; }
 .workflow-detail-tabs > * { padding: 6px 2px; }
-.workflow-detail-tabs b { margin-bottom: -1px; border-bottom: 2px solid #b369ef; color: #c88eff; font-weight: 500; }
+.workflow-detail-tabs button { border: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; }
+.workflow-detail-tabs button[aria-selected="true"] { margin-bottom: -1px; border-bottom: 2px solid #b369ef; color: #c88eff; font-weight: 500; }
 .workflow-run-steps { display: grid; gap: 11px; padding: 13px; }
 .workflow-run-step { display: flex; align-items: center; gap: 10px; color: #e2dce9; font-size: 11px; }
 .workflow-run-step i { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; color: #31dca5; background: #164438; font-size: 11px; font-style: normal; }

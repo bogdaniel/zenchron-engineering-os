@@ -76,8 +76,9 @@ flowchart LR
   requests, and load a bounded diff for a selected pull request. It can submit top-level PR comments and request changes
   using the configured control-plane token; provider approvals, checks, and merge remain unavailable.
 - Overview delivery analytics uses the same complete GitHub pull-request history as Reports and charts merged PRs over
-  the available history. It shows an empty state when there are no merged records or the history is incomplete. The
-  Clicking Delivery Velocity opens Reports; All Activity opens a dialog with all items available to the current view.
+  the available history. It shows an empty state when there are no merged records or the history is incomplete. In the
+  local preview, its metric menu switches between illustrative velocity, cycle-time, and CI-duration views. All Activity
+  opens a dialog with all items available to the current view.
 - Budget usage, approval records, evidence artifacts, and delivery timeline do not have backend sources yet. The live
   Overview uses unavailable or empty states instead of sample values.
 - The local unauthenticated Overview uses the same OverviewPage layout as live mode, populated with frontend

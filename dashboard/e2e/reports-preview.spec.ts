@@ -56,8 +56,8 @@ test('local Reports mock renders its fixture without protected reads or exports'
   ]);
   await expect(page.getByRole('button', { name: 'Apply filters' })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Reset' })).toBeEnabled();
-  await expect(page.getByRole('combobox', { name: 'Repository filter unavailable in preview data' })).toBeDisabled();
-  await expect(page.getByRole('combobox', { name: 'Workflow filter unavailable because runs are not linked to workflows' })).toBeDisabled();
+  await expect(page.getByRole('combobox', { name: 'Repository' })).toBeEnabled();
+  await expect(page.getByRole('combobox', { name: 'Workflow' })).toBeEnabled();
 
   await page.getByRole('combobox', { name: 'Time Range' }).click();
   await page.getByRole('option', { name: 'Last 90 Days' }).click();
@@ -65,10 +65,16 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await page.getByRole('option', { name: 'Core Product' }).click();
   await page.getByRole('combobox', { name: 'Team' }).click();
   await page.getByRole('option', { name: 'Platform', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Workflow' }).click();
+  await page.getByRole('option', { name: 'Nightly Regression Suite' }).click();
+  await page.getByRole('combobox', { name: 'Repository' }).click();
+  await page.getByRole('option', { name: 'zenchron/engineering-os' }).click();
   await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(5);
   await page.getByRole('button', { name: 'Apply filters' }).click();
   await expect(page.locator('.work-outcomes-panel .shared-panel-heading p'))
-    .toHaveText('All Workflows · last 90 days');
+    .toHaveText('Nightly Regression Suite · last 90 days');
+  await expect(page.locator('.reports-preview-scope-status'))
+    .toContainText('Nightly Regression Suite · zenchron/engineering-os');
   await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(2);
   await expect(page.locator('.product-summary-panel tbody')).toContainText('Core Product');
   await expect(page.locator('.inventory-panel tbody tr')).toHaveCount(2);
@@ -77,6 +83,8 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await expect(page.getByRole('combobox', { name: 'Time Range' })).toHaveValue('Last 30 Days');
   await expect(page.getByRole('combobox', { name: 'Product' })).toHaveValue('All Products');
   await expect(page.getByRole('combobox', { name: 'Team' })).toHaveValue('All Teams');
+  await expect(page.getByRole('combobox', { name: 'Workflow' })).toHaveValue('All Workflows');
+  await expect(page.getByRole('combobox', { name: 'Repository' })).toHaveValue('All Repositories');
   await expect(page.locator('.work-outcomes-panel .shared-panel-heading p'))
     .toHaveText('All Workflows · last 30 days');
   await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(5);
