@@ -52,8 +52,12 @@ test('local Reports mock renders its fixture without protected reads or exports'
   expect(reportDetailsFit).toBe(true);
   await expect(page.locator('.downloadable-report-format').evaluateAll((formats) =>
     formats.map((format) => format.getAttribute('aria-label')))).resolves.toEqual([
-    'PDF file', 'XLSX file', 'CSV file', 'PDF file',
+    'PDF file unavailable', 'XLSX file unavailable', 'CSV file unavailable', 'PDF file unavailable',
   ]);
+  const previewDownloads = page.locator('.downloadable-report-button');
+  await expect(previewDownloads).toHaveCount(4);
+  expect(await previewDownloads.evaluateAll((buttons) => buttons.every((button) => (button as HTMLButtonElement).disabled))).toBe(true);
+  await expect(previewDownloads.first()).toHaveAttribute('title', 'No download is available in this view');
   await expect(page.getByRole('button', { name: 'Apply filters' })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Reset' })).toBeEnabled();
   await expect(page.getByRole('combobox', { name: 'Repository' })).toBeEnabled();
@@ -89,7 +93,7 @@ test('local Reports mock renders its fixture without protected reads or exports'
     .toHaveText('All Workflows · last 30 days');
   await expect(page.locator('.product-summary-panel tbody tr')).toHaveCount(5);
   await expect(page.locator('.inventory-panel tbody tr')).toHaveCount(5);
-  await expect(page.getByRole('button', { name: 'Executive Summary unavailable' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Executive Summary download unavailable' })).toBeDisabled();
   expect(apiRequests.filter(({ path }) => path !== '/api/v1/auth/session')).toEqual([]);
   expect(apiRequests.filter(({ method }) => method !== 'GET')).toEqual([]);
 
