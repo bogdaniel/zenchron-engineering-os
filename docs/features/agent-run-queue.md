@@ -1,6 +1,9 @@
 # Agent run queue
 
-Prototype status: run ownership, profile snapshots, worker leases, retries, cancellation, and same-run feedback are current implementation choices, not an approved agent lifecycle. See [the architecture checkpoint](../architecture/architecture-checkpoint.md) before extending these contracts.
+This page describes the run queue with the OpenAI-compatible chat runtime. Runs that use the installed Codex or
+Claude Code CLI, GitHub issues as the source of work, verification, and run events are described in
+[Issue to pull request](issue-to-pull-request.md); the lifecycle, leases, and review loop below are shared by both.
+Component decisions are recorded in [Backend architecture and decisions](../architecture/backend-architecture.md).
 
 The loopback control plane accepts a prompt for an active agent profile and an online project, stores a durable run
 record with a run-specific branch name and base branch, then leases it to that project's worker. The worker claim
@@ -48,15 +51,15 @@ sequenceDiagram
   API-->>UI: Current status and local diff
   Reviewer->>API: Submit PR comment or request changes from dashboard
   API->>GH: Read PR head and submit review
-  API->>Store: Match isolated branch and persist feedback on originating run
+  API->>Store: Find the run by its stored pull-request number and persist feedback
   opt Request changes and worker can accept another pass
     API->>Store: Requeue the same run and branch
     Worker->>API: Claim feedback-updated run
   end
   Reviewer->>API: Cancel queued or running run
   API->>Store: Cancel queued run or flag active lease
-  Worker->>API: Poll assigned run cancellation state
-  API-->>Worker: Cancellation requested
+  Worker->>API: POST .../agent-runs/{run}/progress (renews lease)
+  API-->>Worker: cancel_requested: true
   Worker->>LLM: Cancel in-flight request
   Worker->>Branch: Capture partial diff
   Worker->>API: Complete cancelled run with partial diff
@@ -69,7 +72,7 @@ sequenceDiagram
 ```
 
 The Agents page can queue an active profile for an online project and the dashboard polls real run history. The worker
-claims runs only when `ZENCHRON_LLM_BASE_URL` is configured. It creates a worktree under
+claims chat-runtime runs only when `ZENCHRON_LLM_BASE_URL` is configured. It creates a worktree under
 `<UserCacheDir>/zenchron/worktrees/<project-id>/<run-id>` and sends the selected model, profile prompts, task prompt,
 and enabled-tool results to that OpenAI-compatible Chat Completions endpoint. Set
 `ZENCHRON_LLM_API_KEY` on the worker when the endpoint needs a bearer key. HTTPS is required except for loopback HTTP
@@ -83,23 +86,25 @@ Chat Completions stub. It verifies the committed branch, captured diff, and unch
 temporary state and removes it when it exits.
 
 Queued runs can be cancelled immediately. For a running run, the control plane persists a cancellation request and the
-assigned worker polls that run's cancellation state while its model call is active. The worker cancels the request,
+assigned worker learns of it from its next progress report, sent every two seconds. The worker cancels the request,
 captures any partial worktree diff, and completes the run as `cancelled`. If the worker disappears before acknowledging,
 lease recovery marks the requested cancellation complete instead of requeuing the run. A completion racing the cancel
 request is recorded as cancelled by the control plane. Cancellation is available in Reviews; cancelled runs with a
 captured diff remain reviewable and can receive bounded follow-up feedback.
 
 `POST /api/v1/agent-runs/{id}/cancel` cancels a queued run or requests cancellation of its active lease. The assigned
-worker checks `GET /api/v1/workers/{workerID}/agent-runs/{runID}/cancellation` over the existing control-plane HTTP
-channel. Cancellation adds a persisted `cancelled` status; an older binary rejects that status when loading run history,
-so restore a compatible state backup before rolling back to a pre-cancellation build.
+worker reports to `POST /api/v1/workers/{workerID}/agent-runs/{runID}/progress`, which renews the three-minute lease
+and returns `cancel_requested`. A worker that does not hold the current lease gets a conflict and stops. The control
+plane and worker must be the same release: the earlier `GET .../cancellation` endpoint no longer exists, and run
+records carry fields an older binary rejects, so restore a compatible state backup before rolling back.
 
 The runtime implements `code.search`, `docs.search`, `git.diff`, `git.read`, and the opt-in `code.write` tool. Writes
 are limited to one regular file up to 256 KiB, inside the run worktree, with an existing parent directory. Tool paths
 reject traversal, `.git` metadata, and symlinks. The source checkout remains untouched. It does not offer the saved
-`tests.run` permission to the model or capture evidence yet. After a successful model run with a non-truncated diff, the
+`tests.run` permission to the model. After a successful model run the
 worker commits staged changes on the isolated branch using the fixed local identity `Zenchron Agent
-<agent@zenchron.invalid>`. Failed, cancelled, and over-limit runs are left uncommitted. Follow-up passes create additional
+<agent@zenchron.invalid>`. Failed and cancelled runs are left uncommitted. A diff larger than the 128 KiB display cap is still committed and is
+marked truncated in the stored copy. Follow-up passes create additional
 commits on the same branch; diff capture compares the full branch against its merge base so the review still includes
 earlier passes. The commit SHA is stored on the run and shown in Agents and Reviews. When the run finishes, the worker
 captures the bounded branch diff, including newly created files, and sends it with the result. The control plane stores
@@ -107,7 +112,7 @@ at most 128 KiB per attempt in a private sidecar and exposes it through
 `GET /api/v1/agent-runs/{id}/diff`. The Reviews page displays diffs from terminal runs and stores up to ten reviewer
 comments per run, each limited to 1,000 bytes.
 Request changes requeues the same run ID and branch, preserving its worktree and passing all comments to the next model
-attempt. This action is available only while the assigned worker is online with a configured model runtime and the
+attempt. This action is available only while the assigned worker is online with the profile's provider ready and the
 profile has `code.write`. Queueing without a configured runtime leaves the run queued and does not send the prompt to a
 provider. Agent run requests and their prompts are stored locally with the rest of the control-plane state.
 
@@ -118,11 +123,12 @@ push only their `zenchron/agent-run/<id>` branch using the worker's local Git cr
 pull request under the configured token owner. The pull-request link appears in Reviews. A push failure leaves the local
 branch and diff reviewable and records a bounded status message. Automatic publication is skipped without the token or
 a GitHub.com origin. Comments and request-changes submitted from the dashboard on a Zenchron PR are attached to its run;
-request-changes queues that same branch when the worker can accept another code pass. Reviews made directly on GitHub
-are not imported. Approval and merge stay disabled in Reviews.
+request-changes queues that same branch when the worker can accept another code pass. Change requests made directly on
+GitHub are imported on demand with `POST /api/v1/agent-runs/{id}/sync-reviews`. Approval and merge stay disabled in
+Reviews.
 
-Each run is limited to six model/tool rounds, five tool calls per response, a two-minute deadline, and 20,000 bytes of
-tool and final output. Tool arguments are validated; reads and writes reject traversal and paths outside the run
+Each chat-runtime run is limited to six model/tool rounds, five tool calls per response, 45 seconds per model call, the
+worker's `ZENCHRON_RUN_TIMEOUT` wall-clock limit (two hours by default), and 20,000 bytes of tool and final output. Tool arguments are validated; reads and writes reject traversal and paths outside the run
 worktree.
 
 ## Focused verification

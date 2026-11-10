@@ -1,7 +1,9 @@
 # Architecture checkpoint
 
-This is a review checkpoint, not an approved target design. The current code is a local prototype. Its data structures
-and execution contracts may change after the product and agent model are agreed.
+This is a review checkpoint, not an approved target design. Its data structures and execution contracts may change
+after the product and agent model are agreed. The deployment topology, worker identity, project access, run identity,
+and review lineage questions below now have an implemented answer recorded in
+[Backend architecture and decisions](backend-architecture.md); the remaining items are still open.
 
 ## Confirmed requirements
 
@@ -33,7 +35,8 @@ useful while later architecture decisions remain open.
 - Project identity and ownership: organization, workspace, product, project, repository, and checkout boundaries.
 - Review lineage: how a local change, branch, pull request, review thread, and follow-up work are connected.
 - Organization/team authorization, per-worker enrollment, durable sessions, secret rotation, and audit requirements for
-  a hosted control plane. The first remote-worker prototype uses a username allowlist and shared worker bearer secret.
+  a hosted control plane. Per-worker enrollment and repository grants exist as an operator-edited access file;
+  organizations, teams, durable sessions, rotation, and audit are open.
 
 ## Contracts in the prototype today
 
@@ -45,25 +48,27 @@ flowchart LR
     API -->|one assigned worker per run| Worker[Local worker]
     Worker -->|per-run worktree, commit, optional run-branch push| Repo[Local Git checkout]
     Worker -->|OpenAI-compatible Chat Completions| Model[Configured endpoint]
+    Worker -->|non-interactive process in the run worktree| CLI[Codex CLI or Claude Code CLI]
     Worker -->|Git credentials; supported GitHub remotes only| GitHubRepo[GitHub repository]
     API -->|Issue and PR reads/writes; PR creation and reviews| GitHub[GitHub API]
     API -->|Persist dashboard-submitted review when PR branch identifies run| Runs
 ```
 
 - An **agent profile** currently stores prompts, model/provider labels, tool allowlists, enabled state, and a version.
-- An **agent run** snapshots a profile and binds a prompt to one project and one worker. It receives a generated local
-  branch and runs in a per-run worktree. Dashboard feedback can be recorded on the run and an eligible request for
+- An **agent run** snapshots a profile and binds a prompt or a GitHub issue to one project and one worker. It receives
+  a generated local branch and runs in a per-run worktree, through the chat runtime or an installed Codex or Claude Code
+  CLI. Dashboard feedback can be recorded on the run and an eligible request for
   changes can requeue that same run.
 - The worker owns model calls, repository access, local commits, and optional run-branch publication. When publication
   is requested for a successful non-empty run on a supported GitHub checkout, it verifies the push remote and pushes
   only the generated branch with the workstation's Git credentials. The control plane can then create or reuse the
   pull request and persist its link using its own GitHub App installation token or personal-token fallback; provider
   credentials are not sent to the worker.
-- The Reviews dashboard can submit a top-level GitHub comment or request changes. The control plane uses the pull
-  request head branch to associate feedback with a run-created PR and persist it on that run. A request queues another
+- The Reviews dashboard can submit a top-level GitHub comment or request changes. The control plane uses the run's
+  stored pull-request number to associate feedback with a run-created PR and persist it on that run. A request queues another
   pass only when the run has capacity and the assigned worker is online with the required runtime and write tool.
-  Feedback submitted directly on GitHub is not imported, and this prototype does not support inline review comments,
-  approval, or merge.
+  Change requests submitted directly on GitHub are imported on demand; inline review comments, approval, and merge are
+  not supported.
 
 These are descriptions of existing prototype behavior, not decisions that the eventual system must preserve.
 

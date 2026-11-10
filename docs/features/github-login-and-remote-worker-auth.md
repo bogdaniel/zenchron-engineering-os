@@ -2,6 +2,9 @@
 
 GitHub sign-in protects dashboard API access when the Go control plane binds outside loopback. Local preview remains
 unauthenticated on loopback. GitHub identity is distinct from the GitHub App or token used for repository operations.
+Per-worker credentials and per-repository access for users are configured with `ZENCHRON_ACCESS_FILE`; see
+[Worker enrollment and project access](worker-enrollment-and-project-access.md). A non-loopback control plane requires
+that file.
 
 ```mermaid
 sequenceDiagram
@@ -37,14 +40,16 @@ the dashboard starts its own OAuth web flow. For the local preview, use
 - `ZENCHRON_GITHUB_CLIENT_ID` and `ZENCHRON_GITHUB_CLIENT_SECRET`: OAuth app or GitHub App user-authorization credentials.
 - `ZENCHRON_GITHUB_ALLOWED_USERS`: comma-separated GitHub usernames permitted to sign in.
 - `ZENCHRON_SESSION_SECRET`: at least 32 random bytes; `openssl rand -hex 32` creates a suitable value.
-- `ZENCHRON_WORKER_TOKEN`: shared secret also configured on each remote worker.
+- `ZENCHRON_ACCESS_FILE`: worker enrollments and repository grants; required for a non-loopback listener.
+- `ZENCHRON_WORKER_TOKEN`: shared worker secret accepted only when no access file is configured, for loopback
+  development with authentication enabled.
 - `ZENCHRON_LISTEN_ADDR`: non-loopback address, such as `0.0.0.0:8080`.
 
 Generate `ZENCHRON_WORKER_TOKEN` from at least 32 random bytes as well, and distribute it through the deployment's
 secret manager rather than source control.
 
 Terminate TLS at the deployment proxy and expose only that HTTPS origin. A remote worker uses
-`ZENCHRON_CONTROL_PLANE_URL=https://engineering.example.com` and the same `ZENCHRON_WORKER_TOKEN`. Remote workers
+`ZENCHRON_CONTROL_PLANE_URL=https://engineering.example.com` and its own enrolled token in `ZENCHRON_WORKER_TOKEN`. Remote workers
 refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does not require a token.
 
 ## Security boundary and limits
@@ -60,9 +65,9 @@ refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does no
 - OAuth token-exchange failures return a distinct gateway error; only a successfully verified but unlisted GitHub username
   receives the account-not-authorized response.
 - GitHub OAuth codes are exchanged at `github.com`; user identity is fetched separately from `api.github.com/user`.
-- Worker endpoints use a separate bearer token. This first remote-worker bootstrap shares one token across workers;
-  any worker holding it can authenticate as any worker ID. Per-worker enrollment, revocation, and role-based access
-  remain required before multi-tenant or untrusted-worker deployment.
+- Worker endpoints use a separate bearer token. With an access file each worker has its own token bound to its id and
+  revocable by editing the file. Without one, a single shared token authenticates any worker id; that mode is refused
+  on a non-loopback listener.
 - This is user authentication plus an allowlist. GitHub organization/team roles, invite flows, audit history, and
   persistent/revocable server-side sessions remain open architecture work.
 
