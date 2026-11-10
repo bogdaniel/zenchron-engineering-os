@@ -1,4 +1,5 @@
-import { Badge, Progress, TextInput } from '@mantine/core';
+import { useState } from 'react';
+import { Badge, Button, Menu, Modal, Progress, TextInput } from '@mantine/core';
 import type { ReactNode } from 'react';
 import {
   IconActivity, IconApps, IconBook, IconBrandFigma, IconBrandGithub, IconCalendarTime, IconChartBar,
@@ -47,42 +48,93 @@ const decisions = [
   ['Defer custom permissions to v3.2', 'Pending', '1d ago'],
 ] as const;
 
-function Card({ title, description, icon, action, className, children }: {
-  title: string; description?: string; icon: ReactNode; action?: ReactNode; className?: string; children: ReactNode;
+const tabs = ['Overview', 'Objectives', 'Repos', 'Files', 'Decisions', 'Templates'] as const;
+type PreviewTab = typeof tabs[number];
+const quarterOptions = ["Q1 ’25", "Q2 ’25", "Q3 ’25", "Q4 ’25", "Q1 ’26", "Q2 ’26", "Q3 ’26", "Q4 ’26"];
+const deliveryMetrics = {
+  'Last 4 weeks': ['3.8 days', '10.2 hrs', '1.1%'],
+  'Last 8 weeks': ['4.2 days', '11.6 hrs', '1.3%'],
+  'Last 12 weeks': ['4.7 days', '13.1 hrs', '1.8%'],
+} as const;
+
+function Card({ title, description, icon, action, onAction, hidden, className, children }: {
+  title: string; description?: string; icon: ReactNode; action?: ReactNode; onAction?: () => void;
+  hidden?: boolean; className?: string; children: ReactNode;
 }) {
-  return <PanelCard className={`workspace-mock-card${className ? ` ${className}` : ''}`} withBorder>
+  return <PanelCard className={`workspace-mock-card${className ? ` ${className}` : ''}${hidden ? ' is-hidden' : ''}`} withBorder>
     <PanelHeading title={title} description={description} icon={<span className="workspace-mock-card-icon">{icon}</span>}
-      actions={action && <span className="workspace-mock-card-action">{action}{typeof action === 'string' ? ' →' : null}</span>} />
+      actions={action && (typeof action === 'string' && onAction
+        ? <button className="workspace-mock-card-action" onClick={onAction} type="button">{action} →</button>
+        : <span className="workspace-mock-card-action">{action}</span>)} />
     {children}
   </PanelCard>;
 }
 
 export function WorkspaceDesignPreview() {
+  const [search, setSearch] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<string>(products[0][0]);
+  const [activeTab, setActiveTab] = useState<PreviewTab>('Overview');
+  const [roadmapView, setRoadmapView] = useState<'Roadmap' | 'Timeline'>('Roadmap');
+  const [roadmapQuarter, setRoadmapQuarter] = useState(quarterOptions[1]);
+  const [deliveryRange, setDeliveryRange] = useState<keyof typeof deliveryMetrics>('Last 8 weeks');
+  const [newProductOpen, setNewProductOpen] = useState(false);
+  const [newProductName, setNewProductName] = useState('');
+  const [addedProducts, setAddedProducts] = useState<string[]>([]);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [stakeholdersOpen, setStakeholdersOpen] = useState(false);
+  const productNames = [...products.map(([name]) => name), ...addedProducts];
+  const visibleProducts = productNames.filter((name) => name.toLowerCase().includes(search.trim().toLowerCase()));
+  const isDuplicateProduct = productNames.some((name) => name.toLowerCase() === newProductName.trim().toLowerCase());
+  const productDetails = products.find(([name]) => name === selectedProduct);
+  const productDescription = productDetails?.[1] ?? 'Product workspace preview';
+
+  function addProduct() {
+    const name = newProductName.trim();
+    if (!name || isDuplicateProduct) return;
+    setAddedProducts((current) => [...current, name]);
+    setSelectedProduct(name);
+    setNewProductName('');
+    setNewProductOpen(false);
+    setActiveTab('Overview');
+  }
+
   return <section className="workspace-mock" aria-label="Product Workspace design preview" data-preview="mock">
     <aside className="workspace-mock-directory" aria-label="Product workspaces">
       <PanelHeading title="Product Workspace" description="Organize engineering work by product, roadmap, and delivery." />
-      <button className="workspace-mock-new" disabled>＋ New Workspace</button>
-      <TextInput aria-label="Search products" placeholder="Search products…" leftSection={<IconSearch size={14} />} disabled />
+      <button className="workspace-mock-new" onClick={() => setNewProductOpen(true)} type="button">＋ New Workspace</button>
+      <TextInput aria-label="Search products" placeholder="Search products…" leftSection={<IconSearch size={14} />}
+        value={search} onChange={(event) => setSearch(event.currentTarget.value)} />
       <div className="workspace-mock-products">
-        {products.map(([name, description, state, icon], index) => <button key={name} type="button" disabled
-          className={`workspace-mock-product${index === 0 ? ' selected' : ''}`}>
+        {visibleProducts.map((name) => {
+          const product = products.find(([productName]) => productName === name);
+          const [, description, state, icon] = product ?? [name, 'Product workspace preview', 'Active', 'layers'];
+          return <button key={name} type="button" onClick={() => { setSelectedProduct(name); setActiveTab('Overview'); }}
+            aria-pressed={selectedProduct === name} className={`workspace-mock-product${selectedProduct === name ? ' selected' : ''}`}>
           <span className={`workspace-mock-product-icon ${icon}`}>{icon === 'chart' ? <IconChartBar size={17} />
             : icon === 'agents' ? <IconRobot size={17} /> : icon === 'workspace' ? <IconHierarchy size={17} />
               : icon === 'link' ? <IconLink size={17} /> : <IconStack2 size={17} />}</span>
           <span className="workspace-mock-product-copy"><b>{name}</b><small>{description}</small></span>
           <Badge className={state === 'Active' ? 'workspace-mock-active' : 'workspace-mock-planning'} variant="light">{state}</Badge>
           <IconChevronRight className="workspace-mock-chevron" size={13} />
-        </button>)}
-        <button className="workspace-mock-all" disabled><IconApps size={15} /> All Products (5) <IconChevronRight size={13} /></button>
+        </button>;
+        })}
+        {!visibleProducts.length && <p className="workspace-mock-empty">No products match your search.</p>}
+        <button className="workspace-mock-all" onClick={() => setSearch('')} type="button"><IconApps size={15} /> All Products ({products.length + addedProducts.length}) <IconChevronRight size={13} /></button>
       </div>
     </aside>
 
     <div className="workspace-mock-detail">
       <header className="workspace-mock-heading">
         <span className="workspace-mock-product-icon large"><IconStack2 size={25} /></span>
-        <div><h1>Nova Platform</h1><p>Developer platform, APIs, and core services for building on Zenchron.</p>
+        <div><h1>{selectedProduct}</h1><p>{selectedProduct === products[0][0] ? 'Developer platform, APIs, and core services for building on Zenchron.' : productDescription}</p>
           <span className="workspace-mock-meta"><b>● Active</b><i /> Product <i /> Owner: Platform Eng <i /> Updated 2m ago</span></div>
-        <button disabled><IconShare size={13} /> Share</button><button className="workspace-mock-menu" disabled><IconDots size={16} /></button><button className="workspace-mock-add" disabled>＋ Add Product</button>
+        <button onClick={() => setShareOpen(true)} type="button"><IconShare size={13} /> Share</button>
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target><button className="workspace-mock-menu" aria-label="Product actions" type="button"><IconDots size={16} /></button></Menu.Target>
+          <Menu.Dropdown><Menu.Item onClick={() => setActiveTab('Overview')}>Open overview</Menu.Item>
+            <Menu.Item onClick={() => setNewProductOpen(true)}>Add another product</Menu.Item></Menu.Dropdown>
+        </Menu>
+        <button className="workspace-mock-add" onClick={() => setNewProductOpen(true)} type="button">＋ Add Product</button>
       </header>
 
       <div className="workspace-mock-metrics">
@@ -96,52 +148,82 @@ export function WorkspaceDesignPreview() {
           detail="Last 7 days" />
       </div>
 
-      <nav className="workspace-mock-tabs" aria-label="Product sections">
-        {['Overview', 'Objectives', 'Repos', 'Files', 'Decisions', 'Templates'].map((tab, index) => <button key={tab} disabled className={index === 0 ? 'active' : ''}>
+      <nav className="workspace-mock-tabs" aria-label="Product sections" role="tablist">
+        {tabs.map((tab, index) => <button key={tab} type="button" role="tab" aria-selected={activeTab === tab}
+          onClick={() => setActiveTab(tab)} className={activeTab === tab ? 'active' : ''}>
           {index === 0 ? <IconHome size={13} /> : index === 1 ? <IconTarget size={13} />
             : index === 2 ? <IconCode size={13} /> : index === 3 ? <IconFolder size={13} />
               : index === 4 ? <IconGitBranch size={13} /> : <IconStack2 size={13} />}{tab}
         </button>)}
       </nav>
 
-      <div className="workspace-mock-grid">
+      <div className={`workspace-mock-grid ${activeTab.toLowerCase()}`}>
         <Card className="roadmap" title="Product Roadmap" description="Strategic delivery plan and key milestones" icon={<IconMap2 size={15} />}
-          action={<span className="workspace-mock-roadmap-tabs"><b>Roadmap</b><span><IconCalendarTime size={11} /> Timeline</span><span>Quarterly<IconChevronDown size={10} /></span></span>}>
-          <div className="workspace-mock-roadmap"><div className="workspace-mock-quarter-labels"><span />{["Q1 ’25", "Q2 ’25", "Today", "Q3 ’25", "Q4 ’25"].map((q) => <span key={q}>{q}</span>)}</div>
+          hidden={activeTab !== 'Overview' && activeTab !== 'Objectives'}
+          action={<span className="workspace-mock-roadmap-tabs">
+            {(['Roadmap', 'Timeline'] as const).map((view) => <button key={view} type="button"
+              aria-pressed={roadmapView === view} className={roadmapView === view ? 'selected' : ''}
+              onClick={() => setRoadmapView(view)}>{view === 'Timeline' && <IconCalendarTime size={11} />}{view}</button>)}
+            <Menu position="bottom-end" withinPortal>
+              <Menu.Target><button type="button" aria-label="Choose roadmap quarter">{roadmapQuarter}<IconChevronDown size={10} /></button></Menu.Target>
+              <Menu.Dropdown>{quarterOptions.map((quarter) => <Menu.Item key={quarter} onClick={() => setRoadmapQuarter(quarter)}>{quarter}</Menu.Item>)}</Menu.Dropdown>
+            </Menu>
+          </span>}>
+          {roadmapView === 'Roadmap' ? <div className="workspace-mock-roadmap"><div className="workspace-mock-quarter-labels"><span />{[quarterOptions[Math.max(0, quarterOptions.indexOf(roadmapQuarter) - 1)], roadmapQuarter, 'Today', quarterOptions[Math.min(7, quarterOptions.indexOf(roadmapQuarter) + 1)], quarterOptions[Math.min(7, quarterOptions.indexOf(roadmapQuarter) + 2)]].map((q, index) => <span key={`${q}-${index}`}>{q}</span>)}</div>
             {initiatives.map(([name, status, start, width, tone]) => <div className="workspace-mock-roadmap-row" key={name}>
               <span className={`workspace-mock-dot ${tone}`} /> <b>{name}</b><div className="workspace-mock-track"><span className={tone} style={{ left: start, width }}>{status}</span></div>
             </div>)}
-          </div>
+          </div> : <div className="workspace-mock-timeline">{initiatives.map(([name, status, , , tone]) => <div className="workspace-mock-timeline-row" key={name}>
+            <span className={`workspace-mock-dot ${tone}`} /><b>{name}</b><small>{status}</small></div>)}</div>}
         </Card>
-        <Card className="objectives" title="Open Objectives (5)" icon={<IconTarget size={15} />} action="View All">
+        <Card className="objectives" title="Open Objectives (5)" icon={<IconTarget size={15} />} action="View All"
+          onAction={() => setActiveTab('Objectives')}
+          hidden={activeTab !== 'Overview' && activeTab !== 'Objectives'}>
           <div className="workspace-mock-objectives">{objectives.map(([title, progress], index) => <div key={title}>
             <span className={`workspace-mock-objective-status${index < 2 ? ' done' : ''}`}>{index < 2 ? '✓' : '○'}</span><b>{title}</b>
             <Progress value={Number(progress.slice(0, -1))} size="xs" color="teal.5" /><small>{progress}</small>
           </div>)}</div>
         </Card>
 
-        <Card className="repositories" title="Repositories (6)" icon={<IconCode size={15} />} action="View All">
+        <Card className="repositories" title="Repositories (6)" icon={<IconCode size={15} />} action="View All"
+          onAction={() => setActiveTab('Repos')}
+          hidden={activeTab !== 'Overview' && activeTab !== 'Repos'}>
           <div className="workspace-mock-list">{['zenchron/nova-platform', 'zenchron/agent-sdk', 'zenchron/platform-services', 'zenchron/devtools'].map((repo) => <div key={repo}><IconBrandGithub className="workspace-mock-git-icon" size={13} aria-hidden="true" /><b>{repo}</b><span>◌ Main</span></div>)}<small>+ 2 more repositories</small></div>
         </Card>
-        <Card className="linked-workflows" title="Linked Workflows (4)" icon={<IconHierarchy size={15} />} action="View All">
+        <Card className="linked-workflows" title={activeTab === 'Templates' ? 'Workflow Templates (4)' : 'Linked Workflows (4)'}
+          icon={<IconHierarchy size={15} />} action="View All" onAction={() => setActiveTab('Templates')}
+          hidden={activeTab !== 'Overview' && activeTab !== 'Repos' && activeTab !== 'Templates'}>
           <div className="workspace-mock-list status-list">{[['PR Review & CI', 'Running'], ['Build & Test', 'Success'], ['Release (Staging)', 'Success'], ['Release (Prod)', 'Scheduled']].map(([name, state]) => <div key={name}><span className="workspace-mock-run"><IconPlayerPlay size={12} fill="currentColor" /></span><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase().replaceAll(' ', '-')}`} variant="light">{state}</Badge></div>)}</div>
         </Card>
-        <Card className="files" title="Design / Docs / Files" icon={<IconFileText size={15} />} action="View All">
+        <Card className="files" title="Design / Docs / Files" icon={<IconFileText size={15} />} action="View All"
+          onAction={() => setActiveTab('Files')}
+          hidden={activeTab !== 'Overview' && activeTab !== 'Files'}>
           <div className="workspace-mock-list files">{[['Designs (Figma)', '24'], ['Documentation', '118'], ['Product Specs', '34'], ['Files & Assets', '269']].map(([name, count], i) => <div key={name}><span>{i === 0 ? <IconBrandFigma size={14} /> : i === 1 ? <IconBook size={14} /> : i === 2 ? <IconFileText size={14} /> : <IconFolder size={14} />}</span><b>{name}</b><em>{count}</em></div>)}</div>
         </Card>
-        <Card className="people" title="Stakeholders (8)" icon={<IconUsers size={15} />} action="Manage">
+        <Card className="people" title="Stakeholders (8)" icon={<IconUsers size={15} />} action="Manage"
+          onAction={() => setStakeholdersOpen(true)}
+          hidden={activeTab !== 'Overview' && activeTab !== 'Decisions'}>
           <div className="workspace-mock-list people">{[['Alex Chen', 'Product Owner'], ['Priya Shah', 'Engineering Manager'], ['Marcus Lee', 'Design Lead'], ['Elena Rossi', 'Product Manager']].map(([name, role]) => <div key={name}><span>{name === 'Alex Chen' ? <img src="/alex-chen-avatar.jpg" alt="" /> : name.slice(0, 1)}</span><b>{name}</b><small>{role}</small></div>)}<small>+ 4 more stakeholders</small></div>
         </Card>
 
-        <Card className="release" title="Release Streams" description="Coordinated release trains and environments" icon={<IconRocket size={15} />} action="View All">
+        <Card className="release" title="Release Streams" description="Coordinated release trains and environments" icon={<IconRocket size={15} />} action="View All"
+          onAction={() => setActiveTab('Templates')}
+          hidden={activeTab !== 'Overview' && activeTab !== 'Templates'}>
           <div className="workspace-mock-list release-list">{releases.map(([name, state, version, progress, tone]) => <div key={name}><IconCube className={`workspace-mock-release-icon ${tone}`} size={16} /><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase().replaceAll(' ', '-')}`} variant="light">{state}</Badge><small>{version}</small><Progress value={Number(progress.slice(0, -1))} size="xs" color={tone === 'green' ? 'teal.5' : tone === 'blue' ? 'blue.5' : 'violet.5'} /></div>)}</div>
         </Card>
-        <Card className="decisions" title="Recent Decisions" icon={<IconHistory size={15} />} action="View All">
+        <Card className="decisions" title="Recent Decisions" icon={<IconHistory size={15} />} action="View All"
+          onAction={() => setActiveTab('Decisions')}
+          hidden={activeTab !== 'Overview' && activeTab !== 'Decisions'}>
           <div className="workspace-mock-list decision-list">{decisions.map(([name, state, time]) => <div key={name}><IconFileText size={13} /><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase()}`} variant="light">{state}</Badge><small>{time}</small></div>)}</div>
         </Card>
         <Card className="analytics" title="Delivery Metrics" icon={<IconChartBar size={15} />}
-          action={<span className="workspace-mock-range">Last 8 weeks <IconChevronDown size={11} /></span>}>
-          <div className="workspace-mock-analytics"><div><span>Cycle Time</span><b>4.2 days <small>↓ −28%</small></b></div><div><span>PR Merge Time</span><b>11.6 hrs <small>↓ −31%</small></b></div><div><span>Change Fail Rate</span><b>1.3% <small>↓ −0.9 pts</small></b></div>
+          hidden={activeTab !== 'Overview'}
+          action={<Menu position="bottom-end" withinPortal>
+            <Menu.Target><button className="workspace-mock-range" type="button" aria-label="Choose delivery metrics time range">{deliveryRange}<IconChevronDown size={11} /></button></Menu.Target>
+            <Menu.Dropdown>{Object.keys(deliveryMetrics).map((range) => <Menu.Item key={range}
+              onClick={() => setDeliveryRange(range as keyof typeof deliveryMetrics)}>{range}</Menu.Item>)}</Menu.Dropdown>
+          </Menu>}>
+          <div className="workspace-mock-analytics"><div><span>Cycle Time</span><b>{deliveryMetrics[deliveryRange][0]} <small>↓ −28%</small></b></div><div><span>PR Merge Time</span><b>{deliveryMetrics[deliveryRange][1]} <small>↓ −31%</small></b></div><div><span>Change Fail Rate</span><b>{deliveryMetrics[deliveryRange][2]} <small>↓ −0.9 pts</small></b></div>
             <svg viewBox="0 0 150 90" preserveAspectRatio="none" role="img" aria-label="Delivery trend, Nov 24 to Jan 12">
               <defs><linearGradient id="workspace-mock-chart-fill" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#c878ff" stopOpacity=".3" /><stop offset="1" stopColor="#c878ff" stopOpacity="0" /></linearGradient></defs>
               <g className="workspace-mock-grid">{[10, 27, 44, 61].map((y) => <path key={y} d={`M0 ${y}H150`} />)}</g>
@@ -152,5 +234,18 @@ export function WorkspaceDesignPreview() {
         </Card>
       </div>
     </div>
+    <Modal opened={newProductOpen} onClose={() => setNewProductOpen(false)} title="Add a product to this preview" centered>
+      <TextInput autoFocus label="Product name" placeholder="e.g. Nova Platform" value={newProductName}
+        onChange={(event) => setNewProductName(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') addProduct(); }} />
+      {isDuplicateProduct && <p className="workspace-mock-empty" role="alert">A product with this name already exists.</p>}
+      <Button mt="md" onClick={addProduct} disabled={!newProductName.trim() || isDuplicateProduct}>Add product</Button>
+    </Modal>
+    <Modal opened={shareOpen} onClose={() => setShareOpen(false)} title="Share Product Workspace" centered>
+      <p>This local preview does not send invitations. Share the page URL with your team to open the same preview.</p>
+      <TextInput aria-label="Preview link" value={window.location.href} readOnly />
+    </Modal>
+    <Modal opened={stakeholdersOpen} onClose={() => setStakeholdersOpen(false)} title="Stakeholders" centered>
+      <p>Stakeholder records are illustrative in this preview and cannot be changed here.</p>
+    </Modal>
   </section>;
 }

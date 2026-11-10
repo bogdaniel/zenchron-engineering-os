@@ -7,9 +7,10 @@ assigned to products by stable ID; reusable workflow and agent definitions remai
 stakeholders, and release streams remain unavailable without their source services.
 
 An unauthenticated localhost session renders the supplied Product Workspace overview at `/#workspace` in the existing
-dashboard shell. Its product list, roadmap, objective progress, connected services, people, releases, decisions, and
-delivery metrics are illustrative and read only; this state makes no protected product, objective, workflow, agent, or
-repository requests. Its Add Product control remains disabled but keeps the reference's primary-button appearance.
+dashboard shell. Its roadmap, objective progress, connected services, people, releases, decisions, and delivery metrics
+are illustrative. Search, product selection, section tabs, card links, roadmap view and quarter controls, and delivery
+time range work locally; adding a product changes only preview state, and sharing does not send invitations. This state
+makes no protected product, objective, workflow, agent, or repository writes.
 
 ## Feature diagram
 
@@ -33,7 +34,8 @@ flowchart LR
     Agents --> Templates[Reusable agent profiles]
     Missing[Files, decisions, stakeholders,<br/>and release streams: unavailable]
     Browser --> Missing
-    Preview[Local unauthenticated session] -->|Static, read-only fixture| Mock[Product Workspace mock overview]
+    Preview[Local unauthenticated session] -->|Illustrative fixture and local UI state| Mock[Product Workspace mock overview]
+    Mock -->|Search, selection, tabs, temporary add| Local[Browser component state only]
     Mock --> MockData[Roadmap · objectives · repositories · workflows<br/>files · stakeholders · releases · decisions · metrics]
 ```
 

@@ -11,6 +11,7 @@
 .workspace-mock-new { width: 100%; margin-bottom: 9px; }
 .workspace-mock-directory .mantine-Input-input { min-height: 31px; border-color: #373148; color: #ded9e9; background: #191824; font-size: 9px; }
 .workspace-mock-directory .mantine-Input-section { color: #aaa3b7; }
+.workspace-mock-empty { color: #a09aae; font-size: 10px; }
 .workspace-mock-products { display: grid; gap: 5px; margin-top: 9px; }
 .workspace-mock-product {
   display: flex; width: 100%; min-width: 0; min-height: 56px; align-items: center; gap: 5px;
@@ -43,6 +44,8 @@
 .workspace-mock-meta i { width: 1px; height: 10px; background: #514b60; }
 .workspace-mock-heading > button:not(.workspace-mock-add) { display: flex; min-height: 31px; align-items: center; justify-content: center; gap: 5px; padding: 0 10px; border: 1px solid #39334b; border-radius: 8px; color: #e4deeb; background: #191824; font-size: 10px; }
 .workspace-mock-heading > .workspace-mock-menu { width: 38px; padding: 0; }
+.workspace-mock-heading .mantine-Menu-root { display: contents; }
+.workspace-mock-heading .workspace-mock-menu { width: 38px; padding: 0; }
 .workspace-mock-heading > .workspace-mock-add { min-height: 34px; padding: 0 13px; }
 .workspace-mock-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 .workspace-mock-metric { min-width: 0; height: 76px; padding: 8px 11px; border: 1px solid #37314b; border-radius: 9px; background: #171522; }
@@ -87,11 +90,17 @@
 .workspace-mock-card.release .workspace-mock-card-icon { color: #43d8a0; }
 .workspace-mock-card .shared-panel-heading h3 { margin: 0; color: #ece7f3; font-size: 13px; font-weight: 600; line-height: 1.2; }
 .workspace-mock-card .shared-panel-heading p { margin-top: 2px; color: #aaa4b8; font-size: 10px; }
-.workspace-mock-card-action { display: block; flex: 0 0 auto; padding-top: 2px; color: #bea0ef; font-size: 10px; white-space: nowrap; }
+.workspace-mock-card-action { display: block; flex: 0 0 auto; padding: 2px 0 0; border: 0; color: #bea0ef; background: transparent; font: inherit; font-size: 10px; white-space: nowrap; cursor: pointer; }
 .workspace-mock-roadmap-tabs { display: flex; align-items: center; gap: 3px; color: #d8d1e1; font-size: 8px; white-space: nowrap; }
 .workspace-mock-roadmap-tabs > * { display: flex; align-items: center; gap: 3px; padding: 4px 6px; border: 1px solid #38324b; border-radius: 7px; }
-.workspace-mock-roadmap-tabs b { border-color: #9b4de2; color: #fff; background: #7138ab; font-weight: 600; }
+.workspace-mock-roadmap-tabs > .mantine-Menu-root { display: contents; }
+.workspace-mock-roadmap-tabs button { color: inherit; background: transparent; font: inherit; cursor: pointer; }
+.workspace-mock-roadmap-tabs button.selected { border-color: #9b4de2; color: #fff; background: #7138ab; font-weight: 600; }
 .workspace-mock-roadmap { display: grid; gap: 5px; margin-top: 5px; }
+.workspace-mock-timeline { display: grid; gap: 7px; margin: 8px 4px; }
+.workspace-mock-timeline-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 22px; }
+.workspace-mock-timeline-row b { color: #e8e3ef; font-size: 10px; font-weight: 500; }
+.workspace-mock-timeline-row small { color: #aaa4b7; font-size: 9px; }
 .workspace-mock-quarter-labels { display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(5, minmax(0, 1fr)); color: #b7b1c2; font-size: 9px; text-align: center; }
 .workspace-mock-quarter-labels span:nth-child(4) { justify-self: center; padding: 4px 7px; border-radius: 7px; color: #fff; background: #a532d2; font-weight: 700; }
 .workspace-mock-roadmap-row { display: grid; grid-template-columns: 10px minmax(105px, 1.2fr) minmax(0, 5fr); align-items: center; gap: 5px; min-height: 20px; }
@@ -142,7 +151,8 @@
 .workspace-mock-list.decision-list { gap: 5px; }
 .workspace-mock-list.decision-list > div > svg { flex: 0 0 auto; color: #c4a0f4; }
 .workspace-mock-list.decision-list > div > small { color: #aaa4b7; font-size: 8px; white-space: nowrap; }
-.workspace-mock-range { display: flex; align-items: center; gap: 4px; padding: 4px 7px; border: 1px solid #38324b; border-radius: 7px; }
+.workspace-mock-range { display: flex; align-items: center; gap: 4px; padding: 4px 7px; border: 1px solid #38324b; border-radius: 7px; color: #d8d1e1; background: transparent; font: inherit; cursor: pointer; }
+.workspace-mock-card.analytics .mantine-Menu-root { display: contents; }
 .workspace-mock-analytics { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 6px 10px; margin-top: 6px; }
 .workspace-mock-analytics > div { display: grid; grid-column: 1; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px; color: #b7b0c2; font-size: 9px; white-space: nowrap; }
 .workspace-mock-analytics > div:nth-of-type(1) { grid-row: 1; }
@@ -176,7 +186,8 @@
 @media (max-width: 760px) {
   .workspace-mock { padding-top: 8px; }
   .workspace-mock-heading { min-height: 66px; flex-wrap: wrap; }
-  .workspace-mock-heading p, .workspace-mock-meta, .workspace-mock-heading > button { display: none; }
+  .workspace-mock-heading p, .workspace-mock-meta, .workspace-mock-heading > button,
+  .workspace-mock-heading .workspace-mock-menu { display: none; }
   .workspace-mock-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .workspace-mock-grid { grid-template-columns: 1fr; grid-template-rows: auto; }
   .workspace-mock-card, .workspace-mock-card.roadmap, .workspace-mock-card.objectives,
@@ -184,3 +195,7 @@
   .workspace-mock-card.release, .workspace-mock-card.decisions, .workspace-mock-card.analytics { min-height: 145px; grid-column: auto; }
   .workspace-mock-card.roadmap { min-height: 185px; }
 }
+
+.workspace-mock-grid:not(.overview) { grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: auto; }
+.workspace-mock-grid:not(.overview) > .workspace-mock-card { grid-column: 1 / -1; height: auto; min-height: 166px; }
+.workspace-mock-grid > .workspace-mock-card.is-hidden { display: none; }
