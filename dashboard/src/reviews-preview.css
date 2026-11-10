@@ -52,6 +52,7 @@
   font-size: 9px;
   line-height: 1.4;
 }
+.reviews-design-preview .reviews-preview-branch-meta { display: block; color: #9690a5; font-size: 9px; }
 .reviews-preview-category {
   padding: 2px 7px;
   border: 1px solid #5d4385;
@@ -187,6 +188,15 @@
 .reviews-preview-artifacts li span,
 .reviews-preview-checklist li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .reviews-preview-artifacts li b { margin-left: auto; color: #55dba3; font-size: 8px; font-weight: 500; }
+@media (min-width: 761px) {
+  .reviews-design-preview .reviews-stage-row { padding: 2px 8px; }
+  .reviews-design-preview .reviews-stage { gap: 2px; }
+  .reviews-design-preview .reviews-stage b { font-size: 10px; line-height: 1.2; }
+  .reviews-design-preview .reviews-stage small { font-size: 9px; line-height: 1.2; }
+  .reviews-design-preview .reviews-detail-tabs { padding-block: 3px; }
+  .reviews-design-preview .reviews-detail-tabs button { padding-block: 3px; }
+  .reviews-design-preview .reviews-change-empty:has(.reviews-provider-detail) { padding: 8px; }
+}
 @media (max-width: 760px) {
   .reviews-design-preview .reviews-context-panels { flex-basis: auto; grid-template-columns: 1fr; grid-template-rows: none; grid-auto-rows: auto; overflow: visible; }
   .reviews-design-preview .reviews-context-card,

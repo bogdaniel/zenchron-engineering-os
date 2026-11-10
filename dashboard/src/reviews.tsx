@@ -464,7 +464,10 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
                 : selectedIssue ? `#${selectedIssue.number} ${selectedIssue.title}` : `No open ${section === 'issues' ? 'issues' : 'pull requests'}`}
             description={section === 'local-branches'
               ? selected ? `${selected.project_name} · ${selected.agent_name} · ${selected.worker_name}` : 'Agent-run diffs will appear when a worker completes a run.'
-              : selectedProviderItem && selectedProject ? `${selectedProject.name} · opened by ${selectedProviderItem.user.login}`
+              : selectedProviderItem && selectedProject ? designPreview && selectedPullRequest ? <>
+                <span>{selectedProject.name} · opened by {selectedProviderItem.user.login}</span>
+                <span className="reviews-preview-branch-meta">{selectedPullRequest.head.ref} → {selectedPullRequest.base.ref}</span>
+              </> : `${selectedProject.name} · opened by ${selectedProviderItem.user.login}`
                 : selectedProject?.git_remote ?? 'GitHub items will appear when a repository is selected.'}
             actions={<Badge className="reviews-required" variant="light">{designPreview ? selectedPreviewMerged ? 'Merged' : selectedPreviewStatusLabel : section === 'local-branches'
               ? selected?.status ?? 'Waiting for changes' : selectedProviderItem?.state ?? 'No open item'}</Badge>}
@@ -557,7 +560,7 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
           </div> : <div className="reviews-change-empty">
             {section !== 'local-branches' && selectedProviderItem ? (
               <div className="reviews-provider-detail">
-                {section === 'pull-requests' && selectedPullRequest && <div className="reviews-diff-meta">
+                {section === 'pull-requests' && selectedPullRequest && !designPreview && <div className="reviews-diff-meta">
                   <span>{selectedPullRequest.head.ref} → {selectedPullRequest.base.ref}</span>
                   <a href={designPreview ? undefined : selectedPullRequest.html_url} target={designPreview ? undefined : '_blank'} rel="noreferrer">Open pull request on GitHub ↗</a>
                 </div>}

@@ -79,6 +79,8 @@ trusted-main readiness, and merge strategy details. The six top navigation tabs 
 detail panels, and the queue status chips filter the sample PRs without provider reads or writes. Creating a preview PR, approving,
 requesting changes, exporting fixture evidence, toggling auto-merge, and merging update local preview state only.
 Split and Unified views omit raw Git file headers so the change hunk is visible immediately.
+In the wide local preview, PR branch context appears beneath the title, the pipeline and tab rows use the mock's compact
+height, and the complete illustrative diff hunk fits in the center pane without an inert GitHub link row.
 The queue identifies its single sample page instead of implying
 additional provider pages. Repository/date scope and further pagination remain unavailable because the preview has no
 additional repository metadata or page records; the visible scope labels are static. The sample AI suggestion can be marked applied in local preview state;

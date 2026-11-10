@@ -62,6 +62,8 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(pagination.locator('button:not([disabled])')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'New PR' })).toBeEnabled();
   await expect(page.locator('.reviews-detail-heading')).toContainText('#4827 Add AI feedback signals and evidence capture');
+  await expect(page.locator('.reviews-preview-branch-meta')).toHaveText('feat/review-ai-evidence → main');
+  await expect(page.locator('.reviews-provider-detail > .reviews-diff-meta')).toHaveCount(0);
   await expect(page.locator('.reviews-pr-diff')).toContainText('collectArtifacts');
   await expect(page.locator('.reviews-design-diff')).toContainText('evidence_capture.ts');
   await expect(page.locator('.reviews-preview-diff-controls')).toContainText('+37');
@@ -77,6 +79,16 @@ test('local Reviews mock uses its fixture without provider reads or review write
   const unifiedDiffLines = page.locator('.reviews-code-editor .view-lines');
   await expect(unifiedDiffLines).toContainText('artifacts: await collectArtifacts(ctx),');
   await expect(unifiedDiffLines).not.toContainText('diff --git');
+  const finalDiffLine = page.locator('.reviews-code-editor .view-line').filter({ hasText: 'return evidence;' }).last();
+  const finalDiffLineFits = await page.evaluate(() => {
+    const line = document.querySelectorAll('.reviews-code-editor .view-line');
+    const target = [...line].find((row) => row.textContent?.replaceAll('\u00a0', ' ').trim() === '}');
+    const pane = document.querySelector('.reviews-provider-detail')!;
+    if (!target) return false;
+    return target.getBoundingClientRect().bottom <= pane.getBoundingClientRect().bottom;
+  });
+  await expect(finalDiffLine).toBeAttached();
+  expect(finalDiffLineFits, 'the whole illustrative code hunk fits in the desktop diff pane').toBe(true);
   await expect(page.locator('.reviews-preview-thread')).toContainText('artifact schema version for traceability');
   const previewThreadVisible = await page.evaluate(() => {
     const thread = document.querySelector('.reviews-preview-thread')!.getBoundingClientRect();
