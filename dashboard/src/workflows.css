@@ -436,6 +436,7 @@
 .workflow-preview-heading > div { display: flex; align-items: center; gap: 12px; }
 .workflow-preview-heading b, .workflow-preview-summary > b { color: #e5deef; font-size: 10px; }
 .workflow-preview-heading button { padding: 5px 0; border: 0; color: #8f899e; background: transparent; font: inherit; font-size: 9px; }
+.workflow-preview-heading button[aria-selected='true'] { color: #e7d5ff; }
 .workflow-preview-content { display: grid; min-height: 111px; flex: 1; grid-template-columns: minmax(0, 1fr) 175px; }
 .workflow-preview-empty { display: grid; align-content: center; justify-items: center; gap: 6px; padding: 12px; color: #b5a2d0; text-align: center; }
 .workflow-preview-empty b { color: #e4deed; font-size: 10px; }
@@ -456,7 +457,9 @@
 .workflow-preview-config > label { display: grid; gap: 4px; }
 .workflow-preview-rules { display: grid; gap: 4px; }
 .workflow-preview-rules > div { display: grid; grid-template-columns: minmax(0, 1fr) 10px 86px; align-items: center; gap: 4px; }
-.workflow-preview-rules code { overflow: hidden; padding: 5px 4px; border-radius: 5px; color: #c4bdd3; background: #191729; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.workflow-preview-rules code,
+.workflow-preview-rules input { min-width: 0; overflow: hidden; padding: 5px 4px; border: 0; border-radius: 5px; color: #c4bdd3; background: #191729; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.workflow-preview-rules input { outline: 1px solid #4a3a60; }
 .workflow-preview-rules b { overflow: hidden; padding: 4px 5px; border-radius: 5px; color: #e7d8ff; background: #37204e; font-size: 7px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .workflow-preview-rules > div > span { color: #a99ab9; text-align: center; }
 .workflow-preview-add-rule { justify-self: start; padding: 3px 7px; border: 1px solid #4a3a60; border-radius: 6px; color: #d4b6ff; background: #21182e; font-size: 8px; }
@@ -467,13 +470,18 @@
 .workflow-preview-retry label { display: grid; gap: 4px; font-size: 7px; }
 .workflow-preview-budget label > span,
 .workflow-preview-retry label > span { min-height: 25px; padding: 0 5px; font-size: 8px; }
-.workflow-preview-toggle { width: 26px; height: 15px; border-radius: 9px; background: #19c58e; box-shadow: inset 0 0 0 1px #63eac1; }
+.workflow-preview-toggle { width: 26px; height: 15px; padding: 0; border: 0; border-radius: 9px; background: #19c58e; box-shadow: inset 0 0 0 1px #63eac1; cursor: pointer; }
 .workflow-preview-toggle::after { display: block; width: 11px; height: 11px; margin: 2px 2px 2px auto; border-radius: 50%; background: white; content: ''; }
+.workflow-preview-toggle[aria-checked='false'] { background: #423c4c; box-shadow: inset 0 0 0 1px #635b70; }
+.workflow-preview-toggle[aria-checked='false']::after { margin-right: auto; margin-left: 2px; }
 .workflow-preview-expression { display: block; padding: 6px; border: 1px solid #38304f; border-radius: 6px; color: #c6b6dc; background: #191729; font-size: 7px; line-height: 1.4; }
 .workflow-preview-outcomes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
 .workflow-preview-outcomes label { display: grid; gap: 4px; font-size: 7px; }
 .workflow-preview-outcomes label > span { min-height: 25px; padding: 0 5px; font-size: 7px; }
 .workflow-simulated-run { grid-template-columns: minmax(0, 1fr) 175px; }
+.workflow-simulated-output { display: grid; align-content: center; gap: 8px; min-height: 0; overflow: auto; padding: 12px; color: #a9a2b8; font-size: 9px; }
+.workflow-simulated-output b { color: #e8e1f2; font-size: 10px; }
+.workflow-simulated-output code { overflow: hidden; padding: 6px; border: 1px solid #302a46; border-radius: 5px; color: #c8c0d6; background: #11111a; text-overflow: ellipsis; white-space: nowrap; }
 .workflow-simulated-timeline { display: grid; align-content: center; min-width: 0; gap: 2px; padding: 5px 8px; }
 .workflow-simulated-heading { display: grid; grid-template-columns: max-content max-content 1fr; align-items: center; gap: 8px; margin-bottom: 2px; color: #e8e1f2; }
 .workflow-simulated-heading b { font-size: 8px; }

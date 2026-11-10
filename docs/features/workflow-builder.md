@@ -68,9 +68,11 @@ flowchart LR
   the canvas aligned with the supplied desktop mock; the keyboard-focusable separator can also be resized with arrow keys.
 - The palette groups all node types accepted by the control plane. Builder is the only API-backed workflow section.
   The unauthenticated local design preview also opens static Runs, Versions, Schedules, Permissions, and Settings mockups;
-  their sample data is marked illustrative, the shared header shows the version, node, and agent-profile summary, controls
-  stay disabled, and navigation makes no workflow API requests. The Runs actions keep the reference's primary-button
-  styling while remaining disabled in the preview.
+  their sample data is marked illustrative, the shared header shows the version, node, and agent-profile summary, and
+  navigation makes no workflow API requests. In the Builder preview, adding a custom block or routing rule, toggling
+  retry and execution conditions, and switching the simulated run view update local preview state only. Run, Save, and
+  Publish remain disabled because their execution and persistence services are not connected. Secondary section actions
+  that would start, publish, save, invite, or archive remain disabled for the same reason.
   In live mode, those tabs stay disabled until their services exist.
 - Opening a saved workflow selects its Agent Router so the inspector starts with real graph data. Workflows without
   an Agent Router leave the inspector unselected.

@@ -16,7 +16,7 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   await expect(page.locator('.workflow-page-heading .eyebrow')).toContainText('Workflows');
   await expect(page.getByRole('group', { name: 'Canvas tools' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Workflow' })).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Custom Block' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Custom Block/ })).toBeEnabled();
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(11);
   await expect(page.locator('.workflow-canvas .workflow-node.condition')).toContainText('Coverage ≥ 80% and tests pass');
   await expect(page.locator('.workflow-canvas .workflow-node.condition .workflow-node-icon')).toHaveCSS('color', 'rgb(67, 221, 166)');
@@ -50,9 +50,32 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   await expect(page.getByRole('region', { name: 'Execution Conditions' })).toContainText('pr.changed_files_count');
   await expect(page.getByRole('region', { name: 'Simulated run timeline' })).toContainText('PR #4827');
   await expect(page.locator('.workflow-simulated-summary')).toContainText('$0.038');
+  await page.getByRole('tab', { name: 'Logs' }).click();
+  await expect(page.getByRole('region', { name: 'Illustrative run logs' })).toContainText('Trigger received');
+  await page.getByRole('tab', { name: 'Outputs' }).click();
+  await expect(page.getByRole('region', { name: 'Illustrative run outputs' })).toContainText('coverage.percent');
+  await page.getByRole('tab', { name: 'Artifacts' }).click();
+  await expect(page.getByRole('region', { name: 'Illustrative run artifacts' })).toContainText('coverage-summary.json');
+  await page.getByRole('tab', { name: 'Execution Graph' }).click();
   const inspectorFits = await page.locator('.workflow-properties').evaluate((panel) =>
     panel.scrollHeight <= panel.clientHeight);
   expect(inspectorFits).toBe(true);
+  const retrySwitch = page.getByRole('switch', { name: 'Retry Rules' });
+  await retrySwitch.click();
+  await expect(retrySwitch).toHaveAttribute('aria-checked', 'false');
+  await expect(page.locator('.workflow-preview-retry')).toContainText('Off');
+  const conditionsSwitch = page.getByRole('switch', { name: 'Execution Conditions' });
+  await conditionsSwitch.click();
+  await expect(conditionsSwitch).toHaveAttribute('aria-checked', 'false');
+  await expect(page.locator('.workflow-preview-expression')).toHaveText('Execution conditions disabled');
+  const addRule = page.getByRole('button', { name: 'Add Rule' });
+  await addRule.click();
+  await expect(page.getByRole('textbox', { name: 'New routing condition 1' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'New routing condition 1' }).fill('changes.contains("*.ts")');
+  await addRule.click();
+  await expect(page.getByRole('textbox', { name: 'New routing condition 2' })).toBeVisible();
+  await page.getByRole('button', { name: /Custom Block/ }).click();
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(12);
   const sections = [
     ['Runs', 'Run History & Execution Monitoring'],
     ['Versions', 'Workflow Versions'],

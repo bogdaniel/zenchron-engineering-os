@@ -20,6 +20,7 @@ import { PanelHeading } from './PanelHeading';
 import { PanelCard } from './PanelCard';
 import './workflows.css';
 import { WorkflowDesignRouterSettings, WorkflowDesignRunPreview } from './WorkflowDesignPreview';
+import type { WorkflowDesignRunView } from './WorkflowDesignPreview';
 import { WorkflowMobileRunPreview } from './WorkflowMobileRunPreview';
 import { WorkflowSectionPreview, WorkflowSectionTabs } from './WorkflowSectionsPreview';
 import {
@@ -177,6 +178,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutRevision, setLayoutRevision] = useState(0);
+  const [runPreviewView, setRunPreviewView] = useState<WorkflowDesignRunView>('Execution Graph');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'draft' | 'active'>('draft');
@@ -279,6 +281,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       data: { label, description: defaultDescriptions[type], kind: type },
     }]);
     setSelectedId(id);
+    if (designPreview) setNotice('Block added locally · changes are not saved');
   };
   const handleDragEnd = (event: DragEndEvent) => {
     if (event.over?.id !== 'workflow-canvas') return;
@@ -405,7 +408,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       <div className="workflow-editor">
       <aside className="workflow-palette">
         <PanelHeading className="workflow-subheading" icon={<IconCirclePlus size={16} />} title="Components"
-          actions={designPreview && <button className="workflow-preview-custom-block" disabled>＋ Custom Block</button>} />
+          actions={designPreview && <button className="workflow-preview-custom-block" type="button"
+            onClick={() => addComponent('agent-task', 'Custom Block')}>＋ Custom Block</button>} />
         <TextInput
           className="workflow-palette-search"
           aria-label="Search blocks"
@@ -497,13 +501,18 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         <Panel id="preview" className="workflow-center-panel" minSize="25%">
           <div className="workflow-run-preview" aria-label="Workflow execution preview">
             <div className="workflow-preview-heading">
-              <div><b>Run Preview</b><button disabled>Execution Graph</button><button disabled>Logs</button>
-                <button disabled>Outputs</button><button disabled>Artifacts</button></div>
+              <div role="tablist" aria-label="Run preview views"><b>Run Preview</b>
+                {(['Execution Graph', 'Logs', 'Outputs', 'Artifacts'] as const).map((view) => <button
+                  key={view} type="button" role="tab" aria-selected={runPreviewView === view}
+                  className={runPreviewView === view ? 'selected' : ''} disabled={!designPreview}
+                  title={designPreview ? undefined : 'Run a workflow to view execution details'}
+                  onClick={() => setRunPreviewView(view)}>{view}</button>)}
+              </div>
               <Badge color={designPreview ? 'green' : 'gray'}>
                 {designPreview ? '✓ All steps valid' : 'Runner unavailable'}
               </Badge>
             </div>
-            {designPreview ? <WorkflowDesignRunPreview /> : <div className="workflow-preview-content">
+            {designPreview ? <WorkflowDesignRunPreview view={runPreviewView} /> : <div className="workflow-preview-content">
               <div className="workflow-preview-empty"><IconPlayerPlay size={19} />
                 <b>Execution preview unavailable</b>
                 <span>Workflow execution is not connected. Save and validate this graph to keep its definition ready.</span>
