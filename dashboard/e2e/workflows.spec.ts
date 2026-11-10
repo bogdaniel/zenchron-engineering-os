@@ -166,6 +166,12 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
       const versionCompare = await page.locator('.workflow-version-compare').boundingBox();
       expect(versionHistory!.width / versionCompare!.width).toBeCloseTo(0.43, 1);
     }
+    if (section === 'Settings') {
+      const lifecycleStates = page.getByRole('img', { name: 'On' });
+      await expect(lifecycleStates).toHaveCount(2);
+      await expect(lifecycleStates.first()).toHaveCSS('width', '82px');
+      await expect(lifecycleStates.first()).toHaveCSS('height', '25px');
+    }
     if (section === 'Permissions') await expect(page.locator('.workflow-collaborator')).toHaveCount(4);
   }
   await page.setViewportSize({ width: 390, height: 844 });

@@ -241,8 +241,8 @@ function SettingsSection({ onAction }: { onAction: (action: string) => void }) {
           ].map(([name, detail, icon]) => <div className="workflow-service-row" key={name as string}><span className="workflow-section-icon">{icon}</span><span><b>{name}</b><small>{detail}</small></span><Badge>READY</Badge></div>)}
         </PanelCard>
         <PanelCard className="workflow-section-card"><PanelHeading title="Notifications & Lifecycle" description="Alerts and administrative actions" />
-          <div className="workflow-lifecycle-row">Notify on failed execution <i className="workflow-static-toggle" /></div>
-          <div className="workflow-lifecycle-row">Notify assigned approvers <i className="workflow-static-toggle" /></div>
+          <div className="workflow-lifecycle-row">Notify on failed execution <span className="workflow-static-toggle" role="img" aria-label="On" /></div>
+          <div className="workflow-lifecycle-row">Notify assigned approvers <span className="workflow-static-toggle" role="img" aria-label="On" /></div>
           <footer><Button variant="default" onClick={() => onAction('Archive Workflow')}>Archive Workflow</Button>
             <Button variant="default" onClick={() => onAction('View Audit Log')}>View Audit Log</Button></footer>
         </PanelCard>
