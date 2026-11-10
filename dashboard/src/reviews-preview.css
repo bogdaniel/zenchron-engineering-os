@@ -130,3 +130,22 @@
 @media (max-height: 800px) {
   .reviews-design-preview .reviews-summary { overflow-y: auto; }
 }
+
+.reviews-design-diff { position: relative; }
+.reviews-design-diff > .reviews-diff-meta { align-items: center; min-height: 34px; padding: 5px 8px; background: #191825; }
+.reviews-design-diff > .reviews-diff-meta > span:first-child,
+.reviews-preview-diff-controls { display: inline-flex; align-items: center; gap: 6px; }
+.reviews-preview-diff-controls b { color: #5fe0a8; }
+.reviews-preview-diff-controls em { color: #ff7378; font-style: normal; }
+.reviews-preview-diff-controls button { padding: 2px 6px; border: 1px solid #39354a; border-radius: 4px; color: #a9a2b7; background: #211f2d; font: inherit; font-size: 9px; }
+.reviews-preview-diff-controls button:disabled { opacity: 1; }
+.reviews-preview-diff-controls button:last-child { border-color: #7751a6; color: #e6d5ff; background: #4a3470; }
+.reviews-preview-thread { position: absolute; top: 30px; right: 10px; display: grid; width: min(280px, 64%); gap: 4px; padding: 5px; border: 1px solid #594d70; border-radius: 7px; background: #1d1b2d; box-shadow: 0 5px 16px #080710aa; }
+.reviews-preview-thread > div { display: flex; align-items: flex-start; gap: 6px; }
+.reviews-preview-thread p { display: grid; gap: 3px; margin: 0; color: #d4cddd; font-size: 9px; line-height: 1.25; }
+.reviews-preview-thread p b { color: #e0d8eb; font-size: 8px; font-weight: 600; }
+.reviews-preview-thread .mantine-Avatar-root { flex: 0 0 auto; font-size: 8px; }
+@media (max-width: 760px) {
+  .reviews-design-preview .reviews-design-diff { max-height: none; overflow: visible; }
+  .reviews-preview-thread { position: static; width: auto; margin: 8px; }
+}

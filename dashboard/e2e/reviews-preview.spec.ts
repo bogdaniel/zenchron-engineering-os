@@ -33,6 +33,18 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(page.getByRole('button', { name: 'New PR' })).toBeDisabled();
   await expect(page.locator('.reviews-detail-heading')).toContainText('#4827 Add AI feedback signals and evidence capture');
   await expect(page.locator('.reviews-pr-diff')).toContainText('collectArtifacts');
+  await expect(page.locator('.reviews-design-diff')).toContainText('evidence_capture.ts');
+  await expect(page.locator('.reviews-preview-diff-controls')).toContainText('+37');
+  const diffControls = page.locator('.reviews-preview-diff-controls button');
+  await expect(diffControls).toHaveCount(2);
+  expect(await diffControls.evaluateAll((buttons) => buttons.map((button) => (button as HTMLButtonElement).disabled))).toEqual([true, true]);
+  await expect(page.locator('.reviews-preview-thread')).toContainText('artifact schema version for traceability');
+  const previewThreadVisible = await page.evaluate(() => {
+    const thread = document.querySelector('.reviews-preview-thread')!.getBoundingClientRect();
+    const detail = document.querySelector('.reviews-provider-detail')!.getBoundingClientRect();
+    return thread.top >= detail.top && thread.bottom <= detail.bottom;
+  });
+  expect(previewThreadVisible).toBe(true);
   await expect(page.locator('.reviews-provider-detail .reviews-pr-description')).toBeHidden();
   await expect(page.locator('.reviews-summary-copy')).toContainText('end-to-end evidence capture');
   const previewDiffBounds = await page.locator('.reviews-pr-diff').boundingBox();
@@ -72,5 +84,15 @@ test('local Reviews mock uses its fixture without provider reads or review write
     contentHeight: card.scrollHeight,
   })));
   expect(mobileMetrics.every(({ contentHeight, height }) => contentHeight <= height + 1)).toBe(true);
+  await expect(page.locator('.reviews-preview-thread')).toBeVisible();
+  const mobileThreadFollowsDiff = await page.evaluate(() => {
+    const thread = document.querySelector('.reviews-preview-thread')!;
+    const editor = document.querySelector('.reviews-code-editor')!;
+    const diff = document.querySelector('.reviews-design-diff')!;
+    return getComputedStyle(thread).position === 'static' && getComputedStyle(diff).maxHeight === 'none' && thread.getBoundingClientRect().top >= editor.getBoundingClientRect().bottom;
+  });
+  expect(mobileThreadFollowsDiff).toBe(true);
+  await page.locator('.reviews-preview-thread').scrollIntoViewIfNeeded();
+  await expect(page.locator('.reviews-preview-thread')).toBeInViewport({ ratio: 0.5 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });

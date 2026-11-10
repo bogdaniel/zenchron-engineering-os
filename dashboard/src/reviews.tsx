@@ -6,8 +6,6 @@ import { useMediaQuery } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { z } from 'zod';
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { Project } from './projects';
 import {
@@ -19,7 +17,8 @@ import { MetricCard } from './MetricCard';
 import { PanelHeading } from './PanelHeading';
 import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
-import { MonacoEditor } from './MonacoEditor';
+import { CodeDiff, ReviewPreviewDiff } from './reviews-preview-diff';
+import { GitHubMarkdown } from './reviews-markdown';
 import { reviewPreviewDiff, reviewPreviewProject, reviewPreviewPullRequests } from './review-preview';
 import './reviews.css';
 import './reviews-detail.css';
@@ -28,17 +27,6 @@ import './reviews-feedback.css';
 import type { AgentRun } from './agents';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
-
-function CodeDiff({ value, label }: { value: string; label: string }) {
-  return <MonacoEditor className="reviews-code-editor" label={label} mode="diff" value={value} readOnly />;
-}
-
-function GitHubMarkdown({ value, className }: { value: string; className: string }) {
-  const html = useMemo(() => DOMPurify.sanitize(marked.parse(value, { async: false, gfm: true }), {
-    FORBID_TAGS: ['img'],
-  }), [value]);
-  return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
-}
 
 const columns: ColDef<AgentRun>[] = [
   { field: 'branch', headerName: 'Local branch', flex: 1.5, minWidth: 90 },
@@ -540,14 +528,17 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
                 </div>}
                 <GitHubMarkdown className="reviews-pr-description reviews-markdown"
                   value={selectedProviderItem.body || 'No description provided.'} />
-                {selectedPullRequest && <div className="reviews-pr-diff">
-                  <div className="reviews-diff-meta"><span>Pull request diff</span><span>{selectedPullRequest.head.ref}</span></div>
-                  {pullRequestDiff.isLoading ? <span>Loading pull request diff…</span>
-                    : pullRequestDiff.isError ? <span className="reviews-action-error" role="alert">{pullRequestDiff.error.message}</span>
-                      : pullRequestPatch && /^@@+ /m.test(pullRequestPatch)
-                        ? <CodeDiff label="Pull request diff" value={pullRequestPatch} />
-                        : <div className="reviews-pr-diff-empty" role="status">No readable text patch was returned. Review file changes on GitHub.</div>}
-                </div>}
+                {selectedPullRequest && (designPreview
+                  ? <ReviewPreviewDiff loading={pullRequestDiff.isLoading}
+                    error={pullRequestDiff.isError ? pullRequestDiff.error : null} patch={pullRequestPatch} />
+                  : <div className="reviews-pr-diff">
+                    <div className="reviews-diff-meta"><span>Pull request diff</span><span>{selectedPullRequest.head.ref}</span></div>
+                    {pullRequestDiff.isLoading ? <span>Loading pull request diff…</span>
+                      : pullRequestDiff.isError ? <span className="reviews-action-error" role="alert">{pullRequestDiff.error.message}</span>
+                        : pullRequestPatch && /^@@+ /m.test(pullRequestPatch)
+                          ? <CodeDiff label="Pull request diff" value={pullRequestPatch} />
+                          : <div className="reviews-pr-diff-empty" role="status">No readable text patch was returned. Review file changes on GitHub.</div>}
+                  </div>)}
               </div>
             ) : section === 'local-branches' && selected && diff.data ? (
               <div className="reviews-diff-view">
