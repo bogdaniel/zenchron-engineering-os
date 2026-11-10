@@ -295,7 +295,7 @@
 .overview-layout .workflow-panel .section-icon svg { width: 28px; height: 28px; }
 .overview-layout .activity-panel .panel-heading { transform: translateY(-6px); }
 .overview-layout.sample-data .activity-panel .activity-list { margin-left: 9px; }
-.overview-layout.sample-data .activity-panel .activity-list > div { gap: 8px; font-weight: 500; }
+.overview-layout.sample-data .activity-panel .activity-list > div { gap: 8px; padding-top: 2px; padding-bottom: 2px; font-weight: 500; }
 .overview-layout.sample-data .activity-panel .activity-list > div > svg { width: 24px; height: 24px; margin-right: 12px; padding: 3px; border-radius: 50%; }
 .overview-layout.sample-data .activity-panel .activity-list span { flex: 1; font-size: 13px; letter-spacing: -.15px; }
 .overview-layout.sample-data .activity-panel .activity-list time { font-size: 10px; }

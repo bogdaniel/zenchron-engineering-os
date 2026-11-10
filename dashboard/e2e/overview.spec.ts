@@ -219,6 +219,9 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.activity-list > div').first().locator('svg')).toHaveCSS('border-radius', '50%');
   await expect(page.locator('.activity-list > div').first().locator('svg')).toHaveCSS('background-color', 'rgb(20, 57, 47)');
   expect((await page.locator('.activity-list > div').first().locator('span').boundingBox())?.x).toBe(1316);
+  const lastActivity = await page.locator('.activity-panel .activity-list > div').last().boundingBox();
+  const activityPanel = await page.locator('.activity-panel').boundingBox();
+  expect(lastActivity!.y + lastActivity!.height).toBeLessThanOrEqual(activityPanel!.y + activityPanel!.height - 6);
   await page.setViewportSize({ width: 1668, height: 749 });
   const lastActivityLabel = await page.locator('.activity-list > div').last().locator('span').evaluate((span) => ({
     scrollWidth: span.scrollWidth, clientWidth: span.clientWidth,
