@@ -220,7 +220,22 @@ func (store *agentRunStore) persistLocked() error {
 	}{stateFileVersion, store.items})
 }
 
-func (store *agentRunStore) list(w http.ResponseWriter, _ *http.Request) {
+// authorized hides a run from callers who may not touch its repository, exactly as if it did not exist.
+func (store *agentRunStore) authorized(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		store.mu.Lock()
+		item, exists := store.items[strings.ToLower(r.PathValue("id"))]
+		store.mu.Unlock()
+		if exists && !accessFor(r).allows(item.Repository) {
+			http.NotFound(w, r)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (store *agentRunStore) list(w http.ResponseWriter, r *http.Request) {
+	access := accessFor(r)
 	store.mu.Lock()
 	if store.recoverExpiredLocked(time.Now().UTC()) {
 		if err := store.persistLocked(); err != nil {
@@ -231,6 +246,9 @@ func (store *agentRunStore) list(w http.ResponseWriter, _ *http.Request) {
 	}
 	items := make([]agentRun, 0, len(store.items))
 	for _, item := range store.items {
+		if !access.allows(item.Repository) {
+			continue
+		}
 		item.CanRequestChanges = store.canRequestChanges(item)
 		items = append(items, publicAgentRun(item))
 	}
@@ -267,8 +285,12 @@ func (store *agentRunStore) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	project, online := store.registry.onlineProject(input.ProjectID)
-	if !online {
+	if !online || !accessFor(r).allows(project.GitRemote) {
 		http.Error(w, "project has no online worker", http.StatusConflict)
+		return
+	}
+	if !accessFor(r).mayDispatchTo(project.WorkerID) {
+		http.Error(w, "this worker belongs to another user", http.StatusForbidden)
 		return
 	}
 	id := make([]byte, 16)

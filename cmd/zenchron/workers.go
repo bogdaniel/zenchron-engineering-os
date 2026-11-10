@@ -156,17 +156,17 @@ func newMuxWithStores(
 	mux.HandleFunc("POST /api/v1/workers/{id}/worktrees/claim", worktrees.claim)
 	mux.HandleFunc("PUT /api/v1/workers/{id}/worktrees/{requestID}", worktrees.finish)
 	mux.HandleFunc("GET /api/v1/agent-runs", runs.list)
-	mux.HandleFunc("GET /api/v1/agent-runs/{id}/diff", runs.diff)
-	mux.HandleFunc("POST /api/v1/agent-runs/{id}/cancel", runs.cancel)
-	mux.HandleFunc("POST /api/v1/agent-runs/{id}/comments", runs.addComment)
-	mux.HandleFunc("POST /api/v1/agent-runs/{id}/request-changes", runs.requestChanges)
+	mux.HandleFunc("GET /api/v1/agent-runs/{id}/diff", runs.authorized(runs.diff))
+	mux.HandleFunc("POST /api/v1/agent-runs/{id}/cancel", runs.authorized(runs.cancel))
+	mux.HandleFunc("POST /api/v1/agent-runs/{id}/comments", runs.authorized(runs.addComment))
+	mux.HandleFunc("POST /api/v1/agent-runs/{id}/request-changes", runs.authorized(runs.requestChanges))
 	mux.HandleFunc("POST /api/v1/agent-runs", runs.create)
 	mux.HandleFunc("POST /api/v1/workers/{id}/agent-runs/claim", runs.claim)
 	mux.HandleFunc("POST /api/v1/workers/{id}/agent-runs/{requestID}/progress", runs.progress)
-	mux.HandleFunc("GET /api/v1/agent-runs/{id}/events", runs.listEvents)
-	mux.HandleFunc("GET /api/v1/agent-runs/{id}/pull-request", runs.pullRequestStatus)
-	mux.HandleFunc("POST /api/v1/agent-runs/{id}/publish", runs.publish)
-	mux.HandleFunc("POST /api/v1/agent-runs/{id}/sync-reviews", runs.syncReviews)
+	mux.HandleFunc("GET /api/v1/agent-runs/{id}/events", runs.authorized(runs.listEvents))
+	mux.HandleFunc("GET /api/v1/agent-runs/{id}/pull-request", runs.authorized(runs.pullRequestStatus))
+	mux.HandleFunc("POST /api/v1/agent-runs/{id}/publish", runs.authorized(runs.publish))
+	mux.HandleFunc("POST /api/v1/agent-runs/{id}/sync-reviews", runs.authorized(runs.syncReviews))
 	mux.HandleFunc("POST /api/v1/projects/{id}/issues", registry.createGitHubIssue)
 	mux.HandleFunc("PUT /api/v1/workers/{id}/agent-runs/{requestID}", runs.finish)
 	return mux
@@ -184,10 +184,19 @@ func (registry *workerRegistry) ready(w http.ResponseWriter, _ *http.Request) {
 	http.Error(w, "no workers online", http.StatusServiceUnavailable)
 }
 
-func (registry *workerRegistry) listWorkers(w http.ResponseWriter, _ *http.Request) {
+func (registry *workerRegistry) listWorkers(w http.ResponseWriter, r *http.Request) {
+	access := accessFor(r)
 	registry.mu.RLock()
+	visible := make(map[string]bool, len(registry.workers))
+	for _, project := range registry.projects {
+		visible[project.WorkerID] = visible[project.WorkerID] || access.allows(project.GitRemote)
+	}
 	workers := make([]workerStatus, 0, len(registry.workers))
 	for _, worker := range registry.workers {
+		// Under an access policy a user sees only workers serving a repository they may touch.
+		if access.enforced && !visible[worker.ID] {
+			continue
+		}
 		status := "offline"
 		if time.Since(worker.LastSeen) <= workerOnlineWindow {
 			status = "online"
@@ -201,10 +210,14 @@ func (registry *workerRegistry) listWorkers(w http.ResponseWriter, _ *http.Reque
 	writeJSON(w, http.StatusOK, workers)
 }
 
-func (registry *workerRegistry) listProjects(w http.ResponseWriter, _ *http.Request) {
+func (registry *workerRegistry) listProjects(w http.ResponseWriter, r *http.Request) {
+	access := accessFor(r)
 	registry.mu.RLock()
 	projects := make([]projectStatus, 0, len(registry.projects))
 	for _, project := range registry.projects {
+		if !access.allows(project.GitRemote) {
+			continue
+		}
 		status := "offline"
 		if time.Since(project.LastSeen) <= workerOnlineWindow {
 			status = "online"
@@ -300,7 +313,12 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 			delete(registry.projects, key)
 		}
 	}
+	access := accessFor(r)
 	for _, project := range request.Projects {
+		// An enrolled worker registers only the repositories it was approved for.
+		if !access.allows(project.Remote) {
+			continue
+		}
 		key := id + ":" + project.ID
 		registry.projects[key] = projectRecord{
 			ID: project.ID, Name: project.Name, Branch: project.Branch, GitRemote: project.Remote,

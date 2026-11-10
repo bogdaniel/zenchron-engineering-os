@@ -200,6 +200,19 @@ func (client gitHubClient) createPullRequest(ctx context.Context, owner, reposit
 	return pull, nil
 }
 
+// localOrAuthorizedClient gates GitHub writes made with the control plane's own credentials. A remote
+// client qualifies only through an enforced access policy, which projectRepository then applies.
+func localOrAuthorizedClient(r *http.Request) bool {
+	if accessFor(r).enforced {
+		return true
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	remoteIP := net.ParseIP(host)
+	return err == nil && remoteIP != nil && remoteIP.IsLoopback()
+}
+
+// projectRepository resolves the GitHub repository behind a project the caller is allowed to touch.
+// A project outside the caller's access is reported exactly like one that does not exist.
 func (registry *workerRegistry) projectRepository(w http.ResponseWriter, r *http.Request) (string, string, bool) {
 	projectID := r.PathValue("id")
 	registry.mu.RLock()
@@ -212,7 +225,7 @@ func (registry *workerRegistry) projectRepository(w http.ResponseWriter, r *http
 	}
 	registry.mu.RUnlock()
 	owner, repository, ok := githubRepositoryParts(remote)
-	if !ok {
+	if !ok || !accessFor(r).allows(remote) {
 		http.Error(w, "project is not connected to a GitHub repository", http.StatusNotFound)
 		return "", "", false
 	}
@@ -279,9 +292,7 @@ func (registry *workerRegistry) listGitHubIssues(w http.ResponseWriter, r *http.
 }
 
 func (registry *workerRegistry) commentGitHubIssue(w http.ResponseWriter, r *http.Request) {
-	host, _, remoteErr := net.SplitHostPort(r.RemoteAddr)
-	remoteIP := net.ParseIP(host)
-	if remoteErr != nil || remoteIP == nil || !remoteIP.IsLoopback() {
+	if !localOrAuthorizedClient(r) {
 		http.Error(w, "GitHub issue comments are available only from a local client", http.StatusForbidden)
 		return
 	}
@@ -331,9 +342,7 @@ func (registry *workerRegistry) commentGitHubIssue(w http.ResponseWriter, r *htt
 }
 
 func (registry *workerRegistry) updateGitHubIssue(w http.ResponseWriter, r *http.Request) {
-	host, _, remoteErr := net.SplitHostPort(r.RemoteAddr)
-	remoteIP := net.ParseIP(host)
-	if remoteErr != nil || remoteIP == nil || !remoteIP.IsLoopback() {
+	if !localOrAuthorizedClient(r) {
 		http.Error(w, "GitHub issue updates are available only from a local client", http.StatusForbidden)
 		return
 	}
@@ -382,9 +391,7 @@ func (registry *workerRegistry) updateGitHubIssue(w http.ResponseWriter, r *http
 }
 
 func (registry *workerRegistry) reviewGitHubPullRequest(w http.ResponseWriter, r *http.Request) {
-	host, _, remoteErr := net.SplitHostPort(r.RemoteAddr)
-	remoteIP := net.ParseIP(host)
-	if remoteErr != nil || remoteIP == nil || !remoteIP.IsLoopback() {
+	if !localOrAuthorizedClient(r) {
 		http.Error(w, "GitHub reviews are available only from a local client", http.StatusForbidden)
 		return
 	}
