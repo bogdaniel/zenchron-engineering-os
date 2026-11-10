@@ -42,6 +42,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
       bodyFont: getComputedStyle(document.body).fontFamily,
       navigationGap: getComputedStyle(document.querySelector('.nav-link')!).gap,
       navigationPaddingLeft: getComputedStyle(document.querySelector('.nav-link')!).paddingLeft,
+      navigationRowGap: getComputedStyle(document.querySelector('.sidebar nav')!).rowGap,
       navigationFont: getComputedStyle(document.querySelector('.nav-link')!).fontSize,
       navigationWeight: getComputedStyle(document.querySelector('.nav-link')!).fontWeight,
       navigationFontFamily: getComputedStyle(document.querySelector('.nav-link')!).fontFamily,
@@ -63,15 +64,16 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     expect(styles.brandGap).toBe('19px');
     expect(styles.navigationGap).toBe('18px');
     expect(styles.navigationPaddingLeft).toBe('27px');
+    expect(styles.navigationRowGap).toBe('0px');
     expect(styles.bodyFont).toContain('Inter');
     expect(styles.navigationFontFamily).toBe(styles.bodyFont);
     expect(panelFontFamily).toBe(styles.bodyFont);
     expect(styles.navigationFont).toBe('16px');
     expect(styles.navigationWeight).toBe('500');
-    await expect(page.locator('.nav-link:not(.active)').first()).toHaveCSS('min-height', '42px');
+    await expect(page.locator('.nav-link:not(.active)').first()).toHaveCSS('min-height', '46px');
     const activeLink = page.locator('.nav-link.active');
     if (await activeLink.count()) {
-      await expect(activeLink, `${route}: active sidebar item matches shared height`).toHaveCSS('height', '42px');
+      await expect(activeLink, `${route}: active sidebar item matches shared height`).toHaveCSS('height', '46px');
       await expect(activeLink, `${route}: active sidebar item keeps shared padding`).toHaveCSS('padding', '0px 8px 0px 27px');
     }
     expect(await page.locator('.sidebar').evaluate((sidebar) => getComputedStyle(sidebar).backgroundImage), `${route}: sidebar artwork is preserved`).toContain('sidebar-wave.png');
