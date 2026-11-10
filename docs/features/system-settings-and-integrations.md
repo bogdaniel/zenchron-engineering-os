@@ -6,14 +6,16 @@ policy, permission, budget, notification, and audit panels are read-only status 
 labelled instead of shown as configured. GitHub.com repositories support open issue and pull-request sync, plus
 top-level pull-request comments and request-changes when a control-plane token has Pull requests write permission.
 Workers that have not sent the endpoint-status field are shown as needing an update; their configuration is not guessed.
-An unauthenticated localhost session at `/#integrations` uses the same dashboard shell with a static, read-only sample of the supplied
-Integrations mock; it does not query protected provider settings or save changes.
+An unauthenticated localhost session at `/#integrations` uses the same dashboard shell with an illustrative Integrations mock.
+Its category filters, connection switches, secret reveal labels, provider menus, and Add Integration flow update local preview
+state only; they do not query protected provider settings or save changes. Audit log opens the fixture events and Import / Export
+downloads those sample events as JSON. Preview-added providers use placeholder data.
 
 ## Feature diagram
 
 ```mermaid
 flowchart LR
-    Preview[Local unauthenticated Integrations state<br/>static sample only] -->|Read only| Mock[Integrations mock layout]
+    Preview[Local unauthenticated Integrations state<br/>illustrative sample] -->|Local preview actions only| Mock[Integrations mock layout]
     Browser[Dashboard route] --> APIHealth[GET /healthz]
     Browser --> Workers[GET /api/v1/workers]
     Browser --> Projects[GET /api/v1/projects]
@@ -43,8 +45,12 @@ flowchart LR
   settings the service cannot persist or enforce.
 - The Integrations overview uses the mockup's configuration rail and settings-panel layout and the shared dashboard
   panel typography. Its rail uses icon-led category labels; connection status stays in the main cards instead of
-  repeating in the navigation. At tablet widths, the page title and status/actions stack so the system-health badge and
-  provider status controls stay readable. Panels remain read-only where no backing API exists.
+  repeating in the navigation. The configuration rail filters provider groups or jumps to the related settings card.
+  At tablet widths, the page title and status/actions stack so the system-health badge and
+  provider status controls stay readable. The local preview supports filtering providers, toggling connection and
+  notification/controller switches, revealing placeholder secret labels, adding a preview-only provider, and opening/exporting
+  fixture audit events. Organization profile fields, policy/role/secret edits, and persistence remain unavailable without a
+  backing API.
 - GitHub App credentials or the `ZENCHRON_GITHUB_TOKEN` fallback are configured in the control-plane environment,
   never in the worker or dashboard. Public repository reads work without credentials; private reads and PR review
   submissions require repository permissions.
@@ -59,5 +65,6 @@ cd dashboard && npm run test:e2e -- e2e/system.spec.ts --grep "settings and inte
 ```
 
 `cd dashboard && npm run test:e2e -- e2e/integrations-preview.spec.ts` verifies the local mock uses frontend data
-without protected reads or writes, checks provider link and badge visibility at desktop and 682 px, and keeps the
-Connected status dot vertically centered without badge/toggle overlap.
+without protected reads or writes, checks category filtering, local connection updates, preview key labels, adding a
+placeholder integration, and viewing/exporting audit fixture data, then checks provider link and badge visibility at desktop
+and 682 px and keeps the Connected status dot vertically centered without badge/toggle overlap.

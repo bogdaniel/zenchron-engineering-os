@@ -6,7 +6,8 @@
 .system-preview-integration-header .system-section-heading h3 { font-size: 15px; }
 .system-preview-integration-header .system-section-heading p { margin-top: 3px; font-size: 10px; }
 .system-preview-integration-header .system-integration-filters { gap: 4px; }
-.system-preview-integration-header .system-integration-filters span { padding: 4px 7px; font-size: 9px; }
+.system-preview-integration-header .system-integration-filters span,
+.system-preview-integration-header .system-integration-filters button { padding: 4px 7px; font-size: 9px; }
 .system-preview-category-more { display: grid; width: 25px; height: 24px; flex: 0 0 25px; place-items: center; padding: 0; border: 1px solid #353148; border-radius: 9px; color: #bbb5c9; background: #181725; }
 .system-preview-category-more:disabled { opacity: 1; }
 .system-preview-service-grid { gap: 7px; }
@@ -67,18 +68,24 @@
   border-radius: 50%;
   background: #35d995;
 }
-.system-preview-switch { pointer-events: none; }
-.system-preview-switch .mantine-Switch-track { width: 24px; height: 13px; min-height: 13px; border: 0; background: #29c987; }
+.system-preview-switch { cursor: pointer; }
+.system-preview-switch .mantine-Switch-track { width: 24px; height: 13px; min-height: 13px; border: 0; background: #484454; }
+.system-preview-switch[data-checked] .mantine-Switch-track { background: #29c987; }
 .system-preview-switch .mantine-Switch-thumb { width: 9px; height: 9px; border: 0; }
-.system-preview-switch[data-disabled] { opacity: 1; }
+.system-preview-status[data-healthy] { color: #51d9a1; background: #12352a; }
+.system-preview-status:not([data-healthy]) { color: #e5b56d; background: #352c1b; }
 .app-shell .main-content .system-preview-add-integration.system-add-integration {
   min-height: 57px;
   grid-column: span 2;
   justify-content: flex-start;
   padding: 8px 15px;
   border-style: dashed;
+  font: inherit;
+  text-align: left;
 }
 .system-preview-add-integration > span { width: 25px; height: 25px; flex: 0 0 25px; font-size: 18px; }
+.system-preview-add-integration { cursor: pointer; }
+.system-preview-add-integration:focus-visible { outline: 2px solid #9a50e5; outline-offset: 2px; }
 .system-preview-add-integration b { font-size: 11px; }
 .system-preview-add-integration small { font-size: 9px; }
 .system-preview-settings-grid {
@@ -100,6 +107,10 @@
 .system-preview-card .shared-panel-heading svg { flex: 0 0 auto; color: #bd8aff; }
 .system-preview-settings-badge { padding: 3px 6px; border-radius: 8px; color: #d8c9fa; background: #393057; font-size: 8px; font-weight: 500; line-height: 1; }
 .system-preview-card-action { position: absolute; top: 10px; right: 9px; color: #c29aff; font-size: 9px; }
+button.system-preview-card-action { padding: 0; border: 0; background: transparent; cursor: pointer; }
+.system-preview-audit-table { width: 100%; border-collapse: collapse; }
+.system-preview-audit-table th, .system-preview-audit-table td { padding: 8px; border-bottom: 1px solid #292638; color: #c8c2d4; font-size: 11px; text-align: left; white-space: nowrap; }
+.system-preview-audit-table th { color: #8e899e; font-weight: 500; }
 .system-preview-profile-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 7px; }
 .system-preview-field { display: grid; min-width: 0; gap: 2px; color: #a9a5b9; font-size: 9px; }
 .system-preview-field .mantine-Input-input { height: 25px; min-height: 25px; padding: 0 7px; border-color: #373149; color: #e5e0ee; background: #1b1a28; font-size: 9px; }

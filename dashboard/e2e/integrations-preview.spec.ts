@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test.use({ baseURL: 'http://127.0.0.1:4173' });
 
-test('local Integrations mock uses static content and keeps controls read only', async ({ page }) => {
+test('local Integrations mock filters and updates its fixture without provider writes', async ({ page }) => {
   const apiRequests: { method: string; path: string }[] = [];
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request();
@@ -15,9 +15,23 @@ test('local Integrations mock uses static content and keeps controls read only',
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Settings & Integrations' })).toBeVisible();
   await expect(page.getByText('All Systems Operational')).toBeVisible();
+  await page.getByRole('button', { name: 'Audit log', exact: true }).click();
+  const auditDialog = page.getByRole('dialog', { name: 'Activity & audit · preview' });
+  await expect(auditDialog.locator('tbody tr')).toHaveCount(3);
+  await page.keyboard.press('Escape');
+  const auditDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Import / Export' }).click();
+  expect((await auditDownload).suggestedFilename()).toBe('zenchron-preview-audit.json');
+  await page.getByRole('button', { name: 'Activity & Audit' }).click();
+  await expect(auditDialog).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('heading', { name: 'Integrations Overview' })).toBeVisible();
   await expect(page.locator('.system-preview-provider')).toHaveCount(10);
   await expect(page.locator('.system-preview-provider .system-preview-status')).toHaveCount(10);
+  await page.getByRole('button', { name: 'Model Providers' }).click();
+  await expect(page.locator('.system-preview-provider')).toHaveCount(3);
+  await page.getByRole('link', { name: 'Connected Integrations' }).click();
+  await expect(page.locator('.system-preview-provider')).toHaveCount(10);
   const connectedBadge = page.locator('.system-preview-provider .system-preview-status').first();
   const statusDot = connectedBadge.locator('.system-preview-status-dot');
   const dotAlignment = await connectedBadge.evaluate((badge) => {
@@ -27,11 +41,11 @@ test('local Integrations mock uses static content and keeps controls read only',
   });
   await expect(statusDot).toBeVisible();
   expect(dotAlignment, 'status dot is vertically centered in its badge').toBeLessThanOrEqual(1);
-  await expect(page.locator('.system-integration-filters span')).toHaveCount(6);
+  await expect(page.locator('.system-integration-filters button:not(.system-preview-category-more)')).toHaveCount(6);
   await expect(page.locator('.system-preview-settings-grid > .system-preview-card')).toHaveCount(8);
   await expect(page.locator('.system-preview-settings-badge')).toHaveCount(7);
-  await expect(page.locator('.system-preview-provider-link-row button[aria-label*="options unavailable"]')).toHaveCount(10);
-  await expect(page.locator('.system-preview-provider-link-row button[aria-label*="Reveal"]')).toHaveCount(3);
+  await expect(page.locator('.system-preview-provider-link-row button[aria-label$="options"]')).toHaveCount(10);
+  await expect(page.locator('.system-preview-provider-link-row button[aria-label*="preview key"]')).toHaveCount(3);
   const githubLink = page.locator('.system-preview-provider').filter({ hasText: 'GitHub' }).locator('.system-preview-provider-link');
   await expect(githubLink).toContainText('org/zenchron-engineering');
   expect(await githubLink.evaluate((link) => link.scrollWidth <= link.clientWidth), 'GitHub account link is not clipped').toBe(true);
@@ -47,7 +61,31 @@ test('local Integrations mock uses static content and keeps controls read only',
   })), 'Connected badges and toggles stay inside every provider card').toBe(true);
   await expect(page.locator('.system-preview-provider-control').first()).toBeVisible();
   await page.setViewportSize({ width: 1672, height: 941 });
-  await expect(page.getByRole('button', { name: 'More integration categories unavailable' })).toBeDisabled();
+  const categories = page.locator('.system-integration-filters');
+  await categories.getByRole('button', { name: /Models/ }).click();
+  await expect(page.locator('.system-preview-provider')).toHaveCount(3);
+  await categories.getByRole('button', { name: /All/ }).click();
+  const githubSwitch = page.getByRole('switch', { name: 'GitHub connected' });
+  const githubProvider = page.locator('.system-preview-provider').filter({ hasText: 'GitHub' });
+  await githubProvider.getByRole('button', { name: 'GitHub options' }).click();
+  await page.getByRole('menuitem', { name: 'Disconnect in preview' }).click();
+  await expect(githubSwitch).not.toBeChecked();
+  await expect(githubProvider.getByText('Disconnected')).toBeVisible();
+  await githubProvider.locator('.system-preview-switch label').click();
+  await expect(githubSwitch).toBeChecked();
+  const revealKey = page.getByRole('button', { name: 'Reveal OpenAI preview key' });
+  await revealKey.click();
+  await expect(page.locator('.system-preview-provider').filter({ hasText: 'OpenAI' })).toContainText('Preview key · OpenAI');
+  await page.locator('.system-preview-add-integration').click();
+  const addDialog = page.getByRole('dialog', { name: 'Add integration · preview only' });
+  await addDialog.getByRole('textbox', { name: 'Integration name' }).fill('Preview Connector');
+  await addDialog.getByRole('button', { name: 'Add to preview' }).click();
+  await expect(page.locator('.system-preview-provider')).toHaveCount(11);
+  await page.getByRole('button', { name: 'More integration categories' }).click();
+  await page.getByRole('menuitem', { name: 'Other' }).click();
+  await expect(page.locator('.system-preview-provider')).toHaveCount(1);
+  await expect(page.locator('.system-preview-provider')).toContainText('Preview Connector');
+  await categories.getByRole('button', { name: /All/ }).click();
   await expect(page.getByRole('button', { name: 'Last 24 hours' })).toBeDisabled();
   await expect(page.locator('.system-preview-add-integration')).toHaveCSS('border-top-style', 'dashed');
   await expect(page.locator('.system-preview-policy')).toContainText('Human Approval (Prod)');
@@ -103,4 +141,13 @@ test('local Settings section shares the preview cards and marks its navigation a
   await expect(page.locator('.system-config-nav a[aria-current="page"]')).toHaveText('Organization Profile');
   await expect(page.locator('.system-preview-settings-grid > .system-preview-card')).toHaveCount(8);
   await expect(page.locator('.system-preview-service-grid')).toHaveCount(0);
+  const autoScale = page.getByRole('switch', { name: 'Auto-scale Runners' });
+  await expect(autoScale).toBeChecked();
+  await page.locator('.system-preview-controller .system-preview-switch').first().locator('label').click();
+  await expect(autoScale).not.toBeChecked();
+  await page.getByRole('button', { name: 'Policies' }).click();
+  await expect(page.locator('#system-preview-policy')).toBeInViewport();
+  await page.getByRole('button', { name: 'Model Providers' }).click();
+  await expect(page).toHaveURL(/#integrations$/);
+  await expect(page.locator('.system-preview-provider')).toHaveCount(3);
 });
