@@ -165,6 +165,7 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
 export function WorkflowsPage({ designPreview = false }: { designPreview?: boolean }) {
   const queryClient = useQueryClient();
   const [section, setSection] = useState<'Builder' | 'Runs' | 'Versions' | 'Schedules' | 'Permissions' | 'Settings'>('Builder');
+  const sectionPreview = designPreview && section !== 'Builder';
   const query = useQuery({
     queryKey: ['workflows'], queryFn: loadWorkflows, enabled: !designPreview,
     initialData: designPreview ? [designPreviewWorkflow] : undefined,
@@ -327,8 +328,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         onClick={() => createWorkflow.mutate()}
       >Create workflow</Button>
     </Modal>
-    <div className={`workflow-builder-layout${designPreview ? ' workflow-design-preview' : ''}`}>
-      <div className="workflow-page-heading">
+    <div className={`workflow-builder-layout${designPreview ? ' workflow-design-preview' : ''}${sectionPreview ? ' workflow-section-view' : ''}`}>
+      <div className={`workflow-page-heading${sectionPreview ? ' workflow-section-heading' : ''}`}>
         <PageHeading
           eyebrow={designPreview ? <>Workflows <IconChevronRight size={10} /> Workflow Builder</> : 'ORCHESTRATION'}
           title={<>
@@ -342,7 +343,11 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
             <span className="workflow-mobile-description">{activeWorkflow.name}</span>
           </>}
         />
-        <div className="workflow-toolbar">
+        {sectionPreview ? <div className="workflow-toolbar workflow-section-meta" aria-label="Workflow summary">
+          <Badge className="workflow-section-meta-badge">v2.4.0</Badge>
+          <Badge className="workflow-section-meta-badge">{activeWorkflow.nodes.length} Nodes</Badge>
+          <Badge className="workflow-section-meta-badge">3 Agent Profiles</Badge>
+        </div> : <div className="workflow-toolbar">
           <Badge className="workflow-version" color="gray">
             {designPreview ? <>v2.4.0 (Draft) <IconChevronDown size={12} /></> : `v${activeWorkflow.version}`}
           </Badge>
@@ -355,7 +360,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
             Save
           </Button>
           <Button className="workflow-publish" variant="light" disabled title="Workflow publishing is not connected">Publish</Button>
-        </div>
+        </div>}
       </div>
       <WorkflowSectionTabs section={section} designPreview={designPreview} onSelect={setSection} />
       {section === 'Builder' ? <>

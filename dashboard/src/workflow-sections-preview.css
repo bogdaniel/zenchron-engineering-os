@@ -17,7 +17,7 @@
 .workflow-run-metric em { position: absolute; right: 12px; bottom: 16px; color: #53ddb1; font-size: 10px; font-style: normal; }
 .workflow-run-metric:nth-child(3) em { color: #ef728b; }
 .workflow-run-columns { display: grid; grid-template-columns: .95fr 1.05fr; align-items: stretch; gap: 12px; }
-.workflow-section-table, .workflow-run-detail { display: flex; min-height: 440px; flex-direction: column; }
+.workflow-section-table, .workflow-run-detail { display: flex; min-height: 404px; flex-direction: column; }
 .workflow-runs-table { display: grid; padding: 0 12px; }
 .workflow-table-head, .workflow-table-row { display: grid; grid-template-columns: 1.05fr .62fr .95fr .72fr .68fr; align-items: center; gap: 8px; min-width: 0; }
 .workflow-table-head { min-height: 38px; color: #8f899f; font-size: 10px; }
@@ -130,6 +130,16 @@
 .workflow-settings-right .workflow-section-card > footer .mantine-Button-root { min-height: 32px; font-size: 9px; }
 .workflow-section-concept { justify-self: end; color: #787184; font-size: 8px; letter-spacing: .03em; }
 
+@media (min-width: 1051px) {
+  .workflow-run-columns { height: 404px; }
+  .workflow-version-columns, .workflow-schedule-columns { min-height: 518px; }
+  .workflow-calendar-day { min-height: 144px; }
+  .workflow-collaborator { min-height: 39px; }
+  .workflow-settings-left .workflow-section-card:first-child { min-height: 220px; }
+  .workflow-settings-left .workflow-section-card:nth-child(2) { min-height: 286px; }
+  .workflow-settings-right .workflow-section-card:first-child { min-height: 298px; }
+}
+
 @media (max-width: 1050px) {
   .workflow-run-columns, .workflow-version-columns, .workflow-schedule-columns,
   .workflow-permission-columns, .workflow-settings-columns { grid-template-columns: 1fr; }
@@ -149,9 +159,9 @@
   .workflow-run-metric { min-height: 82px; padding: 9px; }
   .workflow-run-metric b { font-size: 19px; }
   .workflow-run-metric em { right: 8px; bottom: 10px; font-size: 8px; }
-  .workflow-table-head, .workflow-table-row { grid-template-columns: minmax(90px, 1fr) .55fr .7fr .55fr; gap: 4px; font-size: 8px; }
+  .workflow-table-head, .workflow-table-row { grid-template-columns: minmax(90px, 1fr) .55fr .7fr .75fr; gap: 4px; font-size: 9px; }
   .workflow-table-head > :nth-child(4), .workflow-table-row > :nth-child(4) { display: none; }
-  .workflow-table-row .mantine-Badge-root { font-size: 7px; }
+  .workflow-table-row .mantine-Badge-root { font-size: 8px; }
   .workflow-runs-table { padding-inline: 7px; }
   .workflow-run-facts { gap: 5px; padding: 8px; }
   .workflow-run-facts > span { padding: 6px; font-size: 8px; }

@@ -68,12 +68,25 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
     await expect(page.locator('.workflow-section-preview-title h2')).toHaveText(title);
     await expect(page.locator('.workflow-section-concept')).toHaveText('CONCEPT · ILLUSTRATIVE DATA');
     await expect(tab).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('.workflow-section-meta')).toContainText('v2.4.0');
+    await expect(page.locator('.workflow-section-meta')).toContainText('11 Nodes');
+    await expect(page.locator('.workflow-section-meta')).toContainText('3 Agent Profiles');
+    await expect(page.getByRole('button', { name: 'Validate', exact: true })).toHaveCount(0);
+    if (section === 'Runs') expect((await page.locator('.workflow-run-columns').boundingBox())?.height).toBe(404);
+    if (section === 'Permissions') await expect(page.locator('.workflow-collaborator')).toHaveCount(4);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   for (const [section, title] of sections) {
     await page.getByRole('navigation', { name: 'Workflow sections' })
       .getByRole('button', { name: section, exact: true }).click();
     await expect(page.locator('.workflow-section-preview-title h2')).toHaveText(title);
+    if (section === 'Runs') {
+      await expect(page.locator('.workflow-table-row').first()).toHaveCSS('font-size', '9px');
+      const status = page.locator('.workflow-table-row .mantine-Badge-root').first();
+      await expect(status).toHaveCSS('font-size', '8px');
+      expect(await status.evaluate((badge) => badge.scrollWidth <= badge.clientWidth),
+        'phone status badge stays fully visible').toBe(true);
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       `${section} preview fits the phone viewport`).toBe(true);
   }

@@ -10,6 +10,7 @@
   gap: 18px;
   margin: 0 0 5px;
 }
+.workflow-section-heading { align-items: flex-start; flex-direction: column; justify-content: flex-start; gap: 12px; }
 .workflow-title-line { display: flex; align-items: center; gap: 8px; }
 .workflow-mobile-title, .workflow-mobile-description { display: none; }
 .app-shell .main-content .workflow-page-heading .page-heading p { margin-top: 0; }
@@ -29,6 +30,8 @@
   align-items: center;
   gap: 9px;
 }
+.workflow-section-meta { gap: 8px; }
+.workflow-section-meta-badge { min-height: 26px; padding: 0 10px; border: 1px solid #454056; color: #c6c0d1; background: #272433; font-size: 10px; font-weight: 500; }
 .workflow-select {
   min-width: 200px;
 }
@@ -549,6 +552,11 @@
   .workflow-run-preview { min-height: 0; }
   .workflow-preview-content { min-height: 0; }
   .workflow-builder-layout.workflow-design-preview { grid-template-rows: 76px 36px minmax(340px, min(413px, calc(100vh - 440px))) 248px; }
+  .workflow-builder-layout.workflow-design-preview.workflow-section-view { grid-template-rows: 180px 60px minmax(340px, min(413px, calc(100vh - 440px))) 248px; }
+  .workflow-section-view .workflow-page-heading, .workflow-section-view .workflow-section-tabs { grid-column: 1 / -1; }
+  .workflow-section-view .workflow-section-meta { margin-top: auto; margin-bottom: 18px; }
+  .workflow-section-view .workflow-section-tabs { min-height: 60px; align-items: center; padding-block: 7px; }
+  .workflow-section-view .workflow-section-tabs button { min-height: 44px; }
   .workflow-design-preview .workflow-properties { gap: 6px; padding: 10px 13px; }
 }
 @media (max-width: 700px) {
@@ -561,6 +569,8 @@
     flex-direction: row;
     gap: 8px;
   }
+  .workflow-section-heading { align-items: stretch; gap: 8px; }
+  .workflow-section-meta { flex-wrap: wrap; }
   .workflow-page-heading > .page-heading { min-width: 0; flex: 1 1 auto; }
   .workflow-page-heading .eyebrow, .workflow-desktop-title, .workflow-desktop-description { display: none; }
   .workflow-mobile-title, .workflow-mobile-description { display: inline; }

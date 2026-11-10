@@ -154,7 +154,10 @@ function SchedulesSection() {
 }
 
 function PermissionsSection() {
-  const roles = [['A', 'Alex Chen', 'Owner', 'All permissions'], ['P', 'Priya Shah', 'Editor', 'Edit & submit reviews'], ['M', 'Marco Lee', 'Operator', 'Execute and monitor runs']];
+  const roles = [
+    ['A', 'Alex Chen', 'Owner', 'All permissions'], ['P', 'Priya Shah', 'Editor', 'Edit & submit reviews'],
+    ['M', 'Marco Lee', 'Operator', 'Execute and monitor runs'], ['S', 'Sarah Kim', 'Viewer', 'Read-only access and audit logs'],
+  ];
   const matrix = [
     ['View workflow', '✓', '✓', '✓', '✓'], ['Edit workflow', '✓', '✓', '–', '–'],
     ['Start execution', '✓', '✓', '✓', '–'], ['Approve protected steps', '✓', '–', '–', '–'], ['Publish a version', '✓', '–', '–', '–'],

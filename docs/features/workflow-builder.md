@@ -68,7 +68,8 @@ flowchart LR
   the canvas aligned with the supplied desktop mock; the keyboard-focusable separator can also be resized with arrow keys.
 - The palette groups all node types accepted by the control plane. Builder is the only API-backed workflow section.
   The unauthenticated local design preview also opens static Runs, Versions, Schedules, Permissions, and Settings mockups;
-  their sample data is marked illustrative, controls stay disabled, and navigation makes no workflow API requests.
+  their sample data is marked illustrative, the shared header shows the version, node, and agent-profile summary, controls
+  stay disabled, and navigation makes no workflow API requests.
   In live mode, those tabs stay disabled until their services exist.
 - Opening a saved workflow selects its Agent Router so the inspector starts with real graph data. Workflows without
   an Agent Router leave the inspector unselected.
