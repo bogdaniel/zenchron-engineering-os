@@ -24,7 +24,7 @@ const maxPullRequestHistoryPages = 20
 
 func (client gitHubClient) pullRequestHistory(ctx context.Context, owner, repository string, since time.Time) (gitHubPullRequestHistory, error) {
 	result := gitHubPullRequestHistory{Items: make([]gitHubPullRequestHistoryItem, 0), Complete: true}
-	// shortcut: caps one report at 2,000 PRs per repository; add incremental sync if larger histories are needed.
+	// ponytail: caps one report at 2,000 PRs per repository; add incremental sync if larger histories are needed.
 	for page := 1; page <= maxPullRequestHistoryPages+1; page++ {
 		query := make(url.Values)
 		query.Set("state", "all")
