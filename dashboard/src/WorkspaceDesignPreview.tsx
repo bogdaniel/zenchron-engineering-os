@@ -148,8 +148,8 @@ export function WorkspaceDesignPreview() {
           detail="Last 7 days" />
       </div>
 
-      <nav className="workspace-mock-tabs" aria-label="Product sections" role="tablist">
-        {tabs.map((tab, index) => <button key={tab} type="button" role="tab" aria-selected={activeTab === tab}
+      <nav className="workspace-mock-tabs" aria-label="Product sections">
+        {tabs.map((tab, index) => <button key={tab} type="button" aria-current={activeTab === tab ? 'page' : undefined}
           onClick={() => setActiveTab(tab)} className={activeTab === tab ? 'active' : ''}>
           {index === 0 ? <IconHome size={13} /> : index === 1 ? <IconTarget size={13} />
             : index === 2 ? <IconCode size={13} /> : index === 3 ? <IconFolder size={13} />

@@ -33,14 +33,14 @@ test('local Product Workspace mock matches the supplied overview without protect
 
   for (const [tab, card] of [['Objectives', 'objectives'], ['Repos', 'repositories'], ['Files', 'files'],
     ['Decisions', 'decisions'], ['Templates', 'linked-workflows']] as const) {
-    await page.getByRole('tab', { name: tab }).click();
+    await page.getByRole('button', { name: tab }).click();
     await expect(page.locator(`.workspace-mock-card.${card}`)).toBeVisible();
     await expect(page.locator('div.workspace-mock-grid')).toHaveClass(new RegExp(tab.toLowerCase()));
   }
-  await page.getByRole('tab', { name: 'Overview' }).click();
+  await page.getByRole('button', { name: 'Overview' }).click();
   await page.locator('.workspace-mock-card.objectives').getByRole('button', { name: /View All/ }).click();
-  await expect(page.getByRole('tab', { name: 'Objectives' })).toHaveAttribute('aria-selected', 'true');
-  await page.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByRole('button', { name: 'Objectives' })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('button', { name: 'Overview' }).click();
   await page.locator('.workspace-mock-card.people').getByRole('button', { name: /Manage/ }).click();
   await expect(page.getByRole('dialog', { name: 'Stakeholders' })).toBeVisible();
   await page.keyboard.press('Escape');
