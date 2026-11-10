@@ -72,8 +72,9 @@ flowchart LR
 - Run and Publish remain disabled because there is no workflow execution runner or publish service yet.
 - `/#workflows` in an unauthenticated local session opens the builder without a session, uses the local design fixture, and disables create/save;
   it makes no workflow API requests.
-- The local mock route shows a Condition node joining test and coverage results before approval, a readable dotted
-  canvas grid, and the Agent Router's rule, budget, retry, and execution-condition panels, plus the
+- The local mock route shows the Retry loop above the Agent Router with dashed failure paths, a Condition node joining
+  test and coverage results before approval, a readable dotted canvas grid, and the Agent Router's rule, budget, retry,
+  and execution-condition panels, plus the
   mock's canvas toolbar and simulated PR #4827 timeline. These sample values are read-only preview content and never
   enter saved workflows.
 - On phones, `/#workflows` in an unauthenticated local session shows run #8821 at 78%, its five task states, and two approval states. These

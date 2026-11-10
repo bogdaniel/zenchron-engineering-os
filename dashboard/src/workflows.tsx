@@ -23,7 +23,7 @@ import { WorkflowDesignRouterSettings, WorkflowDesignRunPreview } from './Workfl
 import { WorkflowMobileRunPreview } from './WorkflowMobileRunPreview';
 import { WorkflowSectionPreview, WorkflowSectionTabs } from './WorkflowSectionsPreview';
 import {
-  components, componentGroups, defaultDescriptions, designPreviewWorkflow, layoutNodes, loadWorkflows,
+  components, componentGroups, defaultDescriptions, designPreviewCanvasPositions, designPreviewWorkflow, layoutNodes, loadWorkflows,
   mobileWorkflowGraph, overviewNodeLayout, workflowGraph, workflowNodeHeight, workflowNodeIcons, workflowNodeWidth,
   workflowSchema,
 } from './workflowModel';
@@ -248,11 +248,14 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     setName(current.name); setDescription(current.description); setStatus(current.status);
     const { nodes: workflowNodes, edges: workflowEdges } = workflowGraph(current);
     const selectedNode = workflowNodes.find((node) => node.data.kind === 'agent-router');
-    const selectedNodes = workflowNodes.map((node) => ({ ...node, selected: node.id === selectedNode?.id }));
+    const selectedNodes = workflowNodes.map((node) => ({ ...node,
+      ...(designPreview ? { position: designPreviewCanvasPositions[node.id] } : {}),
+      selected: node.id === selectedNode?.id,
+    }));
     setSelectedId(selectedNode?.id ?? '');
     setNodes(selectedNodes);
     setEdges(workflowEdges);
-    void layoutNodes(selectedNodes, workflowEdges).then((laidOut) => {
+    void (designPreview ? Promise.resolve(selectedNodes) : layoutNodes(selectedNodes, workflowEdges)).then((laidOut) => {
       if (!isCurrent) return;
       const positions = new Map(laidOut.map((node) => [node.id, node.position]));
       setNodes((currentNodes) => currentNodes.map((node) => {
@@ -472,7 +475,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
             onInit={(instance) => { flow.current = instance; }}
             onNodeClick={(_, node) => setSelectedId(node.id)} fitView minZoom={0.2} attributionPosition="bottom-left"
           >
-            <Background color={designPreview ? '#504665' : '#37324c'} gap={designPreview ? 36 : 18} size={designPreview ? 4 : 2} />
+            {!designPreview && <Background bgColor="var(--workflow-canvas-bg)" color="#37324c"
+              gap={18} size={2} />}
             <MiniMap style={{ width: 128, height: 54 }} nodeColor="#8e52db" maskColor="#0b0b14bb" />
             {!designPreview && <Controls position="top-right" />}
           </ReactFlow>

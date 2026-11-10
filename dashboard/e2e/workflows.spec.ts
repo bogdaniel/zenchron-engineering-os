@@ -17,17 +17,23 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   await expect(page.getByRole('group', { name: 'Canvas tools' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Workflow' })).toBeHidden();
   await expect(page.getByRole('button', { name: 'Custom Block' })).toBeDisabled();
-  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(11);
   await expect(page.locator('.workflow-canvas .workflow-node.condition')).toContainText('Coverage ≥ 80% and tests pass');
   await expect(page.locator('.workflow-canvas .workflow-node.condition .workflow-node-icon')).toHaveCSS('color', 'rgb(67, 221, 166)');
-  const dot = await page.locator('.workflow-canvas .react-flow__background-pattern.dots').evaluate((circle) => ({
-    radius: Number(circle.getAttribute('r')),
-    spacing: Number(circle.closest('pattern')?.getAttribute('width')),
-    fill: getComputedStyle(circle).fill,
-  }));
-  expect(dot.radius).toBeGreaterThanOrEqual(0.9);
-  expect(dot.spacing).toBeGreaterThanOrEqual(16);
-  expect(dot.fill).toBe('rgb(80, 70, 101)');
+  const retry = page.locator('.workflow-canvas .workflow-node.loop');
+  await expect(retry).toContainText('Retry (max 2)');
+  await expect(retry).toContainText('On failure');
+  const retryBounds = await retry.boundingBox();
+  const buildBounds = await page.locator('.workflow-canvas .workflow-node.agent-router').boundingBox();
+  expect(retryBounds && buildBounds && retryBounds.y).toBeLessThan(buildBounds!.y);
+  const retryEdges = page.locator('.workflow-canvas .workflow-loop-edge .react-flow__edge-path');
+  await expect(retryEdges).toHaveCount(4);
+  expect(await retryEdges.first().evaluate((path) => getComputedStyle(path).strokeDasharray)).not.toBe('none');
+  const canvas = page.locator('.workflow-canvas .react-flow');
+  await expect(canvas).toHaveCSS('background-color', 'rgb(11, 11, 20)');
+  await expect(canvas).toHaveCSS('background-image', /radial-gradient/);
+  await expect(canvas).toHaveCSS('background-size', '20px 20px');
+  await expect(page.locator('.workflow-canvas .react-flow__background')).toHaveCount(0);
   const branchNodes = await Promise.all(['code-reviewer', 'test-generator', 'coverage-analyzer']
     .map((kind) => page.locator(`.workflow-canvas .workflow-node.${kind}`).boundingBox()));
   expect(branchNodes.every(Boolean)).toBe(true);

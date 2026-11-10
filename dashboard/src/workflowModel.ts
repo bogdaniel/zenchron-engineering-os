@@ -32,6 +32,12 @@ export const designPreviewPositions: Record<string, { x: number; y: number }> = 
   trigger: { x: 10, y: 72 }, plan: { x: 252, y: 72 }, build: { x: 461, y: 72 },
   test: { x: 666, y: 24 }, review: { x: 666, y: 112 }, merge: { x: 911, y: 72 },
 };
+export const designPreviewCanvasPositions: Record<string, { x: number; y: number }> = {
+  trigger: { x: 0, y: 180 }, plan: { x: 210, y: 180 }, build: { x: 420, y: 180 },
+  retry: { x: 420, y: 40 }, review: { x: 630, y: 100 }, tests: { x: 630, y: 180 },
+  coverage: { x: 630, y: 260 }, condition: { x: 840, y: 40 }, approval: { x: 840, y: 180 },
+  merge: { x: 1050, y: 180 }, publish: { x: 1260, y: 180 },
+};
 export const mobileOverviewStages: {
   id: string; label: string; description: string; kind: ComponentType; types: ComponentType[];
   position: { x: number; y: number }; previewIcon?: typeof IconRoute;
@@ -70,6 +76,7 @@ export const designPreviewWorkflow: Workflow = {
     ['trigger', 'trigger', 'Trigger', 'PR or objective update'],
     ['plan', 'planner', 'Planner', 'Create an execution plan'],
     ['build', 'agent-router', 'Agent Router', 'Route work to specialized agents'],
+    ['retry', 'loop', 'Retry (max 2)', 'On failure'],
     ['review', 'code-reviewer', 'Code Reviewer', 'Analyze changes and provide review'],
     ['tests', 'test-generator', 'Test Generator', 'Generate and update tests'],
     ['coverage', 'coverage-analyzer', 'Coverage Analyzer', 'Compute test coverage and quality'],
@@ -83,6 +90,7 @@ export const designPreviewWorkflow: Workflow = {
   edges: [
     ['trigger', 'plan'], ['plan', 'build'], ['build', 'review'], ['build', 'tests'], ['build', 'coverage'],
     ['review', 'approval'], ['tests', 'condition'], ['coverage', 'condition'], ['condition', 'approval'],
+    ['review', 'retry'], ['tests', 'retry'], ['coverage', 'retry'], ['retry', 'build'],
     ['approval', 'merge'], ['merge', 'publish'],
   ].map(([source, target]) => ({ id: `${source}-${target}`, source, target, label: '' })),
 };
@@ -157,6 +165,8 @@ export function mobileWorkflowGraph(workflow: Workflow, designPreview = false) {
     for (const type of stage.types) stageByType.set(type, stage.id);
   }
   const stageByNode = new Map<string, string>();
+  const loopNodeIDs = designPreview
+    ? new Set(workflow.nodes.filter((node) => node.type === 'loop').map((node) => node.id)) : new Set<string>();
   for (const node of workflow.nodes) {
     const stage = stageByType.get(node.type);
     if (!stage) continue;
@@ -175,6 +185,7 @@ export function mobileWorkflowGraph(workflow: Workflow, designPreview = false) {
   const stageIDs = new Set(stages.map(({ id }) => id));
   const edgeIDs = new Set<string>();
   const edges = workflow.edges.flatMap((edge) => {
+    if (loopNodeIDs.has(edge.source) || loopNodeIDs.has(edge.target)) return [];
     const source = stageByNode.get(edge.source);
     const target = stageByNode.get(edge.target);
     if (!source || !target || source === target || !stageIDs.has(source) || !stageIDs.has(target)) return [];
@@ -188,11 +199,13 @@ export function mobileWorkflowGraph(workflow: Workflow, designPreview = false) {
 }
 
 export function workflowGraph(workflow: Workflow) {
+  const loopNodeIDs = new Set(workflow.nodes.filter((node) => node.type === 'loop').map((node) => node.id));
   return {
     nodes: workflow.nodes.map((node) => ({
       ...node, type: 'workflow', data: { ...node.data, kind: node.type },
     })),
-    edges: workflow.edges.map((edge) => ({ ...edge, type: 'smoothstep', animated: false })),
+    edges: workflow.edges.map((edge) => ({ ...edge, type: 'smoothstep', animated: false,
+      ...(loopNodeIDs.has(edge.source) || loopNodeIDs.has(edge.target) ? { className: 'workflow-loop-edge' } : {}) })),
   };
 }
 

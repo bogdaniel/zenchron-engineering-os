@@ -265,12 +265,17 @@
   min-height: 0;
   flex: 1;
   --xy-attribution-background-color: rgba(13, 12, 21, .85);
+  --workflow-canvas-bg: #0b0b14;
+  background-color: var(--workflow-canvas-bg);
 }
 .workflow-canvas .react-flow__attribution a { color: #77738d; }
-.workflow-canvas .react-flow {
+.workflow-canvas .react-flow { background-color: transparent; isolation: isolate; }
+.workflow-design-preview .workflow-canvas .react-flow {
   background-color: #0b0b14;
+  background-image: radial-gradient(circle, #504665 1px, transparent 1px);
+  background-size: 20px 20px;
 }
-.workflow-canvas.drop-active .react-flow { background-color: #151126; }
+.workflow-canvas.drop-active { --workflow-canvas-bg: #151126; }
 .workflow-canvas .react-flow__controls {
   overflow: hidden;
   border: 1px solid #39344e;
@@ -345,6 +350,7 @@
   stroke-width: 2.5;
   filter: drop-shadow(0 0 3px #b783ff99);
 }
+.workflow-canvas .workflow-loop-edge .react-flow__edge-path { stroke-dasharray: 6 5; }
 .workflow-status {
   display: flex;
   min-height: 38px;
