@@ -48,7 +48,8 @@ export function ProductSummaryPanel({ rows, loading, error, checkoutCount, desig
       description="Delivery metrics for the selected report scope" />
     {loading ? <div className="reports-empty">Loading product summaries…</div>
       : error ? <div className="reports-empty">Product data unavailable.</div>
-        : rows.length ? <div className="report-summary-table-wrap">
+        : rows.length ? <div className="report-summary-table-wrap" role="region"
+          aria-label="Product delivery summary table" tabIndex={0}>
           <Table className="report-summary-table" aria-label="Product delivery summary">
             <Table.Thead><Table.Tr>
               <Table.Th>Product</Table.Th><Table.Th>Velocity</Table.Th><Table.Th>Cycle time</Table.Th>
@@ -79,7 +80,8 @@ export function WorkspaceSummaryPanel({ workItems, metrics, rows, designPreview 
   return <PanelCard className="reports-panel inventory-panel" withBorder>
     <PanelHeading className="reports-panel-heading" icon={<IconStack size={15} />} title="Workspace Summary"
       description="Objectives and delivery in the selected scope" />
-    <div className="report-summary-table-wrap">
+    <div className="report-summary-table-wrap" role="region"
+      aria-label="Workspace delivery summary table" tabIndex={0}>
       <Table className="report-summary-table" aria-label="Workspace delivery summary">
         <Table.Thead><Table.Tr>
           <Table.Th>Workspace</Table.Th><Table.Th>Work items</Table.Th><Table.Th>Velocity</Table.Th>

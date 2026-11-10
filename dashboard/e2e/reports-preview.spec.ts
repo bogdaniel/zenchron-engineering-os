@@ -57,4 +57,22 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await expect(page.getByRole('button', { name: 'Executive Summary unavailable' })).toBeDisabled();
   expect(apiRequests.filter(({ path }) => path !== '/api/v1/auth/session')).toEqual([]);
   expect(apiRequests.filter(({ method }) => method !== 'GET')).toEqual([]);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#reports');
+  const mobileTables = await page.locator('.report-summary-table-wrap').evaluateAll((wrappers) =>
+    wrappers.map((wrapper) => ({
+      clientWidth: wrapper.clientWidth,
+      scrollWidth: wrapper.scrollWidth,
+    })),
+  );
+  expect(mobileTables).toHaveLength(2);
+  expect(mobileTables.every(({ clientWidth, scrollWidth }) => scrollWidth > clientWidth)).toBe(true);
+  expect(await page.locator('.report-summary-table th, .report-summary-table td').evaluateAll((cells) =>
+    cells.every((cell) => getComputedStyle(cell).whiteSpace === 'nowrap'))).toBe(true);
+  const productTableRegion = page.getByRole('region', { name: 'Product delivery summary table' });
+  await expect(productTableRegion).toHaveAttribute('tabindex', '0');
+  await productTableRegion.focus();
+  await expect(productTableRegion).toHaveCSS('outline-style', 'solid');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });

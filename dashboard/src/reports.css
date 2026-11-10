@@ -121,6 +121,7 @@
 .reports-insight-filter.mantine-Select-root { width: 122px; flex: 0 0 auto; }
 .reports-insight-filter .mantine-Select-input { min-height: 24px; height: 24px; border-color: #38324c; background: #1b1928; font-size: 8px; }
 .report-summary-table-wrap { overflow-x: auto; }
+.report-summary-table-wrap:focus-visible { outline: 2px solid #bd8aff; outline-offset: 2px; border-radius: 4px; }
 .report-summary-table {
   width: 100%;
   table-layout: fixed;
@@ -338,6 +339,8 @@
 }
 @media (max-width: 720px) {
   .reports-page { padding-top: 14px; }
+  .report-summary-table { min-width: 520px; }
+  .report-summary-table th, .report-summary-table td { white-space: nowrap; }
   .reports-scope-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reports-scope-label, .reports-scope-actions { grid-column: 1 / -1; }
   .reports-scope-label { padding-bottom: 0; }
