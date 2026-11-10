@@ -316,8 +316,8 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
               className={previewSection === key ? 'selected' : ''} key={tab}
               onClick={() => { setPreviewSection(key); setDetailTab(target); }}>{tab}</button>)}
           <span className="reviews-tab-spacer" />
-          <Button className="reviews-filter" variant="default" disabled>Last 14 Days <IconChevronDown size={13} /></Button>
-          <Button className="reviews-filter" variant="default" disabled><IconFilter size={13} /> All Repos <IconChevronDown size={13} /></Button>
+          <span className="reviews-filter reviews-filter-static" title="Illustrative label only; the sample fixture is not date-filtered">Last 14 Days</span>
+          <span className="reviews-filter reviews-filter-static" title="The local preview contains one sample repository">All Repos</span>
         </> : tabs.map((tab, index) => {
           const key = (['pull-requests', 'issues', 'local-branches'] as const)[index];
           return <button

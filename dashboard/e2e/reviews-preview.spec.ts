@@ -27,7 +27,11 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(page.locator('.reviews-metric').nth(3)).toContainText('-28%');
   await expect(page.locator('.reviews-metric').nth(4)).toContainText('+1.9pp');
   await expect(page.locator('.reviews-metric').nth(5)).toContainText('+0.8pp');
-  await expect(page.getByRole('button', { name: 'All Repos' })).toBeDisabled();
+  await expect(page.locator('.reviews-filter-static').filter({ hasText: 'Last 14 Days' }))
+    .toHaveAttribute('title', /not date-filtered/);
+  await expect(page.locator('.reviews-filter-static').filter({ hasText: 'All Repos' }))
+    .toHaveAttribute('title', /one sample repository/);
+  await expect(page.getByRole('button', { name: 'All Repos' })).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'GitHub repository' })).toHaveCount(0);
   await expect(page.locator('.reviews-provider-card')).toHaveCount(5);
   await page.getByRole('button', { name: 'Approved 276' }).click();

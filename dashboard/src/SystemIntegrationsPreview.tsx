@@ -298,7 +298,7 @@ export function SystemIntegrationsPreview({ section, onShowAudit }: { section: '
         <PanelCard id="system-preview-audit" className="system-preview-card system-preview-audit" withBorder>
           <PanelHeading title="Recent Audit Log" icon={<IconDatabase size={15} />} />
           <button className="system-preview-card-action" type="button" onClick={onShowAudit}>View Full Audit Log →</button>
-          <button className="system-preview-audit-range" disabled>Last 24 hours <IconChevronDown size={10} /></button>
+          <span className="system-preview-audit-range" title="The local audit fixture has a fixed sample time range">Last 24 hours</span>
           <div className="system-preview-table-scroll"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead><tbody>
             {systemPreviewAuditEvents.map(([time, actor, action, detail]) => <tr key={time}><td>{time}</td><td>{actor}</td><td>{action}</td><td>{detail}</td></tr>)}
           </tbody></table></div>

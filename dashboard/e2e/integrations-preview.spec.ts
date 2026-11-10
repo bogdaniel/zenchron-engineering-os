@@ -86,7 +86,9 @@ test('local Integrations mock filters and updates its fixture without provider w
   await expect(page.locator('.system-preview-provider')).toHaveCount(1);
   await expect(page.locator('.system-preview-provider')).toContainText('Preview Connector');
   await categories.getByRole('button', { name: /All/ }).click();
-  await expect(page.getByRole('button', { name: 'Last 24 hours' })).toBeDisabled();
+  await expect(page.locator('.system-preview-audit-range')).toHaveText('Last 24 hours');
+  await expect(page.locator('.system-preview-audit-range')).toHaveAttribute('title', /fixed sample time range/);
+  await expect(page.getByRole('button', { name: 'Last 24 hours' })).toHaveCount(0);
   await expect(page.locator('.system-preview-add-integration')).toHaveCSS('border-top-style', 'dashed');
   await expect(page.locator('.system-preview-policy')).toContainText('Human Approval (Prod)');
   await expect(page.locator('.system-preview-secrets')).toContainText('OPENAI_API_KEY');

@@ -80,7 +80,7 @@ detail panels, and the queue status chips filter the sample PRs without provider
 requesting changes, exporting fixture evidence, toggling auto-merge, and merging update local preview state only. The
 Split and Unified switch the local diff display, and the queue identifies its single sample page instead of implying
 additional provider pages. Repository/date scope and further pagination remain unavailable because the preview has no
-additional repository metadata or page records. The sample AI suggestion can be marked applied in local preview state;
+additional repository metadata or page records; the visible scope labels are static. The sample AI suggestion can be marked applied in local preview state;
 this does not modify repository code. The authenticated route still needs provider operations for protected review actions.
 
 ## Verification

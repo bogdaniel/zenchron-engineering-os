@@ -189,8 +189,7 @@ button.system-preview-card-action { padding: 0; border: 0; background: transpare
 .system-preview-notifications .system-preview-switch { display: inline-flex; }
 .system-preview-table-scroll { overflow-x: auto; }
 .system-preview-audit .system-preview-table-scroll table { min-width: 450px; }
-.system-preview-audit-range { position: absolute; top: 8px; left: 155px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px; border: 1px solid #493c61; border-radius: 9px; color: #d4c8e8; background: #29223a; font-size: 8px; }
-.system-preview-audit-range:disabled { opacity: 1; }
+.system-preview-audit-range { position: absolute; top: 8px; left: 155px; display: inline-flex; align-items: center; padding: 3px 6px; border: 1px solid #493c61; border-radius: 9px; color: #a9a1b6; background: #29223a; font-size: 8px; cursor: default; }
 .system-preview-audit table { margin-top: 9px; }
 .system-preview-audit td { white-space: nowrap; }
 .system-preview-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin-top: 8px; }

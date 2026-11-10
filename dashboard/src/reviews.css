@@ -146,6 +146,19 @@
   background: #1b1a28;
   font-size: 12px;
 }
+.reviews-filter-static {
+  display: inline-flex;
+  min-height: 27px;
+  height: 27px;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid #353149;
+  border-radius: 5px;
+  color: #8f899f;
+  background: #1b1a28;
+  font-size: 12px;
+  cursor: default;
+}
 .reviews-filter svg {
   margin: 0 3px;
 }

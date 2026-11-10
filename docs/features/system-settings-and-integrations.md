@@ -9,7 +9,7 @@ Workers that have not sent the endpoint-status field are shown as needing an upd
 An unauthenticated localhost session at `/#integrations` uses the same dashboard shell with an illustrative Integrations mock.
 Its category filters, connection switches, secret reveal labels, provider menus, and Add Integration flow update local preview
 state only; they do not query protected provider settings or save changes. Audit log opens the fixture events and Import / Export
-downloads those sample events as JSON. Profile edits, policy and secret list changes, notification rules, Test Connections,
+downloads those sample events as JSON. The audit range is a fixed sample label, not a filter. Profile edits, policy and secret list changes, notification rules, Test Connections,
 Save, and Discard also operate only on local preview state. Preview-added providers and secrets use placeholder data.
 Discard restores the last preview save; a reload resets the page to its original fixtures.
 
