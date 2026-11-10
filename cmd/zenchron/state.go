@@ -102,3 +102,14 @@ func writeStateFile(path string, value any) (err error) {
 	renamed = true
 	return nil
 }
+
+func ensurePrivateDirectory(path string) error {
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return err
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", filepath.Base(path))
+	}
+	return nil
+}

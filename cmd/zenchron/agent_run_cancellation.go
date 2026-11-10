@@ -21,8 +21,7 @@ func (store *agentRunStore) cancel(w http.ResponseWriter, r *http.Request) {
 	}
 	if item.Status == "cancelled" {
 		store.mu.Unlock()
-		item.Profile = nil
-		writeJSON(w, http.StatusOK, item)
+		writeJSON(w, http.StatusOK, publicAgentRun(item))
 		return
 	}
 	if item.Status != "queued" && item.Status != "running" {
@@ -45,32 +44,5 @@ func (store *agentRunStore) cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	store.mu.Unlock()
-	item.Profile = nil
-	writeJSON(w, http.StatusAccepted, item)
-}
-
-func (store *agentRunStore) cancellationStatus(w http.ResponseWriter, r *http.Request) {
-	workerID, runID := strings.ToLower(r.PathValue("id")), strings.ToLower(r.PathValue("requestID"))
-	if !validHexID(workerID) || !validHexID(runID) {
-		http.Error(w, "worker or run id is invalid", http.StatusBadRequest)
-		return
-	}
-	store.mu.Lock()
-	item, exists := store.items[runID]
-	store.mu.Unlock()
-	if !exists {
-		http.NotFound(w, r)
-		return
-	}
-	if item.WorkerID != workerID {
-		http.Error(w, "agent run belongs to another worker", http.StatusForbidden)
-		return
-	}
-	if item.Status != "running" {
-		http.Error(w, "agent run is no longer active", http.StatusConflict)
-		return
-	}
-	writeJSON(w, http.StatusOK, struct {
-		CancelRequested bool `json:"cancel_requested"`
-	}{item.CancelRequested})
+	writeJSON(w, http.StatusAccepted, publicAgentRun(item))
 }

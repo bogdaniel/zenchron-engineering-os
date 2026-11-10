@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 func TestAgentRunCancellationFencesWorkerAndKeepsPartialDiff(t *testing.T) {
@@ -50,18 +52,18 @@ func TestAgentRunCancellationFencesWorkerAndKeepsPartialDiff(t *testing.T) {
 	}
 	running := createRun("cancel during model call")
 	response = call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", "")
-	var command agentRunCommand
+	var command workerapi.AgentRunCommand
 	if err := json.NewDecoder(response.Body).Decode(&command); err != nil || response.Code != http.StatusOK || command.ID != running.ID {
 		t.Fatalf("claim running request = %#v, decode error = %v, HTTP %d", command, err, response.Code)
 	}
-	if response := call(http.MethodGet, "/api/v1/workers/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/agent-runs/"+running.ID+"/cancellation", ""); response.Code != http.StatusForbidden {
-		t.Fatalf("other worker cancellation check returned HTTP %d", response.Code)
+	if response := call(http.MethodPost, "/api/v1/workers/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/agent-runs/"+running.ID+"/progress", `{"attempts":1}`); response.Code != http.StatusForbidden {
+		t.Fatalf("other worker progress report returned HTTP %d", response.Code)
 	}
 	response = call(http.MethodPost, "/api/v1/agent-runs/"+running.ID+"/cancel", "")
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("running cancellation returned HTTP %d: %s", response.Code, response.Body.String())
 	}
-	response = call(http.MethodGet, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+running.ID+"/cancellation", "")
+	response = call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+running.ID+"/progress", `{"attempts":1}`)
 	var status struct {
 		CancelRequested bool `json:"cancel_requested"`
 	}

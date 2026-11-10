@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
@@ -36,7 +38,7 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&queued); err != nil || response.Code != http.StatusAccepted {
 		t.Fatalf("queue run = %#v, decode error = %v, HTTP %d", queued, err, response.Code)
 	}
-	if queued.Profile != nil || queued.Status != "queued" || queued.Branch != agentRunBranch(queued.ID) || queued.BaseBranch != "main" {
+	if queued.Profile != nil || queued.Status != "queued" || queued.Branch != workerapi.AgentRunBranch(queued.ID) || queued.BaseBranch != "main" {
 		t.Fatalf("public run leaked profile or has wrong status: %#v", queued)
 	}
 	response = call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", "")
@@ -48,7 +50,7 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 		t.Fatalf("runtime-enabled heartbeat returned HTTP %d: %s", response.Code, response.Body.String())
 	}
 	response = call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", "")
-	var first agentRunCommand
+	var first workerapi.AgentRunCommand
 	if err := json.NewDecoder(response.Body).Decode(&first); err != nil || response.Code != http.StatusOK {
 		t.Fatalf("claim run = %#v, decode error = %v, HTTP %d", first, err, response.Code)
 	}
@@ -143,7 +145,7 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 		t.Fatalf("previous diff unavailable while follow-up is queued: HTTP %d", response.Code)
 	}
 	response = call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", "")
-	var second agentRunCommand
+	var second workerapi.AgentRunCommand
 	if err := json.NewDecoder(response.Body).Decode(&second); err != nil || response.Code != http.StatusOK ||
 		second.ID != first.ID || second.Attempts != 2 || second.Branch != first.Branch ||
 		!strings.Contains(second.Prompt, "Please explain the new API behavior.") ||
@@ -193,11 +195,11 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 			Body  string `json:"body"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.Title != "Add review flow" ||
-			input.Head != agentRunBranch(runID) || input.Base != "main" {
+			input.Head != workerapi.AgentRunBranch(runID) || input.Base != "main" {
 			t.Errorf("pull request input = %#v, decode error = %v", input, err)
 		}
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"number":23,"title":"Add review flow","state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":"` + agentRunBranch(runID) + `"},"base":{"ref":"main"}}`))
+		_, _ = w.Write([]byte(`{"number":23,"title":"Add review flow","state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":"` + workerapi.AgentRunBranch(runID) + `"},"base":{"ref":"main"}}`))
 	}))
 	defer provider.Close()
 	registry := newWorkerRegistry()
@@ -207,7 +209,8 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 		Status: "active", SystemPrompt: "Review", Version: 1, UpdatedAt: time.Now().UTC()}
 	store := newAgentRunStore(registry, newAgentProfileStore())
 	item := agentRun{ID: runID, AgentID: profile.ID, AgentName: profile.Name, ProjectID: testProjectID,
-		ProjectName: "platform", WorkerID: testWorkerID, WorkerName: "worker", Branch: agentRunBranch(runID),
+		Repository:  "github.com/acme/platform",
+		ProjectName: "platform", WorkerID: testWorkerID, WorkerName: "worker", Branch: workerapi.AgentRunBranch(runID),
 		BaseBranch: "main", Prompt: "Add review flow", Output: "Agent summary.", Status: "running", Attempts: 1,
 		LeaseUntil: time.Now().Add(time.Minute), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 		Profile: &profile, PullRequestEnabled: true}
@@ -250,7 +253,7 @@ func TestAgentRunClaimEnablesPullRequestForGitHubProjectWithToken(t *testing.T) 
 	request = httptest.NewRequest(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", nil)
 	request.SetPathValue("id", testWorkerID)
 	store.claim(response, request)
-	var command agentRunCommand
+	var command workerapi.AgentRunCommand
 	if err := json.NewDecoder(response.Body).Decode(&command); err != nil || response.Code != http.StatusOK || !command.PublishPullRequest {
 		t.Fatalf("claimed run = %#v, decode error = %v, HTTP %d", command, err, response.Code)
 	}

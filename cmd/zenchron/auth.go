@@ -185,7 +185,7 @@ func isWorkerAPIRequest(method, path string) bool {
 		return true
 	case len(parts) == 6 && parts[4] == "agent-runs" && parts[5] == "claim" && method == http.MethodPost:
 		return true
-	case len(parts) == 7 && parts[4] == "agent-runs" && parts[6] == "cancellation" && method == http.MethodGet:
+	case len(parts) == 7 && parts[4] == "agent-runs" && parts[6] == "progress" && method == http.MethodPost:
 		return true
 	case len(parts) == 6 && parts[4] == "agent-runs" && method == http.MethodPut:
 		return true

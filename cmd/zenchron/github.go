@@ -437,7 +437,11 @@ func (registry *workerRegistry) reviewGitHubPullRequest(w http.ResponseWriter, r
 		AgentRunQueued    bool   `json:"agent_run_queued"`
 		FeedbackSyncError string `json:"feedback_sync_error,omitempty"`
 	}{Status: "submitted"}
-	if runID, ok := strings.CutPrefix(pull.Head.Ref, agentRunBranchPrefix); ok && validHexID(runID) && registry.runs != nil {
+	if registry.runs == nil {
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
+	if runID, found := registry.runs.findByPullRequest("github.com/"+owner+"/"+repository, pull.Number); found {
 		run, status, message := registry.runs.recordReview(
 			runID, r.PathValue("id"), input.Body, input.Event == "REQUEST_CHANGES", false,
 		)
