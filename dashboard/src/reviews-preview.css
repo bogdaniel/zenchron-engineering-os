@@ -40,6 +40,7 @@
 }
 .reviews-preview-pagination button.selected { border-color: #8050cc; color: #f3eaff; background: #4a2b70; }
 .reviews-preview-pagination button:disabled { opacity: 1; }
+.reviews-design-preview .reviews-pr-description { display: none; }
 .reviews-design-preview .reviews-detail-tabs { flex-wrap: nowrap; overflow-x: auto; }
 .reviews-design-preview .reviews-detail-tabs button { flex: 0 0 auto; gap: 3px; padding: 5px; font-size: 10px; white-space: nowrap; }
 .reviews-design-preview .reviews-detail-tabs button small {

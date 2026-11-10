@@ -33,6 +33,10 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(page.getByRole('button', { name: 'New PR' })).toBeDisabled();
   await expect(page.locator('.reviews-detail-heading')).toContainText('#4827 Add AI feedback signals and evidence capture');
   await expect(page.locator('.reviews-pr-diff')).toContainText('collectArtifacts');
+  await expect(page.locator('.reviews-provider-detail .reviews-pr-description')).toBeHidden();
+  await expect(page.locator('.reviews-summary-copy')).toContainText('end-to-end evidence capture');
+  const previewDiffBounds = await page.locator('.reviews-pr-diff').boundingBox();
+  expect(previewDiffBounds!.height).toBeGreaterThanOrEqual(130);
   await expect(page.locator('.reviews-summary-stats')).toContainText('+427');
   await expect(page.locator('.reviews-detail-tabs button')).toHaveCount(6);
   await expect(page.locator('.reviews-context-card')).toHaveCount(6);
