@@ -352,18 +352,26 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
           <Badge className="workflow-section-meta-badge">{activeWorkflow.nodes.length} Nodes</Badge>
           <Badge className="workflow-section-meta-badge">3 Agent Profiles</Badge>
         </div> : <div className="workflow-toolbar">
-          <Badge className="workflow-version" color="gray">
-            {designPreview ? <>v2.4.0 (Draft) <IconChevronDown size={12} /></> : `v${activeWorkflow.version}`}
-          </Badge>
+          {designPreview ? <Menu position="bottom-start" withinPortal>
+            <Menu.Target><button className="workflow-version-trigger" type="button" aria-label="Workflow version history">
+              <Badge className="workflow-version" color="gray">v2.4.0 (Draft) <IconChevronDown size={12} /></Badge>
+            </button></Menu.Target>
+            <Menu.Dropdown><Menu.Item onClick={() => setSection('Versions')}>Open version history</Menu.Item></Menu.Dropdown>
+          </Menu> : <Badge className="workflow-version" color="gray">v{activeWorkflow.version}</Badge>}
           <Button className="workflow-validate" variant="default" leftSection={<IconCheck size={15} />} onClick={validate}>Validate</Button>
-          <Button className="workflow-run" variant="default" leftSection={<IconPlayerPlay size={15} />} disabled title="Runner not connected">
+          <Button className="workflow-run" variant="default" leftSection={<IconPlayerPlay size={15} />}
+            disabled={!designPreview} title={designPreview ? 'Show the simulated workflow run' : 'Runner not connected'}
+            onClick={() => { setRunPreviewView('Execution Graph'); setNotice('Simulated run shown · workflow was not executed'); }}>
             Run
           </Button>
-          <Button className="workflow-save" leftSection={<IconDeviceFloppy size={15} />} loading={save.isPending}
-            disabled={designPreview} onClick={() => save.mutate()}>
+          <Button className="workflow-save" leftSection={<IconDeviceFloppy size={15} />} loading={!designPreview && save.isPending}
+            disabled={!designPreview && save.isPending}
+            onClick={() => designPreview ? setNotice('Draft acknowledged locally · changes are not persisted') : save.mutate()}>
             Save
           </Button>
-          <Button className="workflow-publish" variant="light" disabled title="Workflow publishing is not connected">Publish</Button>
+          <Button className="workflow-publish" variant="light" disabled={!designPreview}
+            title={designPreview ? 'Mark this draft as published in the preview only' : 'Workflow publishing is not connected'}
+            onClick={() => setNotice('Published in preview only · no live workflow changed')}>Publish</Button>
         </div>}
       </div>
       <WorkflowSectionTabs section={section} designPreview={designPreview} onSelect={setSection} />

@@ -69,10 +69,13 @@ flowchart LR
 - The palette groups all node types accepted by the control plane. Builder is the only API-backed workflow section.
   The unauthenticated local design preview also opens static Runs, Versions, Schedules, Permissions, and Settings mockups;
   their sample data is marked illustrative, the shared header shows the version, node, and agent-profile summary, and
-  navigation makes no workflow API requests. In the Builder preview, adding a custom block or routing rule, switching the Agent Router's Properties, Prompt, Variables, and Advanced tabs,
-  toggling retry and execution conditions, and switching the simulated run view update local preview state only. Prompt and
-  variable examples are labeled illustrative and are not saved. Run, Save, and
-  Publish remain disabled because their execution and persistence services are not connected. Secondary section actions
+  navigation makes no workflow API requests. In the Builder preview, adding a custom block or routing rule, switching the
+  Agent Router's Properties, Prompt, Variables, and Advanced tabs, toggling retry and execution conditions, validating the
+  graph, and switching the simulated run view update local preview state only. Run displays the simulated timeline; Save
+  acknowledges the local draft; Publish marks only the preview; and the version menu opens history. None changes persisted
+  workflow data. Prompt and
+  variable examples are labeled illustrative and are not saved. In the authenticated editor, Run and Publish remain disabled
+  because their execution and publishing services are not connected. Secondary section actions
   that would start, publish, save, invite, or archive remain disabled for the same reason.
   In live mode, those tabs stay disabled until their services exist.
 - Opening a saved workflow selects its Agent Router so the inspector starts with real graph data. Workflows without
