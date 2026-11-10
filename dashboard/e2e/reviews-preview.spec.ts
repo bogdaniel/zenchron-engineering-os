@@ -30,6 +30,20 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(page.getByRole('button', { name: 'All Repos' })).toBeDisabled();
   await expect(page.getByRole('combobox', { name: 'GitHub repository' })).toHaveCount(0);
   await expect(page.locator('.reviews-provider-card')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Approved 276' }).click();
+  await expect(page.locator('.reviews-provider-card')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Changes Req. 12' }).click();
+  await expect(page.locator('.reviews-provider-card')).toHaveCount(1);
+  await expect(page.locator('.reviews-provider-card')).toContainText('#4819');
+  await page.getByRole('button', { name: 'All 428' }).click();
+  await expect(page.locator('.reviews-provider-card')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Code Review', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Code Review', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Evidence', exact: true }).click();
+  await expect(page.locator('.reviews-detail-tab-panel')).toContainText('Evidence unavailable');
+  await expect(page.getByRole('button', { name: 'Evidence', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Pull Requests 428' }).click();
+  await expect(page.locator('.reviews-provider-card')).toHaveCount(5);
   const queueLayout = await page.evaluate(() => {
     const viewport = document.querySelector('.reviews-grid-wrap')!.getBoundingClientRect();
     const cards = [...document.querySelectorAll('.reviews-provider-card')].map((card) => card.getBoundingClientRect());

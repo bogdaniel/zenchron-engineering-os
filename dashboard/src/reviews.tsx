@@ -47,6 +47,7 @@ const issueSchema = z.array(githubItem.extend({ labels: z.array(z.object({ name:
 type GitHubPullRequest = z.infer<typeof pullRequestSchema>[number];
 type GitHubIssue = z.infer<typeof issueSchema>[number];
 type ProviderQueueFilter = 'all' | 'open' | 'draft' | 'closed';
+type PreviewQueueFilter = 'all' | 'in-review' | 'changes-requested' | 'approved' | 'blocked' | 'draft';
 const reviewTheme = themeQuartz.withPart(colorSchemeDark).withParams({
   accentColor: '#a36bff', backgroundColor: '#11121b', foregroundColor: '#e4dfef',
   borderColor: '#2c293d', headerBackgroundColor: '#171622', headerTextColor: '#a7a1b8', fontSize: 11,
@@ -122,6 +123,8 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
   const [selectedProviderNumber, setSelectedProviderNumber] = useState<number | null>(null);
   const [providerSearch, setProviderSearch] = useState('');
   const [providerFilter, setProviderFilter] = useState<ProviderQueueFilter>('all');
+  const [previewQueueFilter, setPreviewQueueFilter] = useState<PreviewQueueFilter>('all');
+  const [previewSection, setPreviewSection] = useState<'pull-requests' | 'code-review' | 'evidence' | 'governance' | 'policies' | 'trusted-main'>('pull-requests');
   const [comment, setComment] = useState('');
   const [providerReviewBody, setProviderReviewBody] = useState('');
   const [providerReviewStatus, setProviderReviewStatus] = useState('');
@@ -146,8 +149,12 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
   const selected = localBranches.find((run) => run.id === selectedID) ?? localBranches[0];
   const providerItems = section === 'pull-requests' ? pullRequests.data ?? [] : issues.data ?? [];
   const searchTerm = providerSearch.trim().toLowerCase();
+  const previewStatusByNumber: Record<number, Exclude<PreviewQueueFilter, 'all'>> = {
+    4827: 'in-review', 4819: 'changes-requested', 4816: 'approved', 4812: 'blocked', 4808: 'approved',
+  };
   const visibleProviderItems = providerItems.filter((item) => {
     if (!`${item.number} ${item.title} ${item.user.login}`.toLowerCase().includes(searchTerm)) return false;
+    if (designPreview && previewQueueFilter !== 'all' && previewStatusByNumber[item.number] !== previewQueueFilter) return false;
     if (providerFilter === 'all') return true;
     if (section === 'pull-requests') {
       const pullRequest = item as GitHubPullRequest;
@@ -290,8 +297,12 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
       </div>
       <nav className="reviews-tabs" aria-label="Review sections">
         {designPreview ? <>
-          {['Pull Requests 428', 'Code Review', 'Evidence', 'Merge Governance', 'Policies', 'Trusted-main'].map((tab, index) =>
-            <button className={index === 0 ? 'selected' : ''} disabled={index > 0} key={tab}>{tab}</button>)}
+          {([['Pull Requests 428', 'pull-requests', 'code-changes'], ['Code Review', 'code-review', 'code-changes'],
+            ['Evidence', 'evidence', 'evidence'], ['Merge Governance', 'governance', 'approvals'],
+            ['Policies', 'policies', 'checklist'], ['Trusted-main', 'trusted-main', 'approvals']] as const)
+            .map(([tab, key, target]) => <button type="button" aria-pressed={previewSection === key}
+              className={previewSection === key ? 'selected' : ''} key={tab}
+              onClick={() => { setPreviewSection(key); setDetailTab(target); }}>{tab}</button>)}
           <span className="reviews-tab-spacer" />
           <Button className="reviews-filter" variant="default" disabled>Last 14 Days <IconChevronDown size={13} /></Button>
           <Button className="reviews-filter" variant="default" disabled><IconFilter size={13} /> All Repos <IconChevronDown size={13} /></Button>
@@ -356,8 +367,12 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             <IconFilter size={16} />
           </div>
           <div className="reviews-queue-states">{designPreview ? <>
-              {['All 428', 'In Review 37', 'Changes Req. 12', 'Approved 276', 'Blocked 5', 'Draft 18'].map((filter, index) =>
-                <button className={index === 0 ? 'selected' : ''} disabled key={filter}>{filter}</button>)}
+              {([{ value: 'all', label: 'All 428' }, { value: 'in-review', label: 'In Review 37' },
+                { value: 'changes-requested', label: 'Changes Req. 12' }, { value: 'approved', label: 'Approved 276' },
+                { value: 'blocked', label: 'Blocked 5' }, { value: 'draft', label: 'Draft 18' }] as const).map((filter) =>
+                <button type="button" key={filter.value} aria-pressed={previewQueueFilter === filter.value}
+                  className={previewQueueFilter === filter.value ? 'selected' : ''}
+                  onClick={() => setPreviewQueueFilter(filter.value)}>{filter.label}</button>)}
             </> : section === 'local-branches' ? <>
               <span>All {localBranches.length}</span>
               <span>Succeeded {localBranches.filter((run) => run.status === 'succeeded').length}</span>
