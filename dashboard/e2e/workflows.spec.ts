@@ -17,6 +17,11 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   await expect(page.getByRole('group', { name: 'Canvas tools' })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Workflow' })).toBeHidden();
   await expect(page.getByRole('button', { name: /Custom Block/ })).toBeEnabled();
+  for (const component of ['Condition', 'Loop', 'Publish Report']) {
+    await expect(page.locator('.workflow-palette .workflow-component-add').filter({ hasText: component })).toBeVisible();
+  }
+  expect(await page.locator('.workflow-palette').evaluate((palette) => palette.scrollHeight <= palette.clientHeight),
+    'the reference component list fits in the desktop palette without scrolling').toBe(true);
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(11);
   await expect(page.locator('.workflow-canvas .workflow-node.condition')).toContainText('Coverage ≥ 80% and tests pass');
   await expect(page.locator('.workflow-canvas .workflow-node.condition .workflow-node-icon')).toHaveCSS('color', 'rgb(67, 221, 166)');

@@ -230,6 +230,13 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
+.workflow-design-preview .workflow-component-add { min-height: 34px; grid-template-columns: 20px minmax(0, 1fr); padding-inline: 7px; }
+.workflow-design-preview .workflow-component-icon { width: 18px; height: 18px; }
+.workflow-design-preview .workflow-component-copy { gap: 0; }
+.workflow-design-preview .workflow-component-copy b { font-size: 9px; }
+.workflow-design-preview .workflow-component-copy small { display: block; font-size: 8px; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
+.workflow-design-preview .workflow-palette { gap: 6px; padding-block: 12px; }
+.workflow-design-preview .workflow-component-group, .workflow-design-preview .workflow-component-list { gap: 4px; }
 .workflow-canvas-wrap {
   display: flex;
   min-width: 0;
