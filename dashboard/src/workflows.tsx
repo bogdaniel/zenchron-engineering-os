@@ -356,7 +356,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         />
         {sectionPreview ? <div className="workflow-toolbar workflow-section-meta" aria-label="Workflow summary">
           <Badge className="workflow-section-meta-badge">v2.4.0</Badge>
-          <Badge className="workflow-section-meta-badge">{activeWorkflow.nodes.length} Nodes</Badge>
+          <Badge className="workflow-section-meta-badge">8 Nodes</Badge>
           <Badge className="workflow-section-meta-badge">3 Agent Profiles</Badge>
           <span className="workflow-section-concept" role="status">
             {sectionActionNotice || 'CONCEPT · ILLUSTRATIVE DATA'}

@@ -130,7 +130,7 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
     expect(conceptBounds!.x + conceptBounds!.width).toBeGreaterThan(metaBounds!.x + metaBounds!.width - 8);
     await expect(tab).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.workflow-section-meta')).toContainText('v2.4.0');
-    await expect(page.locator('.workflow-section-meta')).toContainText('11 Nodes');
+    await expect(page.locator('.workflow-section-meta')).toContainText('8 Nodes');
     await expect(page.locator('.workflow-section-meta')).toContainText('3 Agent Profiles');
     await expect(page.getByRole('button', { name: 'Validate', exact: true })).toHaveCount(0);
     if (section === 'Runs') {
