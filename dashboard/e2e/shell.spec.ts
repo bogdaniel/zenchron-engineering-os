@@ -77,7 +77,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
       await expect(activeLink, `${route}: active sidebar item keeps shared padding`).toHaveCSS('padding', '0px 8px 0px 27px');
     }
     expect(await page.locator('.sidebar').evaluate((sidebar) => getComputedStyle(sidebar).backgroundImage), `${route}: sidebar artwork is preserved`).toContain('sidebar-wave.png');
-    await expect(page.locator('.sidebar'), `${route}: sidebar keeps its layered artwork over the opaque base`).toHaveCSS('background-color', 'rgb(10, 11, 19)');
+    await expect(page.locator('.sidebar'), `${route}: sidebar keeps its layered artwork over the translucent base`).toHaveCSS('background-color', 'rgba(10, 11, 19, 0.92)');
     const workspaceLabel = page.locator('.nav-link .nav-label').filter({ hasText: 'Product Workspace' });
     await expect(workspaceLabel, 'long navigation label stays on one line').toHaveCSS('white-space', 'nowrap');
     expect(await workspaceLabel.evaluate((label) => label.scrollWidth <= label.clientWidth),
