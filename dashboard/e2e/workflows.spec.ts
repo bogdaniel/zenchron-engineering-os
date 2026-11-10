@@ -53,6 +53,21 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   const inspectorFits = await page.locator('.workflow-properties').evaluate((panel) =>
     panel.scrollHeight <= panel.clientHeight);
   expect(inspectorFits).toBe(true);
+  for (const [section, title] of [
+    ['Runs', 'Run History & Execution Monitoring'],
+    ['Versions', 'Workflow Versions'],
+    ['Schedules', 'Schedules & Triggers'],
+    ['Permissions', 'Workflow Permissions'],
+    ['Settings', 'Workflow Settings'],
+  ]) {
+    const tab = page.getByRole('navigation', { name: 'Workflow sections' })
+      .getByRole('button', { name: section, exact: true });
+    await expect(tab).toBeEnabled();
+    await tab.click();
+    await expect(page.locator('.workflow-section-preview-title h2')).toHaveText(title);
+    await expect(page.locator('.workflow-section-concept')).toHaveText('CONCEPT · ILLUSTRATIVE DATA');
+    await expect(tab).toHaveAttribute('aria-current', 'page');
+  }
   expect(workflowRequests).toEqual([]);
 });
 
