@@ -12,6 +12,7 @@ state only; they do not query protected provider settings or save changes. Audit
 downloads those sample events as JSON. The audit range is a fixed sample label, not a filter. Profile edits, policy and secret list changes, notification rules, Test Connections,
 Save, and Discard also operate only on local preview state. Preview-added providers and secrets use placeholder data.
 Discard restores the last preview save; a reload resets the page to its original fixtures.
+Provider descriptions stay fully readable on the desktop mock, including the Linear / Jira work-tracking label.
 
 ## Feature diagram
 
@@ -69,5 +70,5 @@ cd dashboard && npm run test:e2e -- e2e/system.spec.ts --grep "settings and inte
 `cd dashboard && npm run test:e2e -- e2e/integrations-preview.spec.ts` verifies the local mock uses frontend data
 without protected reads or writes, checks category filtering, local connection updates, preview key labels, adding a
 placeholder integration, editing settings, local policy/secret/rule actions, Save/Discard, connection testing, and
-viewing/exporting audit fixture data, then checks provider link and badge visibility at desktop and 682 px and keeps the
-Connected status dot vertically centered without badge/toggle overlap.
+viewing/exporting audit fixture data, then checks provider descriptions and links at desktop, provider link and badge
+visibility at 682 px, and Connected status-dot alignment without badge/toggle overlap.

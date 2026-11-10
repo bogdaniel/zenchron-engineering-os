@@ -35,6 +35,12 @@ test('local Integrations mock filters and updates its fixture without provider w
   await expect(page.getByRole('heading', { name: 'Integrations Overview' })).toBeVisible();
   await expect(page.locator('.system-preview-provider')).toHaveCount(10);
   await expect(page.locator('.system-preview-provider .system-preview-status')).toHaveCount(10);
+  const clippedDescriptions = await page.locator('.system-preview-provider').evaluateAll((cards) =>
+    cards.flatMap((card) => {
+      const description = card.querySelector('.system-service-copy p')!;
+      return description.scrollWidth > description.clientWidth ? [description.textContent] : [];
+    }));
+  expect(clippedDescriptions, 'all provider descriptions are fully visible').toEqual([]);
   await page.getByRole('button', { name: 'Model Providers' }).click();
   await expect(page.locator('.system-preview-provider')).toHaveCount(3);
   await page.getByRole('link', { name: 'Connected Integrations' }).click();

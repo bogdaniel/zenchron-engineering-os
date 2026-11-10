@@ -41,7 +41,14 @@
 .system-preview-provider-icon.storage { color: #c09bff; background: #2c2243; }
 .system-preview-provider .system-service-copy { min-width: 0; padding-right: 100px; }
 .system-preview-provider .system-service-copy h4 { margin: 0 0 2px; font-size: 12px; line-height: 1.2; white-space: nowrap; }
-.system-preview-provider .system-service-copy p { overflow: hidden; font-size: 10px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.system-preview-provider .system-service-copy p {
+  overflow: hidden;
+  font-size: 9px;
+  letter-spacing: -.15px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .system-preview-provider-link-row { display: flex; min-width: 0; align-items: center; gap: 5px; margin: 3px -100px 0 -36px; }
 .system-preview-provider-link { display: flex; min-width: 0; align-items: center; gap: 3px; overflow: hidden; color: #9691a8; font-size: 9px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .system-preview-provider-link svg { flex: 0 0 auto; }
