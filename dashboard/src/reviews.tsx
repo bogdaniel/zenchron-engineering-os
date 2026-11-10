@@ -19,6 +19,7 @@ import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
 import { CodeDiff, ReviewPreviewDiff } from './reviews-preview-diff';
 import { GitHubMarkdown } from './reviews-markdown';
+import { ReviewPreviewContext } from './reviews-preview-context';
 import { reviewPreviewDiff, reviewPreviewProject, reviewPreviewPullRequests } from './review-preview';
 import './reviews.css';
 import './reviews-detail.css';
@@ -618,36 +619,13 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             <span />
             {cancelRun.isError && <span className="reviews-action-error" role="alert">{cancelRun.error.message}</span>}
           </div>}
-          {detailTab === 'code-changes' && section === 'pull-requests' && selectedPullRequest &&
-            <div className="reviews-context-panels" aria-label="Additional review context">
-            <section className="reviews-context-card">
-              <h4><IconSparkles size={13} /> AI Suggestions {designPreview && <small>4</small>}</h4>
-              <span>{designPreview ? 'Add schema version to artifact metadata · High impact' : 'Suggestions are unavailable for this pull request.'}</span>
-            </section>
-            <section className="reviews-context-card">
-              <h4><IconShieldCheck size={13} /> Evidence Artifacts {designPreview && <small>7</small>}</h4>
-              <span>{designPreview ? 'evidence.json · 412 KB · Verified' : 'Artifact data is unavailable.'}</span>
-            </section>
-            <section className="reviews-context-card">
-              <h4><IconChecks size={13} /> Review Checklist {designPreview && <small>12/12</small>}</h4>
-              <span>{designPreview ? 'Code follows standards · Tests added · Evidence attached' : 'Provider check data is unavailable.'}</span>
-            </section>
-            {designPreview && <>
-              <section className="reviews-context-card reviews-context-secondary">
-                <h4><IconUserCheck size={13} /> Approvals <small>2/3</small></h4>
-                <span>Jordan Kim · Approved · 1h ago</span><span>Riley Torres · Approved · 47m ago</span>
-                <span>Casey Morgan · Pending</span>
-              </section>
-              <section className="reviews-context-card reviews-context-secondary">
-                <h4><IconChecks size={13} /> Policy Gate Status <small>5/5</small></h4>
-                <span>✓ Security　✓ Quality　✓ Compliance</span><span>✓ Risk　✓ Evidence</span>
-              </section>
-              <section className="reviews-context-card reviews-context-secondary">
-                <h4><IconShieldCheck size={13} /> Trusted-main Readiness</h4>
-                <span>Ready to Merge</span><span>All governance checks passed.</span>
-              </section>
-            </>}
-          </div>}
+          {detailTab === 'code-changes' && section === 'pull-requests' && selectedPullRequest && (designPreview
+            ? <ReviewPreviewContext />
+            : <div className="reviews-context-panels" aria-label="Additional review context">
+              <section className="reviews-context-card"><h4><IconSparkles size={13} /> AI Suggestions</h4><span>Suggestions are unavailable for this pull request.</span></section>
+              <section className="reviews-context-card"><h4><IconShieldCheck size={13} /> Evidence Artifacts</h4><span>Artifact data is unavailable.</span></section>
+              <section className="reviews-context-card"><h4><IconChecks size={13} /> Review Checklist</h4><span>Provider check data is unavailable.</span></section>
+            </div>)}
           </PanelCard>
         </Panel>
         <Separator id="detail-summary-separator" className="reviews-resize-handle" aria-label="Resize review detail and summary" />

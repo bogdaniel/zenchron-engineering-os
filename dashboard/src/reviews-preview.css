@@ -149,3 +149,24 @@
   .reviews-design-preview .reviews-design-diff { max-height: none; overflow: visible; }
   .reviews-preview-thread { position: static; width: auto; margin: 8px; }
 }
+.reviews-design-preview .reviews-context-panels { min-height: 0; overflow: hidden; grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr); }
+.reviews-design-preview .reviews-context-card { min-height: 0; overflow: hidden; }
+.reviews-preview-card-list { display: grid; min-height: 0; gap: 3px; margin: 0; padding: 0; overflow: hidden; list-style: none; }
+.reviews-preview-card-list li { min-width: 0; color: #c7c0d2; font-size: 8px; line-height: 1.2; }
+.reviews-preview-suggestions li { display: flex; align-items: center; gap: 5px; padding: 3px 5px; border: 1px solid #343044; border-radius: 5px; background: #1c1a27; }
+.reviews-preview-suggestions li b { min-width: 0; flex: 1; overflow: hidden; color: #ddd5e8; font-size: 8px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.reviews-preview-suggestions li span { flex: 0 0 auto; color: #9e97ab; font-size: 7px; white-space: nowrap; }
+.reviews-preview-suggestions button { flex: 0 0 auto; padding: 2px 5px; border: 1px solid #4d3d64; border-radius: 4px; color: #bda4da; background: #282133; font: inherit; font-size: 8px; }
+.reviews-preview-suggestions button:disabled { opacity: 1; }
+.reviews-preview-artifacts li,
+.reviews-preview-checklist li { display: flex; align-items: center; gap: 4px; min-height: 0; white-space: nowrap; }
+.reviews-preview-artifacts li svg,
+.reviews-preview-checklist li svg { flex: 0 0 auto; color: #53d9a1; }
+.reviews-preview-artifacts li span,
+.reviews-preview-checklist li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.reviews-preview-artifacts li b { margin-left: auto; color: #55dba3; font-size: 8px; font-weight: 500; }
+@media (max-width: 760px) {
+  .reviews-design-preview .reviews-context-panels { flex-basis: auto; grid-template-columns: 1fr; grid-template-rows: none; grid-auto-rows: auto; overflow: visible; }
+  .reviews-design-preview .reviews-context-card,
+  .reviews-design-preview .reviews-preview-card-list { overflow: visible; }
+}

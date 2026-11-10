@@ -53,6 +53,10 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(page.locator('.reviews-detail-tabs button')).toHaveCount(6);
   await expect(page.locator('.reviews-context-card')).toHaveCount(6);
   await expect(page.locator('.reviews-context-panels')).toContainText('Trusted-main Readiness');
+  await expect(page.locator('.reviews-preview-suggestions li')).toHaveCount(3);
+  await expect(page.locator('.reviews-preview-artifacts li')).toHaveCount(7);
+  await expect(page.locator('.reviews-preview-checklist li')).toHaveCount(7);
+  expect(await page.locator('.reviews-preview-suggestions button').isDisabled()).toBe(true);
   await expect(page.locator('.reviews-summary')).toContainText('Squash & Merge');
   await expect(page.locator('.reviews-summary')).toContainText('trusted-main');
   await expect(page.getByRole('switch', { name: 'Auto-merge when ready' })).toBeDisabled();
@@ -94,5 +98,11 @@ test('local Reviews mock uses its fixture without provider reads or review write
   expect(mobileThreadFollowsDiff).toBe(true);
   await page.locator('.reviews-preview-thread').scrollIntoViewIfNeeded();
   await expect(page.locator('.reviews-preview-thread')).toBeInViewport({ ratio: 0.5 });
+  const lastMobileArtifact = page.locator('.reviews-preview-artifacts li').last();
+  await lastMobileArtifact.scrollIntoViewIfNeeded();
+  await expect(lastMobileArtifact).toBeInViewport();
+  const lastMobileCheck = page.locator('.reviews-preview-checklist li').last();
+  await lastMobileCheck.scrollIntoViewIfNeeded();
+  await expect(lastMobileCheck).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
