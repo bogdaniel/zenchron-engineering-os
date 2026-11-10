@@ -53,13 +53,14 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   const inspectorFits = await page.locator('.workflow-properties').evaluate((panel) =>
     panel.scrollHeight <= panel.clientHeight);
   expect(inspectorFits).toBe(true);
-  for (const [section, title] of [
+  const sections = [
     ['Runs', 'Run History & Execution Monitoring'],
     ['Versions', 'Workflow Versions'],
     ['Schedules', 'Schedules & Triggers'],
     ['Permissions', 'Workflow Permissions'],
     ['Settings', 'Workflow Settings'],
-  ]) {
+  ];
+  for (const [section, title] of sections) {
     const tab = page.getByRole('navigation', { name: 'Workflow sections' })
       .getByRole('button', { name: section, exact: true });
     await expect(tab).toBeEnabled();
@@ -67,6 +68,14 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
     await expect(page.locator('.workflow-section-preview-title h2')).toHaveText(title);
     await expect(page.locator('.workflow-section-concept')).toHaveText('CONCEPT · ILLUSTRATIVE DATA');
     await expect(tab).toHaveAttribute('aria-current', 'page');
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const [section, title] of sections) {
+    await page.getByRole('navigation', { name: 'Workflow sections' })
+      .getByRole('button', { name: section, exact: true }).click();
+    await expect(page.locator('.workflow-section-preview-title h2')).toHaveText(title);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      `${section} preview fits the phone viewport`).toBe(true);
   }
   expect(workflowRequests).toEqual([]);
 });
