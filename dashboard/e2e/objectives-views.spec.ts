@@ -159,6 +159,13 @@ test('Objectives mock layout stays within desktop, tablet, and mobile viewports'
           return bounds.left >= row.getBoundingClientRect().left && bounds.right <= row.getBoundingClientRect().right + 1;
         })));
       expect(milestoneRowsFit, 'milestone details should fit the mobile card').toBe(true);
+      const milestoneCardContainsRows = await page.locator('.objective-milestones-card').evaluate((card) => {
+        const cardBounds = card.getBoundingClientRect();
+        const rows = [...card.querySelectorAll('.objective-milestones-list > div')];
+        return card.scrollHeight <= card.clientHeight
+          && rows.every((row) => row.getBoundingClientRect().bottom <= cardBounds.bottom + 1);
+      });
+      expect(milestoneCardContainsRows, 'all four milestones should remain visible inside the mobile card').toBe(true);
     }
     const clippedMetricLabels = await page.locator('.objective-metric .metric-top > span')
       .evaluateAll((labels) => labels.filter((label) => label.scrollWidth > label.clientWidth).map((label) => label.textContent));

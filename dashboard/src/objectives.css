@@ -266,6 +266,7 @@
   .objective-detail-stack { grid-template-rows: minmax(420px, auto) auto; }
   .objective-grid-wrap { height: 330px; }
   .objective-detail-panel { min-height: 320px; }
+  .objective-preview-layout .objective-milestones-card { flex-basis: auto; overflow: visible; }
   .detail-meta-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 600px) {
