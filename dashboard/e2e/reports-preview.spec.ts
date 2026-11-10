@@ -13,6 +13,7 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await page.goto('/#reports');
 
   await expect(page.locator('.reports-page')).toHaveClass(/reports-design-preview/);
+  await expect(page.locator('.reports-scope-bar [data-position="left"] svg')).toHaveCount(5);
   await expect(page.locator('.reports-metric')).toHaveCount(7);
   await expect(page.locator('.reports-metric').nth(0)).toContainText('42');
   await expect(page.locator('.reports-metric').nth(6)).toContainText('68.4%');

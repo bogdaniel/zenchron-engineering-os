@@ -3,8 +3,9 @@ import { BarChart, CompositeChart, DonutChart, LineChart, Sparkline } from '@man
 import { Button, Select } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import {
-  IconActivity, IconChartBar, IconCircleCheck, IconCpu, IconFilter, IconFolders,
+  IconActivity, IconCalendar, IconChartBar, IconCircleCheck, IconCode, IconCpu, IconFilter, IconFolders,
   IconInfinity, IconMessageCircle, IconRobot, IconRocket, IconRoute, IconSparkles, IconStack, IconStopwatch,
+  IconUsers,
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { agentsSchema, loadAgentRuns } from './agents';
@@ -298,15 +299,18 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
       <div className="reports-scope-bar" aria-label="Report scope">
         <div className="reports-scope-label"><IconFilter size={16} /><span>Report Scope</span></div>
         <Select aria-label="Time Range" label="Time Range" data={timeRanges}
-          value={scope.timeRange} onChange={(value) => updateScope('timeRange', value)} disabled={designPreview} />
+          leftSection={<IconCalendar size={13} />} value={scope.timeRange}
+          onChange={(value) => updateScope('timeRange', value)} disabled={designPreview} />
         <Select aria-label="Product" label="Product" data={productOptions}
-          value={scope.product} onChange={(value) => updateScope('product', value)} disabled={designPreview} />
+          leftSection={<IconStack size={13} />} value={scope.product}
+          onChange={(value) => updateScope('product', value)} disabled={designPreview} />
         <Select aria-label={designPreview ? 'Team' : 'Objective owner'} label={designPreview ? 'Team' : 'Objective owner'} data={ownerOptions} value={scope.objectiveOwner}
-          onChange={(value) => updateScope('objectiveOwner', value)} disabled={designPreview} />
+          leftSection={<IconUsers size={13} />} onChange={(value) => updateScope('objectiveOwner', value)} disabled={designPreview} />
         <Select aria-label="Workflow filter unavailable because runs are not linked to workflows" label="Workflow"
-          data={[{ value: 'all', label: 'All Workflows' }]} value="all" disabled />
+          leftSection={<IconRoute size={13} />} data={[{ value: 'all', label: 'All Workflows' }]} value="all" disabled />
         <Select aria-label="Repository" label="Repository" data={repositoryOptions}
-          value={scope.repository} onChange={(value) => updateScope('repository', value)} disabled={designPreview} />
+          leftSection={<IconCode size={13} />} value={scope.repository}
+          onChange={(value) => updateScope('repository', value)} disabled={designPreview} />
         <div className="reports-scope-actions">
           <Button className="reports-apply-filters" disabled={designPreview} onClick={() => setAppliedScope(scope)}>Apply filters</Button>
           <Button className="reports-reset-filters" variant="subtle" onClick={() => {

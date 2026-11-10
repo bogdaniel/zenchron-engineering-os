@@ -37,6 +37,7 @@
   font-size: var(--metric-label-size);
   line-height: 1;
 }
+.reports-scope-bar .mantine-Input-section[data-position='left'] { color: #a49caf; }
 .reports-scope-actions {
   display: flex;
   align-items: center;
