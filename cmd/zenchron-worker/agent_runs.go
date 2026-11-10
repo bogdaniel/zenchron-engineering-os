@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,13 +11,13 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 const (
-	agentRunTimeout       = 2 * time.Minute
 	maxAgentRunOutputSize = 20_000
 	maxAgentRunDiffSize   = 128 << 10
 )
@@ -27,26 +26,6 @@ type agentRuntime struct {
 	endpoint *url.URL
 	apiKey   string
 	client   *http.Client
-}
-
-type workerAgentProfile struct {
-	Provider     string   `json:"provider"`
-	Model        string   `json:"model"`
-	SystemPrompt string   `json:"system_prompt"`
-	GoalPrompt   string   `json:"goal_prompt"`
-	Tools        []string `json:"tools"`
-}
-
-type agentRunCommand struct {
-	ID                 string             `json:"id"`
-	ProjectID          string             `json:"project_id"`
-	Branch             string             `json:"branch"`
-	BaseBranch         string             `json:"base_branch"`
-	CommitSHA          string             `json:"commit_sha,omitempty"`
-	Prompt             string             `json:"prompt"`
-	Profile            workerAgentProfile `json:"profile"`
-	Attempts           int                `json:"attempts"`
-	PublishPullRequest bool               `json:"publish_pull_request,omitempty"`
 }
 
 func loadAgentRuntime() (*agentRuntime, error) {
@@ -69,90 +48,6 @@ func loadAgentRuntime() (*agentRuntime, error) {
 
 func isLoopbackModelHost(host string) bool {
 	return strings.EqualFold(host, "localhost") || (net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback())
-}
-
-func processAgentRunCommand(
-	ctx context.Context, client *http.Client, baseURL *url.URL, workerID string,
-	projects []discoveredProject, runtime *agentRuntime,
-) error {
-	if runtime == nil {
-		return nil
-	}
-	command, found, err := claimAgentRun(ctx, client, baseURL, workerID)
-	if err != nil || !found {
-		return err
-	}
-	var project *discoveredProject
-	for i := range projects {
-		if projects[i].ID == command.ProjectID {
-			project = &projects[i]
-			break
-		}
-	}
-	if project == nil {
-		return finishAgentRun(ctx, client, baseURL, workerID, command, "failed", "Project checkout is unavailable.", "", false, false)
-	}
-	runCtx, cancel := context.WithTimeout(ctx, agentRunTimeout)
-	defer cancel()
-	cancelled, stopWatching := watchAgentRunCancellation(runCtx, client, baseURL, workerID, command.ID, cancel)
-	defer stopWatching()
-	root, err := worktreeRoot()
-	if err != nil {
-		return finishAgentRun(ctx, client, baseURL, workerID, command, "failed", "Could not prepare an isolated branch.", "", false, false)
-	}
-	worktree := filepath.Join(root, project.ID, command.ID)
-	if err := prepareWorktree(runCtx, root, *project, worktreeCommand{
-		ID: command.ID, ProjectID: command.ProjectID, Branch: command.Branch, BaseBranch: command.BaseBranch,
-	}); err != nil {
-		select {
-		case <-cancelled:
-			return finishCancelledAgentRun(ctx, client, baseURL, workerID, command, worktree)
-		default:
-		}
-		return finishAgentRun(ctx, client, baseURL, workerID, command, "failed", "Could not prepare an isolated branch.", "", false, false)
-	}
-	output, runErr := runtime.execute(runCtx, command, worktree)
-	select {
-	case <-cancelled:
-		return finishCancelledAgentRun(ctx, client, baseURL, workerID, command, worktree)
-	default:
-	}
-	diff, truncated, diffErr := collectAgentRunDiff(runCtx, worktree, command.BaseBranch)
-	if diffErr != nil {
-		if err := finishAgentRun(ctx, client, baseURL, workerID, command, "failed", "Could not collect the isolated branch diff.", "", false, false); err != nil {
-			return err
-		}
-		return fmt.Errorf("collect agent run %s diff: %w", command.ID, diffErr)
-	}
-	if runErr != nil {
-		if err := finishAgentRun(ctx, client, baseURL, workerID, command, "failed", "Agent runtime failed; inspect worker logs.", diff, truncated, true); err != nil {
-			return err
-		}
-		return fmt.Errorf("execute agent run %s: %w", command.ID, runErr)
-	}
-	if len(output) > maxAgentRunOutputSize {
-		return finishAgentRun(ctx, client, baseURL, workerID, command, "failed", "Agent response exceeded the output limit.", diff, truncated, true)
-	}
-	if !truncated {
-		command.CommitSHA, err = commitAgentRunChanges(runCtx, worktree, command.BaseBranch, command.ID, command.Attempts)
-		if err != nil {
-			return finishAgentRun(ctx, client, baseURL, workerID, command, "failed", "Could not commit isolated branch changes.", diff, truncated, true)
-		}
-		diff, truncated, diffErr = collectAgentRunDiff(runCtx, worktree, command.BaseBranch)
-		if diffErr != nil {
-			return finishAgentRun(ctx, client, baseURL, workerID, command, "failed", "Could not capture the committed branch diff.", "", false, false)
-		}
-	}
-	branchPushed, branchPushFailed := false, false
-	if command.PublishPullRequest && command.CommitSHA != "" && !truncated {
-		if err := pushAgentBranch(runCtx, worktree, project.Remote, command.Branch); err != nil {
-			branchPushFailed = true
-		} else {
-			branchPushed = true
-		}
-	}
-	return finishAgentRunWithPublish(ctx, client, baseURL, workerID, command, "succeeded", output, diff, truncated, true,
-		branchPushed, branchPushFailed)
 }
 
 func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch string) error {
@@ -269,80 +164,27 @@ func commitAgentRunChanges(ctx context.Context, worktree, baseBranch, runID stri
 
 func claimAgentRun(
 	ctx context.Context, client *http.Client, baseURL *url.URL, workerID string,
-) (agentRunCommand, bool, error) {
+) (workerapi.AgentRunCommand, bool, error) {
 	endpoint := *baseURL
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/api/v1/workers/" + workerID + "/agent-runs/claim"
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), nil)
 	if err != nil {
-		return agentRunCommand{}, false, fmt.Errorf("create agent run claim: %w", err)
+		return workerapi.AgentRunCommand{}, false, fmt.Errorf("create agent run claim: %w", err)
 	}
 	response, err := client.Do(request)
 	if err != nil {
-		return agentRunCommand{}, false, fmt.Errorf("claim agent run: %w", err)
+		return workerapi.AgentRunCommand{}, false, fmt.Errorf("claim agent run: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusNoContent {
-		return agentRunCommand{}, false, nil
+		return workerapi.AgentRunCommand{}, false, nil
 	}
 	if response.StatusCode != http.StatusOK {
-		return agentRunCommand{}, false, fmt.Errorf("agent run claim returned HTTP %d", response.StatusCode)
+		return workerapi.AgentRunCommand{}, false, fmt.Errorf("agent run claim returned HTTP %d", response.StatusCode)
 	}
-	var command agentRunCommand
+	var command workerapi.AgentRunCommand
 	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&command); err != nil {
-		return agentRunCommand{}, false, fmt.Errorf("decode agent run claim: %w", err)
+		return workerapi.AgentRunCommand{}, false, fmt.Errorf("decode agent run claim: %w", err)
 	}
 	return command, true, nil
-}
-
-func finishAgentRun(
-	ctx context.Context, client *http.Client, baseURL *url.URL, workerID string,
-	command agentRunCommand, status, message, diff string, truncated, captured bool,
-) error {
-	return finishAgentRunWithPublish(ctx, client, baseURL, workerID, command, status, message, diff, truncated, captured, false, false)
-}
-
-func finishAgentRunWithPublish(
-	ctx context.Context, client *http.Client, baseURL *url.URL, workerID string,
-	command agentRunCommand, status, message, diff string, truncated, captured, branchPushed, branchPushFailed bool,
-) error {
-	endpoint := *baseURL
-	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/api/v1/workers/" + workerID + "/agent-runs/" + command.ID
-	result := struct {
-		Status           string  `json:"status"`
-		Output           string  `json:"output,omitempty"`
-		Error            string  `json:"error,omitempty"`
-		Attempts         int     `json:"attempts"`
-		CommitSHA        string  `json:"commit_sha,omitempty"`
-		Diff             *string `json:"diff,omitempty"`
-		Truncated        bool    `json:"diff_truncated,omitempty"`
-		BranchPushed     bool    `json:"branch_pushed,omitempty"`
-		BranchPushFailed bool    `json:"branch_push_failed,omitempty"`
-	}{Status: status, Attempts: command.Attempts, CommitSHA: command.CommitSHA, Truncated: truncated,
-		BranchPushed: branchPushed, BranchPushFailed: branchPushFailed}
-	if captured {
-		result.Diff = &diff
-	}
-	if status == "succeeded" {
-		result.Output = message
-	} else {
-		result.Error = message
-	}
-	body, err := json.Marshal(result)
-	if err != nil {
-		return fmt.Errorf("encode agent run result: %w", err)
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint.String(), bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create agent run result: %w", err)
-	}
-	request.Header.Set("Content-Type", "application/json")
-	response, err := client.Do(request)
-	if err != nil {
-		return fmt.Errorf("send agent run result: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("agent run result returned HTTP %d", response.StatusCode)
-	}
-	return nil
 }

@@ -11,6 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 const agentRunTestID = "0123456789abcdef0123456789abcdef"
@@ -84,10 +87,10 @@ func TestWorkerClaimsAgentRunCallsChatToolsAndCompletesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtime := &agentRuntime{endpoint: modelURL, apiKey: "test-key", client: model.Client()}
-	command := agentRunCommand{
+	command := workerapi.AgentRunCommand{
 		ID: agentRunTestID, ProjectID: agentRunTestID, Branch: "zenchron/agent-run/" + agentRunTestID,
 		BaseBranch: "main", Prompt: "Update the README.", Attempts: 1,
-		Profile: workerAgentProfile{Model: "review-model", SystemPrompt: "Be concise.", Tools: []string{"code.write"}},
+		Profile: workerapi.AgentProfile{Model: "review-model", SystemPrompt: "Be concise.", Tools: []string{"code.write"}},
 	}
 	type runResult struct {
 		Status    string `json:"status"`
@@ -123,12 +126,18 @@ func TestWorkerClaimsAgentRunCallsChatToolsAndCompletesIt(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/progress") {
+			_, _ = io.WriteString(w, `{"cancel_requested":false}`)
+			return
+		}
 		http.NotFound(w, r)
 	}))
 	defer api.Close()
 	controlURL, _ := url.Parse(api.URL)
-	err = processAgentRunCommand(context.Background(), api.Client(), controlURL, agentRunTestID,
-		[]discoveredProject{{ID: command.ProjectID, Path: repository}}, runtime)
+	runner := &agentRunner{client: api.Client(), baseURL: controlURL, workerID: agentRunTestID, chat: runtime,
+		limits: runLimits{wallClock: time.Minute, inactivity: time.Minute, toolActivity: time.Minute, verification: time.Minute, gitStage: time.Minute}}
+	projects := []discoveredProject{{ID: command.ProjectID, Path: repository}}
+	err = runner.process(context.Background(), projects)
 	if err != nil {
 		t.Fatalf("process agent run: %v", err)
 	}
@@ -140,8 +149,7 @@ func TestWorkerClaimsAgentRunCallsChatToolsAndCompletesIt(t *testing.T) {
 		!strings.Contains(results[0].Diff, "Created in isolated branch.") {
 		t.Fatalf("first run result = %#v, model calls = %d", results, modelCalls)
 	}
-	if err := processAgentRunCommand(context.Background(), api.Client(), controlURL, agentRunTestID,
-		[]discoveredProject{{ID: command.ProjectID, Path: repository}}, runtime); err != nil {
+	if err := runner.process(context.Background(), projects); err != nil {
 		t.Fatalf("process review follow-up: %v", err)
 	}
 	if len(results) != 2 || results[1].Status != "succeeded" || results[1].Output != "Review feedback addressed." ||

@@ -12,9 +12,12 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 func main() {
@@ -50,10 +53,6 @@ func run() error {
 	if name == "" || len(name) > 128 {
 		return fmt.Errorf("worker name must be between 1 and 128 bytes")
 	}
-	llm, err := loadAgentRuntime()
-	if err != nil {
-		return err
-	}
 	identity, err := os.UserConfigDir()
 	if err != nil {
 		return fmt.Errorf("get user config directory: %w", err)
@@ -63,20 +62,43 @@ func run() error {
 	if projectsRoot == "" {
 		projectsRoot = "."
 	}
+	config, err := loadWorkerConfig()
+	if err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	client := newWorkerHTTPClient(workerToken)
+	if len(os.Args) > 1 {
+		if os.Args[1] != "cleanup-worktrees" || len(os.Args) > 2 {
+			return fmt.Errorf("unknown command; the only command is cleanup-worktrees")
+		}
+		return runWorktreeCleanup(ctx, projectsRoot, workerID, config)
+	}
+	runner := &agentRunner{client: newWorkerHTTPClient(workerToken), baseURL: baseURL, workerID: workerID,
+		token: workerToken, providers: newCLIProviders(), config: config}
+	if runner.chat, err = loadAgentRuntime(); err != nil {
+		return err
+	}
+	if runner.limits, err = loadRunLimits(); err != nil {
+		return err
+	}
+	// ponytail: providers are detected once at startup; restart the worker after installing or signing in to a CLI.
+	for _, provider := range runner.providers {
+		provider.detect(ctx)
+	}
+	runtimeEnabled := runner.chat != nil
 	ticker := time.NewTicker(workerHeartbeatInterval)
 	defer ticker.Stop()
 	for {
-		projects, err := discoverProjects(projectsRoot, workerID)
+		projects, err := discoverServedProjects(projectsRoot, workerID, config)
 		if err != nil {
 			log.Printf("project discovery failed: %v", err)
 		} else {
-			runtimeEnabled := llm != nil
-			if err := sendHeartbeat(ctx, client, baseURL, workerID, name, projects, runtimeEnabled); err != nil {
+			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects),
+				AgentRuntimeEnabled: &runtimeEnabled, Providers: runner.providerStatuses()}
+			if err := sendHeartbeat(ctx, runner.client, baseURL, workerID, heartbeat); err != nil {
 				log.Printf("worker heartbeat failed: %v", err)
-			} else if err := processWorkerCommands(ctx, client, baseURL, workerID, name, projects, llm); err != nil {
+			} else if err := processWorkerCommands(ctx, runner, heartbeat, projects); err != nil {
 				log.Printf("worker command failed: %v", err)
 			}
 		}
@@ -86,6 +108,40 @@ func run() error {
 		case <-ticker.C:
 		}
 	}
+}
+
+// discoverServedProjects returns the checkouts this worker may advertise and execute work for.
+func discoverServedProjects(root, workerID string, config *workerConfig) ([]discoveredProject, error) {
+	projects, err := discoverProjects(root, workerID)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(projects, func(project discoveredProject) bool { return !config.serves(project.Remote) }), nil
+}
+
+func wireProjects(projects []discoveredProject) []workerapi.Project {
+	wire := make([]workerapi.Project, 0, len(projects))
+	for _, project := range projects {
+		wire = append(wire, workerapi.Project{ID: project.ID, Name: project.Name, Branch: project.Branch, Remote: project.Remote})
+	}
+	return wire
+}
+
+func runWorktreeCleanup(ctx context.Context, projectsRoot, workerID string, config *workerConfig) error {
+	projects, err := discoverServedProjects(projectsRoot, workerID, config)
+	if err != nil {
+		return err
+	}
+	root, err := worktreeRoot()
+	if err != nil {
+		return err
+	}
+	removed, kept, err := cleanupWorktrees(ctx, root, projects)
+	fmt.Printf("removed %d worktree(s); kept %d active or modified worktree(s)\n", len(removed), len(kept))
+	for _, label := range kept {
+		fmt.Println("kept " + label)
+	}
+	return err
 }
 
 func isLoopbackWorkerHost(host string) bool {
@@ -110,16 +166,11 @@ func newWorkerHTTPClient(token string) *http.Client {
 }
 
 func sendHeartbeat(
-	ctx context.Context, client *http.Client, baseURL *url.URL, id, name string, projects []discoveredProject,
-	runtimeEnabled bool,
+	ctx context.Context, client *http.Client, baseURL *url.URL, id string, heartbeat workerapi.Heartbeat,
 ) error {
 	endpoint := *baseURL
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/api/v1/workers/" + id + "/heartbeat"
-	body, err := json.Marshal(struct {
-		Name                string              `json:"name"`
-		Projects            []discoveredProject `json:"projects"`
-		AgentRuntimeEnabled bool                `json:"agent_runtime_enabled"`
-	}{Name: name, Projects: projects, AgentRuntimeEnabled: runtimeEnabled})
+	body, err := json.Marshal(heartbeat)
 	if err != nil {
 		return fmt.Errorf("encode heartbeat: %w", err)
 	}

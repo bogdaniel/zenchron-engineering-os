@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
@@ -45,8 +47,10 @@ func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	runtimeEnabled := true
 	if err := sendHeartbeat(context.Background(), server.Client(), baseURL,
-		"0123456789abcdef0123456789abcdef", "dev-machine", []discoveredProject{project}, true); err != nil {
+		"0123456789abcdef0123456789abcdef", workerapi.Heartbeat{Name: "dev-machine",
+			Projects: wireProjects([]discoveredProject{project}), AgentRuntimeEnabled: &runtimeEnabled}); err != nil {
 		t.Fatalf("sendHeartbeat: %v", err)
 	}
 }
