@@ -23,9 +23,10 @@ import { summarizeProductDelivery } from './reportSummaryMetrics';
 import type { ProductDeliverySummary } from './ReportSummaries';
 import { ProductSummaryPanel, WorkspaceSummaryPanel } from './ReportSummaries';
 import { DownloadableReports } from './DownloadableReports';
-import { reportPreviewCIDistribution, reportPreviewDownloads, reportPreviewInsights, reportPreviewLatency, reportPreviewOutcomes,
+import { reportPreviewCIDistribution, reportPreviewDownloads, reportPreviewInsights, reportPreviewOutcomes,
   reportPreviewProducts, reportPreviewRepositories, reportPreviewRepositoryProducts, reportPreviewSpend,
-  reportPreviewTrend, reportPreviewWorkflowProducts, reportPreviewWorkflows, reportPreviewWorkspaces } from './reports-preview';
+  reportPreviewLatencyPercentiles, reportPreviewTrend, reportPreviewWorkflowProducts, reportPreviewWorkflows,
+  reportPreviewWorkspaces } from './reports-preview';
 import './reports.css';
 import './reports-preview.css';
 
@@ -91,6 +92,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
   const [scope, setScope] = useState(defaultScope);
   const [appliedScope, setAppliedScope] = useState(defaultScope);
   const [insightView, setInsightView] = useState('executive');
+  const [latencyPercentile, setLatencyPercentile] = useState<keyof typeof reportPreviewLatencyPercentiles>('P50');
   const updateScope = (key: keyof ReportScope, value: string | null) => {
     setScope((current) => ({ ...current, [key]: value ?? 'all' }));
   };
@@ -471,14 +473,19 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
               </div>}
         </PanelCard>
         {designPreview ? <PanelCard className="reports-panel review-latency-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconMessageCircle size={15} />} title="Review Latency Trend" />
+          <PanelHeading className="reports-panel-heading" icon={<IconMessageCircle size={15} />} title="Review Latency Trend"
+            actions={<div className="reports-percentiles" role="group" aria-label="Illustrative review latency percentile">
+              {(Object.keys(reportPreviewLatencyPercentiles) as (keyof typeof reportPreviewLatencyPercentiles)[]).map((percentile) =>
+                <button key={percentile} type="button" aria-pressed={latencyPercentile === percentile}
+                  onClick={() => setLatencyPercentile(percentile)}>{percentile}</button>)}
+            </div>} />
           <ChartLegend items={[{ tone: 'violet', label: 'Review latency' }]} />
           <LineChart className="reports-latency-chart" h={76} textColor="#9691a8"
-            data={reportPreviewTrend.map((item, index) => ({ date: item.date, latency: reportPreviewLatency[index] }))}
-            dataKey="date" series={[{ name: 'latency', label: 'Review latency (h)', color: 'violet.5' }]}
+            data={reportPreviewTrend.map((item, index) => ({ date: item.date, latency: reportPreviewLatencyPercentiles[latencyPercentile][index] }))}
+            dataKey="date" series={[{ name: 'latency', label: `Review latency ${latencyPercentile} (h)`, color: 'violet.5' }]}
             yAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, width: 28 }}
             xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 'preserveStartEnd' }}
-            gridAxis="xy" withDots={false} withTooltip aria-label="Mock review latency trend" />
+            gridAxis="xy" withDots={false} withTooltip aria-label={`Illustrative ${latencyPercentile} review latency trend`} />
         </PanelCard> : <UnavailableMetricsPanel className="review-latency-panel" title="Review Latency Trend"
           icon={<IconMessageCircle size={15} />} detail="Requires provider review events." />}
         {designPreview ? <PanelCard className="reports-panel agent-spend-panel" withBorder>

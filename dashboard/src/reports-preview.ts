@@ -14,6 +14,11 @@ export const reportPreviewTrend = [
 ];
 
 export const reportPreviewLatency = [11.5, 9.1, 7.7, 6.4, 5.9, 5.3, 5.1, 4.9, 4.8, 4.7];
+export const reportPreviewLatencyPercentiles = {
+  P50: reportPreviewLatency,
+  P75: [15.2, 12.1, 10.2, 8.5, 7.8, 7.1, 6.8, 6.6, 6.5, 6.4],
+  P95: [23.4, 18.6, 15.8, 13.2, 12.0, 10.9, 10.5, 10.1, 9.9, 9.7],
+} as const;
 
 export const reportPreviewCIDistribution = [
   { duration: '<2', runs: 390 }, { duration: '2–4', runs: 920 }, { duration: '4–6', runs: 1760 },

@@ -110,7 +110,7 @@
 .reports-panel-heading > div > svg { color: #bd8aff; }
 .reports-panel-heading p { line-height: 1.2; }
 .reports-percentiles { display: flex; flex: 0 0 auto; gap: 4px; }
-.reports-percentiles span {
+.reports-percentiles span, .reports-percentiles button {
   padding: 2px 5px;
   border: 1px solid #38324c;
   border-radius: 5px;
@@ -119,6 +119,9 @@
   font-size: 9px;
   line-height: 1.2;
 }
+.reports-percentiles button { cursor: pointer; }
+.reports-percentiles button[aria-pressed="true"] { color: #fff; border-color: #9d62ed; background: #56308a; }
+.reports-percentiles button:focus-visible { outline: 2px solid #c491ff; outline-offset: 2px; }
 .acceptance-panel .reports-panel-heading h3 { font-size: 14px; letter-spacing: -.5px; white-space: nowrap; }
 .reports-insight-filter.mantine-Select-root { width: 122px; flex: 0 0 auto; }
 .reports-insight-filter .mantine-Select-input { min-height: 24px; height: 24px; border-color: #38324c; background: #1b1928; font-size: 8px; }

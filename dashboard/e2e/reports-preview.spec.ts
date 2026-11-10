@@ -40,6 +40,12 @@ test('local Reports mock renders its fixture without protected reads or exports'
   const insightsFit = await page.locator('.reports-summary').evaluate((panel) => panel.scrollHeight <= panel.clientHeight);
   expect(insightsFit).toBe(true);
   await expect(page.getByRole('combobox', { name: 'Insights view' })).toHaveValue('Executive Summary');
+  const latencyPercentiles = page.getByRole('group', { name: 'Illustrative review latency percentile' });
+  await expect(latencyPercentiles.getByRole('button')).toHaveCount(3);
+  await expect(latencyPercentiles.getByRole('button', { name: 'P50' })).toHaveAttribute('aria-pressed', 'true');
+  await latencyPercentiles.getByRole('button', { name: 'P95' }).click();
+  await expect(latencyPercentiles.getByRole('button', { name: 'P95' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.reports-latency-chart')).toHaveAttribute('aria-label', 'Illustrative P95 review latency trend');
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
   const downloadsFit = await page.locator('.downloadable-reports-panel').evaluate((panel) => {
     const panelBottom = panel.getBoundingClientRect().bottom;
