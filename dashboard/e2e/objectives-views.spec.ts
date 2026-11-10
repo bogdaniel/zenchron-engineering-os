@@ -72,11 +72,22 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await expect(page.locator('.objective-detail-panel')).toContainText('Launch AI code review v2');
   await expect(page.locator('.objective-preview-blocker')).toContainText('Model training run (PR #1462)');
   await expect(page.locator('.objective-milestones-list > div')).toHaveCount(4);
-  const lowerPanelHeights = await page.evaluate(() => ({
-    chart: document.querySelector('.objective-capacity')!.getBoundingClientRect().height,
-    milestones: document.querySelector('.objective-milestones-card')!.getBoundingClientRect().height,
-  }));
-  expect(Math.abs(lowerPanelHeights.chart - lowerPanelHeights.milestones)).toBeLessThanOrEqual(1);
+  const detailComposition = await page.evaluate(() => {
+    const detail = document.querySelector('.objective-detail-panel')!;
+    const detailBounds = detail.getBoundingClientRect();
+    const layoutBounds = document.querySelector('.objective-content-grid')!.getBoundingClientRect();
+    const milestones = document.querySelector('.objective-milestones-card')!;
+    return {
+      nested: detail.contains(milestones),
+      detailHeight: detailBounds.height,
+      layoutHeight: layoutBounds.height,
+      milestonesBottom: milestones.getBoundingClientRect().bottom,
+      detailBottom: detailBounds.bottom,
+    };
+  });
+  expect(detailComposition.nested).toBe(true);
+  expect(Math.abs(detailComposition.detailHeight - detailComposition.layoutHeight)).toBeLessThanOrEqual(1);
+  expect(detailComposition.milestonesBottom).toBeLessThanOrEqual(detailComposition.detailBottom - 8);
   await page.getByRole('tab', { name: 'Milestones', exact: true }).click();
   await expect(page.locator('.objective-detail-milestones > div')).toHaveCount(4);
   await page.getByRole('tab', { name: 'Related PRs' }).click();

@@ -441,6 +441,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
         <div className="objective-detail-stack">
         <PanelCard className="objective-detail-panel" withBorder>
           {selected ? (
+            <div className="objective-detail-content">
             <>
               <PanelHeading className="objective-detail-head entity-detail-heading" title={selected.title}
                 description={<small>{selected.id.startsWith('OBJ-') ? selected.id : selected.id.slice(0, 8).toUpperCase()}</small>}
@@ -513,11 +514,11 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                 <p>This information is not included in the available objective data.</p>
               </section>}
             </>
+            </div>
           ) : (
             <div className="objective-detail-empty"><span className="detail-objective-icon"><IconTarget size={19} /></span><h3>Objective details</h3><p>Select an objective to see its plan and progress, or create the first objective for this workspace.</p><Button className="new-objective-button" onClick={() => setCreateOpen(true)}>Create objective</Button></div>
           )}
-        </PanelCard>
-        {sampleData && <PanelCard className="objective-milestones-card" withBorder>
+          {sampleData && <PanelCard className="objective-milestones-card" withBorder>
           <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon">⚑</span>} title="Milestone Progress"
             actions={<span>3 of 4 complete (75%)</span>} />
           <div className="objective-milestones-list">{objectivePreviewDetails.milestones.map((item) => <div key={item.title}>
@@ -525,7 +526,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
             <Progress value={item.progress} color={item.progress === 100 ? 'teal' : 'violet'} />
             <Badge className={`objective-milestone-status ${item.status.toLowerCase().replace(' ', '-')}`}>{item.status}</Badge><time>{item.date}</time>
           </div>)}</div>
-        </PanelCard>}
+          </PanelCard>}
+        </PanelCard>
         </div>
       </div>
 

@@ -123,8 +123,9 @@
 .objective-preview-overview .objective-preview-blocker p::before { margin-right: 5px; color: #f2bb62; content: '▲'; }
 .objective-preview-overview li span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .objective-preview-overview li em { flex: 0 0 auto; color: #c5a4f5; font-size: 10px; font-style: normal; }
-.objective-preview-layout .objective-detail-stack { grid-template-rows: minmax(0, 1fr) 167px; }
-.objective-milestones-card { min-height: 0; padding: 10px 12px; overflow: hidden; }
+.objective-preview-layout .objective-detail-stack { grid-template-rows: minmax(0, 1fr); }
+.objective-preview-layout .objective-detail-content { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
+.objective-preview-layout .objective-milestones-card { min-height: 0; flex: 0 0 142px; margin-top: 8px; padding: 8px 12px; overflow: hidden; }
 .objective-milestones-card .panel-heading { min-height: 25px; }
 .objective-milestones-card .panel-heading > div:last-child { color: #c5bfd2; font-size: 9px; }
 .objective-milestones-list { display: grid; gap: 4px; margin-top: 4px; }
