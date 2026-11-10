@@ -154,6 +154,13 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
       await runWorkflow.click();
       await expect(page.locator('.workflow-section-concept')).toHaveText('Run Workflow previewed · no workflow changes were saved');
     }
+    if (section === 'Schedules') {
+      const scheduleList = await page.locator('.workflow-schedule-list').boundingBox();
+      const scheduleCalendar = await page.locator('.workflow-schedule-calendar').boundingBox();
+      const firstSchedule = await page.locator('.workflow-schedule-row').first().boundingBox();
+      expect(scheduleList!.width / scheduleCalendar!.width).toBeCloseTo(0.47, 1);
+      expect(firstSchedule!.height).toBeGreaterThanOrEqual(88);
+    }
     if (section === 'Permissions') await expect(page.locator('.workflow-collaborator')).toHaveCount(4);
   }
   await page.setViewportSize({ width: 390, height: 844 });

@@ -81,7 +81,7 @@
 .workflow-change-row small { color: #9891a5; font-size: 9px; }
 .workflow-section-actions { display: flex; justify-content: flex-end; gap: 8px; margin: 8px 12px 0; }
 .workflow-section-actions .mantine-Button-root { min-height: 32px; font-size: 9px; }
-.workflow-schedule-columns { display: grid; grid-template-columns: minmax(300px, .32fr) minmax(0, 1fr); gap: 12px; }
+.workflow-schedule-columns { display: grid; grid-template-columns: minmax(300px, .48fr) minmax(0, 1fr); gap: 12px; }
 .workflow-schedule-list { display: flex; flex-direction: column; }
 .workflow-schedule-row { display: flex; align-items: flex-start; gap: 10px; margin: 6px 10px 0; padding: 11px; border: 1px solid #39334a; border-radius: 9px; background: #1c1928; }
 .workflow-schedule-row.selected { border-color: #8951c2; background: #382348; }
@@ -142,6 +142,7 @@
 @media (min-width: 1051px) {
   .workflow-run-columns { height: 404px; }
   .workflow-version-columns, .workflow-schedule-columns { min-height: 518px; }
+  .workflow-schedule-row { margin-top: 10px; padding-block: 17px; }
   .workflow-calendar-day { min-height: 144px; }
   .workflow-collaborator { min-height: 39px; }
   .workflow-settings-left .workflow-section-card:first-child { min-height: 220px; }
