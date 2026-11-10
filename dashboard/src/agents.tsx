@@ -177,7 +177,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
   );
   if (agentSort !== 'default') visibleItems.sort((a, b) =>
     agentSort === 'ascending' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
-  const selected = visibleItems.find((item) => item.id === selectedID) ?? visibleItems[0] ?? items[0];
+  const selected = visibleItems.find((item) => item.id === selectedID) ?? visibleItems[0];
   const createForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateInput });
   const editForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateInput });
   const runForm = useForm<{ prompt: string }>({ initialValues: { prompt: '' }, validate: (values) => {

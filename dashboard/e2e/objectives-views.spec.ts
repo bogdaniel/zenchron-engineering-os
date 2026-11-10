@@ -72,6 +72,22 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await expect(page.locator('.objective-detail-panel')).toContainText('Launch AI code review v2');
   await expect(page.locator('.objective-preview-blocker')).toContainText('Model training run (PR #1462)');
   await expect(page.locator('.objective-milestones-list > div')).toHaveCount(4);
+  await page.locator('.ag-row').filter({ hasText: 'Improve review velocity' }).click();
+  await expect(page.locator('.objective-detail-panel')).toContainText('Improve review velocity');
+  await page.getByRole('button', { name: 'Favorite objective' }).click();
+  await expect(page.getByRole('button', { name: 'Remove objective favorite' })).toHaveAttribute('aria-pressed', 'true');
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.getByRole('button', { name: 'Copy objective link' }).click();
+  const objectiveLink = await page.evaluate(() => navigator.clipboard.readText());
+  expect(objectiveLink).toContain('?objective=OBJ-1492#objectives');
+  const sharedObjective = await page.context().newPage();
+  await sharedObjective.goto(objectiveLink);
+  await expect(sharedObjective.locator('.objective-detail-panel')).toContainText('Improve review velocity');
+  await sharedObjective.close();
+  await page.getByRole('button', { name: 'More objective actions' }).click();
+  await page.getByRole('menuitem', { name: 'View activity' }).click();
+  await expect(page.locator('.objective-detail-activity > div')).toHaveCount(4);
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   const detailComposition = await page.evaluate(() => {
     const detail = document.querySelector('.objective-detail-panel')!;
     const detailBounds = detail.getBoundingClientRect();

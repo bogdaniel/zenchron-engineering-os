@@ -5,9 +5,9 @@ import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { AreaChart, Sparkline } from '@mantine/charts';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Badge, Button, Modal, NumberInput, Progress, Select, Text, Textarea, TextInput } from '@mantine/core';
+import { Badge, Button, Menu, Modal, NumberInput, Progress, Select, Text, Textarea, TextInput } from '@mantine/core';
 import { IconActivity, IconAlertTriangle, IconCalendar, IconChecklist, IconCircleCheck, IconCube,
-  IconFileText, IconGitPullRequest, IconHierarchy, IconListCheck, IconPlus, IconShieldCheck, IconTarget,
+  IconDots, IconFileText, IconGitPullRequest, IconHierarchy, IconLink, IconListCheck, IconPlus, IconShieldCheck, IconStar, IconTarget,
   IconTargetArrow, IconUser } from '@tabler/icons-react';
 import { z } from 'zod';
 import { loadProducts } from './productEditor';
@@ -132,7 +132,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [detailTab, setDetailTab] = useState<'overview' | 'milestones' | 'pull-requests' | 'activity'>('overview');
-  const [selectedID, setSelectedID] = useState<string | null>(null);
+  const [selectedID, setSelectedID] = useState<string | null>(() => new URLSearchParams(window.location.search).get('objective'));
+  const [favoriteID, setFavoriteID] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState('');
   const [progressValue, setProgressValue] = useState<number>(0);
   const [statusValue, setStatusValue] = useState<Objective['status']>('in_progress');
   const [productIDValue, setProductIDValue] = useState('');
@@ -447,11 +449,27 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                 description={<small>{selected.id.startsWith('OBJ-') ? selected.id : selected.id.slice(0, 8).toUpperCase()}</small>}
                 icon={<span className="detail-objective-icon"><IconTarget size={19} /></span>}
                 actions={sampleData ? <div className="objective-preview-actions">
-                  <button aria-label="Favorite objective" disabled>☆</button><button aria-label="Copy objective link" disabled>↗</button><button aria-label="More objective actions" disabled>⋯</button>
+                  <button type="button" aria-label={favoriteID === selected.id ? 'Remove objective favorite' : 'Favorite objective'}
+                    aria-pressed={favoriteID === selected.id} onClick={() => setFavoriteID(favoriteID === selected.id ? null : selected.id)}><IconStar size={15} /></button>
+                  <button type="button" aria-label="Copy objective link" onClick={async () => {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('objective', selected.id);
+                    url.hash = 'objectives';
+                    try { await navigator.clipboard.writeText(url.toString()); setActionNotice('Objective link copied'); }
+                    catch { setActionNotice('Could not copy objective link'); }
+                  }}><IconLink size={15} /></button>
+                  <Menu position="bottom-end" withinPortal>
+                    <Menu.Target><button type="button" aria-label="More objective actions"><IconDots size={16} /></button></Menu.Target>
+                    <Menu.Dropdown>
+                      <Menu.Item onClick={() => setDetailTab('pull-requests')}>View related PRs</Menu.Item>
+                      <Menu.Item onClick={() => setDetailTab('activity')}>View activity</Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
                 </div> : <Button className="edit-objective-button" onClick={() => {
                   if (editing) cancelEdit();
                   else { setDetailTab('overview'); setEditing(true); }
                 }}>{editing ? 'Cancel edit' : 'Edit objective'}</Button>} />
+              {sampleData && actionNotice && <Text className="objective-action-notice" role="status">{actionNotice}</Text>}
               <div className="detail-summary">{statusBadge(statusValue)}<span>{progressValue}% complete</span><Progress value={progressValue} size="sm" /></div>
               <div className="detail-meta-grid">{sampleData ? <>
                 <div><small>Owner</small><b><IconUser size={13} aria-hidden="true" />{selected.owner}</b></div>

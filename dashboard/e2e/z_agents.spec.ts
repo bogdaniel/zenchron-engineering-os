@@ -249,6 +249,9 @@ test('Agents local preview filters and sorts profiles without API writes', async
   await page.getByRole('button', { name: 'Sort agents' }).click();
   await page.getByRole('menuitem', { name: 'Name Z–A' }).click();
   await expect(rows.first()).toContainText('Test Generator');
+  await page.getByRole('textbox', { name: 'Search agents' }).fill('no matching agent');
+  await expect(rows).toHaveCount(0);
+  await expect(page.locator('.agents-detail-empty')).toBeVisible();
   await page.getByRole('textbox', { name: 'Search agents' }).fill('planner');
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText('Planner');

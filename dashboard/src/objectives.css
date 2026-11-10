@@ -106,7 +106,9 @@
 .objective-preview-layout .objective-detail-tabs { margin: 4px 0; }
 .objective-preview-layout .objective-detail-tabs button { padding-top: 5px; padding-bottom: 5px; }
 .objective-preview-actions { display: flex; align-items: center; gap: 7px; }
-.objective-preview-actions button { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #302b45; border-radius: 9px; color: #c9c2d8; background: #1a1927; font-size: 17px; }
+.objective-preview-actions button { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #302b45; border-radius: 9px; color: #c9c2d8; background: #1a1927; font-size: 17px; cursor: pointer; }
+.objective-preview-actions button[aria-pressed="true"] { color: #f5c451; border-color: #8a6b31; }
+.objective-action-notice { position: absolute; z-index: 1; margin-top: 34px; color: #a9a1bb; font-size: 11px; }
 .objective-preview-overview { min-height: 0; flex: 1; grid-template-rows: minmax(0, .85fr) repeat(2, minmax(0, 1fr)); }
 .objective-preview-overview .objective-overview-card { min-height: 0; padding: 4px; overflow: hidden; }
 .objective-preview-overview .objective-overview-card p { margin-top: 5px; }
