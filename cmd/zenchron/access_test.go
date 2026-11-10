@@ -276,11 +276,6 @@ func TestRevokingAGrantTakesEffectWithoutRestartAndInvalidPolicyDeniesAll(t *tes
 		if err := os.WriteFile(harness.path, []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		// Make the change visible on filesystems with coarse modification times.
-		future := time.Now().Add(time.Duration(len(content)) * time.Second)
-		if err := os.Chtimes(harness.path, future, future); err != nil {
-			t.Fatal(err)
-		}
 	}
 	rewrite(accessFileContent(strings.Replace(enrolledWorkers(), tokenHash(aliceToken), tokenHash("rotated-token-0123456789abcdef0123"), 1)))
 	if status := harness.heartbeat(aliceWorkerID, aliceToken, ""); status != http.StatusUnauthorized {

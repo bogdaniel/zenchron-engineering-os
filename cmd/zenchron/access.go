@@ -9,8 +9,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"sync"
-	"time"
 )
 
 // accessFile is the operator-maintained record of who may do what. It is the single authority for
@@ -29,16 +27,11 @@ type workerGrant struct {
 	Repositories []string `json:"repositories"`
 }
 
-// accessPolicy reloads the access file when it changes, so removing a grant revokes it without a
+// accessPolicy reads the access file on every request, so removing a grant revokes it without a
 // restart. An unreadable or invalid file denies everything until it is fixed.
-// ponytail: one stat per request; replace with a database table when grants are edited through an API.
+// ponytail: one small file read per request; replace with a database table when grants are edited through an API.
 type accessPolicy struct {
 	path string
-
-	mu       sync.Mutex
-	modTime  time.Time
-	size     int64
-	snapshot *accessFile
 }
 
 func loadAccessPolicy() (*accessPolicy, error) {
@@ -54,26 +47,18 @@ func loadAccessPolicy() (*accessPolicy, error) {
 }
 
 func (policy *accessPolicy) current() (*accessFile, error) {
-	policy.mu.Lock()
-	defer policy.mu.Unlock()
-	info, err := os.Stat(policy.path)
-	if err != nil {
-		policy.snapshot = nil
-		return nil, fmt.Errorf("inspect ZENCHRON_ACCESS_FILE: %w", err)
-	}
-	if policy.snapshot != nil && info.ModTime().Equal(policy.modTime) && info.Size() == policy.size {
-		return policy.snapshot, nil
-	}
 	var file accessFile
-	policy.snapshot = nil
-	if exists, err := loadStateFile(policy.path, &file); err != nil || !exists {
-		return nil, fmt.Errorf("load ZENCHRON_ACCESS_FILE: %v", err)
+	exists, err := loadStateFile(policy.path, &file)
+	if err != nil {
+		return nil, fmt.Errorf("load ZENCHRON_ACCESS_FILE: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("ZENCHRON_ACCESS_FILE does not exist")
 	}
 	if err := file.normalize(); err != nil {
 		return nil, fmt.Errorf("ZENCHRON_ACCESS_FILE: %w", err)
 	}
-	policy.snapshot, policy.modTime, policy.size = &file, info.ModTime(), info.Size()
-	return policy.snapshot, nil
+	return &file, nil
 }
 
 func (file *accessFile) normalize() error {

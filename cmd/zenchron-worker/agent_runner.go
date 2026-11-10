@@ -70,17 +70,17 @@ func (runner *agentRunner) providerStatuses() []workerapi.ProviderStatus {
 }
 
 func (runner *agentRunner) canExecute() bool {
-	return runner.chat != nil || slices.ContainsFunc(runner.providerStatuses(), func(status workerapi.ProviderStatus) bool {
-		return status.Ready
-	})
+	for _, provider := range runner.providers {
+		if provider.ready {
+			return true
+		}
+	}
+	return runner.chat != nil
 }
 
 func (runner *agentRunner) executorFor(provider string) runExecutor {
-	if cli := runner.providers[provider]; cli != nil {
-		if cli.ready {
-			return cli
-		}
-		return nil
+	if cli := runner.providers[provider]; cli != nil && cli.ready {
+		return cli
 	}
 	if runner.chat == nil || workerapi.IsCLIProvider(provider) {
 		return nil
@@ -106,7 +106,13 @@ func (runner *agentRunner) process(ctx context.Context, projects []discoveredPro
 }
 
 func failedRun(reason, message string) workerapi.AgentRunResult {
-	return workerapi.AgentRunResult{Status: "failed", Error: message, TerminationReason: reason}
+	return failed(workerapi.AgentRunResult{}, reason, message)
+}
+
+// failed marks a result as failed while keeping the evidence already collected in it.
+func failed(result workerapi.AgentRunResult, reason, message string) workerapi.AgentRunResult {
+	result.Status, result.Error, result.TerminationReason = "failed", message, reason
+	return result
 }
 
 // run executes one claimed attempt. It reports false when the attempt must not be finished by this
@@ -154,10 +160,6 @@ func (runner *agentRunner) attempt(
 	executor runExecutor, reporter *progressReporter,
 ) workerapi.AgentRunResult {
 	result := workerapi.AgentRunResult{ProviderVersion: executor.versionLabel()}
-	fail := func(reason, message string) workerapi.AgentRunResult {
-		result.Status, result.Error, result.TerminationReason = "failed", message, reason
-		return result
-	}
 	err := prepareWorktree(ctx, root, project, worktreeCommand{
 		ID: command.ID, ProjectID: command.ProjectID, Branch: command.Branch, BaseBranch: command.BaseBranch,
 	})
@@ -165,7 +167,7 @@ func (runner *agentRunner) attempt(
 		return cancelledRun(result)
 	}
 	if err != nil {
-		return fail(workerapi.TerminationWorkerError, "Could not prepare an isolated branch.")
+		return failed(result, workerapi.TerminationWorkerError, "Could not prepare an isolated branch.")
 	}
 	unlock := lockWorktree(project.Path, worktree)
 	defer unlock()
@@ -191,12 +193,12 @@ func (runner *agentRunner) attempt(
 		return cancelledRun(result)
 	}
 	if diffErr != nil {
-		return fail(workerapi.TerminationWorkerError, "Could not collect the isolated branch diff.")
+		return failed(result, workerapi.TerminationWorkerError, "Could not collect the isolated branch diff.")
 	}
 	if runErr != nil {
 		log.Printf("agent run %s attempt %d: %v", command.ID, command.Attempts, reporter.redactor.clean(runErr.Error()))
 		reporter.emit("error", runErr.Error())
-		return fail(execution.reason, executionFailureMessage(execution.reason))
+		return failed(result, execution.reason, executionFailureMessage(execution.reason))
 	}
 	result.Output = truncateText(reporter.redactor.clean(execution.output), maxAgentRunOutputSize)
 	return runner.deliver(ctx, gitCtx, command, project, worktree, result, reporter)
@@ -208,14 +210,10 @@ func (runner *agentRunner) deliver(
 	ctx, gitCtx context.Context, command workerapi.AgentRunCommand, project discoveredProject, worktree string,
 	result workerapi.AgentRunResult, reporter *progressReporter,
 ) workerapi.AgentRunResult {
-	fail := func(reason, message string) workerapi.AgentRunResult {
-		result.Status, result.Error, result.TerminationReason = "failed", message, reason
-		return result
-	}
 	var err error
 	result.CommitSHA, err = commitAgentRunChanges(gitCtx, worktree, command.BaseBranch, command.ID, command.Attempts)
 	if err != nil {
-		return fail(workerapi.TerminationWorkerError, "Could not commit isolated branch changes.")
+		return failed(result, workerapi.TerminationWorkerError, "Could not commit isolated branch changes.")
 	}
 	if result.CommitSHA == "" {
 		reporter.emit("status", "The agent finished without changing any files.")
@@ -229,7 +227,7 @@ func (runner *agentRunner) deliver(
 		return cancelledRun(result)
 	}
 	if result.Verification == workerapi.VerificationFailed {
-		return fail(workerapi.TerminationVerification, "Verification failed; the changes are committed on the isolated branch.")
+		return failed(result, workerapi.TerminationVerification, "Verification failed; the changes are committed on the isolated branch.")
 	}
 	if command.PublishPullRequest {
 		if err := pushAgentBranch(gitCtx, worktree, project.Remote, command.Branch); err != nil {

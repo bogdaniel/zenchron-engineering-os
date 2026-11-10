@@ -120,9 +120,7 @@ func (provider *cliProvider) execute(
 	process.Dir = worktree
 	process.Env = providerEnvironment(os.Environ())
 	process.Stdin = strings.NewReader(cliPrompt(command))
-	process.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	process.Cancel = func() error { return syscall.Kill(-process.Process.Pid, syscall.SIGTERM) }
-	process.WaitDelay = cliTerminationGrace
+	ownProcessGroup(process)
 	session := &cliSession{parse: provider.parse, emit: emit, lastActivity: time.Now(), openTools: map[string]bool{}}
 	stderr := &tailBuffer{limit: 2048}
 	process.Stdout, process.Stderr = &lineWriter{handle: session.handle}, stderr
@@ -136,6 +134,14 @@ func (provider *cliProvider) execute(
 	// Sweep anything the provider left behind in its process group.
 	_ = syscall.Kill(-process.Process.Pid, syscall.SIGKILL)
 	return session.result(ctx, waitErr, stderr.String())
+}
+
+// ownProcessGroup makes cancellation stop a command together with everything it started: the group gets
+// SIGTERM, then the command is killed after a grace period.
+func ownProcessGroup(command *exec.Cmd) {
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	command.Cancel = func() error { return syscall.Kill(-command.Process.Pid, syscall.SIGTERM) }
+	command.WaitDelay = cliTerminationGrace
 }
 
 // cliSession tracks one provider process: its normalized result and how recently it showed activity.

@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
@@ -127,9 +126,7 @@ func runVerification(
 		command := exec.CommandContext(verifyCtx, arguments[0], arguments[1:]...)
 		command.Dir, command.Env = worktree, providerEnvironment(os.Environ())
 		command.Stdout, command.Stderr = output, output
-		command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-		command.Cancel = func() error { return syscall.Kill(-command.Process.Pid, syscall.SIGTERM) }
-		command.WaitDelay = cliTerminationGrace
+		ownProcessGroup(command)
 		err := command.Run()
 		if errors.Is(verifyCtx.Err(), context.DeadlineExceeded) {
 			emit("verification", fmt.Sprintf("timed out after %s: %s", timeout, label))

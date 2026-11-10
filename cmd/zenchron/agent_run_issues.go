@@ -39,20 +39,21 @@ func (store *agentRunStore) attachIssue(ctx context.Context, item *agentRun, num
 		}
 	}
 	item.IssueNumber, item.IssueURL = issue.Number, issue.HTMLURL
-	item.IssueTitle = strings.ToValidUTF8(truncateBytes(strings.TrimSpace(issue.Title), 300), "")
-	item.IssueContext = strings.ToValidUTF8(truncateBytes(issueContext.String(), maxIssueContextSize), "")
+	item.IssueTitle = truncateUTF8(strings.TrimSpace(issue.Title), 300)
+	item.IssueContext = truncateUTF8(issueContext.String(), maxIssueContextSize)
 	if item.Prompt == "" {
 		item.Prompt = fmt.Sprintf("Resolve GitHub issue #%d: %s", issue.Number, item.IssueTitle)
-		item.Prompt = strings.ToValidUTF8(truncateBytes(item.Prompt, 5000), "")
+		item.Prompt = truncateUTF8(item.Prompt, 5000)
 	}
 	return 0, ""
 }
 
-func truncateBytes(value string, limit int) string {
+// truncateUTF8 cuts value to at most limit bytes without leaving a broken character at the end.
+func truncateUTF8(value string, limit int) string {
 	if len(value) <= limit {
 		return value
 	}
-	return value[:limit]
+	return strings.ToValidUTF8(value[:limit], "")
 }
 
 type pullRequestStatus struct {
@@ -128,7 +129,7 @@ func (store *agentRunStore) syncReviews(w http.ResponseWriter, r *http.Request) 
 			!trustedGitHubAuthor(review.AuthorAssociation) {
 			continue
 		}
-		comment := strings.ToValidUTF8(truncateBytes(review.User.Login+" on GitHub: "+body, maxAgentRunCommentSize), "")
+		comment := truncateUTF8(review.User.Login+" on GitHub: "+body, maxAgentRunCommentSize)
 		updated, status, message := store.recordReview(item.ID, "", comment, true, false)
 		if status != 0 {
 			http.Error(w, message, status)
