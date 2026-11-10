@@ -3,6 +3,13 @@
 .workflow-section-preview-title h2 { margin: 0; color: #eee9f7; font-size: 17px; line-height: 1.25; }
 .workflow-section-preview-title p { margin: 4px 0 0; color: #9a93a8; font-size: 12px; }
 .workflow-section-preview-title .mantine-Button-root { min-height: 36px; padding-inline: 14px; font-size: 11px; }
+.workflow-design-preview .workflow-section-preview-title .mantine-Button-root:disabled,
+.workflow-design-preview .workflow-run-detail .workflow-section-bottom-action:disabled {
+  border-color: #9654db;
+  color: #fff;
+  background: linear-gradient(135deg, #7542bb, #572f91);
+  opacity: 1;
+}
 .workflow-section-card { min-width: 0; border: 1px solid #373148; border-radius: 12px; background: #171522; }
 .workflow-section-card .panel-heading { min-height: 50px; padding: 10px 14px; border-bottom: 1px solid #302b40; }
 .workflow-section-card .panel-heading h3 { color: #e9e4f0; font-size: 13px; }

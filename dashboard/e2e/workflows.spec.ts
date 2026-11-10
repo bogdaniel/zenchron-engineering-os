@@ -72,7 +72,15 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
     await expect(page.locator('.workflow-section-meta')).toContainText('11 Nodes');
     await expect(page.locator('.workflow-section-meta')).toContainText('3 Agent Profiles');
     await expect(page.getByRole('button', { name: 'Validate', exact: true })).toHaveCount(0);
-    if (section === 'Runs') expect((await page.locator('.workflow-run-columns').boundingBox())?.height).toBe(404);
+    if (section === 'Runs') {
+      expect((await page.locator('.workflow-run-columns').boundingBox())?.height).toBe(404);
+      const runWorkflow = page.getByRole('button', { name: 'Run Workflow' });
+      const reviewApproval = page.getByRole('button', { name: 'Review Approval' });
+      await expect(runWorkflow).toBeDisabled();
+      await expect(reviewApproval).toBeDisabled();
+      await expect(runWorkflow).toHaveCSS('background-image', /linear-gradient/);
+      await expect(reviewApproval).toHaveCSS('background-image', /linear-gradient/);
+    }
     if (section === 'Permissions') await expect(page.locator('.workflow-collaborator')).toHaveCount(4);
   }
   await page.setViewportSize({ width: 390, height: 844 });
