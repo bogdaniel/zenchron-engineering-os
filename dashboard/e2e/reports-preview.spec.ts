@@ -47,6 +47,9 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await expect(latencyPercentiles.getByRole('button', { name: 'P95' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.reports-latency-chart')).toHaveAttribute('aria-label', 'Illustrative P95 review latency trend');
   await expect(page.locator('.downloadable-report')).toHaveCount(4);
+  await expect(page.locator('.downloadable-report-copy span').evaluateAll((details) =>
+    details.every((detail) => getComputedStyle(detail).whiteSpace === 'normal'
+      && detail.scrollWidth <= detail.clientWidth && detail.scrollHeight <= detail.clientHeight))).resolves.toBe(true);
   const downloadsFit = await page.locator('.downloadable-reports-panel').evaluate((panel) => {
     const panelBottom = panel.getBoundingClientRect().bottom;
     const lastReportBottom = panel.querySelector('.downloadable-report:last-child')!.getBoundingClientRect().bottom;

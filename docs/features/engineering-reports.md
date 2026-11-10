@@ -117,6 +117,7 @@ CSV reports against isolated API responses.
 `cd dashboard && npm run test:e2e -- e2e/report-summary-metrics.spec.ts` checks per-product and workspace metric
 attribution from distinct GitHub PR and Actions histories.
 `cd dashboard && npm run test:e2e -- e2e/reports-preview.spec.ts` checks that the local mock route uses frontend fixtures
-without protected reads or exports, and verifies preview scope selection, apply, and reset behavior.
+without protected reads or exports, verifies preview scope selection, apply, and reset behavior, and ensures the full
+download descriptions wrap without truncation in the mock layout.
 `GOCACHE=/tmp/zenchron-gocache go test ./cmd/zenchron -run 'TestGitHub(WorkflowRunHistory|PullRequestHistory)' -count=1`
 checks both history endpoints' pagination, cutoffs, limits, and timestamp validation.
