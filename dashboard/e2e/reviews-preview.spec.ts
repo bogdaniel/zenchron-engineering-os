@@ -16,6 +16,17 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(page.locator('.reviews-page')).toHaveAttribute('data-preview', 'mock');
   await expect(page.locator('.reviews-metric').nth(0)).toContainText('428');
   await expect(page.locator('.reviews-metric').nth(5)).toContainText('99.2%');
+  await expect(page.locator('.reviews-preview-metric-trend')).toHaveCount(4);
+  await expect(page.getByRole('img', { name: 'Pull requests trend' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'In review trend' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Review time trend' })).toBeVisible();
+  await expect(page.locator('.reviews-metric').nth(0)).toContainText('+14%');
+  await expect(page.locator('.reviews-metric').nth(1)).toContainText('Live');
+  await expect(page.locator('.reviews-metric').nth(2)).toContainText('+3');
+  await expect(page.locator('.reviews-preview-metric-bars i')).toHaveCount(5);
+  await expect(page.locator('.reviews-metric').nth(3)).toContainText('-28%');
+  await expect(page.locator('.reviews-metric').nth(4)).toContainText('+1.9pp');
+  await expect(page.locator('.reviews-metric').nth(5)).toContainText('+0.8pp');
   await expect(page.getByRole('button', { name: 'All Repos' })).toBeDisabled();
   await expect(page.getByRole('combobox', { name: 'GitHub repository' })).toHaveCount(0);
   await expect(page.locator('.reviews-provider-card')).toHaveCount(5);
@@ -92,6 +103,7 @@ test('local Reviews mock uses its fixture without provider reads or review write
     contentHeight: card.scrollHeight,
   })));
   expect(mobileMetrics.every(({ contentHeight, height }) => contentHeight <= height + 1)).toBe(true);
+  expect(await page.locator('.reviews-metrics').evaluate((metrics) => metrics.scrollWidth <= metrics.clientWidth)).toBe(true);
   await expect(page.locator('.reviews-preview-thread')).toBeVisible();
   const mobileThreadFollowsDiff = await page.evaluate(() => {
     const thread = document.querySelector('.reviews-preview-thread')!;

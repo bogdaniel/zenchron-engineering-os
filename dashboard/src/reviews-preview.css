@@ -82,6 +82,15 @@
 .reviews-design-preview .reviews-summary-stats b { color: #ef635f; }
 .reviews-design-preview .reviews-summary-stats > div:nth-child(2) b,
 .reviews-design-preview .reviews-summary-stats > div:nth-child(6) b { color: #56dfa8; }
+.reviews-design-preview .reviews-metric .metric-value-row { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.reviews-design-preview .reviews-metric .metric-value-row > strong { flex: 0 0 auto; margin-top: 0; }
+.reviews-preview-metric-trend { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: space-between; gap: 3px; }
+.reviews-preview-metric-trend .mantine-Badge-root,
+.reviews-preview-metric-change { flex: 0 0 auto; padding-inline: 4px; border: 0; color: #3ee1a2; background: #123b30; font-size: 9px; white-space: nowrap; }
+.reviews-preview-metric-live { display: inline-flex; align-items: center; gap: 3px; color: #49dfaf; font-size: 9px; white-space: nowrap; }
+.reviews-preview-metric-live i { width: 6px; height: 6px; border-radius: 50%; background: #26dab0; }
+.reviews-preview-metric-bars { display: flex; width: 42px; height: 26px; align-items: flex-end; justify-content: space-between; }
+.reviews-preview-metric-bars i { width: 5px; border-radius: 2px 2px 0 0; background: #a65cf4; }
 .reviews-design-preview .reviews-summary-actions .mantine-Button-root { opacity: 1; }
 .reviews-design-preview .reviews-summary-copy { max-height: 66px; margin: 7px 9px; overflow: hidden; }
 .reviews-design-preview .reviews-summary-stats { gap: 4px; padding: 0 8px 6px; }
@@ -147,6 +156,10 @@
 .reviews-preview-thread p b { color: #e0d8eb; font-size: 8px; font-weight: 600; }
 .reviews-preview-thread .mantine-Avatar-root { flex: 0 0 auto; font-size: 8px; }
 @media (max-width: 760px) {
+  .reviews-design-preview .reviews-metric .metric-value-row { flex-wrap: wrap; }
+  .reviews-design-preview .reviews-preview-metric-trend { flex-basis: 100%; }
+  .reviews-design-preview .reviews-preview-metric-trend .mantine-Sparkline-root,
+  .reviews-design-preview .reviews-preview-metric-bars { display: none; }
   .reviews-design-preview .reviews-design-diff { max-height: none; overflow: visible; }
   .reviews-preview-thread { position: static; width: auto; margin: 8px; }
 }

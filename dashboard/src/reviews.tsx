@@ -1,6 +1,7 @@
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, colorSchemeDark, themeQuartz } from 'ag-grid-community';
 import type { ColDef } from 'ag-grid-community';
+import { Sparkline } from '@mantine/charts';
 import { Badge, Button, Select, Switch, Textarea, TextInput } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -55,6 +56,14 @@ const metrics = [
   ['Avg. review time', IconClockHour4], ['Merge success rate', IconGitMerge], ['Policy gate pass', IconShieldCheck],
 ] as const;
 const previewMetricLabels = ['Pull Requests', 'In Review', 'Review Queue', 'Avg. Review Time', 'Merge Success Rate', 'Policy Gate Pass'];
+const previewMetricTrends = [
+  <span className="reviews-preview-metric-trend"><Badge>↑ +14%</Badge><Sparkline role="img" aria-label="Pull requests trend" data={[3, 4, 3, 6, 5, 7, 9]} color="violet.5" w={54} h={24} withGradient={false} /></span>,
+  <span className="reviews-preview-metric-trend"><span className="reviews-preview-metric-live"><i />Live</span><Sparkline role="img" aria-label="In review trend" data={[2, 3, 3, 4, 5, 5, 7]} color="teal.4" w={54} h={24} withGradient={false} /></span>,
+  <span className="reviews-preview-metric-trend"><Badge>↑ +3</Badge><span className="reviews-preview-metric-bars" aria-hidden="true">{[8, 12, 18, 24, 30].map((height) => <i key={height} style={{ height }} />)}</span></span>,
+  <span className="reviews-preview-metric-trend"><Badge>↓ -28%</Badge><Sparkline role="img" aria-label="Review time trend" data={[8, 7, 8, 6, 5, 4, 3]} color="teal.4" w={54} h={24} withGradient={false} /></span>,
+  <Badge className="reviews-preview-metric-change">↑ +1.9pp</Badge>,
+  <Badge className="reviews-preview-metric-change">↑ +0.8pp</Badge>,
+];
 const tabs = ['Pull requests', 'Issues', 'Local branches', 'Code Review', 'Evidence', 'Merge Governance', 'Policies', 'Trusted-main'];
 const stages = ['Code review', 'Evidence', 'Policy gates', 'CI', 'Merge'];
 const detailTabs = [
@@ -264,6 +273,7 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             key={label}
             label={designPreview ? previewMetricLabels[index]! : label}
             value={value}
+            trend={designPreview ? previewMetricTrends[index] : undefined}
             icon={<Icon size={17} />}
           />;
         })}
