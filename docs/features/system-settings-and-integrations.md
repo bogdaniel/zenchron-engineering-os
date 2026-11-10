@@ -58,4 +58,5 @@ cd dashboard && npm run test:e2e -- e2e/system.spec.ts --grep "settings and inte
 ```
 
 `cd dashboard && npm run test:e2e -- e2e/integrations-preview.spec.ts` verifies the local mock uses frontend data
-without protected reads or writes.
+without protected reads or writes, checks provider link visibility at desktop and 682 px, and keeps the Connected
+status dot vertically centered in its badge.

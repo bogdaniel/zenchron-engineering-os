@@ -39,7 +39,10 @@ function Toggle({ label, checked = true }: { label: string; checked?: boolean })
 }
 
 function Status({ children, healthy = true }: { children: string; healthy?: boolean }) {
-  return <Badge className={healthy ? 'system-preview-status connected' : 'system-preview-status'}>{children}</Badge>;
+  return <Badge className="system-preview-status"
+    leftSection={healthy && <i className="system-preview-status-dot" aria-hidden="true" />}>
+    {children}
+  </Badge>;
 }
 
 function StaticField({ label, value, select = false }: { label: string; value: string; select?: boolean }) {

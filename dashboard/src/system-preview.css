@@ -58,13 +58,14 @@
   font-size: 9px;
   font-weight: 600;
 }
-.system-preview-status.connected::before {
+.system-preview-status-dot {
+  display: block;
   width: 5px;
   height: 5px;
+  flex: 0 0 5px;
   margin-right: 3px;
   border-radius: 50%;
   background: #35d995;
-  content: '';
 }
 .system-preview-switch { pointer-events: none; }
 .system-preview-switch .mantine-Switch-track { width: 24px; height: 13px; min-height: 13px; border: 0; background: #29c987; }

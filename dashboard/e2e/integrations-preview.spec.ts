@@ -18,6 +18,15 @@ test('local Integrations mock uses static content and keeps controls read only',
   await expect(page.getByRole('heading', { name: 'Integrations Overview' })).toBeVisible();
   await expect(page.locator('.system-preview-provider')).toHaveCount(10);
   await expect(page.locator('.system-preview-provider .system-preview-status')).toHaveCount(10);
+  const connectedBadge = page.locator('.system-preview-provider .system-preview-status').first();
+  const statusDot = connectedBadge.locator('.system-preview-status-dot');
+  const dotAlignment = await connectedBadge.evaluate((badge) => {
+    const badgeRect = badge.getBoundingClientRect();
+    const dotRect = badge.querySelector('.system-preview-status-dot')!.getBoundingClientRect();
+    return Math.abs((badgeRect.top + badgeRect.bottom) / 2 - (dotRect.top + dotRect.bottom) / 2);
+  });
+  await expect(statusDot).toBeVisible();
+  expect(dotAlignment, 'status dot is vertically centered in its badge').toBeLessThanOrEqual(1);
   await expect(page.locator('.system-integration-filters span')).toHaveCount(6);
   await expect(page.locator('.system-preview-settings-grid > .system-preview-card')).toHaveCount(8);
   await expect(page.locator('.system-preview-settings-badge')).toHaveCount(7);
