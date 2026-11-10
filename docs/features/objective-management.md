@@ -46,6 +46,7 @@ flowchart LR
 - An unauthenticated localhost session at `/#objectives` uses the same Objectives page with sample KPI, approval, workflow, and milestone data. The fixture is read only and does not call protected objective or product APIs.
 - The mock KPI row keeps the success-rate change beside its value and omits extra captions from the four compact count cards, matching the supplied layout. Live objective cards retain their explanatory details.
 - The mock preview uses larger table and detail text than the dense live table. Its title, status, product, and due-date columns fit the sample rows at the reference viewport without horizontal clipping.
+- Objective IDs appear below titles in the mock table, and the planned/completed capacity series retain a visible area fill.
 - The local preview keeps the capacity chart below the objective list and places Milestone Progress inside the selected objective's detail panel. Its four milestone rows fit the fixed desktop mock card and the card grows to fit on tablet and phone layouts.
 - In the read-only preview, favorite toggles locally, Copy objective link copies a deep link that selects that objective, and the more-actions menu opens the related PR or activity tab. These actions do not write objective data.
 - Approval and linked-workflow counts in the mock preview are illustrative fields; they remain unavailable in live mode until their sources are part of the objective API.

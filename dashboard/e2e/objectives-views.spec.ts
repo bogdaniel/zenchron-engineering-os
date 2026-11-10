@@ -63,6 +63,18 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await expect(page.getByRole('combobox', { name: 'Filter by due quarter' })).toHaveValue('This Quarter');
   const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(6);
+  await expect(page.locator('.objective-grid-wrap .objective-title-cell')).toHaveCount(6);
+  await expect(page.locator('.objective-grid-wrap .objective-title-cell small')).toHaveText([
+    'OBJ-1487', 'OBJ-1492', 'OBJ-1501', 'OBJ-1506', 'OBJ-1510', 'OBJ-1517',
+  ]);
+  const objectiveTitles = page.locator('.objective-grid-wrap .objective-title-cell > span');
+  await expect(objectiveTitles.first()).toHaveText('Launch AI code review v2');
+  expect(await objectiveTitles.evaluateAll((titles) => titles.every((title) => title.scrollWidth <= title.clientWidth)),
+    'all objective titles remain visible above their IDs').toBe(true);
+  const capacityAreas = page.locator('.objective-capacity-chart .recharts-area-area');
+  await expect(capacityAreas).toHaveCount(4);
+  expect(await capacityAreas.evaluateAll((areas) => areas.every((area) => Number(getComputedStyle(area).opacity) >= .18)),
+    'both capacity series retain visible fill').toBe(true);
   await expect(objectiveRows.first()).toHaveClass(/ag-row-selected/);
   await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="title"]').first()).toHaveCSS('font-size', '11px');
   await expect(page.locator('.objective-grid-wrap .objective-status').first()).toHaveCSS('font-size', '9px');

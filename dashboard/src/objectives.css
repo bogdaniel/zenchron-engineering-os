@@ -75,6 +75,9 @@
 .objective-grid-wrap .ag-cell-value { min-width: 0; }
 .objective-grid-wrap .ag-row { cursor: pointer; }
 .objective-grid-wrap .ag-row-selected .ag-cell { background-color: #292039; }
+.objective-title-cell { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.objective-title-cell > span { overflow: hidden; font-size: 10px; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
+.objective-title-cell small { color: #9690a4; font-size: 8px; line-height: 1; }
 .objective-grid-wrap .ag-paging-panel { min-height: 34px; border-top: 1px solid #292737; color: #8f899f; font-size: 10px; }
 .objective-status { padding: 4px 6px; border: 1px solid transparent; border-radius: 10px; font-size: 10px; text-transform: capitalize; }
 .objective-status.on_track, .objective-status.completed { border-color: #286347; color: #61dba9; background: #17352b; }
@@ -183,7 +186,7 @@
 .objective-capacity-legend span + span i { background: #23d9a0; }
 .objective-capacity-chart .recharts-cartesian-grid line { stroke: #302d3c; }
 .objective-capacity-chart .recharts-cartesian-axis-tick-value { fill: #9d97aa; font-size: 8px; }
-.objective-capacity-chart .recharts-area-area { opacity: .12; }
+.objective-capacity-chart .recharts-area-area { opacity: .2; }
 .objective-metric-trend { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: space-between; gap: 5px; }
 .objective-metric-trend > span { color: #3fd9a2; font-size: 10px; font-weight: 600; }
 .objective-metric-trend .mantine-Badge-root { border: 0; color: #3ee1a2; background: #123b30; font-size: 9px; }

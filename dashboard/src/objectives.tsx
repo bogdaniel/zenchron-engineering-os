@@ -235,7 +235,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     },
   });
   const columns = useMemo<ColDef<Objective>[]>(() => [
-    { field: 'title', headerName: 'Objective', flex: 1.8, minWidth: sampleData ? 138 : 130 },
+    { field: 'title', headerName: 'Objective', flex: 1.8, minWidth: sampleData ? 138 : 130,
+      cellRenderer: ({ value, data }: ICellRendererParams<Objective, string>) => sampleData
+        ? <span className="objective-title-cell"><span>{value}</span><small>{data?.id}</small></span> : value },
     { field: 'owner', headerName: 'Owner', flex: .8, minWidth: sampleData ? 64 : 72, valueFormatter: ({ value }) => sampleData ? value?.replace(/\s+(\S).*$/, ' $1.') : value,
       cellRenderer: ({ value, valueFormatted }: ICellRendererParams<Objective, string>) => sampleData
         ? <span className="objective-owner-cell"><span className="objective-owner-avatar" aria-hidden="true">{value?.split(/\s+/).map((part) => part[0]).join('')}</span>{valueFormatted}</span>
