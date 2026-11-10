@@ -24,6 +24,9 @@ test('local Product Workspace mock matches the supplied overview without protect
   await expect(page.locator('.workspace-mock-list.people > div')).toHaveCount(4);
   await expect(page.getByRole('button', { name: 'New Workspace' })).toBeDisabled();
   await expect(page.getByRole('textbox', { name: 'Search products' })).toBeDisabled();
+  const addProduct = page.getByRole('button', { name: /Add Product/ });
+  await expect(addProduct).toBeDisabled();
+  await expect(addProduct).toHaveCSS('background-image', /linear-gradient/);
 
   const gridColumns = await page.locator('div.workspace-mock-grid').evaluate((grid) =>
     getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length);

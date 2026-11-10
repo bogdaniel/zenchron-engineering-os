@@ -9,7 +9,7 @@ stakeholders, and release streams remain unavailable without their source servic
 An unauthenticated localhost session renders the supplied Product Workspace overview at `/#workspace` in the existing
 dashboard shell. Its product list, roadmap, objective progress, connected services, people, releases, decisions, and
 delivery metrics are illustrative and read only; this state makes no protected product, objective, workflow, agent, or
-repository requests.
+repository requests. Its Add Product control remains disabled but keeps the reference's primary-button appearance.
 
 ## Feature diagram
 
