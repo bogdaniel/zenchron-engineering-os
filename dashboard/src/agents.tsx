@@ -455,9 +455,16 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                 runForm.reset();
                 setRunOpen(true);
               }}>Queue run</Button></>}</div>} />
-          <form onSubmit={editForm.onSubmit((values) => updateAgent.mutate({
-            ...inputSchema.parse(values), id: selected.id,
-          }))}>
+          <form onSubmit={editForm.onSubmit((values) => {
+            const profile = inputSchema.parse(values);
+            if (sampleMode) {
+              const updated = agentSchema.parse({ ...selected, ...profile, version: selected.version + 1, updated_at: new Date().toISOString() });
+              setPreviewItems((current) => current.map((item) => item.id === selected.id ? updated : item));
+              setPreviewNotice(`${selected.name} saved in this preview only`);
+              setIsEditing(false);
+              setDetailTab('overview');
+            } else updateAgent.mutate({ ...profile, id: selected.id });
+          })}>
             <Tabs value={detailTab} onChange={setDetailTab} className="agents-detail-tabs">
               <Tabs.List aria-label="Agent profile sections">
                 <Tabs.Tab value="overview">Overview</Tabs.Tab>
@@ -517,13 +524,15 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                 </div>
                 <div className="agents-overview-previews">
                   <PanelCard className="agents-overview-card" withBorder>
-                    <PanelHeading title="System Prompt" />
+                    <PanelHeading title="System Prompt" actions={sampleMode && <Button className="agents-preview-card-action" variant="subtle" size="xs"
+                      onClick={() => { resetEditForm(); setDetailTab('prompts'); setIsEditing(true); }}>Edit</Button>} />
                     <p className="agents-prompt-preview" title={selected.system_prompt}>
                       {selected.system_prompt || 'No system prompt configured.'}
                     </p>
                   </PanelCard>
                   <PanelCard className="agents-overview-card" withBorder>
-                    <PanelHeading title="Goal Prompt" />
+                    <PanelHeading title="Goal Prompt" actions={sampleMode && <Button className="agents-preview-card-action" variant="subtle" size="xs"
+                      onClick={() => { resetEditForm(); setDetailTab('prompts'); setIsEditing(true); }}>Edit</Button>} />
                     <p className="agents-prompt-preview" title={selected.goal_prompt}>
                       {selected.goal_prompt || 'No goal prompt configured.'}
                     </p>

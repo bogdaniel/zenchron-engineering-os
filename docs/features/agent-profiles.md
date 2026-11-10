@@ -25,9 +25,9 @@ hover. Metrics use recorded data only.
 The unauthenticated local design preview is fixture-only and makes no agent or run API requests. Its metrics and
 profile history, including performance deltas, sparklines, durations, and costs, are illustrative and carry a visible
 `ILLUSTRATIVE DATA` label; fields absent from the live profile contract, including owner and creation time, stay
-exclusive to that preview. Search, status filtering, and name sorting operate on the local fixture. Create, duplicate,
-disable, simulated run, library selection, import/export, and version/history controls update or inspect preview data
-only; they never call the agent APIs.
+exclusive to that preview. Search, status filtering, and name sorting operate on the local fixture. Create, edit,
+duplicate, disable, simulated run, library selection, import/export, and version/history controls update or inspect
+preview data only; they never call the agent APIs.
 
 At phone width, the local preview switches to the supplied Agents & Reviews summary: the Agents tab shows recent runs,
 pull request reviews, evidence health, and quick actions; Reviews and Evidence tabs focus their matching panels. Run
@@ -79,5 +79,7 @@ The API validates field lengths and rejects unknown JSON fields, duplicate tools
   checks verify that the profile, detail, and run panels do not overlap.
 - `cd dashboard && npm run test:e2e -- e2e/agents-mobile-preview.spec.ts` verifies the 390×844 summary, local tabs and
   actions, return to profile management, and absence of agent API reads.
+- `cd dashboard && npm run test:e2e -- e2e/agents-desktop-preview.spec.ts` verifies prompt-card editing saves only to
+  the local fixture and makes no agent API requests.
 - On desktop viewports from 700px high, the profile list spans both rows while run history and performance stack under
   the selected profile; the content height contracts to the available viewport and retains the 670px mock height cap.
