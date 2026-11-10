@@ -178,6 +178,16 @@ test('Agents local design preview labels illustrative metadata without API reads
   expect(await page.locator('.agent-row-body small').evaluateAll((details) =>
     details.every((detail) => detail.scrollWidth <= detail.clientWidth)),
   'desktop preview profile metadata is not ellipsized').toBe(true);
+  const visibleProfileRows = await page.locator('.agents-list').evaluate((list) => {
+    const rows = [...list.querySelectorAll('.agent-row')].map((row) => row.getBoundingClientRect());
+    const bottom = list.getBoundingClientRect().bottom;
+    return rows.slice(0, 5).every((row) => row.bottom <= bottom) && rows[5]!.top >= bottom
+      && list.scrollHeight > list.clientHeight;
+  });
+  expect(visibleProfileRows, 'the desktop mock shows five complete profiles and scrolls to the sixth').toBe(true);
+  const sixthProfile = page.locator('.agent-row').nth(5);
+  await sixthProfile.scrollIntoViewIfNeeded();
+  await expect(sixthProfile).toBeInViewport();
   const summary = page.locator('.agents-profile-summary');
   await expect(summary).toContainText('Model');
   await expect(summary).toContainText('Provider');
