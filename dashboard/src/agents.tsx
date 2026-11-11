@@ -18,6 +18,8 @@ import { runsInLast30Days } from './runMetrics';
 import { AgentPerformanceTrend } from './AgentPerformanceTrend';
 import { AgentPromptEditor } from './AgentPromptEditor';
 import { AgentExecutionOverview } from './AgentExecutionOverview';
+import { RunIssueSelect, runReadiness, type RunWorker } from './agentRunQueue';
+import { runEvidenceFields } from './runEvidence';
 import {
   agentsPreviewProfiles as previewAgents,
   agentsPreviewRuns as previewRuns,
@@ -49,7 +51,7 @@ const agentRunSchema = z.object({
   review_comments: z.array(z.object({ body: z.string(), request_changes: z.boolean(), created_at: z.string() })).optional().default([]),
   error: z.string().optional(), status: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']),
   attempts: z.number(), created_at: z.string(), updated_at: z.string(),
-});
+}).extend(runEvidenceFields);
 export const agentRunsSchema = z.array(agentRunSchema);
 export const agentsSchema = z.array(agentSchema);
 const inputSchema = z.object({
@@ -64,8 +66,9 @@ const inputSchema = z.object({
 });
 const runInputSchema = z.object({
   project_id: z.string().min(1, 'Choose an online project'),
-  prompt: z.string().trim().min(1, 'Add a task prompt').max(5000),
-});
+  prompt: z.string().trim().max(5000),
+  issue_number: z.number().int().positive().optional(),
+}).refine((input) => input.prompt !== '' || input.issue_number !== undefined, { path: ['prompt'], message: 'Add a task prompt or choose an issue' });
 export type Agent = z.infer<typeof agentSchema>;
 export type AgentRun = z.infer<typeof agentRunSchema>;
 type AgentInput = z.infer<typeof inputSchema>;
@@ -136,7 +139,7 @@ const blankProfile: AgentInput = {
   system_prompt: '', goal_prompt: '', tools: [],
 };
 
-type Worker = { id: string; name: string; agent_runtime_enabled?: boolean };
+type Worker = RunWorker;
 
 export function AgentsPage({ projects, workers, designPreview = false }: {
   projects: Project[];
@@ -149,6 +152,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
   const [createOpen, setCreateOpen] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
   const [runProjectID, setRunProjectID] = useState('');
+  const [runIssue, setRunIssue] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const agents = useQuery({ queryKey: ['agents'], queryFn: loadAgents, enabled: !designPreview });
@@ -170,7 +174,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
   const createForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateInput });
   const editForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateInput });
   const runForm = useForm<{ prompt: string }>({ initialValues: { prompt: '' }, validate: (values) => {
-    const result = z.string().trim().min(1, 'Add a task prompt').max(5000).safeParse(values.prompt);
+    const result = runInputSchema.safeParse({ project_id: runProjectID || '-', prompt: values.prompt, issue_number: runIssue ?? undefined });
     return result.success ? {} : { prompt: result.error.issues[0].message };
   } });
 
@@ -233,6 +237,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['agent-runs'] });
       runForm.reset();
+      setRunIssue(null);
       setRunOpen(false);
     },
   });
@@ -241,8 +246,7 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
   const workersByID = new Map(workers.map((worker) => [worker.id, worker]));
   const runProjectOptions = onlineProjects.map((project) => {
     const worker = workersByID.get(project.worker_id);
-    const runtime = worker?.agent_runtime_enabled === true ? 'runtime configured'
-      : worker?.agent_runtime_enabled === false ? 'runtime not configured' : 'runtime status unknown';
+    const runtime = runReadiness(selected?.provider, worker).label;
     return { value: project.id, label: `${project.name} · ${worker?.name ?? project.worker_name} · ${runtime}` };
   });
   const selectedRunProject = onlineProjects.find((project) => project.id === runProjectID);
@@ -541,21 +545,19 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
     </Modal>
     <Modal opened={runOpen} onClose={() => setRunOpen(false)} title="Queue agent run" centered>
       <form onSubmit={runForm.onSubmit((values) => {
-        const input = runInputSchema.safeParse({ project_id: runProjectID, prompt: values.prompt });
+        const input = runInputSchema.safeParse({ project_id: runProjectID, prompt: values.prompt, issue_number: runIssue ?? undefined });
         if (selected && input.success) queueRun.mutate({ ...input.data, agent_id: selected.id });
       })}>
         <Select label="Project" data={runProjectOptions}
           value={runProjectID || null} allowDeselect={false}
-          onChange={(value) => setRunProjectID(value ?? '')} />
+          onChange={(value) => { setRunProjectID(value ?? ''); setRunIssue(null); }} />
         {!onlineProjects.length && <Text className="agents-error" role="status">No online projects are available to run on.</Text>}
         {onlineProjects.length > 0 && <Text className="agents-queue-note" role="status">
-          {selectedRunWorker?.agent_runtime_enabled === true
-            ? `${selectedRunWorker.name} reports an OpenAI-compatible endpoint configured. Queueing saves the run for the worker.`
-            : selectedRunWorker?.agent_runtime_enabled === false
-              ? `${selectedRunWorker.name} has no OpenAI-compatible endpoint configured; the run will stay queued.`
-              : 'Worker runtime status is unknown; the run may stay queued until runtime availability is reported.'}
+          {runReadiness(selected?.provider, selectedRunWorker).note}
         </Text>}
-        <Textarea label="Task prompt" minRows={3} maxLength={5000} {...runForm.getInputProps('prompt')} />
+        <RunIssueSelect projectID={runProjectID} value={runIssue} onChange={setRunIssue} />
+        <Textarea label={runIssue === null ? 'Task prompt' : 'Task prompt (optional)'} minRows={3} maxLength={5000}
+          {...runForm.getInputProps('prompt')} />
         {queueRun.isError && <Text className="agents-error" role="alert">{queueRun.error.message}</Text>}
         <div className="agents-modal-actions">
           <Button variant="subtle" type="button" onClick={() => setRunOpen(false)}>Cancel</Button>

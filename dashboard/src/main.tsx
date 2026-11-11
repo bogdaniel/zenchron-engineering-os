@@ -27,6 +27,7 @@ import { OverviewPage } from './OverviewPage';
 import { Sidebar } from './Sidebar';
 import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
+import { workerProvidersSchema } from './agentRunQueue';
 import './style.css';
 import './overview.css';
 import './monaco.css';
@@ -50,6 +51,7 @@ const workersResponse = z.array(
     status: z.enum(['online', 'offline']),
     last_seen: z.string(),
     agent_runtime_enabled: z.boolean().optional(),
+    providers: workerProvidersSchema,
   }),
 );
 function App() {

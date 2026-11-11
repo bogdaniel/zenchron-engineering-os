@@ -5,6 +5,7 @@ import { Badge, Button, Select, Switch, Textarea, TextInput } from '@mantine/cor
 import { useMediaQuery } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { RunEvidence } from './runEvidence';
 import { z } from 'zod';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
@@ -504,6 +505,8 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
               <b>AI Suggestions · 4</b><span>Add schema version to artifact metadata · High impact</span></div>
               : detailTab === 'approvals' ? <div role="status"><IconUserCheck size={24} />
                 <b>Approvals · 2 of 3 approved</b><span>Jordan Kim and Riley Torres approved. Casey Morgan is pending.</span></div>
+                : detailTab === 'evidence' && section === 'local-branches' && selected && !designPreview
+                  ? <RunEvidence run={selected} />
                 : <div role="status">
                   {detailTab === 'evidence' ? <IconShieldCheck size={24} /> : <IconChecks size={24} />}
                   <b>{detailTab === 'evidence' ? 'Evidence unavailable' : 'Required checks unavailable'}</b>
