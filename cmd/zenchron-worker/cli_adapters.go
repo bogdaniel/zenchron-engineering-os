@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
@@ -44,18 +45,45 @@ func canWrite(command workerapi.AgentRunCommand) bool {
 	return slices.Contains(command.Profile.Tools, "code.write")
 }
 
-// codexArguments uses `codex exec` with JSONL events. The prompt arrives on stdin. The workspace-write
-// sandbox confines model-run commands to the worktree; read-only profiles get the read-only sandbox.
-func codexArguments(command workerapi.AgentRunCommand, worktree string) []string {
-	sandbox := "read-only"
-	if canWrite(command) {
-		sandbox = "workspace-write"
+// sandboxRoots are the locations both provider sandboxes are built from.
+func sandboxRoots() (home, temporary string) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "/" {
+		home = ""
 	}
-	args := []string{"exec", "--json", "--color", "never", "--sandbox", sandbox, "--cd", worktree}
+	return home, os.TempDir()
+}
+
+// codexArguments uses `codex exec` with JSONL events. The prompt arrives on stdin. Model-run commands
+// are confined by a Codex permission profile instead of the stock workspace-write mode, because that
+// mode confines writes only: the profile also makes the home directory unreadable apart from the
+// worktree and the listed read paths. Network access stays off, as in the stock mode.
+func codexArguments(command workerapi.AgentRunCommand, workspace runWorkspace) []string {
+	args := []string{"exec", "--json", "--color", "never", "-c", `default_permissions="zenchron"`,
+		"-c", "permissions.zenchron.filesystem=" + codexFilesystemProfile(workspace, canWrite(command)), "--cd", workspace.path}
 	if command.Profile.Model != defaultModel {
 		args = append(args, "--model="+command.Profile.Model)
 	}
 	return append(args, "-")
+}
+
+// codexFilesystemProfile is a TOML inline table of path = access. More specific paths win in Codex, so
+// the worktree and read paths stay usable inside a denied home directory.
+func codexFilesystemProfile(workspace runWorkspace, writable bool) string {
+	home, temporary := sandboxRoots()
+	access := "read"
+	if writable {
+		access = "write"
+	}
+	entries := []string{`"/"="read"`}
+	if home != "" {
+		entries = append(entries, strconv.Quote(home)+`="none"`)
+	}
+	entries = append(entries, strconv.Quote(workspace.path)+"="+strconv.Quote(access), strconv.Quote(temporary)+`="write"`)
+	for _, path := range workspace.readPaths {
+		entries = append(entries, strconv.Quote(path)+`="read"`)
+	}
+	return "{" + strings.Join(entries, ",") + "}"
 }
 
 func parseCodexEvent(line []byte) cliEvent {
@@ -129,7 +157,7 @@ func codexCompletedItem(id, itemType, text, command string, exitCode *int, chang
 // claudeArguments uses print mode with stream-json events. The prompt arrives on stdin. User settings and
 // MCP servers are not loaded, which keeps personal plugins and connectors out of runs. Profiles get file
 // tools only, unless they may run tests: then Bash is offered, but only inside Claude Code's own sandbox.
-func claudeArguments(command workerapi.AgentRunCommand, worktree string) []string {
+func claudeArguments(command workerapi.AgentRunCommand, workspace runWorkspace) []string {
 	tools, mode := "Read,Glob,Grep", "default"
 	if canWrite(command) {
 		tools, mode = "Read,Edit,Write,Glob,Grep", "acceptEdits"
@@ -138,7 +166,7 @@ func claudeArguments(command workerapi.AgentRunCommand, worktree string) []strin
 		"--setting-sources", "project", "--strict-mcp-config", "--permission-mode", mode}
 	if canWrite(command) && slices.Contains(command.Profile.Tools, "tests.run") {
 		tools += ",Bash"
-		args = append(args, "--settings", claudeSandboxSettings(worktree))
+		args = append(args, "--settings", claudeSandboxSettings(workspace))
 	}
 	args = append(args, "--tools", tools)
 	if command.Profile.Model != defaultModel {
@@ -150,7 +178,7 @@ func claudeArguments(command workerapi.AgentRunCommand, worktree string) []strin
 // claudeSandboxSettings confines every shell command of a run: commands that cannot be sandboxed are
 // refused, writes are limited to the worktree and the temporary directory, and the home directory cannot
 // be read apart from the worktree itself.
-func claudeSandboxSettings(worktree string) string {
+func claudeSandboxSettings(workspace runWorkspace) string {
 	type filesystem struct {
 		DenyRead   []string `json:"denyRead,omitempty"`
 		AllowRead  []string `json:"allowRead"`
@@ -162,8 +190,9 @@ func claudeSandboxSettings(worktree string) string {
 		AllowUnsandboxedCommands bool       `json:"allowUnsandboxedCommands"`
 		Filesystem               filesystem `json:"filesystem"`
 	}
-	rules := filesystem{AllowRead: []string{worktree}, AllowWrite: []string{os.TempDir()}}
-	if home, err := os.UserHomeDir(); err == nil && home != "" && home != "/" {
+	home, temporary := sandboxRoots()
+	rules := filesystem{AllowRead: append([]string{workspace.path}, workspace.readPaths...), AllowWrite: []string{temporary}}
+	if home != "" {
 		rules.DenyRead = []string{home}
 	}
 	settings, err := json.Marshal(struct {

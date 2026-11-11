@@ -21,7 +21,7 @@ import (
 // implementation today: the chat-completions runtime and the installed coding CLIs.
 type runExecutor interface {
 	execute(
-		ctx context.Context, command workerapi.AgentRunCommand, worktree string, environment []string, limits runLimits,
+		ctx context.Context, command workerapi.AgentRunCommand, workspace runWorkspace, limits runLimits,
 		emit func(kind, message string),
 	) (executionResult, error)
 	versionLabel() string
@@ -32,10 +32,10 @@ func (provider *cliProvider) versionLabel() string { return provider.version }
 func (runtime *agentRuntime) versionLabel() string { return "" }
 
 func (runtime *agentRuntime) execute(
-	ctx context.Context, command workerapi.AgentRunCommand, worktree string, _ []string, _ runLimits,
+	ctx context.Context, command workerapi.AgentRunCommand, workspace runWorkspace, _ runLimits,
 	_ func(kind, message string),
 ) (executionResult, error) {
-	output, err := runtime.complete(ctx, command, worktree)
+	output, err := runtime.complete(ctx, command, workspace.path)
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return executionResult{reason: workerapi.TerminationWallClock}, ctx.Err()
@@ -182,8 +182,13 @@ func (runner *agentRunner) attempt(
 	reporter.emit("status", fmt.Sprintf("Isolated worktree ready on %s from %s", command.Branch, command.BaseBranch))
 
 	runCtx, cancelRun := context.WithTimeout(ctx, runner.limits.wallClock)
-	execution, runErr := executor.execute(runCtx, command, worktree, runner.config.processEnvironment(project.Remote),
-		runner.limits, reporter.emit)
+	workspace := runWorkspace{path: worktree, environment: runner.config.processEnvironment(project.Remote),
+		readPaths: runner.config.readPaths(project.Remote)}
+	// Git keeps a worktree's metadata in the source checkout; a sandboxed agent needs to read it.
+	if gitDir, err := gitOutput(ctx, "-C", worktree, "rev-parse", "--path-format=absolute", "--git-common-dir"); err == nil {
+		workspace.readPaths = append(workspace.readPaths, strings.TrimSpace(gitDir))
+	}
+	execution, runErr := executor.execute(runCtx, command, workspace, runner.limits, reporter.emit)
 	cancelRun()
 	result.Usage, result.TerminationReason = execution.usage, execution.reason
 

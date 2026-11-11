@@ -9,7 +9,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -34,6 +36,9 @@ type repositoryConfig struct {
 	// Environment is added to provider and verification processes, for example a build cache location
 	// that a sandboxed agent can write to.
 	Environment map[string]string `json:"environment"`
+	// ReadPaths are absolute paths a sandboxed provider may read in addition to the worktree, for
+	// example a dependency cache in the home directory.
+	ReadPaths []string `json:"read_paths"`
 }
 
 var environmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -78,6 +83,11 @@ func loadWorkerConfig() (*workerConfig, error) {
 				return nil, fmt.Errorf("ZENCHRON_WORKER_CONFIG repository %q sets an invalid or reserved variable %q", repository, name)
 			}
 		}
+		for _, path := range settings.ReadPaths {
+			if !filepath.IsAbs(path) || filepath.Clean(path) != path || path == "/" {
+				return nil, fmt.Errorf("ZENCHRON_WORKER_CONFIG repository %q lists read path %q, which must be absolute and clean", repository, path)
+			}
+		}
 		for _, command := range settings.Verify {
 			if len(command) == 0 || strings.TrimSpace(command[0]) == "" {
 				return nil, fmt.Errorf("ZENCHRON_WORKER_CONFIG repository %q has an empty verification command", repository)
@@ -113,6 +123,13 @@ func (config *workerConfig) processEnvironment(repository string) []string {
 		environment = append(environment, name+"="+value)
 	}
 	return environment
+}
+
+func (config *workerConfig) readPaths(repository string) []string {
+	if config == nil {
+		return nil
+	}
+	return slices.Clone(config.Repositories[repository].ReadPaths)
 }
 
 func loadRunLimits() (runLimits, error) {

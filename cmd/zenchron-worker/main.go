@@ -27,6 +27,9 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) > 1 && os.Args[1] == "guard" {
+		os.Exit(runGuard(os.Args[2:]))
+	}
 	controlPlaneURL := strings.TrimRight(os.Getenv("ZENCHRON_CONTROL_PLANE_URL"), "/")
 	if controlPlaneURL == "" {
 		controlPlaneURL = "http://127.0.0.1:8080"
@@ -88,7 +91,12 @@ func run() error {
 		return err
 	}
 	// ponytail: providers are detected once at startup; restart the worker after installing or signing in to a CLI.
+	self, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("locate the worker binary for the provider guard: %w", err)
+	}
 	for _, provider := range runner.providers {
+		provider.guard = []string{self, "guard"}
 		provider.detect(ctx)
 	}
 	runtimeEnabled := runner.chat != nil

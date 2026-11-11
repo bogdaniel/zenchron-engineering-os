@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"slices"
 	"strings"
 	"sync"
@@ -37,8 +39,11 @@ type cliProvider struct {
 	versionArgs []string
 	readyArgs   []string
 	isReady     func(output []byte, err error) bool
-	args        func(command workerapi.AgentRunCommand, worktree string) []string
-	parse       func(line []byte) cliEvent
+	args        func(command workerapi.AgentRunCommand, workspace runWorkspace) []string
+	// guard, when set, is a command prefix that runs the provider under a process that stops it if the
+	// worker dies. It is this worker binary's own `guard` command.
+	guard []string
+	parse func(line []byte) cliEvent
 
 	path    string
 	version string
@@ -54,6 +59,15 @@ type cliEvent struct {
 	output       string
 	failure      string
 	usage        *workerapi.Usage
+}
+
+// runWorkspace is where one attempt executes and what its processes may see beyond it.
+type runWorkspace struct {
+	path        string
+	environment []string
+	// readPaths are extra locations a sandboxed provider may read: the repository's Git metadata and
+	// whatever the operator listed, such as a dependency cache.
+	readPaths []string
 }
 
 type executionResult struct {
@@ -112,16 +126,30 @@ func cliPrompt(command workerapi.AgentRunCommand) string {
 }
 
 func (provider *cliProvider) execute(
-	ctx context.Context, command workerapi.AgentRunCommand, worktree string, environment []string, limits runLimits,
+	ctx context.Context, command workerapi.AgentRunCommand, workspace runWorkspace, limits runLimits,
 	emit func(kind, message string),
 ) (executionResult, error) {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	process := exec.CommandContext(runCtx, provider.path, provider.args(command, worktree)...)
-	process.Dir = worktree
-	process.Env = environment
+	arguments := append(slices.Clone(provider.guard), provider.path)
+	arguments = append(arguments, provider.args(command, workspace)...)
+	process := exec.CommandContext(runCtx, arguments[0], arguments[1:]...)
+	process.Dir = workspace.path
+	// The agent must not depend on, or be able to read, the user's personal Git configuration.
+	process.Env = append([]string{"GIT_CONFIG_GLOBAL=" + os.DevNull}, workspace.environment...)
 	process.Stdin = strings.NewReader(cliPrompt(command))
 	ownProcessGroup(process)
+	if len(provider.guard) > 0 {
+		// The guard watches the read end of this pipe. The worker never writes to it, so the guard sees
+		// end-of-file exactly when the worker process is gone, however it died.
+		reader, writer, err := os.Pipe()
+		if err != nil {
+			return executionResult{reason: workerapi.TerminationWorkerError}, fmt.Errorf("create provider guard pipe: %w", err)
+		}
+		defer writer.Close()
+		defer reader.Close()
+		process.ExtraFiles = []*os.File{reader}
+	}
 	session := &cliSession{parse: provider.parse, emit: emit, lastActivity: time.Now(), openTools: map[string]bool{}}
 	stderr := &tailBuffer{limit: 2048}
 	process.Stdout, process.Stderr = &lineWriter{handle: session.handle}, stderr
@@ -135,6 +163,41 @@ func (provider *cliProvider) execute(
 	// Sweep anything the provider left behind in its process group.
 	_ = syscall.Kill(-process.Process.Pid, syscall.SIGKILL)
 	return session.result(ctx, waitErr, stderr.String())
+}
+
+// runGuard is the `guard` command: it runs a provider and stops the whole process group when file
+// descriptor 3 reaches end-of-file, which happens when the worker that started it no longer exists.
+// Without it a provider would keep editing the worktree after a worker crash while the next attempt
+// starts a second provider there.
+func runGuard(arguments []string) int {
+	if len(arguments) == 0 {
+		fmt.Fprintln(os.Stderr, "guard needs a command")
+		return 2
+	}
+	// The guard must outlive the SIGTERM it sends to its own group so it can escalate.
+	signal.Ignore(syscall.SIGTERM)
+	command := exec.Command(arguments[0], arguments[1:]...)
+	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := command.Start(); err != nil {
+		fmt.Fprintln(os.Stderr, "guard could not start the command:", err)
+		return 127
+	}
+	go func() {
+		_, _ = io.Copy(io.Discard, os.NewFile(3, "worker-liveness"))
+		_ = syscall.Kill(0, syscall.SIGTERM)
+		time.Sleep(cliTerminationGrace)
+		_ = syscall.Kill(0, syscall.SIGKILL)
+	}()
+	err := command.Wait()
+	var exit *exec.ExitError
+	switch {
+	case err == nil:
+		return 0
+	case errors.As(err, &exit) && exit.ExitCode() >= 0:
+		return exit.ExitCode()
+	default:
+		return 1
+	}
 }
 
 // ownProcessGroup makes cancellation stop a command together with everything it started: the group gets
