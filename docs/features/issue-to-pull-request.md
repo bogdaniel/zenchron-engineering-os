@@ -88,11 +88,15 @@ that exits successfully is therefore not reported as delivered work unless verif
   agent.
 - Each run has its own branch `zenchron/agent-run/<run id>` and its own worktree. The worker refuses any other branch
   name, so two runs never share files and a run cannot push to another branch.
-- The provider process gets the prompt on stdin. Codex runs with `--sandbox workspace-write` (or `read-only` when the
-  profile lacks `code.write`). Claude Code runs without user settings or MCP servers and with file tools only, unless
+- The provider process gets the prompt on stdin. Codex runs under a permission profile built by the worker: the
+  worktree is writable (read-only when the profile lacks `code.write`), the temporary directory is writable, the home
+  directory is unreadable apart from the worktree, the repository's Git metadata, and operator-listed read paths, and
+  network access is off. Claude Code runs without user settings or MCP servers and with file tools only, unless
   the profile has both `code.write` and `tests.run`: then it also gets Bash, forced into Claude Code's sandbox, which
   refuses commands that cannot be sandboxed, allows writes only in the worktree and the temporary directory, and
-  denies reading the home directory outside the worktree.
+  denies reading the home directory outside the worktree and the listed read paths.
+- Every provider starts under `zenchron-worker guard`. If the worker process dies for any reason, the guard stops the
+  provider's whole process group within seconds, so no agent keeps editing a worktree without a worker.
   Worker, GitHub, and provider API-key environment variables are removed, so a subscription sign-in is never replaced
   by API billing.
 - The profile's model is passed to the CLI; the model name `default` leaves the choice to the CLI's own configuration.
@@ -119,7 +123,8 @@ that exits successfully is therefore not reported as delivered work unless verif
 
 - **Agents > Queue run.** The dialog lists the selected project's open GitHub issues; choosing one makes the prompt
   optional and states that the pull request will close the issue. The project line and the note under it say whether
-  the project's worker reports the agent profile's CLI as installed and signed in, or that the run will stay queued.
+  the project's worker reports the agent profile's CLI as installed and signed in. Until it does, "Queue run" is
+  disabled for a CLI profile and the note says to sign in on the worker and restart it.
   If the issue list cannot be loaded the dialog says so and a prompt-only run is still possible.
 - **Reviews > Local branches > Evidence.** For the selected run: issue link, provider and version, worker, branch,
   base and result commits, execution result, verification, publication, pull-request link, reported usage, the pull
@@ -130,6 +135,7 @@ that exits successfully is therefore not reported as delivered work unless verif
 
 - **Agents > Queue run > Create a new issue.** Creates a GitHub issue from a title and description and selects it for
   the run.
+- **Integrations and Settings.** The Local workers card lists which coding CLIs are ready on online workers.
 - **Evidence actions.** "Import change requests from GitHub" on a run with a pull request, and "Retry pull request"
   when the branch was pushed but GitHub did not create the pull request. Both report the outcome in place.
 
@@ -177,7 +183,8 @@ OpenAI-compatible chat runtime described in [Agent run queue](agent-run-queue.md
 
    An optional `"environment": {"GOCACHE": "/tmp/zenchron-gocache"}` beside `verify` is added to the provider and
    verification processes. Use it for tool caches a sandboxed agent must be able to write; it cannot set worker,
-   GitHub, or provider API-key variables.
+   GitHub, or provider API-key variables. An optional `"read_paths": ["/Users/dev/go/pkg/mod"]` lists absolute paths
+   both provider sandboxes may read in addition to the worktree, for dependency caches in the home directory.
 
    Commands are argument lists run in the worktree without a shell. Without this file the worker serves every checkout
    under `ZENCHRON_PROJECTS_ROOT` and reports verification as `not_configured`.
@@ -242,6 +249,8 @@ Live, on 2026-11-11 against `bogdaniel/zenchron-engineering-os` with a loopback 
 | Cancellation | The same run and run `ebf56847dab4d59fff2ff784bd8ce483` ended `cancelled`; no provider process remained |
 | Codex run started and inspected in the dashboard, final build | Issue [#351](https://github.com/bogdaniel/zenchron-engineering-os/issues/351) chosen in the queue dialog; run `ff05244b6995c241c4c1c8c83e43e899`, commit `a2d221b`, verification `passed`, [PR #352](https://github.com/bogdaniel/zenchron-engineering-os/pull/352); evidence read from Reviews |
 | Issue created in the dashboard, sandboxed Claude Code run, build `5c0a62c` | Issue [#355](https://github.com/bogdaniel/zenchron-engineering-os/issues/355) created in the queue dialog; run `787f04a04bc9a7282a378a73af8142da`, commit `fc70b15`, [PR #356](https://github.com/bogdaniel/zenchron-engineering-os/pull/356). In attempt 1 the agent could not run Go (no writable build cache); after `environment` was added (`ab1d58d`) a change request from Reviews produced attempt 2, in which the agent ran `gofmt`, `go vet`, and `go test` itself and the worker's verification passed |
+| Codex under the read-confining profile, build `ec7333c` | Change request from Reviews on run `ff05244b…` produced attempt 2, commit `77f8b87` on PR #352, verification `passed`; asked to print a file in the home directory, the agent reported the sandbox denied it |
+| Worker killed with SIGKILL mid-run, build `ec7333c` | Run `d635c3be1a980aafb781164a83c626f0`: both `codex exec` processes were gone 2.2 s after the kill; after the worker restarted the lease expired, attempt 2 was claimed, and the run was cancelled |
 | Restart and cancellation repeated on the final build | Run `4e2d7f7cc2bf8549cd7ac171c59cc7e2`: control plane killed mid-run, attempt 1 `lease_expired`, attempt 2 resumed; cancelled with the Reviews "Cancel run" button in 0.8 s, partial diff kept, no provider process left |
 | Claude Code run started and inspected in the dashboard, final build | Issue [#353](https://github.com/bogdaniel/zenchron-engineering-os/issues/353); run `48513125f6833b6d21a270471ef47891`, commit `b5921c7`, verification `passed`, [PR #354](https://github.com/bogdaniel/zenchron-engineering-os/pull/354) |
 
@@ -258,22 +267,25 @@ Git deadline had started before the provider ran. That defect is fixed and cover
 1. Start the control plane with GitHub credentials and a worker with `ZENCHRON_PROJECTS_ROOT` on a clone of the target
    repository and a `ZENCHRON_WORKER_CONFIG` that lists it.
 2. `GET /api/v1/workers` must show the provider with `"ready": true`; `GET /api/v1/projects` gives the project id.
-3. Create an agent profile with `provider` `codex-cli` or `claude-code`, `model` `default`, and `code.write` in `tools`.
-4. `POST /api/v1/agent-runs` with the profile id, project id, and `issue_number`.
-5. Poll `GET /api/v1/agent-runs/{id}/events` until the run is terminal, then check `verification`, `publication`, and
-   `pull_request_url`, and open `GET /api/v1/agent-runs/{id}/pull-request` for CI state.
+3. In the dashboard, Agents > Create Agent: provider `codex-cli` or `claude-code`, model `default`, tools including
+   "Write files in isolated branch" (and "Run tests" for a sandboxed Claude Code shell).
+4. Agents > Queue run: choose the project, choose or create the GitHub issue, Queue run.
+5. Reviews > Local branches: select the run's branch, open Evidence, and watch the events until the run is terminal;
+   then read Verification, Publication, the pull-request link, and its checks. The same data is available from
+   `GET /api/v1/agent-runs`, `.../events`, and `.../pull-request`.
+
+This walk-through has been performed by a script driving the pages, not yet by a person.
 
 ## Outstanding
 
 - On a phone-sized screen the Evidence panel sits in the Reviews page's existing short, resizable detail pane and has
   to be scrolled or the pane enlarged.
-- Sandboxed Claude Code can read only the worktree inside the home directory, so a build that needs a dependency
-  cache in the home directory (for example a Go module cache) cannot run inside the agent; the worker's verification
-  still runs it.
-- Codex's `workspace-write` sandbox confines writes but not reads: in a probe it printed a file from the home
-  directory. A Codex run can therefore read anything the worker's user can read.
+- A sandboxed agent cannot open network connections, including local test servers: a Codex run could not run Go
+  tests that bind a loopback port. The worker's verification runs outside the sandbox and covers them.
+- A build that needs a dependency cache in the home directory runs inside the agent only if the operator lists that
+  cache under `read_paths`.
+- Provider sandbox behavior was probed by hand against Codex 0.167.0 and Claude Code 2.1.322 on macOS. CI has neither
+  CLI, so only the arguments the worker passes are tested automatically.
 - Review and CI state are read on request, not pushed by webhooks.
-- If the worker process is killed, a provider it started keeps running in its own process group until it finishes;
-  the next attempt may then start in the same worktree alongside it.
 - Usage is whatever the CLI reports. Codex reports tokens without cost; Claude Code reports a cost figure even under
   a subscription. No budget is enforced beyond the time limits and the three-attempt cap.

@@ -119,13 +119,13 @@ Not covered, and blocking multi-organization or untrusted deployment:
 - User sessions are signed cookies valid for eight hours; removing a user from the allowlist blocks them, but there is
   no server-side session list.
 - Worker tokens are static until the operator replaces the hash. There is no automatic rotation or mutual TLS.
-- A worker executes repository code (tests) with the developer's own permissions. Verification is not sandboxed, and
-  Codex's sandbox is the only isolation for commands the agent runs.
-- Probed on 2026-11-11: Codex 0.167.0 in `workspace-write` mode read a file in the home directory; Claude Code
-  2.1.322 with the worker's sandbox settings was refused for the same file through both Bash and its Read tool. A
-  Codex run can therefore read whatever the worker's user can read, and redaction of events is pattern-based. Run
-  Codex only for repositories whose issue authors and reviewers are trusted, on a machine or account without
-  unrelated secrets.
+- A worker executes repository code (tests) with the developer's own permissions. Verification is not sandboxed; the
+  provider sandboxes isolate only what the agent runs during execution.
+- Probed on 2026-11-11: Codex 0.167.0 in its stock `workspace-write` mode read a file in the home directory, so the
+  worker now runs Codex under its own permission profile; with it, and with the worker's Claude Code sandbox
+  settings, the same file was refused. Files outside the home directory that the worker's user can read (for example
+  under `/etc`) remain readable by both, and redaction of events is pattern-based. These sandboxes are the CLIs' own
+  and were verified by hand on macOS only.
 - The control plane trusts the commit and verification result the enrolled worker reports. A compromised worker can
   misreport its own work; GitHub CI on the pull request is the independent check.
 
