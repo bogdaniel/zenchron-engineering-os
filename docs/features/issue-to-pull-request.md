@@ -216,8 +216,9 @@ Automated, deterministic:
 
 - `cd dashboard && npm run test:e2e -- e2e/z_run_evidence.spec.ts` covers the queue dialog (issue selection, the
   request body, provider ready and not ready, issues unavailable) and the Evidence panel (summary, checks, attempts,
-  events, failure and empty states, no horizontal overflow) at 1672×941 and 390×844, plus one run through the real
-  control plane and worker.
+  events, failure and empty states, no horizontal overflow) at 1672×941 and 390×844 against mocked API responses.
+  `npm run test:e2e -- e2e/z_agents.spec.ts --grep 'real worker run'` checks the panel against a run executed by the
+  real control plane and worker.
 
 Live, on 2026-11-11 against `bogdaniel/zenchron-engineering-os` with a loopback control plane and one worker:
 

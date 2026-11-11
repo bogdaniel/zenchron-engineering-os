@@ -365,3 +365,38 @@ test('Reviews can cancel an active worker run and retain its partial branch diff
   await page.getByRole('button', { name: 'Add comment' }).click();
   await expect(page.getByLabel('Review comments')).toContainText('Resume from the captured partial output.');
 });
+
+// Kept in this file so it runs after the tests above, which expect their own run to be the newest one.
+test('a real worker run shows its control-plane and worker events as evidence', async ({ page }) => {
+  await page.goto('/#agents');
+  const prompt = `Evidence check ${Date.now()}`;
+  const runID = await page.evaluate(async (taskPrompt) => {
+    const profile = await fetch('/api/v1/agents', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Evidence Reviewer', provider: 'custom', model: 'review-v1', tools: ['code.write'] }),
+    }).then((response) => response.json());
+    const projects = await fetch('/api/v1/projects').then((response) => response.json());
+    const run = await fetch('/api/v1/agent-runs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: profile.id, project_id: projects[0].id, prompt: taskPrompt }),
+    }).then((response) => response.json());
+    return run.id as string;
+  }, prompt);
+  await expect.poll(() => page.evaluate(async (id) => {
+    const runs = await fetch('/api/v1/agent-runs').then((response) => response.json());
+    return runs.find((item: { id: string }) => item.id === id)?.status;
+  }, runID), { timeout: 20_000 }).toBe('succeeded');
+  await page.goto('/#reviews');
+  await page.getByRole('button', { name: 'Local branches' }).click();
+  await page.getByRole('gridcell', { name: `zenchron/agent-run/${runID}` }).click();
+  await page.getByRole('group', { name: 'Review detail sections' }).getByRole('button', { name: 'Evidence' }).click();
+  const summary = page.getByLabel('Run evidence summary');
+  await expect(summary).toContainText('Prompt-only run');
+  await expect(summary).toContainText('Not configured on the worker');
+  await expect(summary).toContainText('playwright-worker');
+  const events = page.getByRole('region', { name: 'Run events' });
+  await expect(events).toContainText('Attempt 1 claimed by worker playwright-worker');
+  await expect(events).toContainText('Isolated worktree ready on zenchron/agent-run/');
+  await expect(events).toContainText('Attempt finished: succeeded');
+  await expect(page.getByRole('region', { name: 'Run attempts' })).toContainText('Attempt 1Succeeded');
+});
