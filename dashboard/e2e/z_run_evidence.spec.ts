@@ -164,3 +164,77 @@ test('Reviews evidence reports loading failures and an empty event log', async (
   await page.getByRole('group', { name: 'Review detail sections' }).getByRole('button', { name: 'Evidence' }).click();
   await expect(page.getByRole('region', { name: 'Run events' })).toContainText('No events recorded for this run.');
 });
+
+test('queue dialog creates a GitHub issue and selects it for the run', async ({ page }) => {
+  await mockWorkspace(page, { providerReady: true });
+  let created: Record<string, unknown> | undefined;
+  let failCreation = true;
+  await page.route(`**/api/v1/projects/${projectID}/issues`, (route) => {
+    if (route.request().method() !== 'POST') return route.fulfill(json([{ number: 7, title: 'Bound the claim response body' }]));
+    if (failCreation) return route.fulfill({ status: 502, body: 'GitHub could not create this issue; verify token permissions and provider access' });
+    created = route.request().postDataJSON();
+    return route.fulfill(json({ number: 41, title: 'Reject control characters in worker names' }, 201));
+  });
+  let queued: Record<string, unknown> | undefined;
+  await page.route('**/api/v1/agent-runs', (route) => {
+    if (route.request().method() !== 'POST') return route.fulfill(json([]));
+    queued = route.request().postDataJSON();
+    return route.fulfill(json({ ...evidenceRun, status: 'queued', attempts: 0, attempt_log: [] }, 202));
+  });
+  await page.goto('/#agents');
+  await page.getByRole('button', { name: 'Queue run' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
+  await dialog.getByRole('button', { name: 'Create a new issue' }).click();
+  const draft = dialog.getByRole('group', { name: 'New GitHub issue' });
+  await expect(draft.getByRole('button', { name: 'Create issue' })).toBeDisabled();
+  await draft.getByLabel('Issue title').fill('Reject control characters in worker names');
+  await draft.getByLabel('Issue description').fill('Problem, expected behavior, acceptance criteria.');
+  await draft.getByRole('button', { name: 'Create issue' }).click();
+  await expect(draft.getByRole('alert')).toContainText('GitHub could not create this issue');
+  failCreation = false;
+  await draft.getByRole('button', { name: 'Create issue' }).click();
+  await expect(draft).toBeHidden();
+  expect(created).toEqual({ title: 'Reject control characters in worker names', body: 'Problem, expected behavior, acceptance criteria.' });
+  await expect(dialog.getByRole('combobox', { name: 'GitHub issue (optional)' })).toHaveValue('#41 Reject control characters in worker names');
+  await dialog.getByRole('button', { name: 'Queue run', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(queued).toEqual({ agent_id: profileID, project_id: projectID, prompt: '', issue_number: 41 });
+});
+
+test('Reviews evidence imports GitHub change requests and retries a failed pull request', async ({ page }) => {
+  await mockWorkspace(page, { providerReady: true });
+  let run: Record<string, unknown> = { ...evidenceRun, publication: 'pull_request_failed', pull_request_number: undefined,
+    pull_request_url: undefined, pull_request_error: 'The branch was pushed, but GitHub could not create the pull request.' };
+  const calls: string[] = [];
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([run])));
+  await page.route(`**/api/v1/agent-runs/${runID}/diff`, (route) => route.fulfill(json({ run_id: runID, diff: '', truncated: false })));
+  await page.route(`**/api/v1/agent-runs/${runID}/events`, (route) => route.fulfill(json([])));
+  await page.route(`**/api/v1/agent-runs/${runID}/pull-request`, (route) => route.fulfill(json({
+    number: 23, url: evidenceRun.pull_request_url, state: 'open', merged: false, head_sha: 'a'.repeat(40), checks: [], reviews: [] })));
+  await page.route(`**/api/v1/agent-runs/${runID}/publish`, (route) => {
+    calls.push('publish');
+    run = { ...evidenceRun };
+    return route.fulfill(json(run));
+  });
+  let importStatus = 409;
+  await page.route(`**/api/v1/agent-runs/${runID}/sync-reviews`, (route) => {
+    calls.push('sync-reviews');
+    return route.fulfill(importStatus === 200 ? json({ imported: 2, run }) : { status: 409, body: 'agent run review history is full' });
+  });
+  await page.goto('/#reviews');
+  await page.getByRole('button', { name: 'Local branches' }).click();
+  await page.getByRole('group', { name: 'Review detail sections' }).getByRole('button', { name: 'Evidence' }).click();
+  const summary = page.getByLabel('Run evidence summary');
+  await expect(summary).toContainText('Branch pushed; pull request not created');
+  await expect(page.getByRole('button', { name: 'Import change requests from GitHub' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retry pull request' }).click();
+  await expect(page.locator('.run-evidence-actions').getByRole('status')).toHaveText('Pull request published.');
+  await expect(summary).toContainText('Pull request published', { timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Retry pull request' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Import change requests from GitHub' }).click();
+  await expect(page.locator('.run-evidence-actions').getByRole('alert')).toHaveText('agent run review history is full');
+  importStatus = 200;
+  await page.getByRole('button', { name: 'Import change requests from GitHub' }).click();
+  await expect(page.locator('.run-evidence-actions').getByRole('status')).toHaveText('Imported 2 change requests from GitHub.');
+  expect(calls).toEqual(['publish', 'sync-reviews', 'sync-reviews']);
+});

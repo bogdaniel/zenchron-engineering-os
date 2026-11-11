@@ -1,11 +1,13 @@
-import { Select, Text } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { Button, Select, Text, Textarea, TextInput } from '@mantine/core';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 const cliProviders = ['codex-cli', 'claude-code'];
 const providerSchema = z.object({ id: z.string(), version: z.string().optional(), ready: z.boolean() });
 export const workerProvidersSchema = z.array(providerSchema).optional();
-const issueOptionsSchema = z.array(z.object({ number: z.number(), title: z.string() }));
+const issueOptionSchema = z.object({ number: z.number(), title: z.string() });
+const issueOptionsSchema = z.array(issueOptionSchema);
 
 export type RunWorker = {
   id: string; name: string; agent_runtime_enabled?: boolean; providers?: z.infer<typeof providerSchema>[];
@@ -48,6 +50,28 @@ export function RunIssueSelect({ projectID, value, onChange }: {
     queryKey: ['run-issue-options', projectID], queryFn: () => loadIssueOptions(projectID), enabled: projectID !== '',
     retry: false,
   });
+  const queryClient = useQueryClient();
+  const [drafting, setDrafting] = useState(false);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const createIssue = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/v1/projects/${projectID}/issues`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), body: body.trim() }),
+      });
+      if (!response.ok) throw new Error((await response.text()).trim() || `Could not create the issue (${response.status})`);
+      return issueOptionSchema.parse(await response.json());
+    },
+    onSuccess: (issue) => {
+      // GitHub's issue list can lag behind creation, so the new issue is added to the cached list directly.
+      queryClient.setQueryData<z.infer<typeof issueOptionsSchema>>(['run-issue-options', projectID],
+        (current) => [issue, ...(current ?? []).filter((item) => item.number !== issue.number)]);
+      onChange(issue.number);
+      setTitle('');
+      setBody('');
+      setDrafting(false);
+    },
+  });
   const options = (issues.data ?? []).map((issue) => ({ value: String(issue.number), label: `#${issue.number} ${issue.title}` }));
   return <>
     <Select label="GitHub issue (optional)" data={options} value={value === null ? null : String(value)}
@@ -60,5 +84,21 @@ export function RunIssueSelect({ projectID, value, onChange }: {
     {value !== null && <Text className="agents-issue-note" role="status">
       The agent receives the issue text and the pull request will close issue #{value}.
     </Text>}
+    {projectID !== '' && !drafting && <Button variant="subtle" size="compact-xs" type="button" onClick={() => setDrafting(true)}>
+      Create a new issue
+    </Button>}
+    {drafting && <fieldset className="agents-issue-draft">
+      <legend>New GitHub issue</legend>
+      <TextInput label="Issue title" maxLength={256} value={title} onChange={(event) => setTitle(event.currentTarget.value)} />
+      <Textarea label="Issue description" minRows={3} maxLength={20_000} value={body}
+        onChange={(event) => setBody(event.currentTarget.value)}
+        description="State the problem, the expected behavior, and acceptance criteria." />
+      {createIssue.isError && <Text className="agents-error" role="alert">{createIssue.error.message}</Text>}
+      <div className="agents-modal-actions">
+        <Button variant="subtle" type="button" onClick={() => setDrafting(false)}>Discard</Button>
+        <Button variant="default" type="button" disabled={!title.trim()} loading={createIssue.isPending}
+          onClick={() => createIssue.mutate()}>Create issue</Button>
+      </div>
+    </fieldset>}
   </>;
 }

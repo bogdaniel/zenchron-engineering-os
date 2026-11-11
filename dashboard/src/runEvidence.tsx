@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { Button } from '@mantine/core';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import './run-evidence.css';
 
@@ -77,12 +78,34 @@ export function RunEvidence({ run }: { run: EvidenceRun }) {
       ? <a href={run.pull_request_url} target="_blank" rel="noreferrer">#{run.pull_request_number} on GitHub ↗</a> : 'None'],
     ['Usage', usage],
   ];
+  const queryClient = useQueryClient();
+  const followUp = useMutation({
+    mutationFn: async (action: 'sync-reviews' | 'publish') => {
+      const response = await fetch(`/api/v1/agent-runs/${run.id}/${action}`, { method: 'POST' });
+      if (!response.ok) throw new Error((await response.text()).trim() || `Request failed (${response.status})`);
+      const result = await response.json() as { imported?: number };
+      return action === 'publish' ? 'Pull request published.'
+        : result.imported ? `Imported ${result.imported} change request${result.imported === 1 ? '' : 's'} from GitHub.`
+          : 'No new change requests on GitHub.';
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent-runs'] }),
+  });
   const checks = pullRequest.data?.checks ?? [];
   const attempts = run.attempt_log ?? [];
   return <div className="run-evidence">
     <dl className="run-evidence-facts" aria-label="Run evidence summary">
       {facts.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}
     </dl>
+    {!active && (run.pull_request_number !== undefined || run.publication === 'pull_request_failed') && (
+      <div className="run-evidence-actions">
+        {run.publication === 'pull_request_failed' && <Button size="compact-xs" variant="default"
+          loading={followUp.isPending} onClick={() => followUp.mutate('publish')}>Retry pull request</Button>}
+        {run.pull_request_number !== undefined && <Button size="compact-xs" variant="default"
+          loading={followUp.isPending} onClick={() => followUp.mutate('sync-reviews')}>Import change requests from GitHub</Button>}
+        {followUp.isError && <span role="alert">{followUp.error.message}</span>}
+        {followUp.isSuccess && <span role="status">{followUp.data}</span>}
+      </div>
+    )}
     {run.pull_request_number !== undefined && <section aria-label="Pull request checks">
       <h4>Pull request checks</h4>
       {pullRequest.isLoading ? <p role="status">Loading checks…</p>
