@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -30,7 +31,12 @@ type workerConfig struct {
 
 type repositoryConfig struct {
 	Verify [][]string `json:"verify"`
+	// Environment is added to provider and verification processes, for example a build cache location
+	// that a sandboxed agent can write to.
+	Environment map[string]string `json:"environment"`
 }
+
+var environmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 type runLimits struct {
 	wallClock    time.Duration
@@ -65,6 +71,13 @@ func loadWorkerConfig() (*workerConfig, error) {
 		if repositoryLocator("https://"+repository) != repository || len(settings.Verify) > maxVerificationCommands {
 			return nil, fmt.Errorf("ZENCHRON_WORKER_CONFIG repository %q is invalid", repository)
 		}
+		for name, value := range settings.Environment {
+			// Operator-set variables must not reintroduce what providerEnvironment removes.
+			if !environmentNamePattern.MatchString(name) || strings.ContainsRune(value, 0) ||
+				len(providerEnvironment([]string{name + "=" + value})) == 0 {
+				return nil, fmt.Errorf("ZENCHRON_WORKER_CONFIG repository %q sets an invalid or reserved variable %q", repository, name)
+			}
+		}
 		for _, command := range settings.Verify {
 			if len(command) == 0 || strings.TrimSpace(command[0]) == "" {
 				return nil, fmt.Errorf("ZENCHRON_WORKER_CONFIG repository %q has an empty verification command", repository)
@@ -90,6 +103,18 @@ func (config *workerConfig) verificationCommands(repository string) [][]string {
 	return config.Repositories[repository].Verify
 }
 
+// processEnvironment is what provider and verification processes for a repository run with.
+func (config *workerConfig) processEnvironment(repository string) []string {
+	environment := providerEnvironment(os.Environ())
+	if config == nil {
+		return environment
+	}
+	for name, value := range config.Repositories[repository].Environment {
+		environment = append(environment, name+"="+value)
+	}
+	return environment
+}
+
 func loadRunLimits() (runLimits, error) {
 	limits := runLimits{wallClock: 2 * time.Hour, inactivity: 15 * time.Minute, toolActivity: 45 * time.Minute,
 		verification: 30 * time.Minute, gitStage: 2 * time.Minute}
@@ -112,7 +137,8 @@ func loadRunLimits() (runLimits, error) {
 
 // runVerification executes the operator's commands in the worktree. Every command must exit zero.
 func runVerification(
-	ctx context.Context, worktree string, commands [][]string, timeout time.Duration, emit func(kind, message string),
+	ctx context.Context, worktree string, commands [][]string, environment []string, timeout time.Duration,
+	emit func(kind, message string),
 ) string {
 	if len(commands) == 0 {
 		emit("verification", "No verification commands are configured for this repository on the worker.")
@@ -124,7 +150,7 @@ func runVerification(
 		label := strings.Join(arguments, " ")
 		output := &tailBuffer{limit: verificationOutputTail}
 		command := exec.CommandContext(verifyCtx, arguments[0], arguments[1:]...)
-		command.Dir, command.Env = worktree, providerEnvironment(os.Environ())
+		command.Dir, command.Env = worktree, environment
 		command.Stdout, command.Stderr = output, output
 		ownProcessGroup(command)
 		err := command.Run()

@@ -78,7 +78,8 @@ func newRunHarness(t *testing.T, script string, verify [][]string) *runHarness {
 	harness.runner = &agentRunner{
 		client: api.Client(), baseURL: controlURL, workerID: agentRunTestID, token: fakeWorkerToken,
 		limits: runLimits{wallClock: time.Minute, inactivity: time.Minute, toolActivity: time.Minute, verification: time.Minute, gitStage: time.Minute},
-		config: &workerConfig{Repositories: map[string]repositoryConfig{"": {Verify: verify}}},
+		config: &workerConfig{Repositories: map[string]repositoryConfig{"": {Verify: verify,
+			Environment: map[string]string{"ZC_TEST_CACHE": "/tmp/zc-cache"}}}},
 		providers: map[string]*cliProvider{workerapi.ProviderCodex: {
 			id: workerapi.ProviderCodex, path: binary, version: "fake 1.0", ready: true,
 			args: func(workerapi.AgentRunCommand, string) []string { return nil }, parse: parseCodexEvent,
@@ -213,6 +214,33 @@ func TestCLIRunVerificationFailureKeepsCommitAndDoesNotPublish(t *testing.T) {
 	}
 	if events := harness.eventText(); !strings.Contains(events, "verification: failed: sh -c echo boom-detail; exit 3\nboom-detail") {
 		t.Fatalf("events missing verification failure:\n%s", events)
+	}
+}
+
+func TestOperatorEnvironmentReachesProviderAndVerificationButCannotRestoreCredentials(t *testing.T) {
+	script := `echo "cache=$ZC_TEST_CACHE" >> README.md
+echo '{"type":"item.completed","item":{"id":"m1","type":"agent_message","text":"done"}}'
+`
+	harness := newRunHarness(t, script, [][]string{{"sh", "-c", `test "$ZC_TEST_CACHE" = /tmp/zc-cache && test -z "$ZENCHRON_WORKER_TOKEN"`}})
+	t.Setenv("ZENCHRON_WORKER_TOKEN", fakeWorkerToken)
+	if err := harness.process(); err != nil {
+		t.Fatalf("process run: %v", err)
+	}
+	result := harness.result()
+	if result.Status != "succeeded" || result.Verification != workerapi.VerificationPassed ||
+		!strings.Contains(*result.Diff, "+cache=/tmp/zc-cache") {
+		t.Fatalf("result = %#v", result)
+	}
+	for _, reserved := range []string{`{"ZENCHRON_WORKER_TOKEN":"x"}`, `{"ANTHROPIC_API_KEY":"x"}`, `{"GH_TOKEN":"x"}`, `{"BAD NAME":"x"}`, `{"A=B":"x"}`} {
+		path := filepath.Join(t.TempDir(), "worker.json")
+		content := `{"repositories":{"github.com/acme/api":{"environment":` + reserved + `}}}`
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("ZENCHRON_WORKER_CONFIG", path)
+		if _, err := loadWorkerConfig(); err == nil {
+			t.Errorf("worker config accepted environment %s", reserved)
+		}
 	}
 }
 

@@ -112,14 +112,14 @@ func cliPrompt(command workerapi.AgentRunCommand) string {
 }
 
 func (provider *cliProvider) execute(
-	ctx context.Context, command workerapi.AgentRunCommand, worktree string, limits runLimits,
+	ctx context.Context, command workerapi.AgentRunCommand, worktree string, environment []string, limits runLimits,
 	emit func(kind, message string),
 ) (executionResult, error) {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	process := exec.CommandContext(runCtx, provider.path, provider.args(command, worktree)...)
 	process.Dir = worktree
-	process.Env = providerEnvironment(os.Environ())
+	process.Env = environment
 	process.Stdin = strings.NewReader(cliPrompt(command))
 	ownProcessGroup(process)
 	session := &cliSession{parse: provider.parse, emit: emit, lastActivity: time.Now(), openTools: map[string]bool{}}

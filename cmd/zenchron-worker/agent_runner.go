@@ -21,7 +21,7 @@ import (
 // implementation today: the chat-completions runtime and the installed coding CLIs.
 type runExecutor interface {
 	execute(
-		ctx context.Context, command workerapi.AgentRunCommand, worktree string, limits runLimits,
+		ctx context.Context, command workerapi.AgentRunCommand, worktree string, environment []string, limits runLimits,
 		emit func(kind, message string),
 	) (executionResult, error)
 	versionLabel() string
@@ -32,7 +32,8 @@ func (provider *cliProvider) versionLabel() string { return provider.version }
 func (runtime *agentRuntime) versionLabel() string { return "" }
 
 func (runtime *agentRuntime) execute(
-	ctx context.Context, command workerapi.AgentRunCommand, worktree string, _ runLimits, _ func(kind, message string),
+	ctx context.Context, command workerapi.AgentRunCommand, worktree string, _ []string, _ runLimits,
+	_ func(kind, message string),
 ) (executionResult, error) {
 	output, err := runtime.complete(ctx, command, worktree)
 	switch {
@@ -181,7 +182,8 @@ func (runner *agentRunner) attempt(
 	reporter.emit("status", fmt.Sprintf("Isolated worktree ready on %s from %s", command.Branch, command.BaseBranch))
 
 	runCtx, cancelRun := context.WithTimeout(ctx, runner.limits.wallClock)
-	execution, runErr := executor.execute(runCtx, command, worktree, runner.limits, reporter.emit)
+	execution, runErr := executor.execute(runCtx, command, worktree, runner.config.processEnvironment(project.Remote),
+		runner.limits, reporter.emit)
 	cancelRun()
 	result.Usage, result.TerminationReason = execution.usage, execution.reason
 
@@ -226,7 +228,7 @@ func (runner *agentRunner) deliver(
 	}
 	reporter.emit("status", "Committed "+result.CommitSHA[:12]+" on the run branch.")
 	result.Verification = runVerification(ctx, worktree, runner.config.verificationCommands(project.Remote),
-		runner.limits.verification, reporter.emit)
+		runner.config.processEnvironment(project.Remote), runner.limits.verification, reporter.emit)
 	if cancelled, _ := reporter.state(); cancelled {
 		return cancelledRun(result)
 	}

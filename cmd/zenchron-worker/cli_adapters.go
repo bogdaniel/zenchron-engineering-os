@@ -201,6 +201,7 @@ func parseClaudeEvent(line []byte) cliEvent {
 				Input     struct {
 					FilePath string `json:"file_path"`
 					Pattern  string `json:"pattern"`
+					Command  string `json:"command"`
 				} `json:"input"`
 			} `json:"content"`
 		} `json:"message"`
@@ -230,7 +231,7 @@ func parseClaudeEvent(line []byte) cliEvent {
 			case "text":
 				return cliEvent{kind: "message", message: block.Text}
 			case "tool_use":
-				target := block.Input.Pattern
+				target := nonEmpty(block.Input.Pattern, block.Input.Command)
 				if block.Input.FilePath != "" {
 					target = filepath.Base(block.Input.FilePath)
 				}
