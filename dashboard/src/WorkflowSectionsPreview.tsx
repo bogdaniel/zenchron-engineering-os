@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Badge, Button } from '@mantine/core';
 import {
-  IconAlertTriangle, IconCalendar, IconCheck, IconClock, IconCloud, IconDatabase, IconDownload, IconFileText,
-  IconGitBranch, IconLayoutBoard, IconPlayerPlay, IconPlus, IconRepeat, IconSettings, IconUserCheck,
+  IconAlertTriangle, IconArrowUp, IconCheck, IconClock, IconDiamond, IconDownload, IconFileText,
+  IconLayoutBoard, IconPlayerPlay, IconPlus, IconRepeat, IconSettings, IconUserCheck,
 } from '@tabler/icons-react';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
@@ -46,12 +46,12 @@ const schedules = [
   ['GitHub PR Webhook', 'On pull_request event', 'Event-driven, enabled'],
 ];
 
-function SectionTitle({ title, description, action, onAction }: {
-  title: string; description: string; action: string; onAction: (action: string) => void;
+function SectionTitle({ title, description, action, actionIcon, onAction }: {
+  title: string; description: string; action: string; actionIcon?: ReactNode; onAction: (action: string) => void;
 }) {
   return <div className="workflow-section-preview-title">
     <div><h2>{title}</h2><p>{description}</p></div>
-    <Button className="workflow-section-primary-action" onClick={() => onAction(action)} leftSection={<IconPlus size={14} />}>{action}</Button>
+    <Button className="workflow-section-primary-action" onClick={() => onAction(action)} leftSection={actionIcon}>{action}</Button>
   </div>;
 }
 
@@ -78,7 +78,7 @@ function RunSection({ onAction }: { onAction: (action: string) => void }) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   return <>
-    <SectionTitle title="Run History & Execution Monitoring" description="Inspect every execution, trace agent activity, and act on pending reviews." action="Run Workflow" onAction={onAction} />
+    <SectionTitle title="Run History & Execution Monitoring" description="Inspect every execution, trace agent activity, and act on pending reviews." action="Run Workflow" actionIcon={<IconPlayerPlay size={14} />} onAction={onAction} />
     <div className="workflow-run-metrics">
       {[
         ['Running now', '3', '● Live', <IconPlayerPlay />], ['Succeeded', '128', '+8% this month', <IconCheck />],
@@ -122,7 +122,7 @@ function RunSection({ onAction }: { onAction: (action: string) => void }) {
 
 function VersionsSection({ onAction }: { onAction: (action: string) => void }) {
   return <>
-    <SectionTitle title="Workflow Versions" description="Review draft changes, compare history, and publish known-good definitions." action="Publish Draft" onAction={onAction} />
+    <SectionTitle title="Workflow Versions" description="Review draft changes, compare history, and publish known-good definitions." action="Publish Draft" actionIcon={<IconArrowUp size={14} />} onAction={onAction} />
     <div className="workflow-version-columns">
       <PanelCard className="workflow-section-card workflow-version-history">
         <PanelHeading title="Version History" description="6 saved versions · newest first" />
@@ -142,10 +142,10 @@ function VersionsSection({ onAction }: { onAction: (action: string) => void }) {
         </div>
         <h3 className="workflow-section-kicker">CHANGE SUMMARY</h3>
         {[
-          ['+ ADDED', 'Coverage Analyzer node', 'Parallel coverage threshold validation'],
-          ['~ UPDATED', 'Merge Gate condition', 'Requires 80% coverage and approval'],
-          ['→ ROUTED', 'Agent Router outputs', 'Additional test-generation fallback paths'],
-        ].map(([kind, title, detail]) => <div className="workflow-change-row" key={title}><Badge>{kind}</Badge><span><b>{title}</b><small>{detail}</small></span></div>)}
+          ['added', '+ ADDED', 'Coverage Analyzer node', 'Parallel coverage threshold validation'],
+          ['updated', '~ UPDATED', 'Merge Gate condition', 'Requires 80% coverage and approval'],
+          ['routed', '→ ROUTED', 'Agent Router outputs', 'Additional test-generation fallback paths'],
+        ].map(([state, kind, title, detail]) => <div className={`workflow-change-row ${state}`} key={title}><Badge>{kind}</Badge><span><b>{title}</b><small>{detail}</small></span></div>)}
         <div className="workflow-section-actions"><Button variant="default" onClick={() => onAction('Restore Draft')}>Restore Draft</Button>
           <Button onClick={() => onAction('Publish v2.4.0')}>Publish v2.4.0</Button></div>
       </PanelCard>
@@ -155,13 +155,18 @@ function VersionsSection({ onAction }: { onAction: (action: string) => void }) {
 
 function SchedulesSection({ onAction }: { onAction: (action: string) => void }) {
   const days = ['MON 9', 'TUE 10', 'WED 11', 'THU 12', 'FRI 13', 'SAT 14', 'SUN 15'];
+  const [enabled, setEnabled] = useState([true, true, true, true]);
   return <>
-    <SectionTitle title="Schedules & Triggers" description="Control how and when the workflow starts, and preview upcoming runs." action="New Schedule" onAction={onAction} />
+    <SectionTitle title="Schedules & Triggers" description="Control how and when the workflow starts, and preview upcoming runs." action="New Schedule" actionIcon={<IconPlus size={14} />} onAction={onAction} />
     <div className="workflow-schedule-columns">
       <PanelCard className="workflow-section-card workflow-schedule-list">
         <PanelHeading title="Active Triggers" description="4 schedules configured" />
         {schedules.map(([name, timing, next], index) => <div className={`workflow-schedule-row${index === 0 ? ' selected' : ''}`} key={name}>
-          <span className="workflow-section-icon"><IconCalendar size={15} /></span><span><b>{name}</b><small>{timing}</small><small>{next}</small></span><i className="workflow-static-toggle" />
+          <span className="workflow-section-icon">{index === 3 ? <IconDiamond size={15} /> : <IconFileText size={15} />}</span>
+          <span><b>{name}</b><small>{timing}</small><small>{next}</small></span>
+          <button type="button" role="switch" aria-label={`Enable ${name}`} aria-checked={enabled[index]}
+            className={`workflow-static-toggle${enabled[index] ? '' : ' off'}`}
+            onClick={() => setEnabled((current) => current.map((value, item) => item === index ? !value : value))} />
         </div>)}
         <footer>Timezone: Europe/Bucharest (EET/EEST)</footer>
       </PanelCard>
@@ -183,6 +188,7 @@ function SchedulesSection({ onAction }: { onAction: (action: string) => void }) 
 }
 
 function PermissionsSection({ onAction }: { onAction: (action: string) => void }) {
+  const [protections, setProtections] = useState([true, true, false, true]);
   const roles = [
     ['A', 'Alex Chen', 'Owner', 'All permissions'], ['P', 'Priya Shah', 'Editor', 'Edit & submit reviews'],
     ['M', 'Marco Lee', 'Operator', 'Execute and monitor runs'], ['S', 'Sarah Kim', 'Viewer', 'Read-only access and audit logs'],
@@ -192,7 +198,7 @@ function PermissionsSection({ onAction }: { onAction: (action: string) => void }
     ['Start execution', '✓', '✓', '✓', '–'], ['Approve protected steps', '✓', '–', '–', '–'], ['Publish a version', '✓', '–', '–', '–'],
   ];
   return <>
-    <SectionTitle title="Workflow Permissions" description="Manage collaborators, roles, and approvals for sensitive operations." action="Invite Member" onAction={onAction} />
+    <SectionTitle title="Workflow Permissions" description="Manage collaborators, roles, and approvals for sensitive operations." action="Invite Member" actionIcon={<IconPlus size={14} />} onAction={onAction} />
     <div className="workflow-permission-columns">
       <div className="workflow-permission-left">
         <PanelCard className="workflow-section-card">
@@ -209,9 +215,13 @@ function PermissionsSection({ onAction }: { onAction: (action: string) => void }
       <PanelCard className="workflow-section-card workflow-protection">
         <PanelHeading title="Protection & Approvals" description="Safeguards before merge and publication" />
         {[
-          ['Require approval before merge', 'Paused at Human Approval gate', true], ['Restrict version publishing', 'Owners only', true],
-          ['Allow public sharing', 'Disabled for this workflow', false], ['Signed audit trail', 'Immutable event history', true],
-        ].map(([name, detail, on]) => <div className="workflow-protection-row" key={name as string}><span>{name}<small>{detail}</small></span><i className={`workflow-static-toggle${on ? '' : ' off'}`} /></div>)}
+          ['Require approval before merge', 'Paused at Human Approval gate'], ['Restrict version publishing', 'Owners only'],
+          ['Allow public sharing', 'Disabled for this workflow'], ['Signed audit trail', 'Immutable event history'],
+        ].map(([name, detail], index) => <div className="workflow-protection-row" key={name}><span>{name}<small>{detail}</small></span>
+          <button type="button" role="switch" aria-label={name} aria-checked={protections[index]}
+            className={`workflow-static-toggle${protections[index] ? '' : ' off'}`}
+            onClick={() => setProtections((current) => current.map((value, item) => item === index ? !value : value))} />
+        </div>)}
         <label className="workflow-static-field">Minimum reviewers<output>2 distinct reviewers</output></label>
         <Button className="workflow-section-bottom-action" onClick={() => onAction('Save Permissions')}>Save Permissions</Button>
       </PanelCard>
@@ -237,7 +247,7 @@ function SettingsSection({ onAction }: { onAction: (action: string) => void }) {
       <div className="workflow-settings-right">
         <PanelCard className="workflow-section-card"><PanelHeading title="Connected Services" description="Providers used by this workflow" />
           {[
-            ['GitHub', 'Pull requests and branch events', <IconGitBranch />], ['LLM provider', 'Review and test agents', <IconCloud />], ['Evidence storage', 'Artifacts and logs', <IconDatabase />],
+            ['GitHub', 'Pull requests and branch events', <IconDiamond />], ['LLM provider', 'Review and test agents', <IconDiamond />], ['Evidence storage', 'Artifacts and logs', <IconDiamond />],
           ].map(([name, detail, icon]) => <div className="workflow-service-row" key={name as string}><span className="workflow-section-icon">{icon}</span><span><b>{name}</b><small>{detail}</small></span><Badge>READY</Badge></div>)}
         </PanelCard>
         <PanelCard className="workflow-section-card"><PanelHeading title="Notifications & Lifecycle" description="Alerts and administrative actions" />

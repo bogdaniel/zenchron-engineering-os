@@ -7,12 +7,15 @@ service exists. GitHub.com repositories support open issue and pull-request sync
 top-level pull-request comments and request-changes when a control-plane token has Pull requests write permission.
 Workers that have not sent the endpoint-status field are shown as needing an update; their configuration is not guessed.
 An unauthenticated localhost session at `/#integrations` uses the same dashboard shell with an illustrative Integrations mock.
+The dashboard development server forwards `/api/` requests, including mutation methods, to the configured control plane
+before static-file handling.
 Its category filters, connection switches, secret reveal labels, provider menus, and Add Integration flow update local preview
 state only; they do not query protected provider settings or save changes. Audit log opens the fixture events and Import / Export
 downloads those sample events as JSON. The audit range is a fixed sample label, not a filter. Profile edits, policy and secret list changes, notification rules, Test Connections,
 Save, and Discard also operate only on local preview state. Preview-added providers and secrets use placeholder data.
 Discard restores the last preview save; a reload resets the page to its original fixtures.
 Provider descriptions stay fully readable on the desktop mock, including the Linear / Jira work-tracking label.
+The Integrations Overview subtitle and parenthesized category counts match the supplied mock.
 
 ## Feature diagram
 
@@ -71,4 +74,7 @@ cd dashboard && npm run test:e2e -- e2e/system.spec.ts --grep "settings and inte
 without protected reads or writes, checks category filtering, local connection updates, preview key labels, adding a
 placeholder integration, editing settings, local policy/secret/rule actions, Save/Discard, connection testing, and
 viewing/exporting audit fixture data, then checks provider descriptions and links at desktop, provider link and badge
-visibility at 682 px, and Connected status-dot alignment without badge/toggle overlap.
+visibility at 682 px, title-case Connected badge text and label styling, and status-dot alignment without badge/toggle overlap.
+The desktop check also keeps the lower settings row within 152 px and aligns Notification Rules with the supplied mock.
+Set `ZENCHRON_E2E_DASHBOARD_PORT` to a free port to force Playwright to start a fresh dashboard instead of reusing
+a running preview.

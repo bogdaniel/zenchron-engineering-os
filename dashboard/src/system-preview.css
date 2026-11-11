@@ -63,9 +63,11 @@
   border-radius: 8px;
   color: #51d9a1;
   background: #12352a;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
+  text-transform: none;
 }
+.system-preview-status .mantine-Badge-label { font-size: inherit; text-transform: none; }
 .system-preview-status-dot {
   display: block;
   width: 5px;
@@ -155,7 +157,7 @@ button.system-preview-card-action { padding: 0; border: 0; background: transpare
 .system-preview-permissions table { margin-top: 8px; }
 .system-preview-permissions td { padding: 4px 3px; }
 .system-preview-permissions td:first-child { color: #51d9a1; }
-.system-preview-secrets td { white-space: nowrap; }
+.system-preview-secrets td { padding-block: 0; white-space: nowrap; }
 .system-preview-secrets td:first-child { display: flex; align-items: center; gap: 3px; }
 .system-preview-secrets td:first-child svg { color: #dfa644; }
 .system-preview-permissions td:last-child button,

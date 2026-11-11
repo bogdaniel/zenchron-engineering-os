@@ -4,6 +4,10 @@ The Workflows page follows the supplied node-editor mockup with an editable Reac
 component properties, graph validation, and control-plane save. The seeded PR review workflow is the first editable
 graph.
 
+In the local design preview, the component inspector's overflow menu resets selection to Agent Router. Closing the
+inspector hides it and gives the canvas the freed width; selecting a canvas node opens it again.
+The default Agent Router description also matches the routing summary in the supplied mock.
+
 ## Feature diagram
 
 ```mermaid
@@ -52,6 +56,9 @@ flowchart LR
 - Palette components show their type icon and purpose, and can be clicked or dragged onto the canvas; dragged nodes
   are centered under the cursor using React Flow viewport coordinates.
 - Palette search filters the existing component labels and descriptions, leaving the current groups and node types intact.
+- The local design preview also has All, Agents, Actions, Control, and Integrations category filters; each narrows the palette without changing the available workflow node types.
+- Compact desktop preview-only node dimensions and positions let Fit View show the complete graph at 100%, matching the supplied canvas mock.
+- The local design preview colors graph connectors by their destination node type; the live editor keeps its existing connector styling.
 - On desktop the component palette spans the canvas and run-preview rows, while the inspector spans the header through the
   preview. The Overview and phone summaries group configured node types into six readable workflow stages with concise
   action captions; component and connection totals still report the full saved graph. On phones, the preview uses compact
@@ -68,33 +75,54 @@ flowchart LR
   kind as read-only, and uses the matching component icon. It exposes no fields beyond the saved workflow shape.
 - The installed `react-resizable-panels` separator adjusts the canvas and run-preview heights. Its default split keeps
   the canvas aligned with the supplied desktop mock; the keyboard-focusable separator can also be resized with arrow keys.
-- The palette groups all node types accepted by the control plane. Builder is the only API-backed workflow section.
+- The palette groups all node types accepted by the control plane. In the local design preview, Publish Report appears
+  under the collapsed Integrations group, matching the mock; group headings toggle open and closed, and search reveals
+  matching blocks even when their group is collapsed. Builder is the only API-backed workflow section.
   The unauthenticated local design preview also opens static Runs, Versions, Schedules, Permissions, and Settings mockups;
   their sample data is marked illustrative, the shared header shows the version, node, and agent-profile summary, and
   navigation makes no workflow API requests. In the Builder preview, adding a custom block or routing rule, switching the
   Agent Router's Properties, Prompt, Variables, and Advanced tabs, toggling retry and execution conditions, validating the
-  graph, and switching the simulated run view update local preview state only. Run displays the simulated timeline; Save
+  graph, and switching the simulated run view update local preview state only. Its inspector tabs use the mock's segmented
+  control styling with a filled active tab. Run displays the simulated timeline; Save
   acknowledges the local draft; Publish marks only the preview; and the version menu opens history. None changes persisted
   workflow data. The mock's Runs, Versions, Schedules, Permissions, and Settings actions acknowledge locally and state
   that no workflow changes were saved; run detail tabs and phone section buttons switch their local view. Export logs
   downloads a clearly named sample log for the selected illustrative run. Prompt and
-  variable examples are labeled illustrative and are not saved. In live mode, secondary section tabs stay disabled until
+  variable examples are labeled illustrative and are not saved. The default Properties view includes routing, budget, retry, and execution-condition groups to match the desktop mock; Advanced remains a working tab for those controls. In live mode, secondary section tabs stay disabled until
   their services exist.
 - The desktop Versions preview follows the reference's 43/57 history/compare split. Schedules uses its 32/68
   trigger/calendar split and ~90 px schedule cards; tablet and phone retain the stacked layout.
+- Schedule preview trigger rows and the calendar grid use the reference insets and 90 px/144 px card heights. Trigger
+  switches update local state only; Save Schedule confirms the preview action without persisting workflow data.
+- Runs keeps the 397 px desktop history/detail panels below the four metric cards, with the mock's 0.88:1 history/detail
+  split and 32 px metric values. Secondary workflow section CTAs share the mock's 159 px width.
+- Version comparison cards retain the mock's 160 px graph frames and 114×44 node cards; Added, Updated, and Routed
+  summary badges use their separate status colors, and Restore Draft uses the outlined secondary style.
 - Settings lifecycle states use labeled, accessible ON pills matching the reference.
-- The desktop Permissions matrix uses compact rows so both columns fit inside the mock's 941 px frame.
+- Section preview primary actions use the mock's per-action icon (Run, Publish, create/invite) or no icon for Save Settings;
+  the Settings service rows use the repeated diamond glyph and its lifecycle buttons retain the outlined treatment.
+- The desktop Permissions panels use the mock's 1.6:1 left/right split and compact matrix rows to fit the 941 px frame.
+  Protection switches are keyboard-accessible and update local preview state; Save Permissions only acknowledges the
+  illustrative change and does not persist workflow data.
 - Opening a saved workflow selects its Agent Router so the inspector starts with real graph data. Workflows without
   an Agent Router leave the inspector unselected.
-- Run and Publish remain disabled because there is no workflow execution runner or publish service yet.
-- `/#workflows` in an unauthenticated local session opens the builder without a session, uses the local design fixture, and disables create/save;
+- In live mode, Run and Publish remain disabled until execution and publishing services exist. In the local design preview,
+  Run shows the illustrative timeline, Save acknowledges the draft, and Publish marks only the preview.
+- `/#workflows` in an unauthenticated local session opens the builder without a session, uses the local design fixture, disables creation, and allows local Save;
   it makes no workflow API requests.
+- The desktop local mock uses tall primary cards, separated branch cards, and green check markers for illustrative passed steps; the markers are status indicators, not controls.
+  The Retry title stays on one line beside its status marker to match the mock.
+  Code Reviewer, Test Generator, and Coverage Analyzer cards use the reference's wider branch width; Coverage Analyzer is shorter than the primary nodes and has clear space above it.
+  Tablet and phone graph sizing remain on the responsive canvas rules.
 - The local mock route shows the Retry loop above the Agent Router with dashed failure paths, a Condition node joining
   test and coverage results before approval, a readable dotted canvas grid, and the Agent Router's rule, budget, retry,
-  and execution-condition panels, plus the
-  mock's canvas toolbar and simulated PR #4827 timeline. These sample values are read-only preview content and never
-  enter saved workflows.
-- On phones, `/#workflows` in an unauthenticated local session shows run #8821 at 78%, its five task states, and two approval states. These
+  and execution-condition panels. Its canvas toolbar switches between select and pan modes, adds a local block, fits and
+  zooms the graph, toggles fullscreen, and shows or hides the mini-map. These preview controls and the simulated PR #4827
+  timeline use local state only and never save or execute a workflow. The canvas includes the mock's compact Execution
+  Flow summary as an overlay; builder status notices appear in the same card, and live mode keeps its runner status row.
+- The Run Preview's “Simulate Run” switch hides and restores the illustrative data; the Run action restores it as well.
+- The desktop simulated run timeline includes the mock's Step and Status columns, node icons, parallel-step labels, and Ready / Awaiting (manual) / Pending fixture states. These are illustrative and do not imply a live run.
+- On phones, `/#workflows` in an unauthenticated local session shows the mock's back/brand/overflow header, run #8821 at 78%, its five task states, and two approval states. The header actions return to Overview or scroll to run/approval details. These
   sample values are static and do not imply a live run or approval.
 - Run Preview shows the saved graph's actual node and edge counts and states explicitly that no execution is available;
   it does not show simulated statuses, duration, or cost in the authenticated editor.
@@ -109,6 +137,7 @@ flowchart LR
 go test ./cmd/zenchron -run 'TestWorkflow|TestPersistentMuxRestoresObjectivesAndWorkflows' -count=1
 cd dashboard && npm run test:e2e -- e2e/workflows.spec.ts -g 'workflow graph can be edited'
 cd dashboard && npm run test:e2e -- e2e/workflows.spec.ts -g 'local Workflow Builder mock preview'
+cd dashboard && npm run test:e2e -- e2e/workflows.spec.ts -g 'Workflow Builder preview canvas tools'
 cd dashboard && npm run test:e2e -- e2e/workflow-mobile-preview.spec.ts
 ```
 

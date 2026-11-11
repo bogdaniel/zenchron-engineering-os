@@ -15,6 +15,7 @@ const pullRequest = (number: number, title: string, author: string, head: string
   number,
   title,
   state,
+  repository: 'Nova Platform',
   html_url: '#',
   body: number === 4827
     ? 'Adds AI feedback signals and end-to-end evidence capture for code reviews, including artifact collection, attestation, and policy context. Improves review quality, traceability, and merge governance.'
@@ -33,6 +34,18 @@ export const reviewPreviewPullRequests = [
   pullRequest(4812, 'Harden evidence artifact signing', 'Casey Morgan', 'security/artifact-signing'),
   pullRequest(4808, 'Update policy rules and merge thresholds', 'Alex Chen', 'chore/policy-rules'),
 ];
+
+export const reviewPreviewCardDetails: Record<number, {
+  category: string; risk: number; evidence: number; ciPassed: boolean; comments: number; otherReviewers: number;
+  openedAge?: string; commits?: number; additions?: number; deletions?: number; updatedAge?: string;
+}> = {
+  4827: { category: 'Feature', risk: 78, evidence: 94, ciPassed: true, comments: 3, otherReviewers: 2,
+    openedAge: '2h ago', commits: 12, additions: 427, deletions: 68, updatedAge: '18m ago' },
+  4819: { category: 'Fix', risk: 42, evidence: 100, ciPassed: true, comments: 2, otherReviewers: 1 },
+  4816: { category: 'Refactor', risk: 55, evidence: 96, ciPassed: true, comments: 0, otherReviewers: 3 },
+  4812: { category: 'Security', risk: 91, evidence: 87, ciPassed: false, comments: 5, otherReviewers: 2 },
+  4808: { category: 'Chore', risk: 18, evidence: 100, ciPassed: true, comments: 0, otherReviewers: 1 },
+};
 
 export const reviewPreviewDiff = `diff --git a/src/review/evidence_capture.ts b/src/review/evidence_capture.ts
 index 6d3aa72..746bb91 100644

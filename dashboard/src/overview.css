@@ -137,8 +137,8 @@
 .overview-layout .workflow-node.planner,
 .overview-layout .workflow-node.test-generator,
 .overview-layout .workflow-node.code-reviewer { --workflow-accent: #43dda6; --workflow-border: #318b6d; --workflow-tint: #133a2d; --workflow-icon-bg: #1e5842; --workflow-glow: #43dda066; }
-.sample-data .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 12px; right: 8px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
-.sample-data .workflow-overview-canvas .react-flow__attribution { display: none; }
+.overview-layout.sample-data .workflow-overview-canvas .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 12px; right: 8px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
+.overview-layout.sample-data .overview-design-preview .workflow-overview-canvas .react-flow__attribution { display: none; }
 .overview-layout.sample-data .overview-design-preview .workflow-panel {
   background-color: #141321;
   background-image: radial-gradient(circle, #302b42 1px, transparent 1px), radial-gradient(ellipse 130% 180% at 15% 0%, #efe8ff0a 0, #efe8ff04 50%, transparent 83%), linear-gradient(140deg, #211e30, #11121b 76%);
@@ -421,7 +421,8 @@
   .review-panel, .timeline-panel, .analytics-panel { grid-column: span 6; }
 }
 @media (max-width: 760px) {
-  .overview-shell .topbar { transform: translateY(-13px); }
+  .overview-shell .topbar { transform: none; }
+  .overview-shell .topbar .greeting { transform: translateY(-13px); }
   .overview-shell .greeting p { max-width: none; }
   .overview-shell .metric-grid { margin-top: 16px; }
   .overview-shell .activity-panel { min-height: 246px; }

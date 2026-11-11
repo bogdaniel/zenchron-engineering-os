@@ -13,6 +13,7 @@ test('Agents phone preview matches the compact mobile reference and keeps profil
   await page.goto('/#agents');
 
   await expect(page.locator('.agents-mobile-preview')).toBeVisible();
+  await expect(page.locator('.notification-button')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(page.locator('.greeting')).toBeHidden();
   await expect(page.getByRole('heading', { name: 'Agents & Reviews' })).toBeVisible();
   await expect(page.locator('.agents-mobile-preview-label')).toHaveText('ILLUSTRATIVE DATA');

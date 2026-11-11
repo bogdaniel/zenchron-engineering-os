@@ -20,18 +20,28 @@ worktree isolation, profile-gated file writes, and unavailable test execution fr
 the worker does not record them yet. `Edit profile` enables the profile fields, prompt textareas, and tool selection;
 Cancel restores the saved values, and Save persists the profile through the versioned update API. Disable/Enable acts
 directly on the selected saved profile. Prompt previews are truncated for display, with the full prompt available on
-hover. Metrics use recorded data only.
+hover. In the local design preview, the System Prompt and Goal Prompt cards preserve the mock's numbered, read-only
+code lines; Edit opens the full prompt editor. Metrics use recorded data only.
 
 The unauthenticated local design preview is fixture-only and makes no agent or run API requests. Its metrics and
 profile history, including performance deltas, sparklines, durations, and costs, are illustrative and carry a visible
 `ILLUSTRATIVE DATA` label; fields absent from the live profile contract, including owner and creation time, stay
-exclusive to that preview. The preview's Model / Provider, Version, Status, and Owner controls update local fixture
+exclusive to that preview. The desktop performance chart keeps its illustrative success percentages, USD costs, and seconds latency on separate scales to match the reference. The preview's Model / Provider, Version, Status, and Owner controls update local fixture
 state only. Search, status filtering, and name sorting operate on the local fixture. Create, edit,
 duplicate, disable, simulated run, library selection, import/export, and version/history controls update or inspect
-preview data only; they never call the agent APIs.
+preview data only; they never call the agent APIs. Overview card links open the matching Variables & Templates,
+Tools & Permissions, Safety & Governance, or Run History tab. Prompt cards also match the mock's pencil Edit and
+overflow controls; Copy prompt writes the illustrative prompt text to the local clipboard. Tool permission and governance edits stay local. The
+Performance Trends range selector switches the illustrative chart between the 7-day and 30-day sample windows.
+The desktop mock preview uses the full subtitle, including “Define specialized agents for your engineering workflows.” The System Prompt uses numbered 10 px monospace text with 12 px line spacing; the Goal Prompt remains plain 10 px text as shown in the mock.
+Its profile detail tabs use the mock's bordered segmented rail and filled active tab. The local detail actions use the mock's 30 px button height, 10 px labels, and Run, Duplicate, Disable, and Compare icons.
+The mock's Research Analyst row is labeled Idle while its local disabled state remains available to the preview's
+status filter and Enable action.
 Each desktop preview profile also has an options menu to select or duplicate that profile locally; live profile rows do
-not show this preview-only menu. Desktop preview profile metadata stays on one line without truncating its descriptions;
-the initial list view shows five complete rows and scrolls to the sixth.
+not show this preview-only menu. Each preview card shows model/provider first, then icon-labeled last-run, cost, and
+success values on the next compact row, with the status badge aligned at the card's upper right; descriptions remain readable and the initial list shows five
+complete rows before scrolling to the sixth. Its compact detail header and tab inset keep the lower overview panels
+inside the reference frame.
 
 At phone width, the local preview switches to the supplied Agents & Reviews summary: the Agents tab shows recent runs,
 pull request reviews, evidence health, and quick actions; Reviews and Evidence tabs focus their matching panels. Run
@@ -84,6 +94,8 @@ The API validates field lengths and rejects unknown JSON fields, duplicate tools
 - `cd dashboard && npm run test:e2e -- e2e/agents-mobile-preview.spec.ts` verifies the 390×844 summary, local tabs and
   actions, return to profile management, and absence of agent API reads.
 - `cd dashboard && npm run test:e2e -- e2e/agents-desktop-preview.spec.ts` verifies prompt-card editing saves only to
-  the local fixture and makes no agent API requests.
+  the local fixture and makes no agent API requests; it also checks Overview panel links, local tool/governance edits,
+  Performance Trends range selection, and the detail toolbar's mock-sized buttons and icons.
 - On desktop viewports from 700px high, the profile list spans both rows while run history and performance stack under
   the selected profile; the content height contracts to the available viewport and retains the 670px mock height cap.
+- Compact preview card headings keep all three overview rows and the lower run/trend panels inside that 670px detail grid at 1672×941.

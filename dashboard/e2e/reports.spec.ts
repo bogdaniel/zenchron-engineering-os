@@ -9,6 +9,9 @@ test.beforeEach(async ({ page }) => {
 
 test('Reports panel rows match the desktop mockup proportions', async ({ page }) => {
   await page.route('**/api/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route('**/healthz', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '{"status":"ok"}',
+  }));
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify({ authenticated: true, local: true, login: 'Reports E2E' }),
   }));

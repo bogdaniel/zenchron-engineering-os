@@ -3,12 +3,33 @@ import { Avatar } from '@mantine/core';
 import { IconFileText } from '@tabler/icons-react';
 import { MonacoEditor } from './MonacoEditor';
 
-export function CodeDiff({ value, label }: { value: string; label: string }) {
-  return <MonacoEditor className="reviews-code-editor" label={label} mode="diff" value={value} readOnly />;
+export function CodeDiff({ value, label, lineNumbers }: { value: string; label: string; lineNumbers?: (lineNumber: number) => string }) {
+  return <MonacoEditor className="reviews-code-editor" label={label} mode="diff" value={value} readOnly lineNumbers={lineNumbers} />;
 }
 
 function stripFileHeaders(patch: string) {
   return patch.split('\n').filter((line) => !/^(diff --git |index |--- |\+\+\+ )/.test(line)).join('\n');
+}
+
+function sourceLineNumbers(patch: string) {
+  let oldLine: number | undefined;
+  let newLine: number | undefined;
+  const pair = (oldNumber?: number, newNumber?: number) =>
+    `${oldNumber ?? '&nbsp;'.repeat(3)}&nbsp;${newNumber ?? '&nbsp;'.repeat(3)}`;
+  const lines = patch.split('\n').map((line) => {
+    const hunk = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunk) {
+      oldLine = Number(hunk[1]);
+      newLine = Number(hunk[2]);
+      return '';
+    }
+    if (oldLine === undefined || newLine === undefined || line.startsWith('\\')) return '';
+    if (line.startsWith('-')) return pair(oldLine++);
+    if (line.startsWith('+')) return pair(undefined, newLine++);
+    if (line.startsWith(' ')) return pair(oldLine++, newLine++);
+    return '';
+  });
+  return (line: number) => lines[line - 1] ?? '';
 }
 
 function splitRows(patch: string) {
@@ -34,7 +55,8 @@ export function ReviewPreviewDiff({ loading, error, patch }: { loading: boolean;
     {loading ? <span>Loading pull request diff…</span>
       : error ? <span className="reviews-action-error" role="alert">{error.message}</span>
         : patch && /^@@+ /m.test(patch)
-          ? view === 'unified' ? <CodeDiff label="Pull request diff" value={stripFileHeaders(patch)} />
+          ? view === 'unified' ? <CodeDiff label="Pull request diff" value={stripFileHeaders(patch)}
+            lineNumbers={sourceLineNumbers(stripFileHeaders(patch))} />
             : <div className="reviews-preview-split-diff" role="region" aria-label="Split diff view">
               <div className="reviews-preview-split-head"><span>Before</span><span>After</span></div>
               {splitRows(patch).map((row, index) => row.kind === 'header'

@@ -7,7 +7,8 @@ objectives, workflow definitions, agent-run history, GitHub pull-request counts,
 by current API/provider records. Budget, approvals, evidence, and timeline remain unavailable until their sources
 exist. On localhost, an unauthenticated session shows the supplied screen fixtures as sample data in the same dashboard
 shell; a verified session uses live APIs. Sample data does not fetch protected dashboard records or perform writes.
-The **Sign in** link opens `/#login`; Workflow Builder and Reviews use the same local sample-data state.
+The **Sign in** link opens `/#login`; Workflow Builder and Reviews use the same local sample-data state. The shared header
+page search keeps the mock’s rounded, dark-gradient finish in both sample and live modes.
 
 ## Feature diagram
 
@@ -94,7 +95,7 @@ At desktop widths the overview uses a fixed left navigation rail, five summary c
 row, four operational panels, and a three-panel delivery row. At the tall desktop mockup size, the first row stays 204px tall as
 live events arrive; compact activity rows keep project and worker updates from pushing the lower panels down. The
 operational panels show objective status, approval availability in the empty-state copy, run history, and trusted-branch/evidence availability.
-At mobile widths the navigation becomes a five-item bottom tab bar (Home, Workflows, Agents, Reviews, and Profile).
+At mobile widths the navigation becomes a five-item bottom tab bar (Home, Workflows, Agents, Reviews, and Profile); Profile uses a person icon while desktop Settings keeps its gear icon.
 The overview keeps the four cards shown in the phone mock (objectives, agents, CI, and budget) in two columns, followed
 by Recent Activity. Its compact view selector links to Overview, Objectives (My Work), and Recent Activity (Alerts).
 Desktop-only operational panels stay off the mobile Overview; their full pages remain available from the bottom tabs.

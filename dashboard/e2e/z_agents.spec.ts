@@ -1,10 +1,14 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-test('Agents populated desktop layout matches the reference panel geometry', async ({ page }) => {
+async function authenticateLocalSession(page: Page) {
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify({ authenticated: true, local: true, login: 'E2E' }),
   }));
+}
+
+test('Agents populated desktop layout matches the reference panel geometry', async ({ page }) => {
+  await authenticateLocalSession(page);
   await page.setViewportSize({ width: 1672, height: 941 });
   const profileID = 'ab'.repeat(16);
   const projectID = 'ef'.repeat(16);
@@ -122,10 +126,7 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
 });
 
 test('Agents layout fits tablet and phone widths without panel overlap', async ({ page }) => {
-  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
-    status: 200, contentType: 'application/json',
-    body: JSON.stringify({ authenticated: true, local: true, login: 'E2E' }),
-  }));
+  await authenticateLocalSession(page);
   for (const [width, height, expectedColumns] of [[1024, 768, 2], [390, 844, 1]]) {
     await page.setViewportSize({ width, height });
     await page.goto('/#agents');
@@ -169,6 +170,7 @@ test('Agents local design preview labels illustrative metadata without API reads
   previewURL.hostname = '127.0.0.1';
   await page.goto(previewURL.toString());
   await expect(page.locator('.agents-design-preview')).toBeVisible();
+  await expect(page.locator('.notification-button')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(page.locator('.agents-mobile-preview')).toBeHidden();
   await expect(page.locator('.agents-mobile-return')).toBeHidden();
   await expect(page.locator('.agents-preview-notice')).toHaveText('ILLUSTRATIVE DATA');
@@ -219,6 +221,12 @@ test('Agents local design preview labels illustrative metadata without API reads
   await expect(previewPerformance).toContainText('-18%');
   await expect(previewPerformance).toContainText('-14%');
   await expect(page.getByRole('img', { name: 'Illustrative performance trend' })).toBeVisible();
+  const trendChart = page.locator('.agents-preview-trend');
+  await expect(trendChart.locator('.recharts-dot').first()).toBeVisible();
+  const trendAxisLabels = await trendChart.locator('svg text').allTextContents();
+  expect(trendAxisLabels).toContain('90%');
+  expect(trendAxisLabels).toContain('$0.4');
+  expect(await trendChart.locator('svg .recharts-line-curve').count()).toBe(3);
   const history = page.locator('.agents-preview-run-table');
   await expect(history.locator('thead th')).toHaveText([
     'Run ID', 'Trigger', 'Input', 'Status', 'Duration', 'Cost', 'Time',
@@ -339,6 +347,7 @@ test('Agents preview actions update only the local fixture', async ({ page }) =>
 });
 
 test('Agents empty state uses the primary create action', async ({ page }) => {
+  await authenticateLocalSession(page);
   await page.route('**/api/v1/agents', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',
   }));
@@ -357,12 +366,13 @@ test('Agents empty state uses the primary create action', async ({ page }) => {
 });
 
 test('Agents queue dialog explains when a worker has no model runtime', async ({ page }) => {
+  await authenticateLocalSession(page);
   await page.route('**/api/v1/workers', async (route) => {
     const url = new URL(route.request().url());
     url.hostname = '127.0.0.1';
     const response = await route.fetch({ url: url.toString() });
     const workers = await response.json() as { agent_runtime_enabled?: boolean }[];
-    await route.fulfill({ response, body: JSON.stringify(workers.map((worker) => ({
+    await route.fulfill({ status: response.status(), headers: response.headers(), body: JSON.stringify(workers.map((worker) => ({
       ...worker, agent_runtime_enabled: false,
     }))) });
   });
@@ -372,9 +382,9 @@ test('Agents queue dialog explains when a worker has no model runtime', async ({
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'Runtime status check', provider: 'custom', model: 'review-v1', tools: [] }),
     });
-    return response.ok;
+    return { ok: response.ok, status: response.status, body: await response.text() };
   });
-  expect(created).toBe(true);
+  expect(created).toEqual({ ok: true, status: 201, body: expect.any(String) });
   await page.reload();
   await page.getByRole('button', { name: 'Queue run' }).click();
   const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
@@ -383,6 +393,7 @@ test('Agents queue dialog explains when a worker has no model runtime', async ({
 });
 
 test('agent profiles can be saved and disabled from the dashboard', async ({ page }) => {
+  await authenticateLocalSession(page);
   const name = `QA Reviewer ${Date.now()}`;
   await page.goto('/');
   await page.getByRole('link', { name: 'Agents' }).click();
@@ -439,6 +450,7 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
 });
 
 test('Agents dashboard completes a run and resumes requested review changes on the same branch', async ({ page }) => {
+  await authenticateLocalSession(page);
   await page.goto('/');
   await page.getByRole('link', { name: 'Agents' }).click();
   const profile = await page.evaluate(async () => {
@@ -519,6 +531,7 @@ test('Agents dashboard completes a run and resumes requested review changes on t
 });
 
 test('Reviews can cancel an active worker run and retain its partial branch diff', async ({ page }) => {
+  await authenticateLocalSession(page);
   await page.goto('/#agents');
   const run = await page.evaluate(async () => {
     const profileResponse = await fetch('/api/v1/agents', {

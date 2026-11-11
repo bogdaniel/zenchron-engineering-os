@@ -1,9 +1,16 @@
 import { useState } from 'react';
+import { workflowNodeIcons } from './workflowModel';
 
 const designRunSteps = [
-  ['Trigger', 0, 7], ['Planner', 8, 15], ['Agent Router', 22, 16], ['Code Reviewer', 36, 34],
-  ['Test Generator', 36, 34], ['Coverage Analyzer', 36, 34], ['Human Approval', 71, 15],
-  ['Merge Gate', 87, 9], ['Publish Report', 96, 4],
+  { label: 'Trigger', type: 'trigger', start: 0, span: 7, status: 'Ready', state: 'complete' },
+  { label: 'Planner', type: 'planner', start: 8, span: 15, status: 'Ready', state: 'complete' },
+  { label: 'Agent Router', type: 'agent-router', start: 22, span: 16, status: 'Ready', state: 'active' },
+  { label: 'Code Reviewer (parallel)', type: 'code-reviewer', start: 36, span: 34, status: 'Ready', state: 'parallel' },
+  { label: 'Test Generator (parallel)', type: 'test-generator', start: 36, span: 34, status: 'Ready', state: 'parallel' },
+  { label: 'Coverage Analyzer (parallel)', type: 'coverage-analyzer', start: 36, span: 34, status: 'Ready', state: 'parallel' },
+  { label: 'Human Approval', type: 'human-approval', start: 71, span: 15, status: 'Awaiting (manual)', state: 'manual' },
+  { label: 'Merge Gate', type: 'merge-gate', start: 87, span: 9, status: 'Pending', state: 'pending' },
+  { label: 'Publish Report', type: 'publish-report', start: 96, span: 4, status: 'Pending', state: 'pending' },
 ] as const;
 
 export function WorkflowDesignRouterSettings({ section }: { section: 'Properties' | 'Advanced' }) {
@@ -25,7 +32,7 @@ export function WorkflowDesignRouterSettings({ section }: { section: 'Properties
       <button className="workflow-preview-add-rule" type="button" onClick={() => setNewRuleCount((count) => count + 1)}>
         ＋ Add Rule</button>
     </section>}
-    {section === 'Advanced' && <>
+    {(section === 'Properties' || section === 'Advanced') && <>
     <section className="workflow-preview-config" aria-label="Budgets and limits">
       <header><b>Budgets &amp; Limits</b><span>⌄</span></header>
       <div className="workflow-preview-budget">
@@ -77,14 +84,17 @@ export function WorkflowDesignRunPreview({ view }: { view: WorkflowDesignRunView
     <section className="workflow-simulated-timeline" aria-label="Simulated run timeline">
       <div className="workflow-simulated-heading"><b>Simulated run (PR #4827)</b><span>✓ All steps valid</span>
         <small>Est. duration: 2m 14s　·　Est. cost: $0.038</small></div>
-      <div className="workflow-simulated-axis"><span>Step</span><div><span>0s</span><span>15s</span><span>30s</span>
+      <div className="workflow-simulated-axis"><span>Step</span><span>Status</span><div><span>0s</span><span>15s</span><span>30s</span>
         <span>45s</span><span>1m</span><span>1m 15s</span><span>1m 30s</span><span>1m 45s</span><span>2m 14s</span></div></div>
-      {designRunSteps.map(([label, start, span], index) => <div className={`workflow-simulated-row ${
-        index < 2 ? 'complete' : index === 2 ? 'active' : index < 6 ? 'parallel' : index === 6 ? 'manual' : 'pending'
-      }`} key={label}>
-        <span>{index === 6 ? '◷' : index < 2 ? '✓' : '○'}　{label}</span>
-        <div><i style={{ left: `${start}%`, width: `${span}%` }} /></div>
-      </div>)}
+      {designRunSteps.map(({ label, type, start, span, status, state }) => {
+        const Icon = workflowNodeIcons[type];
+        return <div className={`workflow-simulated-row ${state}`} key={label}>
+          <span className="workflow-simulated-row-step"><Icon size={9} aria-hidden="true" />{label}</span>
+          <span className={`workflow-simulated-row-status ${status === 'Ready' ? 'ready' : status === 'Pending' ? 'pending' : 'manual'}`}>
+            {status === 'Awaiting (manual)' ? '◷' : '✓'} {status}</span>
+          <div><i style={{ left: `${start}%`, width: `${span}%` }} /></div>
+        </div>;
+      })}
     </section>
     <aside className="workflow-simulated-summary">
       <b>Run Summary (est.)</b><label>Total steps<span>7</span></label>

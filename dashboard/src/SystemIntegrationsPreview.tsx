@@ -183,7 +183,7 @@ export function SystemIntegrationsPreview({ section, onShowAudit }: { section: '
         <div className="system-integration-filters" aria-label="Integration categories">
           {categories.map(([name, count]) => <button className={category === name ? 'active' : ''} key={name} type="button"
             aria-pressed={category === name} onClick={() => setCategory(name)}>
-            {name} <b>{count}</b>
+            {name} <b>({count})</b>
           </button>)}
           <Menu position="bottom-end"><Menu.Target><button className="system-preview-category-more" type="button" aria-label="More integration categories"><IconChevronDown size={12} /></button></Menu.Target>
             <Menu.Dropdown><Menu.Item onClick={() => setCategory('Other')}>Other</Menu.Item><Menu.Item onClick={() => setCategory('All')}>Show all integrations</Menu.Item></Menu.Dropdown>

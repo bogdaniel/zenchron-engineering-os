@@ -12,8 +12,16 @@ are illustrative. Selecting a product updates its roadmap, objectives, repositor
 The default Nova Platform repository rows match the supplied mock: `nova-platform`, `agent-sdk`, `platform-services`,
 and `devtools`; their `Main` branch labels use compact badges like the reference. The release card keeps the mock's
 “Release Streams” title across product selections.
+Each local sample release row shows its fixture completion percentage beside the matching progress bar.
+The overview metrics retain the reference mini-trends for Active Initiatives and Delivery Metrics, plus the illustrative
+Recent Decisions mark.
+Open Objectives uses circular completed/open status marks, with accessible labels for each state.
+The Delivery Metrics sample chart includes the mock's plotted data points, shaded trend, grid, and date labels.
+On desktop, the product directory occupies only the upper row; Release Streams, Recent Decisions, and Delivery Metrics
+span the full workspace width beneath it. The responsive preview stacks this lower row on smaller screens.
 Search, All/Active/Planning status filters, per-product favorites, product selection, section tabs, card links, roadmap
-view and quarter controls, and delivery time range work locally; adding a product changes only preview state, and
+view and quarter controls, and delivery time range work locally. The roadmap selector is labeled `Quarterly` like the
+mock; its menu changes the quarter shown on the timeline. Adding a product changes only preview state, and
 sharing does not send invitations. This state
 makes no protected product, objective, workflow, agent, or repository writes.
 

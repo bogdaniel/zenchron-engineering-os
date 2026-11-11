@@ -145,6 +145,7 @@ button:disabled, input:disabled {
   height: 20px;
   flex: 0 0 20px;
 }
+.nav-link .nav-mobile-icon { display: none; }
 .nav-link.active svg {
   color: #d6a5ff;
 }
@@ -253,6 +254,10 @@ button:disabled, input:disabled {
 .search-box input {
   color: #eee;
   font-size: 12px;
+  border-color: #37304d;
+  border-radius: 21px;
+  background: linear-gradient(135deg, #211e34, #171626);
+  box-shadow: inset 0 1px #ffffff0a, 0 4px 18px #0004;
 }
 .search-box input::placeholder {
   color: #77738d;
@@ -429,7 +434,7 @@ button:disabled, input:disabled {
   }
 }
 @media (max-width:760px) {
-  .app-shell { --sidebar-width: auto; }
+  .app-shell { --sidebar-width: auto; position: relative; }
   .sidebar {
     position:static;
     width:auto;
@@ -472,6 +477,8 @@ button:disabled, input:disabled {
   .sidebar nav .nav-link:nth-child(7), .sidebar nav .nav-link:nth-child(8) { display:none; }
   .sidebar nav .nav-link:nth-child(9) { display:flex; }
   .nav-link span { display:block; }
+  .nav-link .nav-desktop-icon { display:none; }
+  .nav-link .nav-mobile-icon { display:block; }
   .nav-label[data-mobile-label] { font-size:0; }
   .nav-label[data-mobile-label]::after { content:attr(data-mobile-label); font-size:12px; }
   .main-content {
@@ -494,8 +501,12 @@ button:disabled, input:disabled {
     display:none;
   }
   .top-actions {
+    position: absolute;
+    top: 60px;
+    right: 14px;
+    z-index: 3;
     gap:6px;
-    margin-left:auto;
+    margin:0;
   }
   .workspace-button {
     display:none;

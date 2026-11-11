@@ -16,7 +16,33 @@ test('local Product Workspace mock matches the supplied overview without protect
   await expect(page.getByRole('heading', { name: 'Nova Platform', exact: true })).toBeVisible();
   await expect(page.getByText('Product Health')).toBeVisible();
   await expect(page.getByText('Release Streams', { exact: true })).toBeVisible();
+  const directoryBounds = await page.locator('.workspace-mock-directory').boundingBox();
+  const detailBounds = await page.locator('.workspace-mock-detail').boundingBox();
+  const lowerRowBounds = await page.locator('.workspace-mock-bottom').boundingBox();
+  expect(directoryBounds && detailBounds && lowerRowBounds).toBeTruthy();
+  expect(directoryBounds!.height).toBeLessThan(detailBounds!.height);
+  expect(directoryBounds!.y + directoryBounds!.height).toBeLessThan(lowerRowBounds!.y);
+  expect(lowerRowBounds!.x).toBe(directoryBounds!.x);
+  expect(lowerRowBounds!.width).toBeGreaterThan(detailBounds!.width);
+  const lowerCards = await page.locator('.workspace-mock-bottom > .workspace-mock-card').evaluateAll((cards) =>
+    cards.map((card) => ({ x: card.getBoundingClientRect().x, y: card.getBoundingClientRect().y,
+      width: card.getBoundingClientRect().width })));
+  expect(lowerCards).toHaveLength(3);
+  expect(lowerCards[0].y).toBe(lowerCards[1].y);
+  expect(lowerCards[1].y).toBe(lowerCards[2].y);
+  expect(lowerCards[0].x).toBeLessThan(lowerCards[1].x);
+  expect(lowerCards[1].x).toBeLessThan(lowerCards[2].x);
+  expect(lowerCards.every(({ width }) => width >= 400), 'the lower mock row has three equal-width cards').toBe(true);
+  await expect(page.locator('.workspace-mock-list.release-list .release-progress-label'))
+    .toHaveText(['100%', '72%', '0%']);
   await expect(page.getByText('Stakeholders (8)')).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Active initiative trend' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Delivery metrics trend' }).locator('rect')).toHaveCount(6);
+  await expect(page.locator('.workspace-mock-decisions-mark')).toBeVisible();
+  const overflowingMetrics = await page.locator('.workspace-mock-metric').evaluateAll((metrics) => metrics
+    .filter((metric) => metric.scrollWidth > metric.clientWidth + 1 || metric.scrollHeight > metric.clientHeight + 1)
+    .map((metric) => metric.className));
+  expect(overflowingMetrics, 'metric values and mock trend graphics remain inside their cards').toEqual([]);
   const repositories = page.locator('.workspace-mock-card.repositories');
   for (const repository of ['zenchron/nova-platform', 'zenchron/agent-sdk', 'zenchron/platform-services', 'zenchron/devtools']) {
     await expect(repositories).toContainText(repository);
@@ -40,6 +66,12 @@ test('local Product Workspace mock matches the supplied overview without protect
   await expect(page.locator('.workspace-mock-card')).toHaveCount(9);
   await expect(page.locator('.workspace-mock-roadmap-row')).toHaveCount(4);
   await expect(page.locator('.workspace-mock-objectives > div')).toHaveCount(5);
+  const objectiveStatuses = page.locator('.workspace-mock-objective-status');
+  await expect(objectiveStatuses.first()).toHaveCSS('border-radius', '50%');
+  await expect(objectiveStatuses.first()).toHaveCSS('width', '14px');
+  await expect(objectiveStatuses.first()).toHaveCSS('height', '14px');
+  await expect(objectiveStatuses.first()).toHaveAttribute('aria-label', 'Completed objective');
+  await expect(objectiveStatuses.nth(2)).toHaveAttribute('aria-label', 'Open objective');
   await expect(page.locator('.workspace-mock-list.people > div')).toHaveCount(4);
   await expect(page.getByRole('button', { name: 'New Workspace' })).toBeEnabled();
   const search = page.getByRole('textbox', { name: 'Search products' });
@@ -68,12 +100,17 @@ test('local Product Workspace mock matches the supplied overview without protect
   await page.getByRole('button', { name: 'Timeline' }).click();
   await expect(page.locator('.workspace-mock-timeline-row')).toHaveCount(4);
   await page.getByRole('button', { name: 'Roadmap', exact: true }).click();
-  await page.getByRole('button', { name: 'Choose roadmap quarter' }).click();
+  const roadmapQuarter = page.getByRole('button', { name: 'Choose roadmap quarter' });
+  await expect(roadmapQuarter).toHaveText('Quarterly');
+  await roadmapQuarter.click();
   await page.getByRole('menuitem', { name: 'Q3 ’25' }).click();
-  await expect(page.getByRole('button', { name: 'Choose roadmap quarter' })).toContainText('Q3 ’25');
+  await expect(roadmapQuarter).toHaveText('Quarterly');
+  await expect(page.locator('.workspace-mock-quarter-labels')).toContainText('Q3 ’25');
   await page.getByRole('button', { name: 'Choose delivery metrics time range' }).click();
   await page.getByRole('menuitem', { name: 'Last 4 weeks' }).click();
   await expect(page.getByText('3.8 days')).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Delivery trend, Nov 24 to Jan 12' }).locator('.workspace-mock-points circle')).toHaveCount(10);
+  await expect(page.getByRole('img', { name: 'Delivery trend, Nov 24 to Jan 12' })).toContainText('Jan 12');
   await page.getByRole('button', { name: 'Share' }).click();
   await expect(page.getByRole('dialog', { name: 'Share Product Workspace' })).toBeVisible();
   await page.keyboard.press('Escape');

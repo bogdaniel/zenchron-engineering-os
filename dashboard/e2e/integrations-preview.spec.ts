@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-test.use({ baseURL: 'http://127.0.0.1:4173' });
+const environment = (
+  globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } }
+).process?.env ?? {};
+const dashboardPort = Number(environment.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+test.use({ baseURL: `http://127.0.0.1:${dashboardPort}` });
 
 test('local Integrations mock filters and updates its fixture without provider writes', async ({ page }) => {
   const apiRequests: { method: string; path: string }[] = [];
@@ -19,9 +23,13 @@ test('local Integrations mock filters and updates its fixture without provider w
     documentHeight: document.documentElement.scrollHeight,
     actionsBottom: document.querySelector('.system-preview-actions')!.getBoundingClientRect().bottom,
     viewportHeight: window.innerHeight,
+    budgetRowHeight: document.querySelector('#system-preview-budget')!.getBoundingClientRect().height,
+    notificationsTop: document.querySelector('#system-preview-notifications')!.getBoundingClientRect().top,
   }));
   expect(desktopFit.documentHeight).toBeLessThanOrEqual(desktopFit.viewportHeight);
   expect(desktopFit.actionsBottom).toBeLessThanOrEqual(desktopFit.viewportHeight);
+  expect(desktopFit.budgetRowHeight, 'settings row stays close to the reference height').toBeLessThanOrEqual(152);
+  expect(desktopFit.notificationsTop, 'notification and audit row stays aligned to the reference').toBeLessThanOrEqual(723);
   await page.getByRole('button', { name: 'Audit log', exact: true }).click();
   const auditDialog = page.getByRole('dialog', { name: 'Activity & audit · preview' });
   await expect(auditDialog.locator('tbody tr')).toHaveCount(3);
@@ -33,6 +41,9 @@ test('local Integrations mock filters and updates its fixture without provider w
   await expect(auditDialog).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('heading', { name: 'Integrations Overview' })).toBeVisible();
+  await expect(page.locator('.system-section-heading p'))
+    .toHaveText('Connect your engineering tools, model providers, infrastructure, and data backends.');
+  await expect(page.locator('.system-integration-filters button').first()).toHaveText('All (12)');
   await expect(page.locator('.system-preview-provider')).toHaveCount(10);
   await expect(page.locator('.system-preview-provider .system-preview-status')).toHaveCount(10);
   const clippedDescriptions = await page.locator('.system-preview-provider').evaluateAll((cards) =>
@@ -46,6 +57,11 @@ test('local Integrations mock filters and updates its fixture without provider w
   await page.getByRole('link', { name: 'Connected Integrations' }).click();
   await expect(page.locator('.system-preview-provider')).toHaveCount(10);
   const connectedBadge = page.locator('.system-preview-provider .system-preview-status').first();
+  const connectedLabel = connectedBadge.locator('.mantine-Badge-label');
+  await expect(connectedLabel).toHaveText('Connected');
+  await expect(connectedLabel).toHaveCSS('text-transform', 'none');
+  await expect(connectedLabel).toHaveCSS('font-size', '10px');
+  await expect(connectedBadge).toHaveCSS('font-size', '10px');
   const statusDot = connectedBadge.locator('.system-preview-status-dot');
   const dotAlignment = await connectedBadge.evaluate((badge) => {
     const badgeRect = badge.getBoundingClientRect();

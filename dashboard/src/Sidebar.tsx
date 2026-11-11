@@ -1,6 +1,6 @@
 import type { MouseEvent } from 'react';
 import {
-  IconChartBar, IconCode, IconHome, IconHierarchy, IconPuzzle, IconRobot, IconSettings, IconStack2, IconTarget,
+  IconChartBar, IconCode, IconHome, IconHierarchy, IconPuzzle, IconRobot, IconSettings, IconStack2, IconTarget, IconUser,
 } from '@tabler/icons-react';
 
 const navigation = [
@@ -12,7 +12,7 @@ const navigation = [
   { label: 'Reviews', href: '#reviews', icon: IconCode },
   { label: 'Integrations', href: '#integrations', icon: IconPuzzle },
   { label: 'Reports', href: '#reports', icon: IconChartBar },
-  { label: 'Settings', href: '#settings', icon: IconSettings },
+  { label: 'Settings', href: '#settings', icon: IconSettings, mobileIcon: IconUser },
 ];
 
 export function Sidebar({ activePage, localReviewHost, onNavigate }: {
@@ -26,10 +26,11 @@ export function Sidebar({ activePage, localReviewHost, onNavigate }: {
       <span>Zenchron<small>Engineering</small></span>
     </a>
     <nav aria-label="Main navigation">
-      {navigation.map(({ label, href, icon: Icon }) => (
+      {navigation.map(({ label, href, icon: Icon, mobileIcon: MobileIcon }) => (
         <a className={`nav-link${href === `#${activePage}` ? ' active' : ''}`} href={href} key={label}
           onClick={(event) => onNavigate(event, href)}>
-          <Icon size={18} stroke={1.8} />
+          <Icon className={MobileIcon ? 'nav-desktop-icon' : undefined} size={18} stroke={1.8} aria-hidden="true" />
+          {MobileIcon && <MobileIcon className="nav-mobile-icon" size={18} stroke={1.8} aria-hidden="true" />}
           <span className="nav-label" data-mobile-label={href === '#overview' ? 'Home' : href === '#settings' ? 'Profile' : undefined}>
             {label}
           </span>

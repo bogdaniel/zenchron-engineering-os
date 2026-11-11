@@ -2,7 +2,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, colorSchemeDark, themeQuartz } from 'ag-grid-community';
 import type { ColDef } from 'ag-grid-community';
 import { Sparkline } from '@mantine/charts';
-import { Badge, Button, Modal, Select, Switch, Textarea, TextInput } from '@mantine/core';
+import { Badge, Button, Menu, Modal, Select, Switch, Textarea, TextInput } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -11,7 +11,7 @@ import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { Project } from './projects';
 import {
   IconChecks, IconChevronDown, IconClockHour4, IconCode, IconDownload, IconFileText,
-  IconFilter, IconGitMerge, IconGitPullRequest, IconLock, IconMessageCircle, IconPlus, IconSearch, IconShieldCheck,
+  IconBookmark, IconDots, IconFilter, IconGitMerge, IconGitPullRequest, IconLink, IconLock, IconMessageCircle, IconPlus, IconSearch, IconShieldCheck,
   IconSparkles, IconUserCheck,
 } from '@tabler/icons-react';
 import { MetricCard } from './MetricCard';
@@ -22,7 +22,7 @@ import { CodeDiff, ReviewPreviewDiff } from './reviews-preview-diff';
 import { GitHubMarkdown } from './reviews-markdown';
 import { ReviewPreviewContext } from './reviews-preview-context';
 import { ReviewPreviewSummary } from './reviews-preview-summary';
-import { reviewPreviewDiff, reviewPreviewProject, reviewPreviewPullRequests } from './review-preview';
+import { reviewPreviewCardDetails, reviewPreviewDiff, reviewPreviewProject, reviewPreviewPullRequests } from './review-preview';
 import './reviews.css';
 import './reviews-detail.css';
 import './reviews-preview.css';
@@ -120,13 +120,21 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
   const [detailTab, setDetailTab] = useState<DetailTab>('code-changes');
   const [projectID, setProjectID] = useState<string | null>(null);
   const [selectedID, setSelectedID] = useState<string | null>(null);
-  const [selectedProviderNumber, setSelectedProviderNumber] = useState<number | null>(null);
+  const [selectedProviderNumber, setSelectedProviderNumber] = useState<number | null>(() => {
+    if (!designPreview) return null;
+    const value = Number(new URLSearchParams(window.location.search).get('pull'));
+    return Number.isInteger(value) && value > 0 ? value : null;
+  });
   const [providerSearch, setProviderSearch] = useState('');
   const [providerFilter, setProviderFilter] = useState<ProviderQueueFilter>('all');
   const [previewQueueFilter, setPreviewQueueFilter] = useState<PreviewQueueFilter>('all');
+  const [previewDateRange, setPreviewDateRange] = useState(14);
+  const [previewRepository, setPreviewRepository] = useState<'all' | 'nova'>('all');
   const [previewQueueStatuses, setPreviewQueueStatuses] = useState<Record<number, Exclude<PreviewQueueFilter, 'all'>>>({});
   const [previewMergedNumbers, setPreviewMergedNumbers] = useState<number[]>([]);
   const [previewAutoMerge, setPreviewAutoMerge] = useState(true);
+  const [previewBookmarkedNumbers, setPreviewBookmarkedNumbers] = useState<number[]>([]);
+  const [previewActionMessage, setPreviewActionMessage] = useState('');
   const [previewPullRequests, setPreviewPullRequests] = useState(reviewPreviewPullRequests);
   const [newPreviewPROpen, setNewPreviewPROpen] = useState(false);
   const [newPreviewPRTitle, setNewPreviewPRTitle] = useState('');
@@ -154,11 +162,19 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
   });
   const localBranches = runs.filter((run) => run.diff_available || ['queued', 'running', 'cancelled'].includes(run.status));
   const selected = localBranches.find((run) => run.id === selectedID) ?? localBranches[0];
-  const providerItems = section === 'pull-requests' ? designPreview ? previewPullRequests : pullRequests.data ?? [] : issues.data ?? [];
+  const previewCutoff = Date.parse(reviewPreviewProject.last_seen) - previewDateRange * 24 * 60 * 60 * 1000;
+  const scopedPreviewPullRequests = previewPullRequests.filter((item) =>
+    (previewRepository === 'all' || item.repository === reviewPreviewProject.name)
+      && Date.parse(item.updated_at) >= previewCutoff);
+  const providerItems = section === 'pull-requests'
+    ? designPreview ? scopedPreviewPullRequests : pullRequests.data ?? [] : issues.data ?? [];
   const searchTerm = providerSearch.trim().toLowerCase();
   const previewStatusByNumber: Record<number, Exclude<PreviewQueueFilter, 'all'>> = {
     4827: 'in-review', 4819: 'changes-requested', 4816: 'approved', 4812: 'blocked', 4808: 'approved',
     ...previewQueueStatuses,
+  };
+  const previewStatusLabels: Record<Exclude<PreviewQueueFilter, 'all'>, string> = {
+    'in-review': 'In Review', 'changes-requested': 'Changes Requested', approved: 'Approved', blocked: 'Blocked', draft: 'Draft',
   };
   const visibleProviderItems = providerItems.filter((item) => {
     if (!`${item.number} ${item.title} ${item.user.login}`.toLowerCase().includes(searchTerm)) return false;
@@ -186,7 +202,9 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
   const selectedIssue = section === 'issues' ? selectedProviderItem as GitHubIssue | undefined : undefined;
   const selectedPreviewStatus = selectedPullRequest ? previewQueueStatuses[selectedPullRequest.number]
     ?? previewStatusByNumber[selectedPullRequest.number] ?? 'in-review' : 'all';
-  const selectedPreviewStatusLabel = selectedPreviewStatus.replaceAll('-', ' ').replace(/^./, (char) => char.toUpperCase());
+  const selectedPreviewDetails = designPreview && selectedPullRequest
+    ? reviewPreviewCardDetails[selectedPullRequest.number] : undefined;
+  const selectedPreviewStatusLabel = selectedPreviewStatus === 'all' ? 'No open item' : previewStatusLabels[selectedPreviewStatus];
   const selectedPreviewMerged = Boolean(selectedPullRequest && previewMergedNumbers.includes(selectedPullRequest.number));
   const providerQuery = section === 'issues' ? issues : pullRequests;
   const pullRequestDiff = useQuery({
@@ -202,6 +220,29 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
     pullRequests.data?.length, pullRequests.data?.filter((item) => item.draft).length, issues.data?.length,
     undefined, undefined, undefined,
   ];
+  const exportEvidenceAction = <Button variant="default" disabled={!designPreview || !selectedPullRequest} fullWidth onClick={() => {
+    if (!selectedPullRequest) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ pullRequest: selectedPullRequest, diff: reviewPreviewDiff }, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = `pr-${selectedPullRequest.number}-preview-evidence.json`; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }}><IconDownload size={14} /> Export evidence</Button>;
+  const reviewActions = <div className="reviews-summary-review-actions">
+    <Button color="green" disabled={!designPreview || !selectedPullRequest} onClick={() => {
+      if (!selectedPullRequest) return;
+      setPreviewQueueStatuses((current) => ({ ...current, [selectedPullRequest.number]: 'approved' }));
+    }}>{selectedPreviewStatus === 'approved' ? 'Approved' : 'Approve'}</Button>
+    {selectedPullRequest && <Button color="violet" onClick={() => {
+      if (designPreview) setPreviewQueueStatuses((current) => ({ ...current, [selectedPullRequest.number]: 'changes-requested' }));
+      setDetailTab('conversations');
+    }}>{selectedPreviewStatus === 'changes-requested' ? 'Changes requested' : 'Request changes'}</Button>}
+    {selectedIssue && <Button variant="default" onClick={() => setDetailTab('conversations')}>Add comment</Button>}
+  </div>;
+  const mergeAction = <Button className="reviews-merge-button" disabled={!designPreview || !selectedPullRequest} fullWidth onClick={() => {
+    if (!selectedPullRequest) return;
+    setPreviewMergedNumbers((current) => current.includes(selectedPullRequest.number) ? current : [...current, selectedPullRequest.number]);
+    setPreviewQueueStatuses((current) => ({ ...current, [selectedPullRequest.number]: 'approved' }));
+  }}>{designPreview ? selectedPreviewMerged ? 'Merged to Trusted-main' : 'Merge to Trusted-main' : 'Merge to protected branch'}</Button>;
   const reviewAction = useMutation({
     mutationFn: async ({ action, body }: { action: 'comments' | 'request-changes'; body: string }) => {
       const response = await fetch(`/api/v1/agent-runs/${selected!.id}/${action}`, {
@@ -309,15 +350,44 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
       </div>
       <nav className="reviews-tabs" aria-label="Review sections">
         {designPreview ? <>
-          {([['Pull Requests 428', 'pull-requests', 'code-changes'], ['Code Review', 'code-review', 'code-changes'],
-            ['Evidence', 'evidence', 'evidence'], ['Merge Governance', 'governance', 'approvals'],
-            ['Policies', 'policies', 'checklist'], ['Trusted-main', 'trusted-main', 'approvals']] as const)
-            .map(([tab, key, target]) => <button type="button" aria-pressed={previewSection === key}
+          {([['Pull Requests', 'pull-requests', 'code-changes', IconGitPullRequest, '428'],
+            ['Code Review', 'code-review', 'code-changes', IconCode, ''],
+            ['Evidence', 'evidence', 'evidence', IconShieldCheck, ''],
+            ['Merge Governance', 'governance', 'approvals', IconGitMerge, ''],
+            ['Policies', 'policies', 'checklist', IconLock, ''],
+            ['Trusted-main', 'trusted-main', 'approvals', IconGitMerge, '']] as const)
+            .map(([tab, key, target, Icon, count]) => <button type="button" aria-pressed={previewSection === key}
               className={previewSection === key ? 'selected' : ''} key={tab}
-              onClick={() => { setPreviewSection(key); setDetailTab(target); }}>{tab}</button>)}
+              onClick={() => { setPreviewSection(key); setDetailTab(target); }}>
+              <Icon size={13} aria-hidden="true" />{tab}{count && <small>{count}</small>}
+            </button>)}
           <span className="reviews-tab-spacer" />
-          <span className="reviews-filter reviews-filter-static" title="Illustrative label only; the sample fixture is not date-filtered">Last 14 Days</span>
-          <span className="reviews-filter reviews-filter-static" title="The local preview contains one sample repository">All Repos</span>
+          <Menu withinPortal position="bottom-end">
+            <Menu.Target><Button className="reviews-filter reviews-preview-filter" variant="default" aria-label="Review date range">
+              Last {previewDateRange} Days <IconChevronDown size={13} />
+            </Button></Menu.Target>
+            <Menu.Dropdown>{[7, 14, 30].map((days) => <Menu.Item key={days}
+              onClick={() => setPreviewDateRange(days)}>Last {days} Days</Menu.Item>)}</Menu.Dropdown>
+          </Menu>
+          <Menu withinPortal position="bottom-end">
+            <Menu.Target><Button className="reviews-filter reviews-preview-filter" variant="default" aria-label="Review repository">
+              {previewRepository === 'all' ? 'All Repos' : reviewPreviewProject.name} <IconChevronDown size={13} />
+            </Button></Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item onClick={() => setPreviewRepository('all')}>All Repos</Menu.Item>
+              <Menu.Item onClick={() => setPreviewRepository('nova')}>{reviewPreviewProject.name}</Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+          <Menu withinPortal position="bottom-end">
+            <Menu.Target><Button className="reviews-filter reviews-preview-filter" variant="default" aria-label="More review filters"><IconDots size={15} /></Button></Menu.Target>
+            <Menu.Dropdown><Menu.Item onClick={() => {
+              setPreviewQueueFilter('all');
+              setProviderSearch('');
+              setPreviewDateRange(14);
+              setPreviewRepository('all');
+              setPreviewActionMessage('Review filters reset in this preview.');
+            }}>Reset queue filters</Menu.Item></Menu.Dropdown>
+          </Menu>
         </> : tabs.map((tab, index) => {
           const key = (['pull-requests', 'issues', 'local-branches'] as const)[index];
           return <button
@@ -333,7 +403,7 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             }}
           >{tab}</button>;
         })}
-        <span className="reviews-tab-spacer" />
+        {!designPreview && <span className="reviews-tab-spacer" />}
         {!designPreview && section !== 'local-branches' && <Select
           aria-label="GitHub repository"
           className="reviews-filter-select"
@@ -409,11 +479,14 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
                       const pullRequest = section === 'pull-requests' ? item as GitHubPullRequest : undefined;
                       const selected = item.number === selectedProviderItem?.number;
                       const updatedAt = Date.parse(item.updated_at);
+                      const previewDetails = designPreview ? reviewPreviewCardDetails[item.number] : undefined;
+                      const previewStatus = previewStatusByNumber[item.number] ?? (pullRequest?.draft ? 'draft' : 'in-review');
                       return <button type="button" key={item.number}
                         className={`reviews-provider-card${selected ? ' selected' : ''}`}
                         aria-pressed={selected}
                         onClick={() => {
                           setSelectedProviderNumber(item.number);
+                          setPreviewActionMessage('');
                           setProviderReviewBody('');
                           setProviderReviewStatus('');
                           setIssueCommentBody('');
@@ -422,9 +495,10 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
                         }}>
                         <span className="reviews-provider-card-top">
                           <span className="reviews-provider-number">{pullRequest ? <IconGitPullRequest size={13} /> : <IconFileText size={13} />} #{item.number}</span>
-                          {designPreview && item.number === 4827 && <span className="reviews-preview-category">Feature</span>}
-                          <span className="reviews-provider-state">{designPreview && pullRequest && item.number === 4827
-                            ? 'In Review' : pullRequest?.draft ? 'Draft' : item.state}</span>
+                          {previewDetails && <span className="reviews-preview-category">{previewDetails.category}</span>}
+                          <span className={`reviews-provider-state${designPreview ? ` preview-${previewStatus}` : ''}`}>
+                            {designPreview ? previewStatusLabels[previewStatus] : pullRequest?.draft ? 'Draft' : item.state}
+                          </span>
                         </span>
                         <strong>{item.title}</strong>
                         <span className="reviews-provider-meta">
@@ -434,8 +508,12 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
                           <span className="reviews-provider-date">{Number.isFinite(updatedAt)
                             ? new Date(updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Date unavailable'}</span>
                         </span>
-                        {designPreview && item.number === 4827 && <span className="reviews-preview-signals">
-                          <i>R 78</i><i>94%</i><i>CI ✓</i><i>Q 3</i>
+                        {previewDetails && <span className="reviews-preview-signals">
+                          <span className="reviews-preview-avatar-stack" aria-label={`${previewDetails.otherReviewers} additional reviewers`}>
+                            <i>{item.user.login.slice(0, 1).toUpperCase()}</i><i>+{previewDetails.otherReviewers}</i>
+                          </span>
+                          <i>R {previewDetails.risk}</i><i>{previewDetails.evidence}%</i>
+                          <i>CI {previewDetails.ciPassed ? '✓' : '✕'}</i><i>Q {previewDetails.comments}</i>
                         </span>}
                       </button>;
                     })}
@@ -465,13 +543,38 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             description={section === 'local-branches'
               ? selected ? `${selected.project_name} · ${selected.agent_name} · ${selected.worker_name}` : 'Agent-run diffs will appear when a worker completes a run.'
               : selectedProviderItem && selectedProject ? designPreview && selectedPullRequest ? <>
-                <span>{selectedProject.name} · opened by {selectedProviderItem.user.login}</span>
+                <span className="reviews-preview-pr-metadata">{selectedPreviewDetails?.commits !== undefined
+                  ? `Opened by ${selectedProviderItem.user.login} · ${selectedPreviewDetails.openedAge} · ${selectedPreviewDetails.commits} commits · +${selectedPreviewDetails.additions} −${selectedPreviewDetails.deletions} · Updated ${selectedPreviewDetails.updatedAge}`
+                  : `${selectedProject.name} · opened by ${selectedProviderItem.user.login}`}</span>
                 <span className="reviews-preview-branch-meta">{selectedPullRequest.head.ref} → {selectedPullRequest.base.ref}</span>
               </> : `${selectedProject.name} · opened by ${selectedProviderItem.user.login}`
                 : selectedProject?.git_remote ?? 'GitHub items will appear when a repository is selected.'}
-            actions={<Badge className="reviews-required" variant="light">{designPreview ? selectedPreviewMerged ? 'Merged' : selectedPreviewStatusLabel : section === 'local-branches'
+            actions={designPreview && selectedPullRequest ? <div className="reviews-preview-header-actions">
+              <Badge className="reviews-required" variant="light">{selectedPreviewMerged ? 'Merged' : selectedPreviewStatusLabel}</Badge>
+              <button type="button" aria-label={previewBookmarkedNumbers.includes(selectedPullRequest.number) ? 'Remove pull request bookmark' : 'Bookmark pull request'}
+                aria-pressed={previewBookmarkedNumbers.includes(selectedPullRequest.number)} onClick={() => setPreviewBookmarkedNumbers((saved) => saved.includes(selectedPullRequest.number)
+                  ? saved.filter((number) => number !== selectedPullRequest.number) : [...saved, selectedPullRequest.number])}><IconBookmark size={15} /></button>
+              <button type="button" aria-label="Copy pull request link" onClick={async () => {
+                const url = new URL(window.location.href);
+                url.searchParams.set('pull', String(selectedPullRequest.number));
+                url.hash = 'reviews';
+                try { await navigator.clipboard.writeText(url.toString()); setPreviewActionMessage('Pull request link copied'); }
+                catch { setPreviewActionMessage('Could not copy pull request link'); }
+              }}><IconLink size={15} /></button>
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target><button type="button" aria-label="More pull request actions"><IconDots size={16} /></button></Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Item onClick={() => setDetailTab('evidence')}>View evidence</Menu.Item>
+                  <Menu.Item onClick={async () => {
+                    try { await navigator.clipboard.writeText(selectedPullRequest.head.ref); setPreviewActionMessage('Branch name copied'); }
+                    catch { setPreviewActionMessage('Could not copy branch name'); }
+                  }}>Copy branch name</Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
+            </div> : <Badge className="reviews-required" variant="light">{designPreview ? selectedPreviewMerged ? 'Merged' : selectedPreviewStatusLabel : section === 'local-branches'
               ? selected?.status ?? 'Waiting for changes' : selectedProviderItem?.state ?? 'No open item'}</Badge>}
           />
+          {designPreview && previewActionMessage && <span className="reviews-preview-action-message" role="status">{previewActionMessage}</span>}
           <div className="reviews-stage-row" aria-label="Review pipeline">
             {stages.map((stage, index) => (
               <div className="reviews-stage" key={stage}>
@@ -690,24 +793,10 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             <div className="reviews-check-empty"><IconLock size={16} /> Checks and policy results need provider data.</div>
           </>}
           <div className="reviews-summary-actions">
-            <Button variant="default" disabled={!designPreview || !selectedPullRequest} fullWidth onClick={() => {
-              if (!selectedPullRequest) return;
-              const url = URL.createObjectURL(new Blob([JSON.stringify({ pullRequest: selectedPullRequest, diff: reviewPreviewDiff }, null, 2)], { type: 'application/json' }));
-              const link = document.createElement('a');
-              link.href = url; link.download = `pr-${selectedPullRequest.number}-preview-evidence.json`; link.click();
-              window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-            }}><IconDownload size={14} /> Export evidence</Button>
-            <div className="reviews-summary-review-actions">
-              <Button color="green" disabled={!designPreview || !selectedPullRequest} onClick={() => {
-                if (!selectedPullRequest) return;
-                setPreviewQueueStatuses((current) => ({ ...current, [selectedPullRequest.number]: 'approved' }));
-              }}>{selectedPreviewStatus === 'approved' ? 'Approved' : 'Approve'}</Button>
-              {selectedPullRequest && <Button color="violet" onClick={() => {
-                if (designPreview) setPreviewQueueStatuses((current) => ({ ...current, [selectedPullRequest.number]: 'changes-requested' }));
-                setDetailTab('conversations');
-              }}>{selectedPreviewStatus === 'changes-requested' ? 'Changes requested' : 'Request changes'}</Button>}
-              {selectedIssue && <Button variant="default" onClick={() => setDetailTab('conversations')}>Add comment</Button>}
-            </div>
+            {!designPreview && exportEvidenceAction}
+            {reviewActions}
+            {designPreview && mergeAction}
+            {designPreview && exportEvidenceAction}
           </div>
           <div className="reviews-governance-heading"><IconGitMerge size={15} /><b>Merge Governance</b></div>
           {designPreview && <div className="reviews-governance-row"><span>Merge strategy</span><b>Squash &amp; Merge</b></div>}
@@ -717,11 +806,7 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
             <div className="reviews-governance-row"><span>Policy</span><b>Core Product v2.4</b></div>
             <div className="reviews-governance-row"><span>Auto-merge (when ready)</span><Switch checked={previewAutoMerge} onChange={(event) => setPreviewAutoMerge(event.currentTarget.checked)} size="xs" aria-label="Auto-merge when ready" /></div>
           </>}
-          <Button className="reviews-merge-button" disabled={!designPreview || !selectedPullRequest} fullWidth onClick={() => {
-            if (!selectedPullRequest) return;
-            setPreviewMergedNumbers((current) => current.includes(selectedPullRequest.number) ? current : [...current, selectedPullRequest.number]);
-            setPreviewQueueStatuses((current) => ({ ...current, [selectedPullRequest.number]: 'approved' }));
-          }}>{designPreview ? selectedPreviewMerged ? 'Merged to Trusted-main' : 'Merge to Trusted-main' : 'Merge to protected branch'}</Button>
+          {!designPreview && mergeAction}
           </PanelCard>
         </Panel>
       </Group>
@@ -732,7 +817,7 @@ export function ReviewsPage({ runs, projects, designPreview = false }: { runs: A
           const branch = newPreviewPRBranch.trim();
           if (!title || !branch) return;
           const number = Math.max(...previewPullRequests.map((item) => item.number), 4827) + 1;
-          const item = { ...reviewPreviewPullRequests[0], number, title, draft: true, updated_at: new Date().toISOString(),
+          const item = { ...reviewPreviewPullRequests[0], number, title, draft: true, updated_at: reviewPreviewProject.last_seen,
             user: { login: 'Alex Chen' }, head: { ref: branch }, body: 'Illustrative pull request created in the local preview.' };
           setPreviewPullRequests((current) => [item, ...current]);
           setPreviewQueueStatuses((current) => ({ ...current, [number]: 'draft' }));

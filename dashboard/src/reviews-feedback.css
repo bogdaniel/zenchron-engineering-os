@@ -48,6 +48,8 @@
 .reviews-pr-diff .reviews-code-editor {
   height: 300px;
 }
+.reviews-code-editor .zenchron-diff-added-line { background: #123222; }
+.reviews-code-editor .zenchron-diff-removed-line { background: #3a1b24; }
 .reviews-pr-diff-empty {
   display: grid;
   min-height: 180px;

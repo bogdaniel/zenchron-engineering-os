@@ -195,7 +195,7 @@ function App() {
                 </> : 'Your engineering control center for objectives, agents, code, and delivery.'} />}
             <Menu opened={searchOpen && Boolean(searchTerm.trim())} onChange={setSearchOpen} position="bottom-start" withinPortal>
               <Menu.Target><TextInput ref={searchInput} className="search-box" leftSection={<IconSearch size={17} />}
-                placeholder="Search pages…" value={searchTerm} onChange={(event) => {
+                placeholder="Search Zenchron…" value={searchTerm} onChange={(event) => {
                   setSearchTerm(event.currentTarget.value);
                   setSearchOpen(true);
                 }} onKeyDown={(event) => {

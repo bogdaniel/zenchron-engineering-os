@@ -146,19 +146,7 @@
   background: #1b1a28;
   font-size: 12px;
 }
-.reviews-filter-static {
-  display: inline-flex;
-  min-height: 27px;
-  height: 27px;
-  align-items: center;
-  padding: 0 8px;
-  border: 1px solid #353149;
-  border-radius: 5px;
-  color: #8f899f;
-  background: #1b1a28;
-  font-size: 12px;
-  cursor: default;
-}
+.reviews-filter.mantine-Button-root[aria-label="More review filters"] { width: 27px; padding: 0; }
 .reviews-filter svg {
   margin: 0 3px;
 }
@@ -420,11 +408,13 @@
   .reviews-tabs {
     overflow-x: auto;
   }
+  .reviews-tabs > * { flex-shrink: 0; }
   .reviews-tab-spacer,
   .reviews-filter,
   .reviews-filter-select {
     display: none;
   }
+  .reviews-tabs .reviews-preview-filter { display: inline-flex; }
   .reviews-resize-handle {
     width: 100%;
     height: 8px;

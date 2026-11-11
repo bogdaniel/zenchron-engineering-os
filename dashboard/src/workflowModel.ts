@@ -33,10 +33,10 @@ export const designPreviewPositions: Record<string, { x: number; y: number }> = 
   test: { x: 666, y: 24 }, review: { x: 666, y: 112 }, merge: { x: 911, y: 72 },
 };
 export const designPreviewCanvasPositions: Record<string, { x: number; y: number }> = {
-  trigger: { x: 0, y: 180 }, plan: { x: 210, y: 180 }, build: { x: 420, y: 180 },
-  retry: { x: 420, y: 40 }, review: { x: 630, y: 100 }, tests: { x: 630, y: 180 },
-  coverage: { x: 630, y: 260 }, condition: { x: 840, y: 40 }, approval: { x: 840, y: 180 },
-  merge: { x: 1050, y: 180 }, publish: { x: 1260, y: 180 },
+  trigger: { x: 0, y: 53 }, plan: { x: 111, y: 53 }, build: { x: 216, y: 53 },
+  retry: { x: 208, y: -51 }, review: { x: 327, y: -8 }, tests: { x: 327, y: 57 },
+  coverage: { x: 327, y: 134 }, condition: { x: 515, y: -55 }, approval: { x: 482, y: 53 },
+  merge: { x: 590, y: 53 }, publish: { x: 698, y: 53 },
 };
 export const mobileOverviewStages: {
   id: string; label: string; description: string; kind: ComponentType; types: ComponentType[];
@@ -73,17 +73,17 @@ export const designPreviewWorkflow: Workflow = {
   status: 'active', version: 1,
   updated_at: '',
   nodes: [
-    ['trigger', 'trigger', 'Trigger', 'PR or objective update'],
-    ['plan', 'planner', 'Planner', 'Create an execution plan'],
-    ['build', 'agent-router', 'Agent Router', 'Route work to specialized agents'],
+    ['trigger', 'trigger', 'Trigger', 'PR opened / updated'],
+    ['plan', 'planner', 'Planner', 'Generate plan & context'],
+    ['build', 'agent-router', 'Agent Router', 'Route to specialized agents'],
     ['retry', 'loop', 'Retry (max 2)', 'On failure'],
-    ['review', 'code-reviewer', 'Code Reviewer', 'Analyze changes and provide review'],
-    ['tests', 'test-generator', 'Test Generator', 'Generate and update tests'],
-    ['coverage', 'coverage-analyzer', 'Coverage Analyzer', 'Compute test coverage and quality'],
+    ['review', 'code-reviewer', 'Code Reviewer', 'Analyze changes & provide review'],
+    ['tests', 'test-generator', 'Test Generator', 'Generate & update tests'],
+    ['coverage', 'coverage-analyzer', 'Coverage Analyzer', 'Compute test coverage'],
     ['condition', 'condition', 'Condition', 'Coverage ≥ 80% and tests pass'],
-    ['approval', 'human-approval', 'Human Approval', 'Review results and approve'],
-    ['merge', 'merge-gate', 'Merge Gate', 'Conditional merge with policies'],
-    ['publish', 'publish-report', 'Publish Report', 'Generate and publish release report'],
+    ['approval', 'human-approval', 'Human Approval', 'Review results & approve'],
+    ['merge', 'merge-gate', 'Merge Gate', 'Apply policies & merge'],
+    ['publish', 'publish-report', 'Publish Report', 'Generate & publish release report'],
   ].map(([id, type, label, description]) => ({
     id, type: type as ComponentType, position: { x: 0, y: 0 }, data: { label, description },
   })),
@@ -105,7 +105,7 @@ export const components = [
   ['Control & Human-in-the-loop', 'merge-gate', 'Merge Gate'],
   ['Control & Human-in-the-loop', 'condition', 'Condition'],
   ['Control & Human-in-the-loop', 'loop', 'Loop'],
-  ['Control & Human-in-the-loop', 'publish-report', 'Publish Report'],
+  ['Integrations', 'publish-report', 'Publish Report'],
 ] as const;
 export type ComponentType = typeof components[number][1];
 export const workflowNodeIcons: Record<ComponentType, typeof IconRoute> = {
@@ -198,14 +198,20 @@ export function mobileWorkflowGraph(workflow: Workflow, designPreview = false, m
   return { nodes, edges };
 }
 
-export function workflowGraph(workflow: Workflow) {
+export function workflowGraph(workflow: Workflow, designPreview = false) {
   const loopNodeIDs = new Set(workflow.nodes.filter((node) => node.type === 'loop').map((node) => node.id));
+  const nodeTypes = new Map(workflow.nodes.map((node) => [node.id, node.type]));
   return {
     nodes: workflow.nodes.map((node) => ({
       ...node, type: 'workflow', data: { ...node.data, kind: node.type },
     })),
-    edges: workflow.edges.map((edge) => ({ ...edge, type: 'smoothstep', animated: false,
-      ...(loopNodeIDs.has(edge.source) || loopNodeIDs.has(edge.target) ? { className: 'workflow-loop-edge' } : {}) })),
+    edges: workflow.edges.map((edge) => {
+      const targetType = nodeTypes.get(edge.target);
+      const loopEdge = loopNodeIDs.has(edge.source) || loopNodeIDs.has(edge.target);
+      return { ...edge, type: 'smoothstep', animated: false,
+        ...(loopEdge ? { className: 'workflow-loop-edge' } : designPreview && targetType
+          ? { className: `workflow-preview-edge workflow-preview-edge-${targetType}` } : {}) };
+    }),
   };
 }
 

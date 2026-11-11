@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
-test.use({ baseURL: 'http://127.0.0.1:4173' });
+const dashboardPort = Number((globalThis as typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+}).process?.env?.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+test.use({ baseURL: `http://127.0.0.1:${dashboardPort}` });
 
 test('shared shell, headings, and metric cards keep their visual scale across routes', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
@@ -231,6 +234,10 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
 });
 
 test('desktop sidebar matches mock width at reference and regular monitor sizes', async ({ page }) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/#settings');
+  await expect(page.locator('.nav-link[href="#settings"] .nav-desktop-icon')).toHaveClass(/tabler-icon-settings/);
+  await expect(page.locator('.nav-link[href="#settings"] .nav-mobile-icon')).toBeHidden();
   for (const width of [1672, 1505]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/#reports');
@@ -250,6 +257,12 @@ test('mobile overview matches the phone shell and keeps workflow/reviews accessi
   await expect(page.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Notifications' })).toBeVisible();
+  const notificationAlignment = () => page.evaluate(() => {
+    const brand = document.querySelector('.sidebar > .brand .brand-mark')!.getBoundingClientRect();
+    const notification = document.querySelector('.top-actions .notification-button')!.getBoundingClientRect();
+    return Math.abs((brand.top + brand.bottom) / 2 - (notification.top + notification.bottom) / 2);
+  });
+  expect(await notificationAlignment(), 'the phone notification button shares the brand row').toBeLessThanOrEqual(4);
   await expect(page.locator('.search-box')).toBeHidden();
   await expect(page.locator('.workspace-button')).toBeHidden();
   await expect(page.locator('.sidebar nav .nav-link:visible')).toHaveCount(5);
@@ -263,6 +276,8 @@ test('mobile overview matches the phone shell and keeps workflow/reviews accessi
   await expect.poll(() => page.locator('.nav-link[href="#settings"] .nav-label').evaluate((element) =>
     getComputedStyle(element, '::after').content,
   )).toBe('"Profile"');
+  await expect(page.locator('.nav-link[href="#settings"] .nav-mobile-icon')).toHaveClass(/tabler-icon-user/);
+  await expect(page.locator('.nav-link[href="#settings"] .nav-desktop-icon')).toBeHidden();
   await expect(page.locator('.sidebar nav')).toHaveCSS('position', 'fixed');
   await expect(page.locator('.activity-list')).toContainText('PR #41827 merged to trusted-main');
   const metricColumns = await page.locator('.metric-grid').evaluate((element) =>
@@ -274,6 +289,9 @@ test('mobile overview matches the phone shell and keeps workflow/reviews accessi
   await page.getByRole('link', { name: 'Reviews', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible();
   await expect(page.locator('.reviews-title-copy p')).toBeVisible();
+  await page.goto('/#agents');
+  await expect(page.locator('.agents-page')).toBeVisible();
+  expect(await notificationAlignment(), 'the Agents phone notification shares the brand row').toBeLessThanOrEqual(4);
 });
 
 test('header search and menus navigate within the local preview', async ({ page }) => {

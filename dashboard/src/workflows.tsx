@@ -11,8 +11,8 @@ import {
 } from '@xyflow/react';
 import type { Connection, Edge, NodeProps, ReactFlowInstance } from '@xyflow/react';
 import {
-  IconCheck, IconChecklist, IconChevronDown, IconChevronRight, IconCirclePlus, IconDeviceFloppy, IconDots, IconGripVertical,
-  IconHierarchy, IconInfoCircle, IconLayoutBoard, IconMaximize, IconPlayerPlay, IconRoute, IconSearch, IconUserCheck,
+  IconArrowLeft, IconCheck, IconChecklist, IconChevronDown, IconChevronRight, IconCirclePlus, IconDeviceFloppy, IconDots, IconGripVertical,
+  IconHierarchy, IconInfoCircle, IconLayoutBoard, IconMaximize, IconPlayerPlay, IconRoute, IconSearch, IconUserCheck, IconX,
 } from '@tabler/icons-react';
 import '@xyflow/react/dist/style.css';
 import { PageHeading } from './PageHeading';
@@ -29,6 +29,16 @@ import {
   workflowSchema,
 } from './workflowModel';
 import type { ComponentType, Workflow, WorkflowData, WorkflowNode } from './workflowModel';
+
+const paletteCategories = ['All', 'Agents', 'Actions', 'Control', 'Integrations'] as const;
+type PaletteCategory = typeof paletteCategories[number];
+const paletteCategoryTypes: Record<PaletteCategory, Set<ComponentType>> = {
+  All: new Set(components.map(([, type]) => type)),
+  Agents: new Set<ComponentType>(['planner', 'agent-router', 'agent-task', 'code-reviewer', 'test-generator', 'coverage-analyzer']),
+  Actions: new Set<ComponentType>(['trigger', 'condition', 'loop', 'merge-gate']),
+  Control: new Set<ComponentType>(['human-approval', 'merge-gate', 'condition', 'loop']),
+  Integrations: new Set<ComponentType>(['publish-report']),
+};
 
 function WorkflowBlock({ data }: NodeProps<WorkflowNode>) {
   const Icon = data.previewIcon ?? workflowNodeIcons[data.kind];
@@ -180,12 +190,14 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
   });
   const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
   const [selectedId, setSelectedId] = useState('');
+  const [inspectorOpen, setInspectorOpen] = useState(true);
   const loadedWorkflowId = useRef('');
   const flow = useRef<ReactFlowInstance<WorkflowNode, Edge> | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [runPreviewView, setRunPreviewView] = useState<WorkflowDesignRunView>('Execution Graph');
+  const [simulateRun, setSimulateRun] = useState(true);
   const [routerTab, setRouterTab] = useState<'Properties' | 'Prompt' | 'Variables' | 'Advanced'>('Properties');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -195,6 +207,14 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
   const [createName, setCreateName] = useState('');
   const [createDescription, setCreateDescription] = useState('');
   const [paletteSearch, setPaletteSearch] = useState('');
+  const [paletteCategory, setPaletteCategory] = useState<PaletteCategory>('All');
+  const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select');
+  const [canvasZoom, setCanvasZoom] = useState(1);
+  const [miniMapVisible, setMiniMapVisible] = useState(true);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    () => new Set(designPreview ? ['Integrations'] : []),
+  );
+  const canvasRef = useRef<HTMLDivElement>(null);
   const selected = nodes.find((node) => node.id === selectedId);
   const InspectorIcon = workflowNodeIcons[selected?.data.kind ?? 'agent-router'];
   const selectedType = selected
@@ -204,7 +224,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
   const mobileStages = activeWorkflow ? mobileWorkflowGraph(activeWorkflow).nodes : [];
   const approvalRequired = activeWorkflow?.nodes.some((node) => node.type === 'human-approval') ?? false;
   const filteredComponents = components.filter(([, type, label]) =>
-    `${label} ${defaultDescriptions[type]}`.toLowerCase().includes(paletteSearch.trim().toLowerCase()),
+    paletteCategoryTypes[paletteCategory].has(type)
+    && `${label} ${defaultDescriptions[type]}`.toLowerCase().includes(paletteSearch.trim().toLowerCase()),
   );
   const save = useMutation({
     mutationFn: async () => {
@@ -257,13 +278,15 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     let isCurrent = true;
     loadedWorkflowId.current = current.id;
     setName(current.name); setDescription(current.description); setStatus(current.status);
-    const { nodes: workflowNodes, edges: workflowEdges } = workflowGraph(current);
+    const { nodes: workflowNodes, edges: workflowEdges } = workflowGraph(current, designPreview);
     const selectedNode = workflowNodes.find((node) => node.data.kind === 'agent-router');
     const selectedNodes = workflowNodes.map((node) => ({ ...node,
       ...(designPreview ? { position: designPreviewCanvasPositions[node.id] } : {}),
+      ...(designPreview && node.data.kind === 'loop' ? { style: { width: 154 } } : {}),
       selected: node.id === selectedNode?.id,
     }));
     setSelectedId(selectedNode?.id ?? '');
+    setInspectorOpen(true);
     setNodes(selectedNodes);
     setEdges(workflowEdges);
     void (designPreview ? Promise.resolve(selectedNodes) : layoutNodes(selectedNodes, workflowEdges)).then((laidOut) => {
@@ -289,6 +312,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       data: { label, description: defaultDescriptions[type], kind: type },
     }]);
     setSelectedId(id);
+    setInspectorOpen(true);
     if (designPreview) setNotice('Block added locally · changes are not saved');
   };
   const handleDragEnd = (event: DragEndEvent) => {
@@ -323,6 +347,17 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     return <div className="workflow-page"><p role="alert">{query.error?.message ?? 'No workflows available'}</p></div>;
   }
   return <section className={`workflow-page${designPreview && section === 'Builder' ? ' workflow-run-mock' : ''}`}>
+    {designPreview && <header className="workflow-mobile-header" aria-label="Workflow navigation">
+      <a href="#overview" aria-label="Back to Overview"><IconArrowLeft size={20} /></a>
+      <div className="workflow-mobile-brand"><span className="brand-mark" aria-hidden="true" />Zenchron Engineering</div>
+      <Menu position="bottom-end" withinPortal>
+        <Menu.Target><button className="workflow-mobile-menu-trigger" type="button" aria-label="More workflow actions"><IconDots size={19} /></button></Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Item onClick={() => navigateMobileSection('Runs', 'workflow-mobile-run-summary')}>Show run status</Menu.Item>
+          <Menu.Item onClick={() => navigateMobileSection('Approvals', 'workflow-mobile-run-approvals')}>Show approvals</Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
+    </header>}
     <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="New Workflow">
       <TextInput
         label="Workflow name" value={createName} onChange={(event) => setCreateName(event.currentTarget.value)}
@@ -339,7 +374,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         onClick={() => createWorkflow.mutate()}
       >Create workflow</Button>
     </Modal>
-    <div className={`workflow-builder-layout${designPreview ? ' workflow-design-preview' : ''}${sectionPreview ? ' workflow-section-view' : ''}`}>
+    <div className={`workflow-builder-layout${designPreview ? ' workflow-design-preview' : ''}${sectionPreview ? ' workflow-section-view' : ''}${designPreview && !inspectorOpen ? ' workflow-inspector-closed' : ''}`}>
       <div className={`workflow-page-heading${sectionPreview ? ' workflow-section-heading' : ''}`}>
         <PageHeading
           eyebrow={designPreview ? <>
@@ -377,7 +412,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
           <Button className="workflow-validate" variant="default" leftSection={<IconCheck size={15} />} onClick={validate}>Validate</Button>
           <Button className="workflow-run" variant="default" leftSection={<IconPlayerPlay size={15} />}
             disabled={!designPreview} title={designPreview ? 'Show the simulated workflow run' : 'Runner not connected'}
-            onClick={() => { setRunPreviewView('Execution Graph'); setNotice('Simulated run shown · workflow was not executed'); }}>
+            onClick={() => { setRunPreviewView('Execution Graph'); setSimulateRun(true); setNotice('Simulated run shown · workflow was not executed'); }}>
             Run
           </Button>
           <Button className="workflow-save" leftSection={<IconDeviceFloppy size={15} />} loading={!designPreview && save.isPending}
@@ -447,11 +482,25 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
           value={paletteSearch}
           onChange={(event) => setPaletteSearch(event.currentTarget.value)}
         />
+        {designPreview && <div className="workflow-preview-palette-categories" role="group" aria-label="Component categories">
+          {paletteCategories.map((category) => <button key={category} type="button"
+            aria-pressed={paletteCategory === category} onClick={() => setPaletteCategory(category)}>{category}</button>)}
+        </div>}
         {componentGroups.map((group) => {
           const groupComponents = filteredComponents.filter(([category]) => category === group);
+          const isCollapsed = collapsedGroups.has(group) && !paletteSearch.trim() && paletteCategory === 'All';
+          const groupId = `workflow-group-${group.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
           return groupComponents.length ? <div className="workflow-component-group" key={group}>
-            <b>{group}</b>
-            <div className="workflow-component-list">
+            <button className="workflow-component-group-toggle" type="button" aria-label={`Toggle ${group}`}
+              aria-expanded={!isCollapsed} aria-controls={groupId} onClick={() => setCollapsedGroups((current) => {
+                const next = new Set(current);
+                if (next.has(group)) next.delete(group);
+                else next.add(group);
+                return next;
+              })}>
+              <b>{group}</b><IconChevronDown size={13} />
+            </button>
+            <div className="workflow-component-list" id={groupId} hidden={isCollapsed}>
               {groupComponents.map(([, type, label]) => (
                 <ComponentPaletteItem key={type} type={type} label={label} description={defaultDescriptions[type]}
                   onAdd={addComponent} />
@@ -467,16 +516,31 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         defaultLayout={{ canvas: 63.15, preview: 36.85 }}
       >
         <Panel id="canvas" className="workflow-center-panel" minSize="40%">
-      <div className="workflow-canvas-wrap">
+      <div className="workflow-canvas-wrap" ref={canvasRef}>
         <div className="workflow-canvas-tools">
           {designPreview ? <>
             <div className="workflow-preview-toolset" role="group" aria-label="Canvas tools">
-              <span className="selected" aria-hidden="true">↖</span><span aria-hidden="true">✋</span>
-              <span aria-hidden="true">＋</span><span aria-hidden="true">□</span><span aria-hidden="true">⤢</span>
+              <button className={canvasMode === 'select' ? 'selected' : ''} type="button" aria-label="Select nodes"
+                aria-pressed={canvasMode === 'select'} onClick={() => setCanvasMode('select')}>↖</button>
+              <button className={canvasMode === 'pan' ? 'selected' : ''} type="button" aria-label="Pan canvas"
+                aria-pressed={canvasMode === 'pan'} onClick={() => setCanvasMode('pan')}>✋</button>
+              <button type="button" aria-label="Add custom block" onClick={() => addComponent('agent-task', 'Custom Block')}>＋</button>
+              <button type="button" aria-label="Fit graph to canvas" onClick={() => flow.current?.fitView({ duration: 200 })}>□</button>
+              <button type="button" aria-label="Toggle canvas fullscreen" onClick={() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const action = document.fullscreenElement === canvas
+                  ? document.exitFullscreen() : canvas.requestFullscreen();
+                void action.catch(() => setNotice('Canvas fullscreen is unavailable'));
+              }}>⤢</button>
             </div>
             <div className="workflow-preview-zoom" role="group" aria-label="Canvas zoom">
-              <span aria-hidden="true">−</span><b aria-hidden="true">100%</b>
-              <span aria-hidden="true">＋</span><span aria-hidden="true">▦</span>
+              <button type="button" aria-label="Zoom out" onClick={() => flow.current?.zoomOut({ duration: 120 })}>−</button>
+              <button className="workflow-zoom-level" type="button" aria-label="Reset canvas zoom"
+                onClick={() => flow.current?.zoomTo(1, { duration: 120 })}>{Math.round(canvasZoom * 100)}%</button>
+              <button type="button" aria-label="Zoom in" onClick={() => flow.current?.zoomIn({ duration: 120 })}>＋</button>
+              <button type="button" aria-label="Toggle minimap" aria-pressed={miniMapVisible}
+                onClick={() => setMiniMapVisible((visible) => !visible)}>▦</button>
             </div>
           </> : <>
             <div className="workflow-canvas-actions">
@@ -510,19 +574,27 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
           <ReactFlow
             key={layoutRevision} nodes={nodes} edges={edges} nodeTypes={flowNodeTypes}
             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
-            onInit={(instance) => { flow.current = instance; }}
-            onNodeClick={(_, node) => setSelectedId(node.id)} fitView minZoom={0.2} attributionPosition="bottom-left"
+            onInit={(instance) => { flow.current = instance; setCanvasZoom(instance.getZoom()); }}
+            onMoveEnd={(_, viewport) => setCanvasZoom(viewport.zoom)}
+            nodesDraggable={designPreview ? canvasMode === 'select' : true}
+            panOnDrag={designPreview ? canvasMode === 'pan' : true}
+            onNodeClick={(_, node) => { setSelectedId(node.id); setInspectorOpen(true); }} fitView minZoom={0.2} attributionPosition="bottom-left"
           >
             {!designPreview && <Background bgColor="var(--workflow-canvas-bg)" color="#37324c"
               gap={18} size={2} />}
-            <MiniMap style={{ width: 128, height: 54 }} nodeColor="#8e52db" maskColor="#0b0b14bb" />
+            {miniMapVisible && <MiniMap style={{ width: 128, height: 54 }} nodeColor="#8e52db" maskColor="#0b0b14bb" />}
             {!designPreview && <Controls position="top-right" />}
           </ReactFlow>
         </WorkflowDropCanvas>
-        <div className="workflow-status" aria-live="polite">
-          <IconPlayerPlay size={14} /><span>{notice || (designPreview
-            ? 'Design preview · changes are not saved' : 'Draft · validate and save changes')}</span>
-          <small>Runner not connected</small>
+        <div className={`workflow-status${designPreview ? ' workflow-preview-execution-flow' : ''}`} aria-live="polite">
+          {designPreview ? <>
+            <IconPlayerPlay size={16} />
+            <div><b>Execution Flow (v2.4.0)</b>
+              <span>{notice || 'Ready to run · 7 nodes · Est. 2m 14s · Cost $0.038'}</span></div>
+          </> : <>
+            <IconPlayerPlay size={14} /><span>{notice || 'Draft · validate and save changes'}</span>
+            <small>Runner not connected</small>
+          </>}
         </div>
       </div>
         </Panel>
@@ -533,15 +605,19 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
               <div role="tablist" aria-label="Run preview views"><b>Run Preview</b>
                 {(['Execution Graph', 'Logs', 'Outputs', 'Artifacts'] as const).map((view) => <button
                   key={view} type="button" role="tab" aria-selected={runPreviewView === view}
-                  className={runPreviewView === view ? 'selected' : ''} disabled={!designPreview}
+                  className={runPreviewView === view ? 'selected' : ''} disabled={!designPreview || !simulateRun}
                   title={designPreview ? undefined : 'Run a workflow to view execution details'}
                   onClick={() => setRunPreviewView(view)}>{view}</button>)}
               </div>
-              <Badge color={designPreview ? 'green' : 'gray'}>
-                {designPreview ? '✓ All steps valid' : 'Runner unavailable'}
-              </Badge>
+              {designPreview ? <label className="workflow-simulate-control">Simulate Run
+                <button type="button" role="switch" aria-label="Simulate Run" aria-checked={simulateRun}
+                  className="workflow-preview-toggle" onClick={() => setSimulateRun((enabled) => !enabled)} />
+              </label> : <Badge color="gray">Runner unavailable</Badge>}
             </div>
-            {designPreview ? <WorkflowDesignRunPreview view={runPreviewView} /> : <div className="workflow-preview-content">
+            {designPreview && simulateRun ? <WorkflowDesignRunPreview view={runPreviewView} />
+              : designPreview ? <div className="workflow-preview-paused" role="status">
+                <b>Simulation paused</b><span>Turn on Simulate Run to view execution details.</span>
+              </div> : <div className="workflow-preview-content">
               <div className="workflow-preview-empty"><IconPlayerPlay size={19} />
                 <b>Execution preview unavailable</b>
                 <span>Workflow execution is not connected. Save and validate this graph to keep its definition ready.</span>
@@ -557,9 +633,16 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       </Group>
       </div>
       </DndContext>
-      <aside className="workflow-properties">
+      <aside className="workflow-properties" hidden={designPreview && !inspectorOpen}>
         <PanelHeading className="workflow-subheading" title={selected?.data.label ?? 'Selected component'}
-          icon={selected && <span className="workflow-inspector-icon" aria-hidden="true"><InspectorIcon size={18} /></span>} />
+          icon={selected && <span className="workflow-inspector-icon" aria-hidden="true"><InspectorIcon size={18} /></span>}
+          actions={designPreview && <div className="workflow-inspector-actions">
+            <Menu position="bottom-end" withinPortal>
+              <Menu.Target><button type="button" aria-label="Component options"><IconDots size={16} /></button></Menu.Target>
+              <Menu.Dropdown><Menu.Item onClick={() => setSelectedId(nodes.find(({ data }) => data.kind === 'agent-router')?.id ?? '')}>Reset selection</Menu.Item></Menu.Dropdown>
+            </Menu>
+            <button type="button" aria-label="Close component settings" onClick={() => setInspectorOpen(false)}><IconX size={16} /></button>
+          </div>} />
         {designPreview && <div className="workflow-inspector-tabs" role="tablist" aria-label="Agent Router settings">
           {(['Properties', 'Prompt', 'Variables', 'Advanced'] as const).map((tab) => <button key={tab}
             type="button" role="tab" aria-selected={routerTab === tab} aria-controls="router-settings-panel"
@@ -576,7 +659,9 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
               />
               <TextInput label="Type" value={selectedType} readOnly />
               <Textarea
-                label="Description" value={selected.data.description}
+                label="Description" value={designPreview && selected.data.kind === 'agent-router'
+                  ? 'Route work to the appropriate agents (review, test, coverage) based on the plan and PR context.'
+                  : selected.data.description}
                 onChange={(event) => updateSelected('description', event.currentTarget.value)}
                 maxLength={500} autosize minRows={2} readOnly={designPreview}
               />

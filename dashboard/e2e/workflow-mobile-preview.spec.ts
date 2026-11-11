@@ -12,6 +12,11 @@ test('phone Workflow mock shows the sample run, task progress, and approvals wit
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/#workflows');
 
+  await expect(page.locator('.workflow-mobile-header')).toBeVisible();
+  await expect(page.locator('.workflow-mobile-menu-trigger')).toHaveCSS('background-color', 'rgb(20, 19, 31)');
+  await expect(page.getByRole('link', { name: 'Back to Overview' })).toHaveAttribute('href', '#overview');
+  await expect(page.locator('.sidebar > .brand')).toBeHidden();
+  await expect(page.locator('.topbar')).toBeHidden();
   await expect(page.locator('.workflow-mobile-eyebrow')).toHaveText('Objective');
   await expect(page.locator('.workflow-desktop-eyebrow')).toBeHidden();
   await expect(page.getByRole('heading', { name: 'Workflow Orchestration' })).toBeVisible();
@@ -67,6 +72,11 @@ test('phone Workflow mock shows the sample run, task progress, and approvals wit
     return approval.bottom <= navigation.top;
   });
   expect(approvalsClearOfNavigation, 'approval controls should be reachable above the fixed phone navigation').toBe(true);
+  await page.getByRole('button', { name: 'More workflow actions' }).click();
+  await page.getByRole('menuitem', { name: 'Show approvals' }).click();
+  await expect(page.getByRole('button', { name: 'Approvals', exact: true })).toHaveAttribute('aria-current', 'page');
   expect(apiRequests.filter(({ path }) => path !== '/api/v1/auth/session')).toEqual([]);
   expect(apiRequests.filter(({ method }) => method !== 'GET')).toEqual([]);
+  await page.getByRole('link', { name: 'Back to Overview' }).click();
+  await expect(page).toHaveURL(/#overview$/);
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, colorSchemeDark, themeQuartz } from 'ag-grid-community';
 import type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
@@ -6,7 +6,7 @@ import { AreaChart, Sparkline } from '@mantine/charts';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, Menu, Modal, NumberInput, Progress, Select, Text, Textarea, TextInput } from '@mantine/core';
-import { IconActivity, IconAlertTriangle, IconCalendar, IconChecklist, IconCircleCheck, IconCube,
+import { IconActivity, IconAlertTriangle, IconCalendar, IconChecklist, IconChevronDown, IconCircleCheck, IconCircleMinus, IconCube,
   IconDots, IconFileText, IconGitPullRequest, IconHierarchy, IconLink, IconListCheck, IconPlus, IconShieldCheck, IconStar, IconTarget,
   IconTargetArrow, IconUser } from '@tabler/icons-react';
 import { z } from 'zod';
@@ -83,8 +83,10 @@ function statusBadge(status: Objective['status']) {
   return <Badge className={`objective-status ${status}`} variant="light">{status.replace('_', ' ')}</Badge>;
 }
 
-function ObjectivePreviewHeading({ icon: Icon, children }: { icon: typeof IconTarget; children: React.ReactNode }) {
-  return <b><Icon size={13} aria-hidden="true" />{children}</b>;
+function ObjectivePreviewHeading({ icon: Icon, children, action }: {
+  icon: typeof IconTarget; children: React.ReactNode; action?: React.ReactNode;
+}) {
+  return <b className="objective-preview-heading"><span><Icon size={13} aria-hidden="true" />{children}</span>{action}</b>;
 }
 
 function ObjectiveItemCard({ item, selected, productName, onSelect }: {
@@ -140,6 +142,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [editing, setEditing] = useState(false);
   const [detailTab, setDetailTab] = useState<'overview' | 'milestones' | 'pull-requests' | 'activity'>('overview');
   const [selectedID, setSelectedID] = useState<string | null>(() => new URLSearchParams(window.location.search).get('objective'));
+  const selectedIDRef = useRef(selectedID);
+  selectedIDRef.current = selectedID;
   const [favoriteIDs, setFavoriteIDs] = useState<string[]>([]);
   const [actionNotice, setActionNotice] = useState('');
   const [progressValue, setProgressValue] = useState<number>(0);
@@ -151,6 +155,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dueQuarter, setDueQuarter] = useState<'this' | 'last' | 'all'>('this');
+  const previewSelectChevron = sampleData ? <IconChevronDown size={12} aria-hidden="true" /> : undefined;
   const [section, setSection] = useState<'objectives' | 'planning' | 'roadmap'>('objectives');
   const [view, setView] = useState<'kanban' | 'table' | 'cards'>('table');
   const [objectiveGridApi, setObjectiveGridApi] = useState<GridApi<Objective> | null>(null);
@@ -160,6 +165,12 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const products = useQuery({ queryKey: ['products'], queryFn: loadProducts, enabled: !sampleData, retry: false });
   const items = objectives.data ?? [];
   const selected = items.find((item) => item.id === selectedID) ?? items[0];
+  useEffect(() => {
+    const activeRow = selectedID ? objectiveGridApi?.getRowNode(selectedID) : null;
+    if (!activeRow || activeRow.isSelected()) return;
+    objectiveGridApi?.deselectAll();
+    activeRow.setSelected(true);
+  }, [items, objectiveGridApi, selectedID]);
   const editForm = useForm<NewObjective>({
     initialValues: { title: '', description: '', owner: '', product_id: '', due_date: '' },
     validate: (values) => {
@@ -195,6 +206,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
       return objectiveSchema.parse(await response.json());
     },
     onSuccess: async (item) => {
+      selectedIDRef.current = item.id;
+      await queryClient.cancelQueries({ queryKey: ['objectives'] });
+      queryClient.setQueryData<Objective[]>(['objectives'], (current) => [...(current ?? []), item]);
       await queryClient.invalidateQueries({ queryKey: ['objectives'] });
       setSelectedID(item.id);
       setEditing(false);
@@ -236,6 +250,14 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
       return objectiveSchema.parse(await response.json());
     },
     onSuccess: async (item) => {
+      selectedIDRef.current = item.id;
+      await queryClient.cancelQueries({ queryKey: ['objectives'] });
+      queryClient.setQueryData<Objective[]>(['objectives'], (current) => {
+        if (!current) return [item];
+        return current.some((objective) => objective.id === item.id)
+          ? current.map((objective) => objective.id === item.id ? item : objective)
+          : [...current, item];
+      });
       await queryClient.invalidateQueries({ queryKey: ['objectives'] });
       setSelectedID(item.id);
       setProgressValue(item.progress);
@@ -244,9 +266,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     },
   });
   const columns = useMemo<ColDef<Objective>[]>(() => [
-    { field: 'title', headerName: 'Objective', flex: 1.8, minWidth: sampleData ? 138 : 130,
+    { field: 'title', headerName: 'Objective', flex: 1.8, minWidth: sampleData ? 156 : 130,
       cellRenderer: ({ value, data }: ICellRendererParams<Objective, string>) => sampleData
-        ? <span className="objective-title-cell"><span>{value}</span><small>{data?.id}</small></span> : value },
+        ? <span className="objective-title-cell"><IconTarget className="objective-title-icon" size={14} aria-hidden="true" /><span>{value}</span><small>{data?.id}</small></span> : value },
     { field: 'owner', headerName: 'Owner', flex: .8, minWidth: sampleData ? 64 : 72, valueFormatter: ({ value }) => sampleData ? value?.replace(/\s+(\S).*$/, ' $1.') : value,
       cellRenderer: ({ value, valueFormatted }: ICellRendererParams<Objective, string>) => sampleData
         ? <span className="objective-owner-cell"><span className="objective-owner-avatar" aria-hidden="true">{value?.split(/\s+/).map((part) => part[0]).join('')}</span>{valueFormatted}</span>
@@ -259,14 +281,22 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     },
     { field: 'approval', headerName: 'Approval', flex: .95, minWidth: sampleData ? 78 : 90, cellRenderer: ({ value }: ICellRendererParams<Objective, string>) => value ? <Badge className={`objective-approval-status ${value.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '')}`}>{value}</Badge> : '—' },
     { field: 'due_date', headerName: 'Due Date', flex: .85, minWidth: sampleData ? 75 : 86, valueFormatter: ({ value }) => value ? formatObjectiveDate(value) : '' },
-    { field: 'workflow_count', headerName: 'Workflows', flex: .65, minWidth: sampleData ? 66 : 65, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => value === undefined ? '—' : <span className="objective-workflow-count"><IconHierarchy size={11} />{value}</span> },
+    { field: 'workflow_count', headerName: 'Workflows', flex: .65, minWidth: sampleData ? 51 : 65, cellRenderer: ({ value }: ICellRendererParams<Objective, number>) => value === undefined ? '—' : <span className="objective-workflow-count"><IconHierarchy size={11} />{value}</span> },
+    ...(sampleData ? [{ colId: 'actions', headerName: '', width: 24, minWidth: 24, maxWidth: 24, sortable: false, resizable: false,
+      cellRenderer: ({ data }: ICellRendererParams<Objective>) => data && <Menu withinPortal position="bottom-end">
+        <Menu.Target><button type="button" className="objective-row-actions" aria-label={`More actions for ${data.title}`}
+          onClick={(event) => event.stopPropagation()}><IconDots size={13} /></button></Menu.Target>
+        <Menu.Dropdown><Menu.Item onClick={() => { selectObjective(data); setDetailTab('pull-requests'); }}>View related PRs</Menu.Item>
+          <Menu.Item onClick={() => { selectObjective(data); setDetailTab('activity'); }}>View activity</Menu.Item></Menu.Dropdown>
+      </Menu>,
+    }] : []),
   ], [sampleData]);
   const legacyProducts = Array.from(new Set(items.filter((item) => !item.product_id).map((item) => item.product)
     .filter((product) => product && !products.data?.some((known) => known.name === product))));
   const linkedProductOptions = items.filter((item) => item.product_id)
     .map((item) => ({ value: item.product_id, label: productName(item) }));
   const productOptions = [
-    { value: 'all', label: 'All products' },
+    { value: 'all', label: sampleData ? 'All Products' : 'All products' },
     ...new Map([...(products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []),
       ...linkedProductOptions].map((option) => [option.value, option])).values(),
     ...legacyProducts.map((product) => ({ value: `legacy:${product}`, label: product })),
@@ -294,6 +324,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const blocked = items.filter((item) => item.status === 'blocked').length;
 
   function selectObjective(item: Objective) {
+    selectedIDRef.current = item.id;
     setSelectedID(item.id);
     setEditing(false);
     setDetailTab('overview');
@@ -322,16 +353,20 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
         </div>
         <div className="objectives-title-actions">
           <div className="objective-filters">
-            <Select aria-label="Filter by product" leftSection={sampleData && <IconCube size={13} />}
+            <Select aria-label="Filter by product" rightSection={previewSelectChevron} rightSectionPointerEvents="none"
+              leftSection={sampleData && <IconCube size={13} />}
               data={productOptions} value={productFilter}
               onChange={(value) => setProductFilter(value ?? 'all')} />
-            <Select aria-label="Filter by owner" leftSection={sampleData && <IconUser size={13} />}
-              data={[{ value: 'all', label: 'All owners' }, ...Array.from(new Set(items.map((item) => item.owner).filter(Boolean))).map((owner) => ({ value: owner, label: owner }))]}
+            <Select aria-label="Filter by owner" rightSection={previewSelectChevron} rightSectionPointerEvents="none"
+              leftSection={sampleData && <IconUser size={13} />}
+              data={[{ value: 'all', label: sampleData ? 'All Owners' : 'All owners' }, ...Array.from(new Set(items.map((item) => item.owner).filter(Boolean))).map((owner) => ({ value: owner, label: owner }))]}
               value={ownerFilter} onChange={(value) => setOwnerFilter(value ?? 'all')} />
-            <Select aria-label="Filter by status" leftSection={sampleData && <IconActivity size={13} />}
-              data={[{ value: 'all', label: 'All statuses' }, ...statusOptions]} value={statusFilter}
+            <Select aria-label="Filter by status" rightSection={previewSelectChevron} rightSectionPointerEvents="none"
+              leftSection={sampleData && <IconActivity size={13} />}
+              data={[{ value: 'all', label: sampleData ? 'All Status' : 'All statuses' }, ...statusOptions]} value={statusFilter}
               onChange={(value) => setStatusFilter(value ?? 'all')} />
-            <Select aria-label="Filter by due quarter" leftSection={sampleData && <IconCalendar size={13} />} data={[
+            <Select aria-label="Filter by due quarter" rightSection={previewSelectChevron} rightSectionPointerEvents="none"
+              leftSection={sampleData && <IconCalendar size={13} />} data={[
               { value: 'this', label: 'This Quarter' }, { value: 'last', label: 'Last Quarter' },
               { value: 'all', label: 'All due dates' },
             ]} value={dueQuarter} onChange={(value) => setDueQuarter(value ?? 'this')} />
@@ -355,27 +390,28 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
         <MetricCard className="objective-metric" label="Total objectives" value={sampleData ? '42' : items.length} detail="Across this workspace" icon={<IconTarget size={18} />} />
         <MetricCard className="objective-metric green" label="On track" value={sampleData ? '28' : onTrack} detail="Objectives" icon={<IconCircleCheck size={18} />} />
         <MetricCard className="objective-metric amber" label="At risk" value={sampleData ? '7' : atRisk} detail="Objectives" icon={<IconAlertTriangle size={18} />} />
-        <MetricCard className="objective-metric red" label="Blocked" value={sampleData ? '3' : blocked} detail="Objectives" icon={<IconAlertTriangle size={18} />} />
+        <MetricCard className="objective-metric red" label="Blocked" value={sampleData ? '3' : blocked} detail="Objectives"
+          icon={sampleData ? <IconCircleMinus size={18} /> : <IconAlertTriangle size={18} />} />
       </section>
 
       <div className={`objective-content-grid${sampleData ? ' objective-preview-layout' : ''}`}>
         <div className="objective-table-stack">
+          <div className="objectives-tabs" role="tablist" aria-label="Objective views">
+            {(['objectives', 'planning', 'roadmap'] as const).map((tab) => (
+              <button key={tab} type="button" role="tab" aria-selected={section === tab}
+                className={section === tab ? 'objective-section-active' : ''} onClick={() => setSection(tab)}>
+                {tab[0].toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+            <span />
+            {section === 'objectives' && (['kanban', 'table', 'cards'] as const).map((mode) => (
+              <button key={mode} type="button" aria-pressed={view === mode}
+                className={view === mode ? 'view-active' : ''} onClick={() => setView(mode)}>
+                {mode === 'kanban' ? 'Kanban' : mode[0].toUpperCase() + mode.slice(1)}
+              </button>
+            ))}
+          </div>
           <PanelCard className="objective-table-panel" withBorder>
-            <div className="objectives-tabs" role="tablist" aria-label="Objective views">
-              {(['objectives', 'planning', 'roadmap'] as const).map((tab) => (
-                <button key={tab} type="button" role="tab" aria-selected={section === tab}
-                  className={section === tab ? 'objective-section-active' : ''} onClick={() => setSection(tab)}>
-                  {tab[0].toUpperCase() + tab.slice(1)}
-                </button>
-              ))}
-              <span />
-              {section === 'objectives' && (['kanban', 'table', 'cards'] as const).map((mode) => (
-                <button key={mode} type="button" aria-pressed={view === mode}
-                  className={view === mode ? 'view-active' : ''} onClick={() => setView(mode)}>
-                  {mode === 'kanban' ? 'Kanban' : mode[0].toUpperCase() + mode.slice(1)}
-                </button>
-              ))}
-            </div>
             <div className="objective-grid-toolbar"><span>{objectives.isLoading ? 'Loading objectives…' : `${filteredItems.length} objectives`}</span><TextInput aria-label="Search objectives" placeholder="Search objectives…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} /><span>{gridHint}</span>
               {objectives.isError && objectives.data && <Button variant="subtle" onClick={() => void objectives.refetch()}>Retry</Button>}
             </div>
@@ -420,9 +456,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                   rowSelection={{ mode: 'multiRow', checkboxes: true, headerCheckbox: true, selectAll: 'filtered', enableClickSelection: 'enableSelection' }}
                   selectionColumnDef={{ width: 32, minWidth: 32, maxWidth: 32, pinned: 'left', resizable: false, sortable: false, suppressMovable: true }}
                   onRowDataUpdated={({ api }) => {
-                    if (!api.getSelectedRows().length) {
-                      const linkedObjective = selectedID ? api.getRowNode(selectedID) : null;
-                      (linkedObjective ?? api.getDisplayedRowAtIndex(0))?.setSelected(true);
+                    if (!selectedIDRef.current && !api.getSelectedRows().length) {
+                      api.getDisplayedRowAtIndex(0)?.setSelected(true);
                     }
                   }}
                   onSelectionChanged={({ api }) => {
@@ -484,8 +519,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
           {selected ? (
             <div className="objective-detail-content">
             <>
-              <PanelHeading className="objective-detail-head entity-detail-heading" title={selected.title}
-                description={<small>{selected.id.startsWith('OBJ-') ? selected.id : selected.id.slice(0, 8).toUpperCase()}</small>}
+              <PanelHeading className="objective-detail-head entity-detail-heading"
+                title={sampleData ? <>{selected.title}<span className="objective-preview-id">{selected.id}</span></> : selected.title}
+                description={sampleData ? undefined : <small>{selected.id.startsWith('OBJ-') ? selected.id : selected.id.slice(0, 8).toUpperCase()}</small>}
                 icon={<span className="detail-objective-icon"><IconTarget size={19} /></span>}
                 actions={sampleData ? <div className="objective-preview-actions">
                   <button type="button" aria-label={favoriteIDs.includes(selected.id) ? 'Remove objective favorite' : 'Favorite objective'}
@@ -510,7 +546,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                   else { setDetailTab('overview'); setEditing(true); }
                 }}>{editing ? 'Cancel edit' : 'Edit objective'}</Button>} />
               {sampleData && actionNotice && <Text className="objective-action-notice" role="status">{actionNotice}</Text>}
-              <div className="detail-summary">{statusBadge(statusValue)}<span>{progressValue}% complete</span><Progress value={progressValue} size="sm" /></div>
+              <div className="detail-summary">{statusBadge(statusValue)}<span>{progressValue}% complete</span><Progress value={progressValue} size="sm" />
+                {sampleData && selected.due_date && <time className="objective-detail-due-date" dateTime={selected.due_date}><IconCalendar size={13} aria-hidden="true" />Due {formatObjectiveDate(selected.due_date)}</time>}
+              </div>
               <div className="detail-meta-grid">{sampleData ? <>
                 <div><small>Owner</small><b><IconUser size={13} aria-hidden="true" />{selected.owner}</b></div>
                 <div><small>Product</small><b><IconCube size={13} aria-hidden="true" />{productName(selected)}</b></div>
@@ -530,11 +568,19 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
               </div>
               {!editing && sampleData && detailTab === 'overview' ? <div className="objective-overview-grid objective-preview-overview">
                 <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconFileText}>Description</ObjectivePreviewHeading><p>{selected.description}</p></section>
-                <section className="objective-overview-card objective-preview-blocker"><ObjectivePreviewHeading icon={IconAlertTriangle}>Blockers (1)</ObjectivePreviewHeading><p>{objectivePreviewDetails.blocker}</p></section>
+                <section className="objective-overview-card objective-preview-blocker"><ObjectivePreviewHeading icon={IconAlertTriangle}
+                  action={<button type="button" aria-label="View blocker details" onClick={() => setDetailTab('pull-requests')}>View →</button>}>Blockers (1)</ObjectivePreviewHeading><p>{objectivePreviewDetails.blocker}</p></section>
                 <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconChecklist}>Acceptance Criteria</ObjectivePreviewHeading><ul>{objectivePreviewDetails.acceptanceCriteria.map((item) => <li key={item}><span>{item}</span></li>)}</ul></section>
-                <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconGitPullRequest}>Related PRs (4)</ObjectivePreviewHeading><ul>{objectivePreviewDetails.relatedPullRequests.map((item) => <li key={item.id}><span>{item.id} {item.title}</span><em>{item.status}</em></li>)}</ul></section>
+                <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconGitPullRequest}
+                  action={<button type="button" aria-label="View all related pull requests" onClick={() => setDetailTab('pull-requests')}>View All ↗</button>}>Related PRs (4)</ObjectivePreviewHeading>
+                  <ul className="objective-preview-related-prs">{objectivePreviewDetails.relatedPullRequests.map((item) => <li key={item.id} className={item.status.toLowerCase()}>
+                    <IconGitPullRequest size={12} aria-hidden="true" /><span>{item.id} {item.title}</span>
+                    <em className={`objective-preview-pr-status ${item.status.toLowerCase()}`}>{item.status}</em>
+                  </li>)}</ul>
+                </section>
                 <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconListCheck}>Plan Summary</ObjectivePreviewHeading><ul>{objectivePreviewDetails.planSummary.map((item) => <li key={item}><span>{item}</span></li>)}</ul></section>
-                <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconActivity}>Activity Feed</ObjectivePreviewHeading><ul>{objectivePreviewDetails.activity.map((item) => <li key={item.text}><span>{item.text}</span><em>{item.time}</em></li>)}</ul></section>
+                <section className="objective-overview-card"><ObjectivePreviewHeading icon={IconActivity}
+                  action={<button type="button" aria-label="View all objective activity" onClick={() => setDetailTab('activity')}>View All ↗</button>}>Activity Feed</ObjectivePreviewHeading><ul>{objectivePreviewDetails.activity.map((item) => <li key={item.text}><span>{item.text}</span><em>{item.time}</em></li>)}</ul></section>
               </div> : !editing && detailTab === 'overview' ? <>
                 <div className="objective-overview-grid">
                   <section className="objective-overview-card"><b>Description</b><p>{selected.description || 'No description provided.'}</p></section>
@@ -581,7 +627,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
             actions={<span>3 of 4 complete (75%)</span>} />
           <div className="objective-milestones-list">{objectivePreviewDetails.milestones.map((item) => <div key={item.title}>
             <span className="objective-milestone-flag">⚑</span><span className="objective-milestone-name">{item.title}</span>
-            <Progress value={item.progress} color={item.progress === 100 ? 'teal' : 'violet'} />
+            <span className="objective-milestone-progress"><Progress value={item.progress} color={item.progress === 100 ? 'teal' : 'violet'} />
+              <b>{item.progress}%</b></span>
             <Badge className={`objective-milestone-status ${item.status.toLowerCase().replace(' ', '-')}`}>{item.status}</Badge><time>{item.date}</time>
           </div>)}</div>
           </PanelCard>}
