@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -125,20 +126,55 @@ func codexCompletedItem(id, itemType, text, command string, exitCode *int, chang
 	return cliEvent{kind: "tool", message: itemType, toolFinished: id}
 }
 
-// claudeArguments uses print mode with stream-json events. The prompt arrives on stdin. Only file tools
-// are offered: Bash stays unavailable, so the agent cannot run arbitrary commands on the workstation.
-// User settings and MCP servers are not loaded, which keeps personal plugins and connectors out of runs.
-func claudeArguments(command workerapi.AgentRunCommand, _ string) []string {
+// claudeArguments uses print mode with stream-json events. The prompt arrives on stdin. User settings and
+// MCP servers are not loaded, which keeps personal plugins and connectors out of runs. Profiles get file
+// tools only, unless they may run tests: then Bash is offered, but only inside Claude Code's own sandbox.
+func claudeArguments(command workerapi.AgentRunCommand, worktree string) []string {
 	tools, mode := "Read,Glob,Grep", "default"
 	if canWrite(command) {
 		tools, mode = "Read,Edit,Write,Glob,Grep", "acceptEdits"
 	}
 	args := []string{"--print", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
-		"--setting-sources", "project", "--strict-mcp-config", "--permission-mode", mode, "--tools", tools}
+		"--setting-sources", "project", "--strict-mcp-config", "--permission-mode", mode}
+	if canWrite(command) && slices.Contains(command.Profile.Tools, "tests.run") {
+		tools += ",Bash"
+		args = append(args, "--settings", claudeSandboxSettings(worktree))
+	}
+	args = append(args, "--tools", tools)
 	if command.Profile.Model != defaultModel {
 		args = append(args, "--model="+command.Profile.Model)
 	}
 	return args
+}
+
+// claudeSandboxSettings confines every shell command of a run: commands that cannot be sandboxed are
+// refused, writes are limited to the worktree and the temporary directory, and the home directory cannot
+// be read apart from the worktree itself.
+func claudeSandboxSettings(worktree string) string {
+	type filesystem struct {
+		DenyRead   []string `json:"denyRead,omitempty"`
+		AllowRead  []string `json:"allowRead"`
+		AllowWrite []string `json:"allowWrite"`
+	}
+	type sandbox struct {
+		Enabled                  bool       `json:"enabled"`
+		AutoAllowBashIfSandboxed bool       `json:"autoAllowBashIfSandboxed"`
+		AllowUnsandboxedCommands bool       `json:"allowUnsandboxedCommands"`
+		Filesystem               filesystem `json:"filesystem"`
+	}
+	rules := filesystem{AllowRead: []string{worktree}, AllowWrite: []string{os.TempDir()}}
+	if home, err := os.UserHomeDir(); err == nil && home != "" && home != "/" {
+		rules.DenyRead = []string{home}
+	}
+	settings, err := json.Marshal(struct {
+		Sandbox sandbox `json:"sandbox"`
+	}{sandbox{Enabled: true, AutoAllowBashIfSandboxed: true, Filesystem: rules}})
+	if err != nil {
+		// The value is built from strings only; if it cannot be encoded, give the CLI settings that enable
+		// the sandbox and nothing else rather than running without one.
+		return `{"sandbox":{"enabled":true,"allowUnsandboxedCommands":false}}`
+	}
+	return string(settings)
 }
 
 func parseClaudeEvent(line []byte) cliEvent {

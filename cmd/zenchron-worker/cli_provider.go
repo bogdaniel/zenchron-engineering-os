@@ -23,7 +23,8 @@ const (
 	cliWatchdogInterval  = time.Second
 	maxProviderVersion   = 100
 	cliOperatingContract = "Work only inside the current directory. Do not commit, push, or switch branches; " +
-		"Zenchron commits and publishes the result. Remove caches, build outputs, and temporary files you created; " +
+		"Zenchron commits and publishes the result. Keep tool caches in the system temporary directory, and remove " +
+		"caches, build outputs, and temporary files you created; " +
 		"only intended source changes may remain. Finish with a short summary of what changed and how it was checked."
 )
 

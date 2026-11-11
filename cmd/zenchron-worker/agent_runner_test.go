@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -585,6 +586,34 @@ func TestProviderArgumentsBoundAgentPermissions(t *testing.T) {
 		strings.Contains(claudeWrite+claudeRead, "Bash") || strings.Contains(claudeWrite+claudeRead, "dangerously") ||
 		!strings.Contains(claudeRead, "--strict-mcp-config") {
 		t.Errorf("claude arguments = %s / %s", claudeWrite, claudeRead)
+	}
+	// Shell access is offered only together with settings that force every command into the sandbox.
+	tests := workerapi.AgentRunCommand{Profile: workerapi.AgentProfile{Model: defaultModel, Tools: []string{"code.write", "tests.run"}}}
+	arguments := claudeArguments(tests, "/work/tree")
+	settingsIndex := slices.Index(arguments, "--settings")
+	if settingsIndex < 0 || !slices.Contains(arguments, "Read,Edit,Write,Glob,Grep,Bash") {
+		t.Fatalf("claude test-running arguments = %v", arguments)
+	}
+	var settings struct {
+		Sandbox struct {
+			Enabled                  bool  `json:"enabled"`
+			AllowUnsandboxedCommands *bool `json:"allowUnsandboxedCommands"`
+			Filesystem               struct {
+				DenyRead, AllowRead, AllowWrite []string
+			} `json:"filesystem"`
+		} `json:"sandbox"`
+	}
+	home, _ := os.UserHomeDir()
+	if err := json.Unmarshal([]byte(arguments[settingsIndex+1]), &settings); err != nil || !settings.Sandbox.Enabled ||
+		settings.Sandbox.AllowUnsandboxedCommands == nil || *settings.Sandbox.AllowUnsandboxedCommands ||
+		!slices.Equal(settings.Sandbox.Filesystem.DenyRead, []string{home}) ||
+		!slices.Equal(settings.Sandbox.Filesystem.AllowRead, []string{"/work/tree"}) ||
+		!slices.Equal(settings.Sandbox.Filesystem.AllowWrite, []string{os.TempDir()}) {
+		t.Fatalf("claude sandbox settings = %s, %v", arguments[settingsIndex+1], err)
+	}
+	readOnlyTests := workerapi.AgentRunCommand{Profile: workerapi.AgentProfile{Model: defaultModel, Tools: []string{"tests.run"}}}
+	if strings.Contains(strings.Join(claudeArguments(readOnlyTests, "/w"), " "), "Bash") {
+		t.Error("a profile without code.write was offered a shell")
 	}
 }
 
