@@ -260,7 +260,8 @@ Live, on 2026-11-11 against `bogdaniel/zenchron-engineering-os` with a loopback 
 | Claude Code run started and inspected in the dashboard, final build | Issue [#353](https://github.com/bogdaniel/zenchron-engineering-os/issues/353); run `48513125f6833b6d21a270471ef47891`, commit `b5921c7`, verification `passed`, [PR #354](https://github.com/bogdaniel/zenchron-engineering-os/pull/354) |
 
 The first six rows used the build before the independent review fixes; the dashboard rows used builds that include
-them. The dashboard was driven by a Playwright script acting on the real pages, not by a person. A newly created issue can
+them. Those dashboard rows were driven by a Playwright script acting on the real pages; the hand-run walk-through is
+recorded under "Repeating the live check". A newly created issue can
 take a few seconds to appear in GitHub's issue list and therefore in the dialog.
 
 The first live Codex run (`b1e099df2b806f6f136f9a7e94d963a6`) failed in the worker after the provider had finished: a
@@ -279,7 +280,11 @@ Git deadline had started before the provider ran. That defect is fixed and cover
    then read Verification, Publication, the pull-request link, and its checks. The same data is available from
    `GET /api/v1/agent-runs`, `.../events`, and `.../pull-request`.
 
-This walk-through has been performed by a script driving the pages, not yet by a person.
+On 2026-11-11 the repository owner performed this walk-through by hand on `http://127.0.0.1:4174/?live`: issue
+[#353](https://github.com/bogdaniel/zenchron-engineering-os/issues/353) chosen in the queue dialog for a Claude Code
+profile, run `3288dd4206a46ab48c4e5330d174fb44`, commit `d1340d6`, verification `passed`,
+[PR #363](https://github.com/bogdaniel/zenchron-engineering-os/pull/363) with green checks, all read from the Evidence
+panel. The other dashboard rows in the table above were driven by a script acting on the same pages.
 
 ## Outstanding
 
