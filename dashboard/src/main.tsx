@@ -239,6 +239,8 @@ function App() {
               modelRuntimeUnknownWorkerCount={onlineWorkers.filter((worker) => worker.agent_runtime_enabled === undefined).length}
               projectCount={projects.data?.length ?? 0}
               gitHubProjectCount={projects.data?.filter((project) => project.git_remote.startsWith('github.com/')).length ?? 0}
+              cliReadyWorkers={Object.fromEntries(['codex-cli', 'claude-code'].map((id) => [id,
+                onlineWorkers.filter((worker) => worker.providers?.some((item) => item.id === id && item.ready)).length]))}
             />
           ) : activePage === 'reports' ? (
             <ReportsPage designPreview={reportPreview}

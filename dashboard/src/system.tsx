@@ -35,12 +35,18 @@ interface SystemPageProps {
   modelRuntimeUnknownWorkerCount: number;
   projectCount: number;
   gitHubProjectCount: number;
+  /** Online workers per coding CLI that report it installed and signed in. */
+  cliReadyWorkers?: Record<string, number>;
 }
 
 export function SystemPage({
   section, designPreview = false, apiOnline, githubLogin, workerCount, onlineWorkerCount, modelRuntimeWorkerCount, modelRuntimeUnknownWorkerCount,
-  projectCount, gitHubProjectCount,
+  projectCount, gitHubProjectCount, cliReadyWorkers = {},
 }: SystemPageProps) {
+  const readyCLIs = Object.entries(cliReadyWorkers).filter(([, count]) => count > 0);
+  const cliDetail = readyCLIs.length
+    ? ` Coding CLIs ready: ${readyCLIs.map(([id, count]) => `${id} on ${count}`).join(', ')}.`
+    : onlineWorkerCount ? ' No online worker reports a signed-in Codex or Claude Code CLI.' : '';
   const modelEndpointDetail = modelRuntimeWorkerCount
     ? `OpenAI-compatible endpoint configured on ${modelRuntimeWorkerCount} online worker${modelRuntimeWorkerCount === 1 ? '' : 's'}.` +
       (modelRuntimeUnknownWorkerCount
@@ -67,7 +73,7 @@ export function SystemPage({
     {
       title: 'Local workers',
       category: 'Execution',
-      detail: `${onlineWorkerCount} of ${workerCount} workers reporting a recent heartbeat.`,
+      detail: `${onlineWorkerCount} of ${workerCount} workers reporting a recent heartbeat.${cliDetail}`,
       status: onlineWorkerCount ? 'Connected' : 'Unavailable',
       icon: <IconRobot size={19} />,
       healthy: onlineWorkerCount > 0,

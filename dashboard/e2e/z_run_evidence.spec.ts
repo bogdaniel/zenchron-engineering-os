@@ -74,12 +74,12 @@ for (const viewport of viewports) {
   });
 }
 
-test('queue dialog reports an unready CLI provider and unavailable issues without blocking a prompt run', async ({ page }) => {
+test('queue dialog blocks a CLI profile whose worker has not signed in and reports unavailable issues', async ({ page }) => {
   await mockWorkspace(page, { providerReady: false, issuesStatus: 502 });
-  let queued: Record<string, unknown> | undefined;
+  let queued = false;
   await page.route('**/api/v1/agent-runs', (route) => {
     if (route.request().method() !== 'POST') return route.fulfill(json([]));
-    queued = route.request().postDataJSON();
+    queued = true;
     return route.fulfill(json({ ...evidenceRun, status: 'queued', attempts: 0, attempt_log: [] }, 202));
   });
   await page.goto('/#agents');
@@ -87,14 +87,21 @@ test('queue dialog reports an unready CLI provider and unavailable issues withou
   const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
   await expect(dialog.getByLabel('Project')).toHaveValue('platform · dev-laptop · codex-cli not ready');
   await expect(dialog.locator('.agents-queue-note')).toHaveText(
-    'dev-laptop does not report codex-cli installed and signed in; the run will stay queued.');
+    'dev-laptop does not report codex-cli installed and signed in; sign in on the worker and restart it.');
   await expect(dialog.locator('.agents-issue-note')).toHaveText(
     'GitHub issues are unavailable for this project; the run can still start from a task prompt.');
   await expect(dialog.getByRole('combobox', { name: 'GitHub issue (optional)' })).toBeDisabled();
   await dialog.getByLabel('Task prompt').fill('Tidy the worker README.');
-  await dialog.getByRole('button', { name: 'Queue run', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  expect(queued).toEqual({ agent_id: profileID, project_id: projectID, prompt: 'Tidy the worker README.' });
+  await expect(dialog.getByRole('button', { name: 'Queue run', exact: true })).toBeDisabled();
+  expect(queued).toBe(false);
+});
+
+test('Settings reports which coding CLIs are ready on online workers', async ({ page }) => {
+  await mockWorkspace(page, { providerReady: true });
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([])));
+  await page.goto('/#integrations');
+  const workers = page.locator('.system-service-card').filter({ has: page.getByRole('heading', { name: 'Local workers' }) });
+  await expect(workers).toContainText('1 of 1 workers reporting a recent heartbeat. Coding CLIs ready: codex-cli on 1.');
 });
 
 for (const viewport of viewports) {

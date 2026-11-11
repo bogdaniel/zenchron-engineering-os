@@ -13,6 +13,10 @@ export type RunWorker = {
   id: string; name: string; agent_runtime_enabled?: boolean; providers?: z.infer<typeof providerSchema>[];
 };
 
+/** A CLI profile cannot start until its worker reports the CLI ready, so queueing it is blocked until then. */
+export const blocksQueueing = (provider: string | undefined, ready: boolean) =>
+  Boolean(provider && cliProviders.includes(provider)) && !ready;
+
 /** Says whether the worker behind a project can execute the selected agent profile's provider. */
 export function runReadiness(provider: string | undefined, worker: RunWorker | undefined) {
   if (provider && cliProviders.includes(provider)) {
@@ -22,7 +26,7 @@ export function runReadiness(provider: string | undefined, worker: RunWorker | u
         note: `${worker?.name} reports ${status.version || provider} installed and signed in.` };
     }
     return { ready: false, label: `${provider} not ready`,
-      note: `${worker?.name ?? 'This worker'} does not report ${provider} installed and signed in; the run will stay queued.` };
+      note: `${worker?.name ?? 'This worker'} does not report ${provider} installed and signed in; sign in on the worker and restart it.` };
   }
   if (worker?.agent_runtime_enabled === true) {
     return { ready: true, label: 'runtime configured',

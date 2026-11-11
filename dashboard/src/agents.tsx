@@ -18,7 +18,7 @@ import { runsInLast30Days } from './runMetrics';
 import { AgentPerformanceTrend } from './AgentPerformanceTrend';
 import { AgentPromptEditor } from './AgentPromptEditor';
 import { AgentExecutionOverview } from './AgentExecutionOverview';
-import { RunIssueSelect, runReadiness, type RunWorker } from './agentRunQueue';
+import { blocksQueueing, RunIssueSelect, runReadiness, type RunWorker } from './agentRunQueue';
 import { runEvidenceFields } from './runEvidence';
 import {
   agentsPreviewProfiles as previewAgents,
@@ -561,7 +561,8 @@ export function AgentsPage({ projects, workers, designPreview = false }: {
         {queueRun.isError && <Text className="agents-error" role="alert">{queueRun.error.message}</Text>}
         <div className="agents-modal-actions">
           <Button variant="subtle" type="button" onClick={() => setRunOpen(false)}>Cancel</Button>
-          <Button className="agents-save-button" type="submit" loading={queueRun.isPending} disabled={!onlineProjects.length}>
+          <Button className="agents-save-button" type="submit" loading={queueRun.isPending}
+            disabled={!onlineProjects.length || blocksQueueing(selected?.provider, runReadiness(selected?.provider, selectedRunWorker).ready)}>
             Queue run
           </Button>
         </div>
