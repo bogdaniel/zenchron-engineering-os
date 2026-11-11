@@ -10,7 +10,7 @@ const server = createServer({
   before: [(request, response) => {
     const incoming = request.request;
     const outgoing = response.response;
-    if (!incoming.url.startsWith('/api/')) return response.emit('next');
+    if (!incoming.url.startsWith('/api/') && incoming.url !== '/healthz') return response.emit('next');
     const upstream = transport.request({
       hostname: api.hostname, port: api.port || (api.protocol === 'https:' ? 443 : 80),
       path: incoming.url, method: incoming.method,

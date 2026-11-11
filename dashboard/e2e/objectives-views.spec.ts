@@ -183,8 +183,9 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await page.getByRole('button', { name: 'Favorite objective' }).click();
   await expect(page.getByRole('button', { name: 'Remove objective favorite' })).toHaveAttribute('aria-pressed', 'true');
   await page.locator('.ag-row').filter({ hasText: 'Launch AI code review v2' }).click();
-  await expect(page.getByRole('button', { name: 'Remove objective favorite' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Favorite objective' })).toHaveAttribute('aria-pressed', 'false');
   await page.locator('.ag-row').filter({ hasText: 'Improve review velocity' }).click();
+  await expect(page.getByRole('button', { name: 'Remove objective favorite' })).toHaveAttribute('aria-pressed', 'true');
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.getByRole('button', { name: 'Copy objective link' }).click();
   const objectiveLink = await page.evaluate(() => navigator.clipboard.readText());

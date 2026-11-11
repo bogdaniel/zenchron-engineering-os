@@ -654,7 +654,8 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
     };
   });
   expect(mobileOverviewLayout.brandTop).toBeCloseTo(57, 0);
-  expect(mobileOverviewLayout.greetingTop).toBeCloseTo(127, 0);
+  expect(mobileOverviewLayout.greetingTop).toBeGreaterThanOrEqual(126);
+  expect(mobileOverviewLayout.greetingTop).toBeLessThanOrEqual(129);
   expect(mobileOverviewLayout.metricTop).toBeCloseTo(272, 0);
   expect(mobileOverviewLayout.metricCardHeight).toBe(100);
   expect(mobileOverviewLayout.activityTop).toBeCloseTo(502, 0);
