@@ -15,7 +15,7 @@ test('local Product Workspace mock matches the supplied overview without protect
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Nova Platform', exact: true })).toBeVisible();
   await expect(page.getByText('Product Health')).toBeVisible();
-  await expect(page.getByText('Release Streams')).toBeVisible();
+  await expect(page.getByText('Release Streams', { exact: true })).toBeVisible();
   await expect(page.getByText('Stakeholders (8)')).toBeVisible();
   const repositories = page.locator('.workspace-mock-card.repositories');
   for (const repository of ['zenchron/nova-platform', 'zenchron/agent-sdk', 'zenchron/platform-services', 'zenchron/devtools']) {

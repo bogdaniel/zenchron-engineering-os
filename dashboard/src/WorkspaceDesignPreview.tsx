@@ -246,7 +246,7 @@ export function WorkspaceDesignPreview() {
           <div className="workspace-mock-list people">{[['Alex Chen', 'Product Owner'], ['Priya Shah', 'Engineering Manager'], ['Marcus Lee', 'Design Lead'], ['Elena Rossi', 'Product Manager']].map(([name, role]) => <div key={name}><span>{name === 'Alex Chen' ? <img src="/alex-chen-avatar.jpg" alt="" /> : name.slice(0, 1)}</span><b>{name}</b><small>{role}</small></div>)}<small>+ 4 more stakeholders</small></div>
         </Card>
 
-        <Card className="release" title={`${selectedProduct} Release Streams`} description="Coordinated release trains and environments" icon={<IconRocket size={15} />} action="View All"
+        <Card className="release" title="Release Streams" description="Coordinated release trains and environments" icon={<IconRocket size={15} />} action="View All"
           onAction={() => setActiveTab('Templates')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Templates'}>
           <div className="workspace-mock-list release-list">{selectedReleases.map(([name, state, version, progress, tone]) => <div key={name}><IconCube className={`workspace-mock-release-icon ${tone}`} size={16} /><b>{name}</b><Badge className={`workspace-mock-state ${state.toLowerCase().replaceAll(' ', '-')}`} variant="light">{state}</Badge><small>{version}</small><Progress value={Number(progress.slice(0, -1))} size="xs" color={tone === 'green' ? 'teal.5' : tone === 'blue' ? 'blue.5' : 'violet.5'} /></div>)}</div>
