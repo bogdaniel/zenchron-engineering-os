@@ -80,15 +80,18 @@ evidence.
 ## Focused checks
 
 ```sh
+test -z "$(gofmt -l $(git ls-files '*.go'))"
+go vet ./...
+python3 scripts/check_file_sizes.py
 go test ./cmd/zenchron \
   -run 'TestWorkerHeartbeat|TestWorktree' \
   -count=1
 go test ./cmd/zenchron-worker \
   -run 'TestSendHeartbeatUsesWorkerEndpoint|TestDiscoverProjects|TestRepositoryLocator|TestGitRemoteScrubsCredentials|TestPrepareWorktree|TestWorkerClaimsAgentRun|TestAgentRuntimeConfiguration|TestSafeRepositoryPath|TestLongCommandKeepsWorkerPresenceAlive' \
   -count=1
-cd dashboard && npm run typecheck
-cd dashboard && npm run test:e2e -- e2e/overview.spec.ts e2e/home.spec.ts \
-  --grep 'dashboard displays|mobile overview|overview lists only agent runs|Projects page shows|worker prepares|Reviews page|workflow graph can be edited|Objectives dashboard fits|objectives can be created|agent profiles'
+(cd dashboard && npm run typecheck)
+(cd dashboard && npm run test:e2e -- e2e/overview.spec.ts e2e/home.spec.ts \
+  --grep 'dashboard displays|mobile overview|overview lists only agent runs|Projects page shows|worker prepares|Reviews page|workflow graph can be edited|Objectives dashboard fits|objectives can be created|agent profiles')
 ```
 
 The browser checks use the same dashboard at `127.0.0.1:4173` as manual review; they do not launch a second dashboard
