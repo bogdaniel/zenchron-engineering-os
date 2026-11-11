@@ -1,5 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+const dashboardPort = Number((globalThis as typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+}).process?.env?.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+
 async function useLocalSession(page: Page) {
   await page.route('**/api/v1/**', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',
@@ -48,9 +52,14 @@ test('local Objectives mock preview renders the supplied screen without protecte
   });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('http://127.0.0.1:4173/#objectives');
+  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
 
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
+  await expect(page.locator('.objective-filters .mantine-Select-section[data-position="left"]')).toHaveCount(4);
+  await expect(page.locator('.objective-filters .mantine-Select-section[data-position="right"] .tabler-icon-chevron-down')).toHaveCount(4);
+  await expect(page.getByRole('combobox', { name: 'Filter by product' })).toHaveValue('All Products');
+  await expect(page.getByRole('combobox', { name: 'Filter by owner' })).toHaveValue('All Owners');
+  await expect(page.getByRole('combobox', { name: 'Filter by status' })).toHaveValue('All Status');
   await expect(page.locator('.objective-metric').nth(0)).toContainText('Objective Throughput');
   await expect(page.locator('.objective-metric').nth(0)).toContainText('Completed this quarter');
   await expect(page.locator('.objective-metric').nth(1)).toContainText('Objective Success Rate86.7%');
@@ -59,9 +68,81 @@ test('local Objectives mock preview renders the supplied screen without protecte
   for (const index of [2, 3, 4, 5]) {
     await expect(page.locator('.objective-metric').nth(index).locator('small')).toBeHidden();
   }
+  await expect(page.locator('.objective-metric.red .tabler-icon-circle-minus')).toHaveCount(1);
+  await expect(page.locator('.objective-metric.red .tabler-icon-alert-triangle')).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'Filter by due quarter' })).toHaveValue('This Quarter');
   const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(6);
+  await expect(page.locator('.objective-grid-wrap .objective-row-actions')).toHaveCount(6);
+  await expect(objectiveRows.first().getByRole('button', { name: 'More actions for Launch AI code review v2' })).toBeVisible();
+  await page.getByRole('button', { name: 'View blocker details' }).click();
+  await expect(page.getByRole('tab', { name: 'Related PRs' })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'View all related pull requests' }).click();
+  await expect(page.getByRole('tab', { name: 'Related PRs' })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'View all objective activity' }).click();
+  await expect(page.getByRole('tab', { name: 'Activity', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  await objectiveRows.nth(1).getByRole('button', { name: 'More actions for Improve review velocity' }).click();
+  await page.getByRole('menuitem', { name: 'View activity' }).click();
+  await expect(page.locator('.objective-detail-panel')).toContainText('Improve review velocity');
+  await expect(page.getByRole('tab', { name: 'Activity', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  await objectiveRows.first().click();
+  const tableComposition = await page.evaluate(() => {
+    const tabs = document.querySelector('.objectives-tabs')!;
+    const panel = document.querySelector('.objective-table-panel')!;
+    const detail = document.querySelector('.objective-detail-panel')!;
+    const capacity = document.querySelector('.objective-capacity')!;
+    const tabsBounds = tabs.getBoundingClientRect();
+    const panelBounds = panel.getBoundingClientRect();
+    const detailBounds = detail.getBoundingClientRect();
+    const capacityBounds = capacity.getBoundingClientRect();
+    return {
+      tabsOutsideTable: !panel.contains(tabs),
+      sharedLeftEdge: Math.abs(tabsBounds.left - panelBounds.left) <= 1,
+      tabsVerticalOffset: tabsBounds.top - detailBounds.top,
+      panelGap: panelBounds.top - tabsBounds.bottom,
+      capacityGap: capacityBounds.top - panelBounds.bottom,
+    };
+  });
+  expect(tableComposition.tabsOutsideTable, 'view controls sit outside the objective table card').toBe(true);
+  expect(tableComposition.sharedLeftEdge, 'view controls align with the table card').toBe(true);
+  expect(tableComposition.tabsVerticalOffset, 'view controls start 10px below the detail card').toBeCloseTo(10, 0);
+  expect(tableComposition.panelGap, 'the table card keeps the mock toolbar gap').toBeCloseTo(16, 0);
+  expect(tableComposition.capacityGap, 'the capacity card keeps the mock table gap').toBeCloseTo(16, 0);
+  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 1–6 of 42 objectives');
+  await expect(page.locator('.objective-preview-pagination nav button')).toHaveText(['1', '2', '3', '4', '5', '7']);
+  await page.getByRole('button', { name: 'Page 2' }).click();
+  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 7–12 of 42 objectives');
+  await expect(page.locator('.objective-preview-pagination button[aria-current="page"]')).toHaveText('2');
+  await page.getByRole('button', { name: 'Page 7' }).click();
+  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 37–42 of 42 objectives');
+  await page.getByRole('button', { name: 'Page 1' }).click();
+  await expect(page.locator('.objective-grid-wrap .objective-title-cell')).toHaveCount(6);
+  await expect(page.locator('.objective-grid-wrap .objective-title-icon')).toHaveCount(6);
+  await expect(page.locator('.objective-grid-wrap .objective-title-cell small')).toHaveText([
+    'OBJ-1487', 'OBJ-1492', 'OBJ-1501', 'OBJ-1506', 'OBJ-1510', 'OBJ-1517',
+  ]);
+  const objectiveTitles = page.locator('.objective-grid-wrap .objective-title-cell > span');
+  await expect(objectiveTitles.first()).toHaveText('Launch AI code review v2');
+  const clippedTitleLabels = await objectiveTitles.evaluateAll((titles) => titles
+    .filter((title) => title.scrollWidth > title.clientWidth)
+    .map((title) => ({ text: title.textContent, width: title.clientWidth, scrollWidth: title.scrollWidth })));
+  expect(clippedTitleLabels, 'all objective titles remain visible above their IDs').toEqual([]);
+  const clippedObjectiveCells = await page.locator('.objective-grid-wrap .ag-cell[col-id="owner"], .objective-grid-wrap .ag-cell[col-id="product"], .objective-grid-wrap .ag-cell[col-id="due_date"]')
+    .evaluateAll((cells) => cells.filter((cell) => cell.scrollWidth > cell.clientWidth).map((cell) => cell.textContent?.trim()));
+  expect(clippedObjectiveCells, 'owner, product, and full due-date text fit their mock table cells').toEqual([]);
+  expect(await page.locator('.objective-grid-wrap .mantine-Badge-label').evaluateAll((labels) =>
+    labels.filter((label) => label.scrollWidth > label.clientWidth).map((label) => label.textContent?.trim())),
+  'objective status and approval labels fit their mock badges').toEqual([]);
+  await expect(page.locator('.objective-grid-wrap .objective-status.in_progress')).toHaveText('in progress');
+  await expect(page.locator('.objective-grid-wrap .objective-approval-status.changes-req')).toHaveText('Changes Req.');
+  const capacityAreas = page.locator('.objective-capacity-chart .recharts-area-area');
+  await expect(capacityAreas).toHaveCount(4);
+  expect(await capacityAreas.evaluateAll((areas) => areas.every((area) => Number(getComputedStyle(area).opacity) >= .18)),
+    'both capacity series retain visible fill').toBe(true);
   await expect(objectiveRows.first()).toHaveClass(/ag-row-selected/);
   await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="title"]').first()).toHaveCSS('font-size', '11px');
   await expect(page.locator('.objective-grid-wrap .objective-status').first()).toHaveCSS('font-size', '9px');
@@ -70,13 +151,65 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await expect(page.locator('.objective-owner-avatar')).toHaveCount(6);
   await expect(page.locator('.objective-approval-status.changes-req')).toHaveCount(1);
   await expect(page.locator('.objective-detail-panel')).toContainText('Launch AI code review v2');
+  await expect(page.locator('.objective-detail-head .objective-preview-id')).toHaveText('OBJ-1487');
+  await expect(page.locator('.objective-detail-head > div h3 .objective-preview-id')).toBeVisible();
+  await expect(page.locator('.objective-detail-due-date')).toHaveText('Due Jan 27, 2025');
+  const detailTabs = page.getByRole('tablist', { name: 'Objective details' });
+  await expect(detailTabs).toHaveCSS('border-radius', '8px');
+  await expect(detailTabs.getByRole('tab', { name: 'Overview', exact: true })).toHaveCSS('background-image', /linear-gradient/);
+  const summaryLayout = await page.locator('.detail-summary').evaluate((summary) => {
+    const progress = summary.querySelector('.mantine-Progress-root')!.getBoundingClientRect();
+    const completion = summary.children[1].getBoundingClientRect();
+    const dueDate = summary.querySelector('.objective-detail-due-date')!.getBoundingClientRect();
+    return { progressWidth: progress.width, dateLeft: dueDate.left, progressRight: progress.right, completionRight: completion.right, progressLeft: progress.left };
+  });
+  expect(summaryLayout.progressWidth).toBeLessThanOrEqual(220);
+  expect(summaryLayout.progressLeft - summaryLayout.completionRight).toBeLessThanOrEqual(8);
+  expect(summaryLayout.progressRight).toBeLessThan(summaryLayout.dateLeft);
   await expect(page.locator('.objective-preview-blocker')).toContainText('Model training run (PR #1462)');
+  const relatedPRRows = page.locator('.objective-preview-related-prs li');
+  await expect(relatedPRRows).toHaveCount(4);
+  await expect(relatedPRRows.locator('svg')).toHaveCount(4);
+  await expect(relatedPRRows.locator('em')).toHaveText(['Review', 'Merged', 'Review', 'Open']);
+  expect(await relatedPRRows.evaluateAll((rows) => rows.map((row) => getComputedStyle(row, '::before').content)))
+    .toEqual(['none', 'none', 'none', 'none']);
+  expect(await relatedPRRows.locator('em').evaluateAll((badges) => badges.map((badge) => badge.className)))
+    .toEqual(['objective-preview-pr-status review', 'objective-preview-pr-status merged',
+      'objective-preview-pr-status review', 'objective-preview-pr-status open']);
   await expect(page.locator('.objective-milestones-list > div')).toHaveCount(4);
-  const lowerPanelHeights = await page.evaluate(() => ({
-    chart: document.querySelector('.objective-capacity')!.getBoundingClientRect().height,
-    milestones: document.querySelector('.objective-milestones-card')!.getBoundingClientRect().height,
-  }));
-  expect(Math.abs(lowerPanelHeights.chart - lowerPanelHeights.milestones)).toBeLessThanOrEqual(1);
+  await expect(page.locator('.objective-milestone-progress b')).toHaveText(['100%', '100%', '60%', '0%']);
+  await page.locator('.ag-row').filter({ hasText: 'Improve review velocity' }).click();
+  await expect(page.locator('.objective-detail-panel')).toContainText('Improve review velocity');
+  await page.getByRole('button', { name: 'Favorite objective' }).click();
+  await expect(page.getByRole('button', { name: 'Remove objective favorite' })).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('.ag-row').filter({ hasText: 'Launch AI code review v2' }).click();
+  await expect(page.getByRole('button', { name: 'Favorite objective' })).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('.ag-row').filter({ hasText: 'Improve review velocity' }).click();
+  await expect(page.getByRole('button', { name: 'Remove objective favorite' })).toHaveAttribute('aria-pressed', 'true');
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.getByRole('button', { name: 'Copy objective link' }).click();
+  const objectiveLink = await page.evaluate(() => navigator.clipboard.readText());
+  expect(objectiveLink).toContain('?objective=OBJ-1492#objectives');
+  await page.getByRole('button', { name: 'More objective actions' }).click();
+  await page.getByRole('menuitem', { name: 'View activity' }).click();
+  await expect(page.locator('.objective-detail-activity > div')).toHaveCount(4);
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  const detailComposition = await page.evaluate(() => {
+    const detail = document.querySelector('.objective-detail-panel')!;
+    const detailBounds = detail.getBoundingClientRect();
+    const layoutBounds = document.querySelector('.objective-content-grid')!.getBoundingClientRect();
+    const milestones = document.querySelector('.objective-milestones-card')!;
+    return {
+      nested: detail.contains(milestones),
+      detailHeight: detailBounds.height,
+      layoutHeight: layoutBounds.height,
+      milestonesBottom: milestones.getBoundingClientRect().bottom,
+      detailBottom: detailBounds.bottom,
+    };
+  });
+  expect(detailComposition.nested).toBe(true);
+  expect(Math.abs(detailComposition.detailHeight - detailComposition.layoutHeight)).toBeLessThanOrEqual(1);
+  expect(detailComposition.milestonesBottom).toBeLessThanOrEqual(detailComposition.detailBottom - 8);
   await page.getByRole('tab', { name: 'Milestones', exact: true }).click();
   await expect(page.locator('.objective-detail-milestones > div')).toHaveCount(4);
   await page.getByRole('tab', { name: 'Related PRs' }).click();
@@ -89,7 +222,11 @@ test('local Objectives mock preview renders the supplied screen without protecte
       .map((card) => card.querySelector('b')?.textContent));
   expect(overflowingCards).toEqual([]);
   const clippedHeaders = await page.locator('.objective-preview-layout .ag-header-cell-text')
-    .evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).map((header) => header.textContent));
+    .evaluateAll((headers) => headers.filter((header) => {
+      const text = document.createRange();
+      text.selectNodeContents(header);
+      return text.getBoundingClientRect().width > header.clientWidth + .5;
+    }).map((header) => header.textContent));
   expect(clippedHeaders).toEqual([]);
   const overflowingGridHeaders = await page.locator('.objective-grid-wrap .ag-header-cell').evaluateAll((headers) => {
     const centerRight = document.querySelector('.objective-grid-wrap .ag-header')!.getBoundingClientRect().right;
@@ -117,6 +254,14 @@ test('local Objectives mock preview renders the supplied screen without protecte
   expect(objectiveRequests).toEqual([]);
 });
 
+test('Objectives preview deep link selects the referenced objective', async ({ page }) => {
+  await page.route('**/api/v1/**', (route) => route.fulfill({ status: 401, body: 'preview fixture expected' }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto(`http://127.0.0.1:${dashboardPort}/?objective=OBJ-1492#objectives`);
+  await expect(page.locator('.objective-detail-panel')).toContainText('Improve review velocity');
+  await expect(page.locator('.objective-grid-wrap [role="row"].ag-row-selected')).toContainText('Improve review velocity');
+});
+
 test('Objectives mock layout stays within desktop, tablet, and mobile viewports', async ({ page }) => {
   const dataRequests: string[] = [];
   await page.route('**/api/v1/**', (route) => {
@@ -125,7 +270,7 @@ test('Objectives mock layout stays within desktop, tablet, and mobile viewports'
   });
   for (const [width, height] of [[1668, 750], [1440, 900], [1280, 800], [768, 1024], [390, 844]]) {
     await page.setViewportSize({ width, height });
-    await page.goto('http://127.0.0.1:4173/#objectives');
+    await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
     await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Objective' })).toBeVisible();
     await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(6);
@@ -148,6 +293,13 @@ test('Objectives mock layout stays within desktop, tablet, and mobile viewports'
           return bounds.left >= row.getBoundingClientRect().left && bounds.right <= row.getBoundingClientRect().right + 1;
         })));
       expect(milestoneRowsFit, 'milestone details should fit the mobile card').toBe(true);
+      const milestoneCardContainsRows = await page.locator('.objective-milestones-card').evaluate((card) => {
+        const cardBounds = card.getBoundingClientRect();
+        const rows = [...card.querySelectorAll('.objective-milestones-list > div')];
+        return card.scrollHeight <= card.clientHeight
+          && rows.every((row) => row.getBoundingClientRect().bottom <= cardBounds.bottom + 1);
+      });
+      expect(milestoneCardContainsRows, 'all four milestones should remain visible inside the mobile card').toBe(true);
     }
     const clippedMetricLabels = await page.locator('.objective-metric .metric-top > span')
       .evaluateAll((labels) => labels.filter((label) => label.scrollWidth > label.clientWidth).map((label) => label.textContent));
@@ -189,7 +341,7 @@ test('empty objective workspace shows a first-objective prompt without stale sel
     status: 200, contentType: 'application/json', body: '[]',
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('http://zenchron.test:4173/#objectives');
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
 
   await expect(page.locator('.ag-overlay-no-rows-center')).toHaveText('No objectives yet. Create one to begin.');
   await expect(page.locator('.objective-grid-toolbar')).not.toContainText('Select an objective to inspect details');
@@ -205,7 +357,7 @@ test('filtered objective table distinguishes no matches from an empty workspace'
     status: 200, contentType: 'application/json', body: '[]',
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('http://zenchron.test:4173/#objectives');
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
   await page.getByRole('textbox', { name: 'Search objectives' }).fill('missing objective');
 
   await expect(page.locator('.ag-overlay-no-rows-center')).toHaveText('No objectives match these filters.');
@@ -223,7 +375,7 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   }));
   await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('http://zenchron.test:4173/#objectives');
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
 
   await expect(page.getByRole('button', { name: 'Table', pressed: true })).toBeVisible();
   const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
@@ -284,7 +436,7 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   ]);
   const planningTab = page.getByRole('tab', { name: 'Planning' });
   await expect(planningTab).toHaveAttribute('aria-selected', 'true');
-  await expect(planningTab).toHaveCSS('background-color', 'rgb(45, 33, 64)');
+  await expect(planningTab).toHaveCSS('background-color', 'rgb(78, 37, 129)');
 
   await page.getByRole('tab', { name: 'Roadmap' }).click();
   await expect(page.getByRole('region', { name: '2026 Q3' })).toContainText('Complete migration');
@@ -298,6 +450,7 @@ test('objective create and edit submit the expected API payloads', async ({ page
   const persisted = [objectives[0]];
   const createdPayloads: unknown[] = [];
   const updatedPayloads: unknown[] = [];
+  const updatedRecords: unknown[] = [];
   await page.route('**/api/v1/objectives', async (route) => {
     if (route.request().method() === 'POST') {
       const payload = route.request().postDataJSON();
@@ -318,12 +471,14 @@ test('objective create and edit submit the expected API payloads', async ({ page
     const id = new URL(route.request().url()).pathname.split('/').at(-1);
     const current = persisted.find((item) => item.id === id)!;
     Object.assign(current, payload);
+    updatedRecords.push({ id: current.id, title: current.title, due_date: current.due_date,
+      status: current.status, progress: current.progress });
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(current) });
   });
   await page.route('**/api/v1/products', (route) => route.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify([{ id: productID, name: 'Core Product', description: '', repository_ids: [], created_at: '', updated_at: '' }]) }));
   await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
-  await page.goto('http://zenchron.test:4173/#objectives');
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
 
   await page.getByRole('button', { name: 'New Objective' }).click();
   await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability testing');
@@ -332,28 +487,37 @@ test('objective create and edit submit the expected API payloads', async ({ page
   await page.getByLabel('Due date').fill('2026-12-10');
   await page.getByRole('button', { name: 'Create objective' }).click();
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability testing');
+  await expect(page.locator('.objective-grid-wrap [role="row"].ag-row-selected'))
+    .toContainText('Expand reliability testing');
   expect(createdPayloads).toEqual([{
     title: 'Expand reliability testing', description: 'Add coverage for critical paths.', owner: 'Sam Rivera',
     product_id: '', due_date: '2026-12-10',
   }]);
 
   await page.getByRole('button', { name: 'Edit objective' }).click();
-  await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability review');
-  await page.getByRole('textbox', { name: 'Description' }).fill('Expand critical-path coverage.');
-  await page.getByRole('textbox', { name: 'Owner' }).fill('Sam Rivera');
-  await page.getByLabel('Due date').fill('2027-01-15');
-  await page.getByRole('combobox', { name: 'Product', exact: true }).click();
+  const editForm = page.locator('.detail-edit-grid');
+  await editForm.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability review');
+  await editForm.getByRole('textbox', { name: 'Description' }).fill('Expand critical-path coverage.');
+  await editForm.getByRole('textbox', { name: 'Owner' }).fill('Sam Rivera');
+  await editForm.getByLabel('Due date').fill('2027-01-15');
+  await editForm.getByRole('combobox', { name: 'Product', exact: true }).click();
   await page.getByRole('option', { name: 'Core Product' }).click();
-  await page.getByRole('combobox', { name: 'Status', exact: true }).click();
+  await editForm.getByRole('combobox', { name: 'Status', exact: true }).click();
   await page.getByRole('option', { name: 'Completed' }).click();
-  await page.getByRole('textbox', { name: 'Progress' }).fill('100');
+  await editForm.getByRole('textbox', { name: 'Progress' }).fill('100');
   await page.getByRole('button', { name: 'Save updates' }).click();
-  await expect(page.locator('.detail-summary')).toContainText('100% complete');
-  await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability review');
-  await expect(page.locator('.detail-meta-grid')).toContainText('Sam Rivera');
-  await expect(page.locator('.detail-meta-grid')).toContainText('Jan 15, 2027');
+  await expect.poll(() => updatedPayloads.length).toBe(1);
   expect(updatedPayloads).toEqual([{
     title: 'Expand reliability review', description: 'Expand critical-path coverage.', owner: 'Sam Rivera',
     due_date: '2027-01-15', status: 'completed', progress: 100, product_id: productID,
   }]);
+  expect(updatedRecords).toEqual([{
+    id: '55555555555555555555555555555555', title: 'Expand reliability review', due_date: '2027-01-15',
+    status: 'completed', progress: 100,
+  }]);
+  await expect(page.locator('.detail-edit-grid')).toHaveCount(0);
+  await expect(page.locator('.detail-summary')).toContainText('100% complete');
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability review');
+  await expect(page.locator('.detail-meta-grid')).toContainText('Sam Rivera');
+  await expect(page.locator('.detail-meta-grid')).toContainText('Jan 15, 2027');
 });

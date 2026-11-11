@@ -13,9 +13,10 @@ export const agentsPreviewProfiles: Agent[] = [
     provider: 'Anthropic',
     model: 'Claude 3.7 Sonnet',
     status: 'active',
-    system_prompt: 'You are the Zenchron Code Reviewer. Review code changes for quality, security, correctness, performance, and '
-      + 'maintainability. Follow the team’s engineering standards and provide concise, actionable findings.',
-    goal_prompt: 'Review the provided code changes, identify issues, assess risk and impact, and return structured feedback '
+    system_prompt: 'You are the Zenchron Code Reviewer.\nReview code changes for quality, security,\n'
+      + 'correctness, performance, and maintainability.\nFollow the team’s engineering standards and\n'
+      + 'provide concise, actionable feedback with\nclear severity and suggested fixes.',
+    goal_prompt: 'Review the provided code changes, identify issues,\nassess risk and impact, and return structured feedback\n'
       + 'with recommended actions and code suggestions.',
     tools: ['code.search', 'code.write', 'git.diff', 'git.read'],
     version: 2,
@@ -82,15 +83,15 @@ export const agentsPreviewRuns: AgentRun[] = [
 ];
 
 export const agentsPreviewTrend = [
-  { date: 'Jan 1', success: 93, cost: 91, latency: 92 },
-  { date: 'Jan 4', success: 95, cost: 92, latency: 93 },
-  { date: 'Jan 7', success: 94, cost: 93, latency: 91 },
-  { date: 'Jan 10', success: 96, cost: 94, latency: 93 },
-  { date: 'Jan 13', success: 97, cost: 95, latency: 92 },
-  { date: 'Jan 16', success: 96, cost: 96, latency: 94 },
-  { date: 'Jan 19', success: 98, cost: 97, latency: 95 },
-  { date: 'Jan 22', success: 97, cost: 98, latency: 94 },
-  { date: 'Jan 25', success: 99, cost: 99, latency: 96 },
+  { date: 'Jan 1', success: 93, cost: 0.42, latency: 1.8 },
+  { date: 'Jan 4', success: 95, cost: 0.48, latency: 1.7 },
+  { date: 'Jan 7', success: 94, cost: 0.51, latency: 1.65 },
+  { date: 'Jan 10', success: 96, cost: 0.57, latency: 1.5 },
+  { date: 'Jan 13', success: 97, cost: 0.63, latency: 1.4 },
+  { date: 'Jan 16', success: 96, cost: 0.68, latency: 1.35 },
+  { date: 'Jan 19', success: 98, cost: 0.74, latency: 1.2 },
+  { date: 'Jan 22', success: 97, cost: 0.8, latency: 1.1 },
+  { date: 'Jan 25', success: 99, cost: 0.9, latency: 0.95 },
 ];
 
 export const agentsPreviewTools: { label: string; icon: ReactNode }[] = [
@@ -111,10 +112,10 @@ export const agentsPreviewTags: Record<string, string[]> = {
 };
 
 export const agentsPreviewListMetrics: Record<string, { lastRun: string; cost: string; success: string }> = {
-  'preview-code-reviewer': { lastRun: 'Last run 2m ago', cost: '$0.42', success: '98.4%' },
-  'preview-test-generator': { lastRun: 'Last run 7m ago', cost: '$0.28', success: '96.1%' },
-  'preview-planner': { lastRun: 'Last run 15m ago', cost: '$0.31', success: '97.6%' },
-  'preview-release-manager': { lastRun: 'Last run 32m ago', cost: '$0.19', success: '95.8%' },
-  'preview-research-analyst': { lastRun: 'Last run 3h ago', cost: '$0.38', success: '94.2%' },
-  'preview-coverage-analyzer': { lastRun: 'Last run 1h ago', cost: '$0.21', success: '95.4%' },
+  'preview-code-reviewer': { lastRun: 'Last run: 2m ago', cost: '$0.42', success: '98.4%' },
+  'preview-test-generator': { lastRun: 'Last run: 7m ago', cost: '$0.28', success: '96.1%' },
+  'preview-planner': { lastRun: 'Last run: 15m ago', cost: '$0.31', success: '97.6%' },
+  'preview-release-manager': { lastRun: 'Last run: 32m ago', cost: '$0.19', success: '95.8%' },
+  'preview-research-analyst': { lastRun: 'Last run: 3h ago', cost: '$0.38', success: '94.2%' },
+  'preview-coverage-analyzer': { lastRun: 'Last run: 1h ago', cost: '$0.21', success: '95.4%' },
 };

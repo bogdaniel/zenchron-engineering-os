@@ -1,18 +1,25 @@
 import { defineConfig } from '@playwright/test';
 
+const environment = (
+  globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } }
+).process?.env ?? {};
+const dashboardPort = Number(environment.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+
 export default defineConfig({
   testDir: './e2e',
   globalTeardown: './e2e/teardown.mjs',
   use: {
-    baseURL: 'http://zenchron.test:4173',
+    baseURL: `http://zenchron.test:${dashboardPort}`,
     launchOptions: { args: ['--host-resolver-rules=MAP zenchron.test 127.0.0.1'] },
   },
   webServer: [
     {
       command: 'sh ./dev.sh',
-      url: 'http://127.0.0.1:4173',
-      env: { ZENCHRON_API_PROXY: 'http://127.0.0.1:8083' },
-      reuseExistingServer: true,
+      url: `http://127.0.0.1:${dashboardPort}`,
+      env: {
+        ZENCHRON_API_PROXY: 'http://127.0.0.1:8083', ZENCHRON_DASHBOARD_PORT: String(dashboardPort),
+      },
+      reuseExistingServer: !environment.ZENCHRON_E2E_DASHBOARD_PORT,
       timeout: 120_000,
     },
     {

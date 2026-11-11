@@ -145,7 +145,7 @@
   color: #ded8e8;
   font-size: 12px;
 }
-.reviews-change-empty span {
+.reviews-change-empty > span {
   max-width: 265px;
   color: #8f899f;
   font-size: 12px;
