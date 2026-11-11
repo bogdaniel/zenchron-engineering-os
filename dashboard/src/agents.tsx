@@ -53,6 +53,7 @@ const agentRunSchema = z.object({
 });
 export const agentRunsSchema = z.array(agentRunSchema);
 export const agentsSchema = z.array(agentSchema);
+const previewProfileVersions = ['v2.4.1', 'v2.4.0', 'v2.3.8'];
 const inputSchema = z.object({
   name: z.string().trim().min(1, 'Add an agent name').max(100),
   description: z.string().max(500),
@@ -148,6 +149,8 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   const queryClient = useQueryClient();
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [previewItems, setPreviewItems] = useState<Agent[]>(previewAgents);
+  const [previewOwners, setPreviewOwners] = useState<Record<string, string>>({});
+  const [previewVersions, setPreviewVersions] = useState<Record<string, string>>({});
   const [previewRunItems, setPreviewRunItems] = useState<AgentRun[]>(previewRuns);
   const [detailTab, setDetailTab] = useState<string | null>('overview');
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -181,6 +184,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   if (agentSort !== 'default') visibleItems.sort((a, b) =>
     agentSort === 'ascending' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
   const selected = visibleItems.find((item) => item.id === selectedID) ?? visibleItems[0];
+  const selectedPreviewVersion = selected ? previewVersions[selected.id] ?? previewProfileVersions[0] : '';
   const createForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateInput });
   const editForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateInput });
   const runForm = useForm<{ prompt: string }>({ initialValues: { prompt: '' }, validate: (values) => {
@@ -202,6 +206,11 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
     setPreviewItems((current) => [...current, copy]);
     setSelectedID(copy.id);
     setDetailTab('overview');
+  }
+  function updatePreviewProfile(patch: Partial<Agent>) {
+    if (!selected) return;
+    setPreviewItems((current) => current.map((item) => item.id === selected.id
+      ? agentSchema.parse({ ...item, ...patch }) : item));
   }
   useEffect(() => {
     if (!selected) return;
@@ -500,12 +509,27 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                         <TextInput label="Profile name" {...editForm.getInputProps('name')} />
                         <TextInput label="Description" {...editForm.getInputProps('description')} />
                       </div>
-                    </> : <div className="agents-profile-summary">
+                    </> : <div className={`agents-profile-summary${sampleMode ? ' agents-preview-profile-fields' : ''}`}>
                       {sampleMode ? <>
-                        <div><small>Model</small><b>{selected.model}</b></div>
-                        <div><small>Provider</small><b>{selected.provider}</b></div>
-                        <div><small>Status</small><b>{selected.status === 'active' ? 'Active' : 'Disabled'}</b></div>
-                        <div><small>Owner</small><b>Platform Engineering</b></div>
+                        <div><small>Model / Provider</small><Select aria-label="Model / Provider"
+                          data={previewAgents.map((agent) => ({ value: agent.id, label: `${agent.model} · ${agent.provider}` }))}
+                          value={previewAgents.find((agent) => agent.model === selected.model && agent.provider === selected.provider)?.id ?? selected.id}
+                          onChange={(id) => {
+                            const agent = previewAgents.find((candidate) => candidate.id === id);
+                            if (agent) updatePreviewProfile({ model: agent.model, provider: agent.provider });
+                          }} /></div>
+                        <div><small>Version</small><Select aria-label="Version" data={previewProfileVersions}
+                          value={selectedPreviewVersion} onChange={(version) => version && setPreviewVersions((current) => ({
+                            ...current, [selected.id]: version,
+                          }))} /></div>
+                        <div><small>Status</small><Select aria-label="Profile status"
+                          data={[{ value: 'active', label: 'Active' }, { value: 'disabled', label: 'Disabled' }]}
+                          value={selected.status} onChange={(status) => {
+                            if (status === 'active' || status === 'disabled') updatePreviewProfile({ status });
+                          }} /></div>
+                        <div><small>Owner</small><Select aria-label="Profile owner"
+                          data={['Platform Engineering', 'AI Platform']} value={previewOwners[selected.id] ?? 'Platform Engineering'}
+                          onChange={(owner) => owner && setPreviewOwners((current) => ({ ...current, [selected.id]: owner }))} /></div>
                         <div><small>Created</small><b>Jan 12, 2025</b></div>
                         <div><small>Last Updated</small><b>Jan 26, 2025, 10:24 AM</b></div>
                       </> : <>
@@ -630,7 +654,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                       {selectedRuns.slice(0, 8).map((run) => <AgentRunRow run={run} key={run.id} />)}
                     </div> : <div className="agents-run-empty">No runs recorded for this profile.</div>}
               </Tabs.Panel>
-              {sampleMode && <Tabs.Panel value="versions" pt="sm"><div className="agents-preview-variable-panel"><h4>Profile versions</h4><div className="agents-preview-variable"><span>v2.4.1 · Current</span><small>Updated Jan 26, 2025</small></div><div className="agents-preview-variable"><span>v2.4.0</span><small>Updated Jan 20, 2025</small></div><div className="agents-preview-variable"><span>v2.3.8</span><small>Updated Jan 12, 2025</small></div></div></Tabs.Panel>}
+              {sampleMode && <Tabs.Panel value="versions" pt="sm"><div className="agents-preview-variable-panel"><h4>Profile versions</h4>{previewProfileVersions.map((version, index) => <div className="agents-preview-variable" key={version}><span>{version}{version === selectedPreviewVersion ? ' · Selected' : ''}</span><small>Updated {['Jan 26, 2025', 'Jan 20, 2025', 'Jan 12, 2025'][index]}</small></div>)}</div></Tabs.Panel>}
             </Tabs>
             {isEditing && <div className="agents-form-status">
               {submitError && <Text className="agents-error">{submitError}</Text>}

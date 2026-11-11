@@ -25,7 +25,8 @@ hover. Metrics use recorded data only.
 The unauthenticated local design preview is fixture-only and makes no agent or run API requests. Its metrics and
 profile history, including performance deltas, sparklines, durations, and costs, are illustrative and carry a visible
 `ILLUSTRATIVE DATA` label; fields absent from the live profile contract, including owner and creation time, stay
-exclusive to that preview. Search, status filtering, and name sorting operate on the local fixture. Create, edit,
+exclusive to that preview. The preview's Model / Provider, Version, Status, and Owner controls update local fixture
+state only. Search, status filtering, and name sorting operate on the local fixture. Create, edit,
 duplicate, disable, simulated run, library selection, import/export, and version/history controls update or inspect
 preview data only; they never call the agent APIs.
 Each desktop preview profile also has an options menu to select or duplicate that profile locally; live profile rows do

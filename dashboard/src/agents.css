@@ -523,8 +523,13 @@
 .agents-design-preview .agents-profile-summary { gap: 5px; margin-top: 5px; }
 .agents-design-preview .agents-overview-top .agents-overview-card { min-height: 116px; }
 .agents-design-preview .agents-profile-summary > div { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; padding: 3px 5px; border: 0; background: transparent; }
+.agents-design-preview .agents-preview-profile-fields { grid-template-columns: 1.2fr 1fr; gap: 5px; }
+.agents-design-preview .agents-preview-profile-fields > div { display: grid; grid-template-columns: 57px minmax(0, 1fr); align-items: center; gap: 5px; padding: 0; }
+.agents-design-preview .agents-preview-profile-fields > div:first-child { grid-template-columns: 80px minmax(0, 1fr); }
 .agents-design-preview .agents-profile-summary small { font-size: 8px; }
 .agents-design-preview .agents-profile-summary b { font-size: 9px; text-align: right; }
+.agents-design-preview .agents-preview-profile-fields .mantine-Select-root { min-width: 0; }
+.agents-design-preview .agents-preview-profile-fields .mantine-Select-input { min-height: 23px; height: 23px; padding-inline: 6px 22px; font-size: 8px; }
 .agents-design-preview .agents-prompt-preview { min-height: 58px; margin-top: 5px; padding: 7px; border: 1px solid #273b37; border-radius: 5px; color: #72ddb2; background: #101d1a; font-family: var(--font-mono, monospace); font-size: 9px; }
 .agents-preview-overview-grid { display: grid; grid-template-columns: 1.05fr 1fr 1fr; gap: 7px; margin-top: 7px; }
 .agents-preview-variable { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 7px; min-height: 24px; padding: 4px 6px; border-bottom: 1px solid #292638; color: #b6afc4; font-size: 9px; }
