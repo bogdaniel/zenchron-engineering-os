@@ -121,6 +121,10 @@ that exits successfully is therefore not reported as delivered work unless verif
 
 ## Dashboard
 
+On `127.0.0.1` or `localhost` most pages show design previews with sample data. Add `?live` before the `#` (for
+example `http://127.0.0.1:4173/?live#reviews`) to see the control plane's real data on every page; on any other host
+name the pages are always live.
+
 - **Agents > Queue run.** The dialog lists the selected project's open GitHub issues; choosing one makes the prompt
   optional and states that the pull request will close the issue. The project line and the note under it say whether
   the project's worker reports the agent profile's CLI as installed and signed in. Until it does, "Queue run" is
@@ -231,8 +235,9 @@ Automated, deterministic:
 - `cd dashboard && npm run test:e2e:agent-runtime` runs the real control plane and worker binaries end to end with
   the chat runtime.
 
-- `cd dashboard && npm run test:e2e -- e2e/z_run_evidence.spec.ts` covers the queue dialog (issue selection, the
-  request body, provider ready and not ready, issues unavailable) and the Evidence panel (summary, checks, attempts,
+- `cd dashboard && npm run test:e2e -- e2e/z_run_evidence.spec.ts` covers the queue dialog (issue selection and
+  creation, the request body, a blocked unready provider, issues unavailable), the `?live` switch on a local host,
+  Settings readiness, the Evidence actions, and the Evidence panel (summary, checks, attempts,
   events, failure and empty states, no horizontal overflow) at 1672×941 and 390×844 against mocked API responses.
   `npm run test:e2e -- e2e/z_agents.spec.ts --grep 'real worker run'` checks the panel against a run executed by the
   real control plane and worker.
@@ -267,7 +272,7 @@ Git deadline had started before the provider ran. That defect is fixed and cover
 1. Start the control plane with GitHub credentials and a worker with `ZENCHRON_PROJECTS_ROOT` on a clone of the target
    repository and a `ZENCHRON_WORKER_CONFIG` that lists it.
 2. `GET /api/v1/workers` must show the provider with `"ready": true`; `GET /api/v1/projects` gives the project id.
-3. In the dashboard, Agents > Create Agent: provider `codex-cli` or `claude-code`, model `default`, tools including
+3. Open the dashboard with `?live` when using a local address. Agents > Create Agent: provider `codex-cli` or `claude-code`, model `default`, tools including
    "Write files in isolated branch" (and "Run tests" for a sandboxed Claude Code shell).
 4. Agents > Queue run: choose the project, choose or create the GitHub issue, Queue run.
 5. Reviews > Local branches: select the run's branch, open Evidence, and watch the events until the run is terminal;

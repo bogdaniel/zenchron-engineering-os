@@ -245,3 +245,25 @@ test('Reviews evidence imports GitHub change requests and retries a failed pull 
   await expect(page.locator('.run-evidence-actions').getByRole('status')).toHaveText('Imported 2 change requests from GitHub.');
   expect(calls).toEqual(['publish', 'sync-reviews', 'sync-reviews']);
 });
+
+test('a developer on a local host reaches live run evidence with ?live and the design preview without it', async ({ page, baseURL }) => {
+  const local = new URL(baseURL!);
+  local.hostname = '127.0.0.1';
+  await mockWorkspace(page, { providerReady: true });
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([evidenceRun])));
+  await page.route(`**/api/v1/agent-runs/${runID}/diff`, (route) => route.fulfill(json({ run_id: runID, diff: '', truncated: false })));
+  await page.route(`**/api/v1/agent-runs/${runID}/events`, (route) => route.fulfill(json([
+    { sequence: 1, attempt: 2, at: now, kind: 'status', message: 'Attempt 2 claimed by worker dev-laptop' },
+  ])));
+  await page.route(`**/api/v1/agent-runs/${runID}/pull-request`, (route) => route.fulfill(json({
+    number: 23, url: evidenceRun.pull_request_url, state: 'open', merged: false, head_sha: 'a'.repeat(40), checks: [], reviews: [] })));
+  await page.goto(`${local.origin}/#reviews`);
+  await expect(page.locator('.app-shell')).toHaveClass(/sample-data/);
+  await expect(page.getByLabel('Run evidence summary')).toHaveCount(0);
+  await page.goto(`${local.origin}/?live#reviews`);
+  await expect(page.locator('.app-shell')).not.toHaveClass(/sample-data/);
+  await page.getByRole('button', { name: 'Local branches' }).click();
+  await page.getByRole('group', { name: 'Review detail sections' }).getByRole('button', { name: 'Evidence' }).click();
+  await expect(page.getByLabel('Run evidence summary')).toContainText('#7 Bound the claim response body');
+  await expect(page.getByRole('region', { name: 'Run events' })).toContainText('Attempt 2 claimed by worker dev-laptop');
+});

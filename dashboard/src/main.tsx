@@ -77,7 +77,10 @@ function App() {
     retry: false,
   });
   const unauthorized = (auth.error as (Error & { status?: number }) | null)?.status === 401;
-  const mockPreview = localReviewHost && !loginRoute;
+  // On a local host the pages show design previews with sample data. `?live` in the address turns that
+  // off so a developer running everything locally sees the control plane's real data on every page.
+  const liveData = new URLSearchParams(window.location.search).has('live');
+  const mockPreview = localReviewHost && !loginRoute && !liveData;
   const designPreview = activePage === 'overview' && mockPreview;
   const objectivePreview = activePage === 'objectives' && mockPreview;
   const workspacePreview = activePage === 'workspace' && mockPreview;

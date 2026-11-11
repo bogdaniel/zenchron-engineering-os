@@ -5,6 +5,9 @@ development session. Reserve `127.0.0.1:4173` for the latest dashboard source an
 plane and worker so the manual-review URL stays fixed. Focused browser tests use separate temporary ports. Ctrl+C stops
 the child services.
 
+Pages that show sample data on a local address switch to the control plane's real data when the address contains
+`?live`, for example `http://127.0.0.1:4173/?live#reviews`.
+
 ```mermaid
 sequenceDiagram
     participant Dev as Developer
