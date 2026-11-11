@@ -374,6 +374,46 @@ func TestBoundedDiffStaysValidAndWithinLimitWhenCutMidCharacter(t *testing.T) {
 	}
 }
 
+func TestAttemptThatLosesItsLeaseAfterCommittingDoesNotPush(t *testing.T) {
+	pushes := 0
+	countPush := func(context.Context, string, string, string) error {
+		pushes++
+		return nil
+	}
+	published := newRunHarness(t, fakeChangeScript, nil)
+	published.command.PublishPullRequest, published.runner.push = true, countPush
+	if err := published.process(); err != nil {
+		t.Fatalf("process run: %v", err)
+	}
+	if result := published.result(); !result.BranchPushed || pushes != 1 {
+		t.Fatalf("current attempt result = %#v after %d pushes", result, pushes)
+	}
+
+	// The same delivery stage, entered by an attempt whose lease was lost while the provider ran.
+	pushes = 0
+	stale := newRunHarness(t, fakeChangeScript, nil)
+	stale.command.PublishPullRequest, stale.runner.push = true, countPush
+	project := discoveredProject{ID: stale.command.ProjectID, Name: "repository", Path: stale.repository}
+	root := filepath.Dir(filepath.Dir(stale.worktree))
+	if err := prepareWorktree(context.Background(), root, project, worktreeCommand{
+		ID: stale.command.ID, ProjectID: stale.command.ProjectID, Branch: stale.command.Branch, BaseBranch: "main",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stale.worktree, "README.md"), []byte("late change\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reporter := &progressReporter{leaseLost: true, redactor: newRedactor(stale.worktree)}
+	result := stale.runner.deliver(context.Background(), context.Background(), stale.command, project, stale.worktree,
+		workerapi.AgentRunResult{}, reporter)
+	if pushes != 0 || result.BranchPushed || result.Status == "succeeded" || len(result.CommitSHA) != 40 {
+		t.Fatalf("stale attempt pushed %d times: %#v", pushes, result)
+	}
+	if commit := strings.TrimSpace(runGit(t, stale.worktree, "rev-parse", "HEAD")); commit != result.CommitSHA {
+		t.Fatalf("stale attempt did not keep its local commit: %q", commit)
+	}
+}
+
 func TestRunRejectsBranchOtherThanItsOwnRunBranch(t *testing.T) {
 	for _, branch := range []string{"main", "zenchron/agent-run/ffffffffffffffffffffffffffffffff", "../escape"} {
 		harness := newRunHarness(t, fakeChangeScript, nil)

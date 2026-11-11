@@ -56,6 +56,8 @@ type agentRunner struct {
 	providers map[string]*cliProvider
 	limits    runLimits
 	config    *workerConfig
+	// push publishes the run branch; nil uses pushAgentBranch. Tests replace this network boundary.
+	push func(ctx context.Context, worktree, remote, branch string) error
 	// finishRetryDelay overrides the pause between result deliveries; zero uses the default.
 	finishRetryDelay time.Duration
 }
@@ -236,7 +238,11 @@ func (runner *agentRunner) deliver(
 		return result
 	}
 	if command.PublishPullRequest {
-		if err := pushAgentBranch(gitCtx, worktree, project.Remote, command.Branch); err != nil {
+		push := runner.push
+		if push == nil {
+			push = pushAgentBranch
+		}
+		if err := push(gitCtx, worktree, project.Remote, command.Branch); err != nil {
 			result.BranchPushFailed = true
 			reporter.emit("error", "Git could not push the run branch.")
 		} else {
