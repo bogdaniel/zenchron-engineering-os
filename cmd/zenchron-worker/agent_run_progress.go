@@ -136,9 +136,16 @@ func (reporter *progressReporter) flush(ctx context.Context) bool {
 			log.Printf("agent run progress report failed: %v", err)
 		}
 		return false
-	case status == http.StatusConflict:
+	case status == http.StatusConflict || status == http.StatusUnauthorized || status == http.StatusForbidden ||
+		status == http.StatusNotFound:
+		// The control plane no longer recognizes this attempt or this worker; stop working on it.
 		reporter.leaseLost = true
 		return true
+	case status == http.StatusBadRequest:
+		// A rejected batch would be rejected again; drop it so later reports can renew the lease.
+		log.Printf("agent run progress report was rejected; dropping %d event(s)", sent)
+		reporter.pending = reporter.pending[min(sent, len(reporter.pending)):]
+		return false
 	case status != http.StatusOK:
 		log.Printf("agent run progress report returned HTTP %d", status)
 		return false

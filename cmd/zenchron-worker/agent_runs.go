@@ -97,7 +97,9 @@ func (buffer *boundedDiff) Write(input []byte) (int, error) {
 	return len(input), nil
 }
 
-func (buffer *boundedDiff) String() string { return string(buffer.data) }
+// String drops a character cut in half by the size limit and bytes that are not UTF-8, so the JSON
+// encoding of the diff cannot grow past the limit the control plane accepts.
+func (buffer *boundedDiff) String() string { return strings.ToValidUTF8(string(buffer.data), "") }
 
 func collectAgentRunDiff(ctx context.Context, worktree, baseBranch string) (string, bool, error) {
 	add := exec.CommandContext(ctx, "git", "add", "--intent-to-add", "--", ".")

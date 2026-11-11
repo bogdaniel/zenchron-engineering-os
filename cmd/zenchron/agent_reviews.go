@@ -87,7 +87,7 @@ func (store *agentRunStore) reviewRun(w http.ResponseWriter, r *http.Request, re
 		http.Error(w, "review comment is invalid", http.StatusBadRequest)
 		return
 	}
-	item, status, message := store.recordReview(runID, "", input.Comment, requestChanges, true)
+	item, status, message := store.recordReview(accessFor(r), runID, "", input.Comment, requestChanges, true)
 	if status != 0 {
 		http.Error(w, message, status)
 		return
@@ -95,8 +95,10 @@ func (store *agentRunStore) reviewRun(w http.ResponseWriter, r *http.Request, re
 	writeJSON(w, http.StatusOK, publicAgentRun(item))
 }
 
+// recordReview stores feedback on a finished run. A change request queues another pass only when the
+// caller may dispatch work to the run's worker; feedback alone never starts work on someone's machine.
 func (store *agentRunStore) recordReview(
-	runID, projectID, comment string, requestChanges, requireQueue bool,
+	access requestAccess, runID, projectID, comment string, requestChanges, requireQueue bool,
 ) (agentRun, int, string) {
 	store.mu.Lock()
 	item, exists := store.items[runID]
@@ -116,7 +118,7 @@ func (store *agentRunStore) recordReview(
 		store.mu.Unlock()
 		return agentRun{}, http.StatusConflict, "agent run review history is full"
 	}
-	canQueue := requestChanges && store.canRequestChanges(item)
+	canQueue := requestChanges && store.canRequestChanges(item) && access.mayDispatchTo(item.WorkerID)
 	if requestChanges && !canQueue && requireQueue {
 		store.mu.Unlock()
 		return agentRun{}, http.StatusConflict, "agent run cannot accept another code-change pass"

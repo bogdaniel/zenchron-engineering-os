@@ -199,7 +199,17 @@ func validStoredAgentRun(item agentRun) bool {
 		validCommitSHA(item.BaseCommit) && (item.Repository == "" || validGitRemote(item.Repository)) &&
 		item.IssueNumber >= 0 && len(item.IssueContext) <= maxIssueContextSize && len(item.IssueTitle) <= 300 &&
 		workerapi.ValidTerminationReason(item.TerminationReason) && workerapi.ValidVerification(item.Verification) &&
-		len(item.AttemptLog) <= maxAgentRunAttempts
+		len(item.AttemptLog) <= maxAgentRunAttempts && validPublication(item.Publication) &&
+		len(item.Provider) <= 100 && len(item.ProviderVersion) <= 100 && item.DiffAttempt >= 0 && item.DiffAttempt <= item.Attempts
+}
+
+func validPublication(publication string) bool {
+	switch publication {
+	case "", publicationPublished, publicationPushFailed, publicationPullRequestFailed, publicationNoChanges:
+		return true
+	default:
+		return false
+	}
 }
 
 func validCommitSHA(value string) bool {
@@ -352,10 +362,13 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 	defer store.mu.Unlock()
 	now := time.Now().UTC()
 	recovered := store.recoverExpiredLocked(now)
+	access := accessFor(r)
 	var selected agentRun
 	for _, item := range store.items {
-		// A run waits in the queue until its worker reports the provider it needs.
+		// A run waits in the queue until its worker reports the provider it needs, and is never handed to
+		// a worker whose grant for the repository has been removed since the run was created.
 		if item.WorkerID == workerID && item.Status == "queued" && workerRunsProfile(worker, *item.Profile) &&
+			access.allows(item.Repository) &&
 			(selected.ID == "" || item.CreatedAt.Before(selected.CreatedAt)) {
 			selected = item
 		}

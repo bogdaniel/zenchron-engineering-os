@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -20,6 +21,10 @@ func (store *agentRunStore) attachIssue(ctx context.Context, item *agentRun, num
 	}
 	if issue.PullRequest != nil || issue.Number != number {
 		return http.StatusBadRequest, "issue number does not identify a GitHub issue"
+	}
+	// The issue text becomes the agent's task, so it must come from someone trusted with the repository.
+	if !trustedGitHubAuthor(issue.AuthorAssociation) {
+		return http.StatusForbidden, "issue author is not an owner, member, or collaborator of the repository"
 	}
 	comments, err := store.registry.github.issueComments(ctx, owner, repository, number)
 	if err != nil {
@@ -122,20 +127,20 @@ func (store *agentRunStore) syncReviews(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "GitHub reviews are unavailable", http.StatusBadGateway)
 		return
 	}
-	imported := 0
-	for _, review := range reviews {
-		body := strings.TrimSpace(review.Body)
-		if review.ID <= item.ImportedReviewID || review.State != "CHANGES_REQUESTED" || body == "" ||
-			!trustedGitHubAuthor(review.AuthorAssociation) {
-			continue
-		}
-		comment := truncateUTF8(review.User.Login+" on GitHub: "+body, maxAgentRunCommentSize)
-		updated, status, message := store.recordReview(item.ID, "", comment, true, false)
-		if status != 0 {
+	pending := slices.DeleteFunc(reviews, func(review gitHubReview) bool {
+		return review.ID <= item.ImportedReviewID || review.State != "CHANGES_REQUESTED" ||
+			strings.TrimSpace(review.Body) == "" || !trustedGitHubAuthor(review.AuthorAssociation)
+	})
+	for index, review := range pending {
+		comment := truncateUTF8(review.User.Login+" on GitHub: "+strings.TrimSpace(review.Body), maxAgentRunCommentSize)
+		// Only the newest request queues the follow-up pass; a queued run cannot take further feedback.
+		newest := index == len(pending)-1
+		if _, status, message := store.recordReview(accessFor(r), item.ID, "", comment, newest, false); status != 0 {
 			http.Error(w, message, status)
 			return
 		}
-		item = updated
+		var status int
+		var message string
 		if item, status, message = store.update(item.ID, func(item *agentRun) (int, string) {
 			item.ImportedReviewID = review.ID
 			return 0, ""
@@ -143,8 +148,8 @@ func (store *agentRunStore) syncReviews(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, message, status)
 			return
 		}
-		imported++
 	}
+	imported := len(pending)
 	item.CanRequestChanges = store.canRequestChanges(item)
 	writeJSON(w, http.StatusOK, struct {
 		Imported int      `json:"imported"`

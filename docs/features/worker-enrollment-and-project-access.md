@@ -72,8 +72,11 @@ An empty `owner` marks a shared execution machine. Users are GitHub usernames an
   checkouts without a remote, are ignored.
 - A signed-in user sees only projects, runs, worktree requests, and workers for repositories they are granted. A user
   without an entry sees none. A run or project outside the user's access returns the same response as a missing one.
-- A user can start runs and worktree requests only on a worker they own or on a shared worker, even when they have
-  access to the repository.
+- A user can start runs and worktree requests, and queue a follow-up pass with a change request, only on a worker
+  they own or on a shared worker, even when they have access to the repository. Feedback without a follow-up pass can
+  still be recorded.
+- A queued run is not handed to a worker whose grant for the run's repository has since been removed.
+- A project id belongs to the first worker that registers it; another worker cannot register the same id.
 - A worker only ever receives runs assigned to its own id, and those runs can only be created for projects it
   registered.
 - The file is checked on every request. Removing or changing a grant takes effect immediately, without a restart. If
@@ -118,17 +121,22 @@ Not covered, and blocking multi-organization or untrusted deployment:
 - Worker tokens are static until the operator replaces the hash. There is no automatic rotation or mutual TLS.
 - A worker executes repository code (tests) with the developer's own permissions. Verification is not sandboxed, and
   Codex's sandbox is the only isolation for commands the agent runs.
+- Whether a provider can read files outside the run worktree (for example in the home directory) depends on the
+  CLI's own sandbox and has not been tested here. Redaction of events is pattern-based.
 - The control plane trusts the commit and verification result the enrolled worker reports. A compromised worker can
   misreport its own work; GitHub CI on the pull request is the independent check.
 
 ## Verification
 
-- `go test ./cmd/zenchron -run 'TestWorkerTokenIsBound|TestWorkerRegistersOnlyApproved|TestRunsAreScoped|TestUsersDispatchOnly|TestRevokingAGrant|TestAccessFileRejects|TestRunRejectsRemoteListener' -count=1`
+- `go test ./cmd/zenchron -run 'TestWorkerTokenIsBound|TestWorkerRegistersOnlyApproved|TestRunsAreScoped|TestUsersDispatchOnly|TestRepositoryAccessAlone|TestWorkerCannot|TestRevokingAGrant|TestAccessFileRejects|TestRunRejectsRemoteListener' -count=1`
   covers impersonation, the shared token, unapproved repositories, cross-user reads and writes on runs and projects,
   cross-worker claims and results, personal versus shared workers, revocation without restart, an invalid policy
   denying everything, malformed grants, and the non-loopback startup requirement.
 - `go test ./cmd/zenchron-worker -run 'TestRunRejectsBranchOtherThanItsOwnRunBranch|TestRunRejectsModelNames|TestProviderEnvironment|TestWorkerConfig|TestPushAgentBranch' -count=1`
   covers the worker-side refusals.
 
-The access policy has not been exercised on a deployed non-loopback control plane; the live issue-to-pull-request
-checks ran on loopback without it.
+Live on 2026-11-11, with the real binaries on loopback and authentication plus an access file enabled: the enrolled
+worker registered its granted repository; its token was refused for another worker id and on the dashboard API; a
+user without the grant saw no projects or workers and got not-found for the project's issues; removing the worker's
+grant made its next heartbeat fail with HTTP 401 without a restart. The access policy has not been exercised on a
+deployed non-loopback control plane, and the live issue-to-pull-request runs used loopback without it.

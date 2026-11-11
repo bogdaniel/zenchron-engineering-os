@@ -33,6 +33,11 @@ type runHarness struct {
 	cancelOnCall int
 	staleLease   bool
 	progress     int
+	// progressStatus, when set, is returned for every progress report after the first.
+	progressStatus int
+	// finishFailures is how many result deliveries fail with a server error before one succeeds.
+	finishFailures int
+	finishCalls    int
 }
 
 // newRunHarness installs script as the fake Codex CLI. The script runs in the run worktree and prints
@@ -97,6 +102,10 @@ func (harness *runHarness) serve(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
+		if harness.progressStatus != 0 && harness.progress > 1 {
+			w.WriteHeader(harness.progressStatus)
+			return
+		}
 		harness.events = append(harness.events, progress.Events...)
 		cancel := harness.cancelOnCall > 0 && harness.progress >= harness.cancelOnCall
 		_ = json.NewEncoder(w).Encode(workerapi.AgentRunProgressReply{CancelRequested: cancel})
@@ -104,6 +113,11 @@ func (harness *runHarness) serve(w http.ResponseWriter, r *http.Request) {
 		var result workerapi.AgentRunResult
 		if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
 			harness.t.Errorf("decode result: %v", err)
+		}
+		harness.finishCalls++
+		if harness.finishCalls <= harness.finishFailures {
+			w.WriteHeader(http.StatusBadGateway)
+			return
 		}
 		harness.results = append(harness.results, result)
 	default:
@@ -315,6 +329,48 @@ func TestStaleLeaseStopsAttemptWithoutReportingResult(t *testing.T) {
 	projects := []discoveredProject{{ID: agentRunTestID, Name: "repository", Path: harness.repository}}
 	if removed, _, err := cleanupWorktrees(context.Background(), root, projects); err != nil || len(removed) != 0 {
 		t.Fatalf("cleanup removed interrupted worktree %v, error %v", removed, err)
+	}
+}
+
+func TestResultDeliveryIsRetriedAfterServerErrors(t *testing.T) {
+	harness := newRunHarness(t, fakeChangeScript, nil)
+	harness.runner.finishRetryDelay, harness.finishFailures = 10*time.Millisecond, 2
+	if err := harness.process(); err != nil {
+		t.Fatalf("process run: %v", err)
+	}
+	if result := harness.result(); result.Status != "succeeded" || harness.finishCalls != 3 {
+		t.Fatalf("result = %#v after %d deliveries", result, harness.finishCalls)
+	}
+	exhausted := newRunHarness(t, fakeChangeScript, nil)
+	exhausted.runner.finishRetryDelay, exhausted.finishFailures = 10*time.Millisecond, 99
+	if err := exhausted.process(); err == nil || exhausted.finishCalls != finishAttempts {
+		t.Fatalf("exhausted delivery error = %v after %d deliveries", err, exhausted.finishCalls)
+	}
+}
+
+func TestWorkerStopsWhenControlPlaneRejectsItsIdentityOrRun(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound} {
+		harness := newRunHarness(t, "echo partial >> README.md\nwhile true; do echo '{\"type\":\"turn.started\"}'; sleep 0.2; done\n", nil)
+		harness.progressStatus = status
+		started := time.Now()
+		if err := harness.process(); err == nil || !strings.Contains(err.Error(), "interrupted") {
+			t.Fatalf("HTTP %d: process error = %v, want interrupted attempt", status, err)
+		}
+		if time.Since(started) > 20*time.Second || len(harness.results) != 0 {
+			t.Fatalf("HTTP %d: worker kept running for %s and sent %d results", status, time.Since(started), len(harness.results))
+		}
+	}
+}
+
+func TestBoundedDiffStaysValidAndWithinLimitWhenCutMidCharacter(t *testing.T) {
+	buffer := &boundedDiff{}
+	_, _ = buffer.Write([]byte(strings.Repeat("é", maxAgentRunDiffSize) + "\xff\xfe"))
+	diff := buffer.String()
+	encoded, err := json.Marshal(diff)
+	var decoded string
+	if err != nil || json.Unmarshal(encoded, &decoded) != nil || len(decoded) > maxAgentRunDiffSize || !buffer.truncated ||
+		strings.ContainsRune(decoded, '\uFFFD') {
+		t.Fatalf("diff of %d bytes decodes to %d bytes, truncated %t, error %v", len(diff), len(decoded), buffer.truncated, err)
 	}
 }
 

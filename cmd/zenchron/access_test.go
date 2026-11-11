@@ -239,6 +239,69 @@ func TestRunsAreScopedToProjectAccessAndWorkerOwnership(t *testing.T) {
 	}
 }
 
+func TestRepositoryAccessAloneCannotRequeueWorkOnAnotherUsersWorker(t *testing.T) {
+	harness := newAccessHarness(t)
+	content := strings.Replace(accessFileContent(enrolledWorkers()), `"bob":["`+repositoryC+`"]`,
+		`"bob":["`+repositoryC+`","`+repositoryA+`"]`, 1)
+	if err := os.WriteFile(harness.path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	harness.heartbeat(aliceWorkerID, aliceToken, projectJSON(projectA, repositoryA))
+	response := harness.user("alice", http.MethodPost, "/api/v1/agent-runs",
+		`{"agent_id":"`+harness.profile.ID+`","project_id":"`+projectA+`","prompt":"Fix it"}`)
+	var run agentRun
+	if err := json.NewDecoder(response.Body).Decode(&run); err != nil || response.Code != http.StatusAccepted {
+		t.Fatalf("Alice's run: HTTP %d, %v", response.Code, err)
+	}
+	harness.worker(http.MethodPost, "/api/v1/workers/"+aliceWorkerID+"/agent-runs/claim", aliceToken, "")
+	finished := harness.worker(http.MethodPut, "/api/v1/workers/"+aliceWorkerID+"/agent-runs/"+run.ID, aliceToken,
+		`{"status":"succeeded","output":"done","attempts":1,"diff":"diff"}`)
+	if finished.Code != http.StatusOK {
+		t.Fatalf("finish returned HTTP %d: %s", finished.Code, finished.Body.String())
+	}
+	// Bob can read the repository's run, but a change request from him must not start work on Alice's machine.
+	if response := harness.user("bob", http.MethodGet, "/api/v1/agent-runs/"+run.ID+"/diff", ""); response.Code != http.StatusOK {
+		t.Fatalf("Bob could not read a run of a repository he is granted: HTTP %d", response.Code)
+	}
+	if response := harness.user("bob", http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/request-changes", `{"comment":"run my text"}`); response.Code != http.StatusConflict {
+		t.Fatalf("Bob requeued Alice's worker: HTTP %d", response.Code)
+	}
+	if response := harness.worker(http.MethodPost, "/api/v1/workers/"+aliceWorkerID+"/agent-runs/claim", aliceToken, ""); response.Code != http.StatusNoContent {
+		t.Fatalf("Alice's worker received work queued by Bob: HTTP %d", response.Code)
+	}
+	if response := harness.user("alice", http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/request-changes", `{"comment":"tighten the test"}`); response.Code != http.StatusOK {
+		t.Fatalf("Alice could not request changes on her own run: HTTP %d", response.Code)
+	}
+}
+
+func TestWorkerCannotClaimQueuedWorkAfterItsRepositoryGrantIsRemoved(t *testing.T) {
+	harness := newAccessHarness(t)
+	harness.heartbeat(aliceWorkerID, aliceToken, projectJSON(projectA, repositoryA))
+	if response := harness.user("alice", http.MethodPost, "/api/v1/agent-runs",
+		`{"agent_id":"`+harness.profile.ID+`","project_id":"`+projectA+`","prompt":"Fix it"}`); response.Code != http.StatusAccepted {
+		t.Fatalf("create run returned HTTP %d", response.Code)
+	}
+	revoked := strings.Replace(accessFileContent(enrolledWorkers()), `"owner":"alice","repositories":["`+repositoryA+`"]`,
+		`"owner":"alice","repositories":[]`, 1)
+	if err := os.WriteFile(harness.path, []byte(revoked), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if response := harness.worker(http.MethodPost, "/api/v1/workers/"+aliceWorkerID+"/agent-runs/claim", aliceToken, ""); response.Code != http.StatusNoContent {
+		t.Fatalf("worker claimed a run for a repository it is no longer granted: HTTP %d", response.Code)
+	}
+}
+
+func TestWorkerCannotRegisterAProjectIDAnotherWorkerHolds(t *testing.T) {
+	harness := newAccessHarness(t)
+	harness.heartbeat(aliceWorkerID, aliceToken, projectJSON(projectA, repositoryA))
+	// The shared worker is approved for the same repository and tries to take over Alice's project id.
+	harness.heartbeat(sharedWorkerID, sharedToken, projectJSON(projectA, repositoryA))
+	projects := decodeList[projectStatus](t, harness.user("alice", http.MethodGet, "/api/v1/projects", ""))
+	if len(projects) != 1 || projects[0].WorkerID != aliceWorkerID {
+		t.Fatalf("project id is registered to %#v", projects)
+	}
+}
+
 func TestUsersDispatchOnlyToTheirOwnOrSharedWorkers(t *testing.T) {
 	harness := newAccessHarness(t)
 	// Grant Bob project A as well; Alice's personal worker must still refuse his work.

@@ -55,7 +55,9 @@ type gitHubIssue struct {
 	Body        string         `json:"body,omitempty"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	PullRequest map[string]any `json:"pull_request,omitempty"`
-	User        struct {
+	// AuthorAssociation is GitHub's statement of the author's relationship to the repository.
+	AuthorAssociation string `json:"author_association,omitempty"`
+	User              struct {
 		Login string `json:"login"`
 	} `json:"user"`
 	Labels []struct {
@@ -450,7 +452,7 @@ func (registry *workerRegistry) reviewGitHubPullRequest(w http.ResponseWriter, r
 	}
 	if runID, found := registry.runs.findByPullRequest("github.com/"+owner+"/"+repository, pull.Number); found {
 		run, status, message := registry.runs.recordReview(
-			runID, r.PathValue("id"), input.Body, input.Event == "REQUEST_CHANGES", false,
+			accessFor(r), runID, r.PathValue("id"), input.Body, input.Event == "REQUEST_CHANGES", false,
 		)
 		if status == 0 {
 			result.AgentRunLinked = true

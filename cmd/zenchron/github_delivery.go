@@ -40,7 +40,7 @@ type gitHubCheckRun struct {
 }
 
 // trustedGitHubAuthor reports whether GitHub says the author can push to or belongs to the repository.
-// Text from anyone else is never placed into an agent prompt.
+// Issue, comment, and review text from anyone else is never placed into an agent prompt.
 func trustedGitHubAuthor(association string) bool {
 	return association == "OWNER" || association == "MEMBER" || association == "COLLABORATOR"
 }

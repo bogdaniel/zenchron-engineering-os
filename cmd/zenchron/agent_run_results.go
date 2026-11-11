@@ -76,6 +76,10 @@ func (store *agentRunStore) applyResult(item *agentRun, workerID string, input w
 		input.Status, input.Output, input.Error, false, now, time.Time{}
 	item.TerminationReason, item.Verification, item.Usage = input.TerminationReason, input.Verification, input.Usage
 	item.ProviderVersion, item.Publication = input.ProviderVersion, ""
+	if input.BranchPushed {
+		// Recorded with the result, so a crash before the pull request exists still leaves a retry path.
+		item.Publication = publicationPullRequestFailed
+	}
 	if input.CommitSHA != "" {
 		item.CommitSHA = input.CommitSHA
 	}

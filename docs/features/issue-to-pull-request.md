@@ -77,8 +77,10 @@ that exits successfully is therefore not reported as delivered work unless verif
 
 - A run is bound to one project, which is one worker's checkout. It waits in the queue until that worker reports the
   profile's provider as installed and signed in.
-- The issue title, body, labels, and comments from repository owners, members, and collaborators are snapshotted when
-  the run is created. Comments from anyone else are not sent to the agent.
+- A run can be started only from an issue written by a repository owner, member, or collaborator; an issue from
+  anyone else is refused, because its text becomes the agent's task. The title, body, labels, and comments from owners,
+  members, and collaborators are snapshotted when the run is created. Comments from anyone else are not sent to the
+  agent.
 - Each run has its own branch `zenchron/agent-run/<run id>` and its own worktree. The worker refuses any other branch
   name, so two runs never share files and a run cannot push to another branch.
 - The provider process gets the prompt on stdin. Codex runs with `--sandbox workspace-write` (or `read-only` when the
@@ -95,7 +97,11 @@ that exits successfully is therefore not reported as delivered work unless verif
   `Closes #<issue>`. Creation reuses an open pull request for the same branch. If GitHub fails after the push,
   `POST /api/v1/agent-runs/{id}/publish` retries without creating a duplicate.
 - A change request from the dashboard, or one imported from GitHub with `sync-reviews`, queues another attempt on the
-  same branch and worktree; the new commit lands on the same pull request. A run has at most three attempts.
+  same branch and worktree; the new commit lands on the same pull request. A run has at most three attempts. When
+  several change requests are imported at once, all are kept and the newest queues the attempt.
+- The worker retries delivering a result up to four times after a connection or server error, so a finished run is
+  not repeated because one request failed. It stops an attempt when the control plane answers a progress report with
+  conflict, unauthorized, forbidden, or not found, and never pushes from an attempt that lost its lease.
 - Cancelling a running run stops the provider's whole process group and keeps the partial diff. Cancelled and
   interrupted worktrees are never deleted automatically.
 - If the control plane restarts or a worker disappears, the attempt's lease lapses, the run is queued again, and the
@@ -198,6 +204,9 @@ Live, on 2026-11-11 against `bogdaniel/zenchron-engineering-os` with a loopback 
 | Control-plane restart mid-run | Run `541d18526f598d04d1a298b43b75bcb3`: attempt 1 `lease_expired`, attempt 2 claimed in the same worktree |
 | Cancellation | The same run and run `ebf56847dab4d59fff2ff784bd8ce483` ended `cancelled`; no provider process remained |
 
+The live runs used the build before the independent review fixes (issue-author check, result retry, grant checks at
+claim and requeue); those fixes are covered by the automated tests above, not by a repeated live run.
+
 The first live Codex run (`b1e099df2b806f6f136f9a7e94d963a6`) failed in the worker after the provider had finished: a
 Git deadline had started before the provider ran. That defect is fixed and covered by
 `TestGitStageDeadlineStartsAfterProviderFinishes`.
@@ -217,5 +226,7 @@ Git deadline had started before the provider ran. That defect is fixed and cover
 - The dashboard does not yet offer issue selection, the event log, or provider readiness; these are API-only.
 - Claude Code cannot run commands during a run. Verification after the run is the only test evidence for it.
 - Review and CI state are read on request, not pushed by webhooks.
+- If the worker process is killed, a provider it started keeps running in its own process group until it finishes;
+  the next attempt may then start in the same worktree alongside it.
 - Usage is whatever the CLI reports. Codex reports tokens without cost; Claude Code reports a cost figure even under
   a subscription. No budget is enforced beyond the time limits and the three-attempt cap.

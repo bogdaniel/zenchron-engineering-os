@@ -56,6 +56,8 @@ type agentRunner struct {
 	providers map[string]*cliProvider
 	limits    runLimits
 	config    *workerConfig
+	// finishRetryDelay overrides the pause between result deliveries; zero uses the default.
+	finishRetryDelay time.Duration
 }
 
 func (runner *agentRunner) providerStatuses() []workerapi.ProviderStatus {
@@ -229,6 +231,10 @@ func (runner *agentRunner) deliver(
 	if result.Verification == workerapi.VerificationFailed {
 		return failed(result, workerapi.TerminationVerification, "Verification failed; the changes are committed on the isolated branch.")
 	}
+	if _, leaseLost := reporter.state(); leaseLost || ctx.Err() != nil {
+		// This attempt no longer owns the run; the commit stays local for the attempt that does.
+		return result
+	}
 	if command.PublishPullRequest {
 		if err := pushAgentBranch(gitCtx, worktree, project.Remote, command.Branch); err != nil {
 			result.BranchPushFailed = true
@@ -264,27 +270,64 @@ func executionFailureMessage(reason string) string {
 	}
 }
 
+const (
+	finishAttempts   = 4
+	finishRetryDelay = 3 * time.Second
+)
+
+// finish delivers the result. A dropped connection or a server error would otherwise discard hours of
+// work and repeat the whole run, so those are retried a few times. A conflict after an unanswered send
+// means the earlier send was applied.
 func (runner *agentRunner) finish(ctx context.Context, runID string, result workerapi.AgentRunResult) error {
 	body, err := json.Marshal(result)
 	if err != nil {
 		return fmt.Errorf("encode agent run result: %w", err)
 	}
 	endpoint := agentRunEndpoint(runner.baseURL, runner.workerID, runID, "")
-	request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create agent run result: %w", err)
-	}
-	request.Header.Set("Content-Type", "application/json")
 	// The control plane may create the pull request while handling the result.
 	client := *runner.client
 	client.Timeout = time.Minute
+	var lastErr error
+	for attempt := 1; attempt <= finishAttempts; attempt++ {
+		status, err := putJSON(ctx, &client, endpoint, body)
+		switch {
+		case err == nil && status == http.StatusOK:
+			return nil
+		case err == nil && status == http.StatusConflict && lastErr != nil:
+			return nil
+		case err == nil && status < http.StatusInternalServerError:
+			return fmt.Errorf("agent run result returned HTTP %d", status)
+		case err != nil:
+			lastErr = err
+		default:
+			lastErr = fmt.Errorf("agent run result returned HTTP %d", status)
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("send agent run result: %w", lastErr)
+		case <-time.After(runner.finishDelay()):
+		}
+	}
+	return fmt.Errorf("send agent run result: %w", lastErr)
+}
+
+func (runner *agentRunner) finishDelay() time.Duration {
+	if runner.finishRetryDelay > 0 {
+		return runner.finishRetryDelay
+	}
+	return finishRetryDelay
+}
+
+func putJSON(ctx context.Context, client *http.Client, endpoint string, body []byte) (int, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	request.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
-		return fmt.Errorf("send agent run result: %w", err)
+		return 0, err
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("agent run result returned HTTP %d", response.StatusCode)
-	}
-	return nil
+	return response.StatusCode, nil
 }
