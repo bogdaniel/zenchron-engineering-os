@@ -288,8 +288,9 @@ panel. The other dashboard rows in the table above were driven by a script actin
 
 ## Outstanding
 
-- On a phone-sized screen the Evidence panel sits in the Reviews page's existing short, resizable detail pane and has
-  to be scrolled or the pane enlarged.
+- On a phone-sized screen the Reviews workspace is lengthened while Evidence is open, so the panel is about 240px
+  tall at 390px wide (roughly four summary rows) instead of 120px. The checks, attempts, and event log still scroll
+  inside the panel, because the page's stacked, resizable panes are kept as they are.
 - A sandboxed agent cannot open network connections, including local test servers: a Codex run could not run Go
   tests that bind a loopback port. The worker's verification runs outside the sandbox and covers them.
 - A build that needs a dependency cache in the home directory runs inside the agent only if the operator lists that
