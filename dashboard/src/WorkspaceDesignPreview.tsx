@@ -228,7 +228,7 @@ export function WorkspaceDesignPreview() {
         <Card className="repositories" title="Repositories (6)" icon={<IconCode size={15} />} action="View All"
           onAction={() => setActiveTab('Repos')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Repos'}>
-          <div className="workspace-mock-list">{selectedRepositories.map((repo) => <div key={repo}><IconBrandGithub className="workspace-mock-git-icon" size={13} aria-hidden="true" /><b>{repo}</b><span>◌ Main</span></div>)}<small>+ 2 more repositories</small></div>
+          <div className="workspace-mock-list">{selectedRepositories.map((repo) => <div key={repo}><IconBrandGithub className="workspace-mock-git-icon" size={13} aria-hidden="true" /><b>{repo}</b><span className="workspace-mock-repo-branch">Main</span></div>)}<small>+ 2 more repositories</small></div>
         </Card>
         <Card className="linked-workflows" title={activeTab === 'Templates' ? 'Workflow Templates (4)' : 'Linked Workflows (4)'}
           icon={<IconHierarchy size={15} />} action="View All" onAction={() => setActiveTab('Templates')}

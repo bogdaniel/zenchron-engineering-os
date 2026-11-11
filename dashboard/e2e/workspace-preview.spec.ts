@@ -21,6 +21,9 @@ test('local Product Workspace mock matches the supplied overview without protect
   for (const repository of ['zenchron/nova-platform', 'zenchron/agent-sdk', 'zenchron/platform-services', 'zenchron/devtools']) {
     await expect(repositories).toContainText(repository);
   }
+  const branchBadges = repositories.locator('.workspace-mock-repo-branch');
+  await expect(branchBadges).toHaveText(['Main', 'Main', 'Main', 'Main']);
+  await expect(branchBadges.first()).toHaveCSS('border-radius', '8px');
   await expect(page.locator('.workspace-mock-product')).toHaveCount(5);
   await page.getByRole('button', { name: 'Filter products: All' }).click();
   await page.getByRole('menuitem', { name: 'Planning' }).click();

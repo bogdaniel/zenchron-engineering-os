@@ -134,6 +134,7 @@
 .workspace-mock-list > small { color: #c4bdcf; font-size: 8px; }
 .workspace-mock-git-icon { flex: 0 0 auto; color: #f2eef7; }
 .workspace-mock-list > div > span:not(.workspace-mock-run) { color: #a78bd1; }
+.workspace-mock-card.repositories .workspace-mock-list > div > .workspace-mock-repo-branch { flex: 0 0 auto; padding: 2px 6px; border: 1px solid #373247; border-radius: 8px; color: #c9c1d3; background: #29263a; font-size: 8px; line-height: 1; }
 .workspace-mock-list > div > span.workspace-mock-run { color: #30d49b; }
 .workspace-mock-list > div > span:last-child:not(.workspace-mock-run) { color: #aaa5b5; }
 .workspace-mock-list > div > em { padding: 2px 6px; border-radius: 8px; color: #c9c1d3; background: #29263a; font-size: 8px; font-style: normal; }
