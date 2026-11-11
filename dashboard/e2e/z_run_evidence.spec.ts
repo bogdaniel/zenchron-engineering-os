@@ -145,6 +145,8 @@ for (const viewport of viewports) {
     await expect(events).toHaveCount(4);
     await expect(events.nth(2)).toContainText('verificationpassed: go vet ./...');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const panel = await page.locator('.reviews-change-empty:has(.run-evidence)').boundingBox();
+    expect(panel?.height).toBeGreaterThanOrEqual(220);
     await page.screenshot({ path: `test-results/run-evidence-${viewport.name}.png`, fullPage: true });
   });
 }
