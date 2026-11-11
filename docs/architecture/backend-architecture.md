@@ -139,6 +139,5 @@ instance. None of them is claimed as working.
 - Per-repository GitHub App installations (one installation per control plane today).
 - Webhook-driven import of GitHub reviews and CI results; both are read on request.
 - Worker auto-update, Windows process isolation, and Gemini or other providers.
-- Dashboard actions for issue creation, GitHub review import, and publish retry (the API exists).
 - Folding the standalone worktree request queue into runs, and replacing the chat-completions executor in dashboard
   E2E with a fake CLI.

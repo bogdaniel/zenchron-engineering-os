@@ -89,7 +89,10 @@ that exits successfully is therefore not reported as delivered work unless verif
 - Each run has its own branch `zenchron/agent-run/<run id>` and its own worktree. The worker refuses any other branch
   name, so two runs never share files and a run cannot push to another branch.
 - The provider process gets the prompt on stdin. Codex runs with `--sandbox workspace-write` (or `read-only` when the
-  profile lacks `code.write`). Claude Code runs with file tools only and without Bash, user settings, or MCP servers.
+  profile lacks `code.write`). Claude Code runs without user settings or MCP servers and with file tools only, unless
+  the profile has both `code.write` and `tests.run`: then it also gets Bash, forced into Claude Code's sandbox, which
+  refuses commands that cannot be sandboxed, allows writes only in the worktree and the temporary directory, and
+  denies reading the home directory outside the worktree.
   Worker, GitHub, and provider API-key environment variables are removed, so a subscription sign-in is never replaced
   by API billing.
 - The profile's model is passed to the CLI; the model name `default` leaves the choice to the CLI's own configuration.
@@ -125,8 +128,10 @@ that exits successfully is therefore not reported as delivered work unless verif
 - **Reviews > Local branches > Code changes / Conversations** are unchanged: the stored diff, comments, request
   changes, and cancel.
 
-Not in the dashboard: creating an issue, importing GitHub change requests (`sync-reviews`), and retrying pull-request
-creation (`publish`); these are API calls.
+- **Agents > Queue run > Create a new issue.** Creates a GitHub issue from a title and description and selects it for
+  the run.
+- **Evidence actions.** "Import change requests from GitHub" on a run with a pull request, and "Retry pull request"
+  when the branch was pushed but GitHub did not create the pull request. Both report the outcome in place.
 
 ## API
 
@@ -170,6 +175,10 @@ OpenAI-compatible chat runtime described in [Agent run queue](agent-run-queue.md
    }
    ```
 
+   An optional `"environment": {"GOCACHE": "/tmp/zenchron-gocache"}` beside `verify` is added to the provider and
+   verification processes. Use it for tool caches a sandboxed agent must be able to write; it cannot set worker,
+   GitHub, or provider API-key variables.
+
    Commands are argument lists run in the worktree without a shell. Without this file the worker serves every checkout
    under `ZENCHRON_PROJECTS_ROOT` and reports verification as `not_configured`.
 5. **Start the worker** with `ZENCHRON_PROJECTS_ROOT` set to a checkout or a directory of checkouts.
@@ -198,6 +207,7 @@ modified or untracked files. Run branches and their commits stay.
 | `publication` is `push_failed` | The workstation could not push to `origin`. Fix Git credentials, then request changes or push the run branch manually. |
 | `publication` is `pull_request_failed` | The branch is on GitHub. Call `POST /api/v1/agent-runs/{id}/publish`. |
 | Attempt log shows `lease_expired` | The worker or control plane stopped mid-run. The run was queued again automatically. |
+| Sandboxed Claude Code cannot run the build tool | The tool's cache is in the home directory. Set its cache variable under `environment` in the worker configuration to a path in the temporary directory. |
 | Old state file rejected at startup | Run records gained fields; a binary from before this change cannot read new state. Restore a backup before rolling back. |
 
 ## Verification
@@ -231,10 +241,12 @@ Live, on 2026-11-11 against `bogdaniel/zenchron-engineering-os` with a loopback 
 | Control-plane restart mid-run | Run `541d18526f598d04d1a298b43b75bcb3`: attempt 1 `lease_expired`, attempt 2 claimed in the same worktree |
 | Cancellation | The same run and run `ebf56847dab4d59fff2ff784bd8ce483` ended `cancelled`; no provider process remained |
 | Codex run started and inspected in the dashboard, final build | Issue [#351](https://github.com/bogdaniel/zenchron-engineering-os/issues/351) chosen in the queue dialog; run `ff05244b6995c241c4c1c8c83e43e899`, commit `a2d221b`, verification `passed`, [PR #352](https://github.com/bogdaniel/zenchron-engineering-os/pull/352); evidence read from Reviews |
+| Issue created in the dashboard, sandboxed Claude Code run, build `5c0a62c` | Issue [#355](https://github.com/bogdaniel/zenchron-engineering-os/issues/355) created in the queue dialog; run `787f04a04bc9a7282a378a73af8142da`, commit `fc70b15`, [PR #356](https://github.com/bogdaniel/zenchron-engineering-os/pull/356). In attempt 1 the agent could not run Go (no writable build cache); after `environment` was added (`ab1d58d`) a change request from Reviews produced attempt 2, in which the agent ran `gofmt`, `go vet`, and `go test` itself and the worker's verification passed |
+| Restart and cancellation repeated on the final build | Run `4e2d7f7cc2bf8549cd7ac171c59cc7e2`: control plane killed mid-run, attempt 1 `lease_expired`, attempt 2 resumed; cancelled with the Reviews "Cancel run" button in 0.8 s, partial diff kept, no provider process left |
 | Claude Code run started and inspected in the dashboard, final build | Issue [#353](https://github.com/bogdaniel/zenchron-engineering-os/issues/353); run `48513125f6833b6d21a270471ef47891`, commit `b5921c7`, verification `passed`, [PR #354](https://github.com/bogdaniel/zenchron-engineering-os/pull/354) |
 
-The first four rows used the build before the independent review fixes; the two dashboard rows used commit `dc000cd`,
-which includes them. The restart and cancellation drills were not repeated on that build. A newly created issue can
+The first six rows used the build before the independent review fixes; the dashboard rows used builds that include
+them. The dashboard was driven by a Playwright script acting on the real pages, not by a person. A newly created issue can
 take a few seconds to appear in GitHub's issue list and therefore in the dialog.
 
 The first live Codex run (`b1e099df2b806f6f136f9a7e94d963a6`) failed in the worker after the provider had finished: a
@@ -255,7 +267,11 @@ Git deadline had started before the provider ran. That defect is fixed and cover
 
 - On a phone-sized screen the Evidence panel sits in the Reviews page's existing short, resizable detail pane and has
   to be scrolled or the pane enlarged.
-- Claude Code cannot run commands during a run. Verification after the run is the only test evidence for it.
+- Sandboxed Claude Code can read only the worktree inside the home directory, so a build that needs a dependency
+  cache in the home directory (for example a Go module cache) cannot run inside the agent; the worker's verification
+  still runs it.
+- Codex's `workspace-write` sandbox confines writes but not reads: in a probe it printed a file from the home
+  directory. A Codex run can therefore read anything the worker's user can read.
 - Review and CI state are read on request, not pushed by webhooks.
 - If the worker process is killed, a provider it started keeps running in its own process group until it finishes;
   the next attempt may then start in the same worktree alongside it.

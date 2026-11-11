@@ -121,8 +121,11 @@ Not covered, and blocking multi-organization or untrusted deployment:
 - Worker tokens are static until the operator replaces the hash. There is no automatic rotation or mutual TLS.
 - A worker executes repository code (tests) with the developer's own permissions. Verification is not sandboxed, and
   Codex's sandbox is the only isolation for commands the agent runs.
-- Whether a provider can read files outside the run worktree (for example in the home directory) depends on the
-  CLI's own sandbox and has not been tested here. Redaction of events is pattern-based.
+- Probed on 2026-11-11: Codex 0.167.0 in `workspace-write` mode read a file in the home directory; Claude Code
+  2.1.322 with the worker's sandbox settings was refused for the same file through both Bash and its Read tool. A
+  Codex run can therefore read whatever the worker's user can read, and redaction of events is pattern-based. Run
+  Codex only for repositories whose issue authors and reviewers are trusted, on a machine or account without
+  unrelated secrets.
 - The control plane trusts the commit and verification result the enrolled worker reports. A compromised worker can
   misreport its own work; GitHub CI on the pull request is the independent check.
 
@@ -138,5 +141,8 @@ Not covered, and blocking multi-organization or untrusted deployment:
 Live on 2026-11-11, with the real binaries on loopback and authentication plus an access file enabled: the enrolled
 worker registered its granted repository; its token was refused for another worker id and on the dashboard API; a
 user without the grant saw no projects or workers and got not-found for the project's issues; removing the worker's
-grant made its next heartbeat fail with HTTP 401 without a restart. The access policy has not been exercised on a
-deployed non-loopback control plane, and the live issue-to-pull-request runs used loopback without it.
+grant made its next heartbeat fail with HTTP 401 without a restart. The same day the control plane was started on an all-interfaces listener: it refused to start with only the shared
+worker token and with an `http` public URL, the worker refused a plain-HTTP non-loopback URL, and with the access file
+the enrolled worker, the two users, an authorized GitHub write, a foreign-origin write, and a revocation behaved as
+described above. Requests were made from the same machine; a TLS-terminating proxy, a worker on another host, and a
+real OAuth sign-in were not part of the check, and the issue-to-pull-request runs used loopback without the policy.
