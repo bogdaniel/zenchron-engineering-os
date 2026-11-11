@@ -27,6 +27,10 @@ runtime endpoint is configured on that worker. `code.write` is opt-in and applie
 worktree. `tests.run` remains saved profile metadata but is not exposed to the model. Provider identifiers are labels;
 the worker endpoint selects the protocol and credentials. Model spend remains unavailable.
 
+Setting `provider` to `codex-cli` or `claude-code` runs the profile through the installed CLI on the worker; the
+queue dialog then reports that CLI's readiness and can start the run from a GitHub issue. See
+[Issue to pull request](issue-to-pull-request.md).
+
 ## Feature diagram
 
 ```mermaid

@@ -10,6 +10,7 @@ from the control plane; nobody copies prompts or results between tools.
 ```mermaid
 sequenceDiagram
   actor User
+  participant UI as Dashboard (Agents, Reviews)
   participant API as Control plane
   participant Store as agent-runs.json + events
   participant GH as GitHub API
@@ -17,7 +18,9 @@ sequenceDiagram
   participant Tree as Run worktree
   participant CLI as Codex or Claude Code CLI
   participant Remote as GitHub Git remote
-  User->>API: POST /api/v1/agent-runs {agent_id, project_id, issue_number}
+  User->>UI: Agents > Queue run: choose project and GitHub issue
+  UI->>API: GET /api/v1/projects/{id}/issues, GET /api/v1/workers
+  UI->>API: POST /api/v1/agent-runs {agent_id, project_id, issue_number}
   API->>GH: GET issue and comments
   API->>Store: Queue run with issue snapshot, profile snapshot, run branch
   Worker->>API: PUT /api/v1/workers/{id}/heartbeat (projects, providers)
@@ -38,8 +41,10 @@ sequenceDiagram
   Worker->>API: PUT .../agent-runs/{run} (result, commits, verification, usage)
   API->>GH: Find or create pull request "Closes #issue"
   API->>Store: Persist publication and pull-request identity
-  User->>API: GET /api/v1/agent-runs, .../events, .../diff, .../pull-request
-  User->>API: POST .../request-changes or .../sync-reviews
+  User->>UI: Reviews > Local branches > Evidence, Code changes
+  UI->>API: GET /api/v1/agent-runs, .../events, .../diff, .../pull-request
+  User->>UI: Request changes
+  UI->>API: POST .../request-changes
   API->>Store: Requeue the same run and branch with the feedback
 ```
 
@@ -106,6 +111,22 @@ that exits successfully is therefore not reported as delivered work unless verif
   interrupted worktrees are never deleted automatically.
 - If the control plane restarts or a worker disappears, the attempt's lease lapses, the run is queued again, and the
   old attempt can no longer report or finish. The next attempt continues in the same worktree.
+
+## Dashboard
+
+- **Agents > Queue run.** The dialog lists the selected project's open GitHub issues; choosing one makes the prompt
+  optional and states that the pull request will close the issue. The project line and the note under it say whether
+  the project's worker reports the agent profile's CLI as installed and signed in, or that the run will stay queued.
+  If the issue list cannot be loaded the dialog says so and a prompt-only run is still possible.
+- **Reviews > Local branches > Evidence.** For the selected run: issue link, provider and version, worker, branch,
+  base and result commits, execution result, verification, publication, pull-request link, reported usage, the pull
+  request's check runs, every attempt, and the event log, which refreshes every two seconds while the run is active.
+  Loading, failure, and empty states are shown per section.
+- **Reviews > Local branches > Code changes / Conversations** are unchanged: the stored diff, comments, request
+  changes, and cancel.
+
+Not in the dashboard: creating an issue, importing GitHub change requests (`sync-reviews`), and retrying pull-request
+creation (`publish`); these are API calls.
 
 ## API
 
@@ -193,6 +214,11 @@ Automated, deterministic:
 - `cd dashboard && npm run test:e2e:agent-runtime` runs the real control plane and worker binaries end to end with
   the chat runtime.
 
+- `cd dashboard && npm run test:e2e -- e2e/z_run_evidence.spec.ts` covers the queue dialog (issue selection, the
+  request body, provider ready and not ready, issues unavailable) and the Evidence panel (summary, checks, attempts,
+  events, failure and empty states, no horizontal overflow) at 1672×941 and 390×844, plus one run through the real
+  control plane and worker.
+
 Live, on 2026-11-11 against `bogdaniel/zenchron-engineering-os` with a loopback control plane and one worker:
 
 | Step | Evidence |
@@ -203,9 +229,12 @@ Live, on 2026-11-11 against `bogdaniel/zenchron-engineering-os` with a loopback 
 | Claude Code 2.1.322 run | Run `e2b04e4418ca2eba6f1332470561df03`, commit `14ee1d8`, verification `passed`, [PR #342](https://github.com/bogdaniel/zenchron-engineering-os/pull/342) |
 | Control-plane restart mid-run | Run `541d18526f598d04d1a298b43b75bcb3`: attempt 1 `lease_expired`, attempt 2 claimed in the same worktree |
 | Cancellation | The same run and run `ebf56847dab4d59fff2ff784bd8ce483` ended `cancelled`; no provider process remained |
+| Codex run started and inspected in the dashboard, final build | Issue [#351](https://github.com/bogdaniel/zenchron-engineering-os/issues/351) chosen in the queue dialog; run `ff05244b6995c241c4c1c8c83e43e899`, commit `a2d221b`, verification `passed`, [PR #352](https://github.com/bogdaniel/zenchron-engineering-os/pull/352); evidence read from Reviews |
+| Claude Code run started and inspected in the dashboard, final build | Issue [#353](https://github.com/bogdaniel/zenchron-engineering-os/issues/353); run `48513125f6833b6d21a270471ef47891`, commit `b5921c7`, verification `passed`, [PR #354](https://github.com/bogdaniel/zenchron-engineering-os/pull/354) |
 
-The live runs used the build before the independent review fixes (issue-author check, result retry, grant checks at
-claim and requeue); those fixes are covered by the automated tests above, not by a repeated live run.
+The first four rows used the build before the independent review fixes; the two dashboard rows used commit `dc000cd`,
+which includes them. The restart and cancellation drills were not repeated on that build. A newly created issue can
+take a few seconds to appear in GitHub's issue list and therefore in the dialog.
 
 The first live Codex run (`b1e099df2b806f6f136f9a7e94d963a6`) failed in the worker after the provider had finished: a
 Git deadline had started before the provider ran. That defect is fixed and covered by
@@ -223,7 +252,8 @@ Git deadline had started before the provider ran. That defect is fixed and cover
 
 ## Outstanding
 
-- The dashboard does not yet offer issue selection, the event log, or provider readiness; these are API-only.
+- On a phone-sized screen the Evidence panel sits in the Reviews page's existing short, resizable detail pane and has
+  to be scrolled or the pane enlarged.
 - Claude Code cannot run commands during a run. Verification after the run is the only test evidence for it.
 - Review and CI state are read on request, not pushed by webhooks.
 - If the worker process is killed, a provider it started keeps running in its own process group until it finishes;
