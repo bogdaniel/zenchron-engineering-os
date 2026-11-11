@@ -22,6 +22,7 @@ func TestValidateWorkerName(t *testing.T) {
 		{label: "too long", name: strings.Repeat("a", 129), wantErr: "worker name must be between 1 and 128 bytes"},
 		{label: "newline", name: "dev\nmachine", wantErr: "worker name must not contain control characters"},
 		{label: "tab", name: "dev\tmachine", wantErr: "worker name must not contain control characters"},
+		{label: "delete", name: "dev\x7fmachine", wantErr: "worker name must not contain control characters"},
 	}
 	for _, test := range tests {
 		t.Run(test.label, func(t *testing.T) {
