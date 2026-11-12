@@ -10,10 +10,16 @@ export const reportPreviewTrend = [
   { date: 'Jan 19', merged: 38, cycle: 12, acceptance: 93, autonomy: 66 },
   { date: 'Jan 22', merged: 35, cycle: 11, acceptance: 94, autonomy: 67 },
   { date: 'Jan 25', merged: 34, cycle: 10, acceptance: 94, autonomy: 68 },
-  { date: 'Jan 30', merged: 42, cycle: 9, acceptance: 94.8, autonomy: 68.4 },
+  { date: 'Jan 28', merged: 35, cycle: 9.5, acceptance: 94.5, autonomy: 68.1 },
+  { date: 'Jan 30', merged: 42, cycle: 13.6, acceptance: 94.8, autonomy: 68.4 },
 ];
 
-export const reportPreviewLatency = [11.5, 9.1, 7.7, 6.4, 5.9, 5.3, 5.1, 4.9, 4.8, 4.7];
+export const reportPreviewLatency = [11.5, 9.1, 7.7, 6.4, 5.9, 5.3, 5.1, 4.9, 4.8, 4.75, 4.7];
+export const reportPreviewLatencyPercentiles = {
+  P50: reportPreviewLatency,
+  P75: [15.2, 12.1, 10.2, 8.5, 7.8, 7.1, 6.8, 6.6, 6.5, 6.45, 6.4],
+  P95: [23.4, 18.6, 15.8, 13.2, 12.0, 10.9, 10.5, 10.1, 9.9, 9.8, 9.7],
+} as const;
 
 export const reportPreviewCIDistribution = [
   { duration: '<2', runs: 390 }, { duration: '2–4', runs: 920 }, { duration: '4–6', runs: 1760 },
@@ -28,7 +34,7 @@ export const reportPreviewOutcomes = [
   { name: 'Abandoned', value: 0.4, color: '#8d93aa' },
 ];
 
-export const reportPreviewSpend = [5, 6, 7, 7.5, 8, 9, 10, 11.5, 12.5, 13.6];
+export const reportPreviewSpend = [5, 6, 7, 7.5, 8, 9, 10, 11.5, 12.5, 13, 13.6];
 
 export const reportPreviewProducts: ProductDeliverySummary[] = [
   { id: 'core-product', name: 'Core Product', recordType: 'Product', repositories: 3, objectives: 8, runs: 421, deliveryVelocity: 18.4, cycleTime: 11.9, ciDuration: 7.6, acceptanceRate: 96.2, autonomousCompletion: 71.8 },
@@ -45,6 +51,22 @@ export const reportPreviewWorkspaces = [
   { name: 'Data', workItems: 2332, deliveryVelocity: 5.2, cycleTime: 14.9, acceptanceRate: 94.3, autonomousCompletion: 66.8 },
   { name: 'Total / Avg.', workItems: 17842, deliveryVelocity: 42, cycleTime: 13.6, acceptanceRate: 94.8, autonomousCompletion: 68.4 },
 ];
+
+export const reportPreviewWorkflows = ['PR Review & Release Orchestration', 'Nightly Regression Suite', 'Production Deployment'];
+export const reportPreviewRepositories = [
+  'zenchron/engineering-os', 'zenchron/platform-services', 'zenchron/agent-sdk', 'zenchron/devtools',
+];
+export const reportPreviewRepositoryProducts: Record<string, string[]> = {
+  'zenchron/engineering-os': ['core-product'],
+  'zenchron/platform-services': ['core-product', 'integrations'],
+  'zenchron/agent-sdk': ['ai-platform'],
+  'zenchron/devtools': ['developer-tools'],
+};
+export const reportPreviewWorkflowProducts: Record<string, string[]> = {
+  'PR Review & Release Orchestration': ['core-product', 'ai-platform', 'developer-tools'],
+  'Nightly Regression Suite': ['core-product', 'ai-platform'],
+  'Production Deployment': ['core-product', 'integrations'],
+};
 
 export const reportPreviewInsights = [
   { group: 'delivery', title: 'Overall engineering performance is up', detail: 'Delivery velocity increased 27% to 42 PRs/week while cycle time decreased 34% to 13.6h.' },

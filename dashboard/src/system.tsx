@@ -1,8 +1,9 @@
-import { Badge, Button, Card } from '@mantine/core';
+import { Badge, Button, Card, Modal } from '@mantine/core';
+import { useState } from 'react';
 import { PageHeading } from './PageHeading';
 import { PanelHeading } from './PanelHeading';
 import { PanelCard } from './PanelCard';
-import { SystemIntegrationsPreview } from './SystemIntegrationsPreview';
+import { SystemIntegrationsPreview, systemPreviewAuditEvents } from './SystemIntegrationsPreview';
 import {
   IconActivity,
   IconBell,
@@ -47,6 +48,7 @@ export function SystemPage({
   const cliDetail = readyCLIs.length
     ? ` Coding CLIs ready: ${readyCLIs.map(([id, count]) => `${id} on ${count}`).join(', ')}.`
     : onlineWorkerCount ? ' No online worker reports a signed-in Codex or Claude Code CLI.' : '';
+  const [auditOpen, setAuditOpen] = useState(false);
   const modelEndpointDetail = modelRuntimeWorkerCount
     ? `OpenAI-compatible endpoint configured on ${modelRuntimeWorkerCount} online worker${modelRuntimeWorkerCount === 1 ? '' : 's'}.` +
       (modelRuntimeUnknownWorkerCount
@@ -117,8 +119,13 @@ export function SystemPage({
             : 'Review connected runtime services and the current control-plane boundary.'} />
         </div>
         <div className="system-page-actions">
-          <Button className="system-quiet-button" variant="default" disabled><IconHistory size={14} /> Audit log</Button>
-          <Button className="system-quiet-button" variant="default" disabled><IconDatabase size={14} /> Import / Export</Button>
+          <Button className="system-quiet-button" variant="default" disabled={!designPreview} onClick={() => setAuditOpen(true)}><IconHistory size={14} /> Audit log</Button>
+          <Button className="system-quiet-button" variant="default" disabled={!designPreview} onClick={() => {
+            const blob = new Blob([JSON.stringify({ preview: true, auditEvents: systemPreviewAuditEvents }, null, 2)], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob); link.download = 'zenchron-preview-audit.json'; link.click();
+            window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+          }}><IconDatabase size={14} /> Import / Export</Button>
           <Badge className="system-health" variant="light">
             <i />{designPreview ? 'All Systems Operational' : apiOnline ? 'API online' : 'API offline'}
           </Badge>
@@ -132,12 +139,17 @@ export function SystemPage({
         <a className={section === 'settings' ? 'active' : ''} href="#settings">
           <IconShieldCheck size={16} /> Settings
         </a>
-        <button type="button" disabled aria-label="Activity and audit history unavailable">
+        <button type="button" disabled={!designPreview} onClick={() => setAuditOpen(true)} aria-label="Activity & Audit">
           <IconHistory size={16} /> Activity &amp; audit
         </button>
       </nav>
 
-      {designPreview ? <SystemIntegrationsPreview section={section} /> : section === 'integrations' ? (
+      {designPreview && <Modal opened={auditOpen} onClose={() => setAuditOpen(false)} title="Activity & audit · preview" centered size="lg">
+        <div className="system-preview-table-scroll"><table className="system-preview-audit-table"><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead>
+          <tbody>{systemPreviewAuditEvents.map(([time, actor, action, detail]) => <tr key={time}><td>{time}</td><td>{actor}</td><td>{action}</td><td>{detail}</td></tr>)}</tbody></table></div>
+      </Modal>}
+
+      {designPreview ? <SystemIntegrationsPreview section={section} onShowAudit={() => setAuditOpen(true)} /> : section === 'integrations' ? (
         <div className="system-workspace">
           <nav className="system-config-nav" aria-label="Configuration categories">
             <b>Configuration</b>

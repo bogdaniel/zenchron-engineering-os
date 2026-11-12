@@ -18,6 +18,8 @@
     grid-row: 1 / 3;
     min-height: 0;
   }
+  .agents-design-preview .agents-list { max-height: 553px; overflow-y: auto; }
+  .agents-design-preview .agent-row { flex-shrink: 0; padding-block: 10px; }
   .agents-detail-panel {
     grid-column: 2;
     grid-row: 1;
@@ -28,4 +30,9 @@
     grid-row: 2;
     min-height: 0;
   }
+}
+
+@media (max-width: 700px) {
+  .agents-list-panel { min-height: 0; overflow: visible; }
+  .agents-design-preview .agents-list-panel { max-height: none; overflow: visible; }
 }

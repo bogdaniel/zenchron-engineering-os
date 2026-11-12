@@ -137,8 +137,8 @@
 .overview-layout .workflow-node.planner,
 .overview-layout .workflow-node.test-generator,
 .overview-layout .workflow-node.code-reviewer { --workflow-accent: #43dda6; --workflow-border: #318b6d; --workflow-tint: #133a2d; --workflow-icon-bg: #1e5842; --workflow-glow: #43dda066; }
-.sample-data .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 12px; right: 8px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
-.sample-data .workflow-overview-canvas .react-flow__attribution { display: none; }
+.overview-layout.sample-data .workflow-overview-canvas .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 12px; right: 8px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
+.overview-layout.sample-data .overview-design-preview .workflow-overview-canvas .react-flow__attribution { display: none; }
 .overview-layout.sample-data .overview-design-preview .workflow-panel {
   background-color: #141321;
   background-image: radial-gradient(circle, #302b42 1px, transparent 1px), radial-gradient(ellipse 130% 180% at 15% 0%, #efe8ff0a 0, #efe8ff04 50%, transparent 83%), linear-gradient(140deg, #211e30, #11121b 76%);
@@ -171,7 +171,8 @@
 .workflow-overview-status { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; color: #a49cb5; font-size: 9px; }
 .workflow-overview-message { display: grid; min-height: 144px; place-items: center; color: #a49cb5; font-size: 11px; }
 .text-link { color: #c7a1ff; font-size: 10px; white-space: nowrap; }
-.activity-panel .text-link { display: flex; align-items: center; gap: 2px; }
+.activity-panel .text-link { display: flex; align-items: center; gap: 2px; padding: 0; border: 0; color: #c7a1ff; background: transparent; font: inherit; font-size: 10px; font-weight: 500; cursor: pointer; }
+.activity-dialog-list { max-height: 65vh; overflow-y: auto; }
 .activity-list { display: grid; gap: 1px; margin-top: 8px; }
 .activity-list > div {
   display: flex;
@@ -268,7 +269,6 @@
 }
 .overview-layout .metric-card .metric-top > svg { filter: drop-shadow(0 0 5px currentColor); }
 .app-shell.overview-layout .main-content .shared-metric-card .metric-top { color: #f4efff; font-size: 15px; font-weight: 600; }
-.overview-layout .nav-link.active { min-height: 46px; }
 .overview-layout .metric-value-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .overview-layout .metric-card:not(:last-child):not(.green) .metric-value-row { justify-content: flex-start; }
 .overview-layout .metric-value-row > .mock-trend { flex: 1; justify-content: space-between; margin-left: 12px; }
@@ -296,7 +296,7 @@
 .overview-layout .workflow-panel .section-icon svg { width: 28px; height: 28px; }
 .overview-layout .activity-panel .panel-heading { transform: translateY(-6px); }
 .overview-layout.sample-data .activity-panel .activity-list { margin-left: 9px; }
-.overview-layout.sample-data .activity-panel .activity-list > div { gap: 8px; font-weight: 500; }
+.overview-layout.sample-data .activity-panel .activity-list > div { gap: 8px; padding-top: 2px; padding-bottom: 2px; font-weight: 500; }
 .overview-layout.sample-data .activity-panel .activity-list > div > svg { width: 24px; height: 24px; margin-right: 12px; padding: 3px; border-radius: 50%; }
 .overview-layout.sample-data .activity-panel .activity-list span { flex: 1; font-size: 13px; letter-spacing: -.15px; }
 .overview-layout.sample-data .activity-panel .activity-list time { font-size: 10px; }
@@ -362,7 +362,8 @@
 .overview-layout .mock-health-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; font-size: 11px; }
 .overview-layout .mock-health-tag .mantine-Badge-label, .overview-layout .muted-tag .mantine-Badge-label { display: flex; align-items: center; gap: 5px; }
 .health-status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: currentColor; }
-.mock-analytics-filter { display: flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid #3a3453; border-radius: 9px; color: #d9d3e5; background: #171625; font-size: 12px; font-weight: 500; text-transform: none; white-space: nowrap; }
+.mock-analytics-filter { display: flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid #3a3453; border-radius: 9px; color: #d9d3e5; background: #171625; font-size: 12px; font-weight: 500; text-decoration: none; text-transform: none; white-space: nowrap; }
+.mock-analytics-filter:hover { border-color: #6b4b93; color: #eee4fc; }
 .preview-running-badge { border: 1px solid #276a50; color: #5be0ad; background: #12392e; font-size: 10px; text-transform: none; }
 .preview-review-panel h4 { margin: 13px 0 5px; overflow: hidden; color: #f1edf7; font-size: 15px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .preview-review-meta { display: flex; align-items: center; gap: 5px; margin-top: 6px; }
@@ -420,7 +421,8 @@
   .review-panel, .timeline-panel, .analytics-panel { grid-column: span 6; }
 }
 @media (max-width: 760px) {
-  .overview-shell .topbar { transform: translateY(-13px); }
+  .overview-shell .topbar { transform: none; }
+  .overview-shell .topbar .greeting { transform: translateY(-13px); }
   .overview-shell .greeting p { max-width: none; }
   .overview-shell .metric-grid { margin-top: 16px; }
   .overview-shell .activity-panel { min-height: 246px; }

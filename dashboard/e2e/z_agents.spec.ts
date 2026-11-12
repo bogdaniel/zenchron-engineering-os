@@ -1,10 +1,14 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-test('Agents populated desktop layout matches the reference panel geometry', async ({ page }) => {
+async function authenticateLocalSession(page: Page) {
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify({ authenticated: true, local: true, login: 'E2E' }),
   }));
+}
+
+test('Agents populated desktop layout matches the reference panel geometry', async ({ page }) => {
+  await authenticateLocalSession(page);
   await page.setViewportSize({ width: 1672, height: 941 });
   const profileID = 'ab'.repeat(16);
   const projectID = 'ef'.repeat(16);
@@ -63,6 +67,8 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   await expect(profileRow).toContainText('1 completed · 100% success');
   await expect(profileRow).toContainText('code.search');
   await expect(profileRow).toContainText('+1');
+  await expect(profileRow.locator('.agent-row-body small').first()).toHaveCSS('font-size', '10px');
+  await expect(profileRow.locator('.agent-tool-badge').first()).toHaveCSS('font-size', '9px');
   const performance = page.locator('.agents-profile-metrics');
   await expect(performance).toContainText('Runs');
   await expect(performance).toContainText('Avg latency');
@@ -120,6 +126,7 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
 });
 
 test('Agents layout fits tablet and phone widths without panel overlap', async ({ page }) => {
+  await authenticateLocalSession(page);
   for (const [width, height, expectedColumns] of [[1024, 768, 2], [390, 844, 1]]) {
     await page.setViewportSize({ width, height });
     await page.goto('/#agents');
@@ -147,7 +154,200 @@ test('Agents layout fits tablet and phone widths without panel overlap', async (
   }
 });
 
+test('Agents local design preview labels illustrative metadata without API reads', async ({ page }) => {
+  const requests: string[] = [];
+  for (const endpoint of ['agents', 'agent-runs']) {
+    await page.route(`**/api/v1/${endpoint}`, (route) => {
+      requests.push(endpoint);
+      return route.fulfill({ status: 401, body: 'authentication required' });
+    });
+  }
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 401, body: 'authentication required',
+  }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  const previewURL = new URL('/#agents', test.info().project.use.baseURL as string);
+  previewURL.hostname = '127.0.0.1';
+  await page.goto(previewURL.toString());
+  await expect(page.locator('.agents-design-preview')).toBeVisible();
+  await expect(page.locator('.notification-button')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(page.locator('.agents-mobile-preview')).toBeHidden();
+  await expect(page.locator('.agents-mobile-return')).toBeHidden();
+  await expect(page.locator('.agents-preview-notice')).toHaveText('ILLUSTRATIVE DATA');
+  await expect(page.getByRole('heading', { name: 'Agent Profiles (6)' })).toBeVisible();
+  await expect(page.locator('.agents-list-panel .agents-count')).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Search agents' })).toHaveCSS('width', '160px');
+  expect(await page.locator('.agent-row-body small').evaluateAll((details) =>
+    details.every((detail) => detail.scrollWidth <= detail.clientWidth)),
+  'desktop preview profile metadata is not ellipsized').toBe(true);
+  const visibleProfileRows = await page.locator('.agents-list').evaluate((list) => {
+    const rows = [...list.querySelectorAll('.agent-row')].map((row) => row.getBoundingClientRect());
+    const bottom = list.getBoundingClientRect().bottom;
+    return rows.slice(0, 5).every((row) => row.bottom <= bottom) && rows[5]!.top >= bottom
+      && list.scrollHeight > list.clientHeight;
+  });
+  expect(visibleProfileRows, 'the desktop mock shows five complete profiles and scrolls to the sixth').toBe(true);
+  const sixthProfile = page.locator('.agent-row').nth(5);
+  await sixthProfile.scrollIntoViewIfNeeded();
+  await expect(sixthProfile).toBeInViewport();
+  const summary = page.locator('.agents-profile-summary');
+  await expect(summary).toContainText('Model');
+  await expect(summary).toContainText('Provider');
+  await expect(summary).toContainText('Status');
+  await expect(summary).toContainText('Owner');
+  await expect(summary).toContainText('Created');
+  await expect(summary).toContainText('Last Updated');
+  const modelProvider = page.getByRole('combobox', { name: 'Model / Provider' });
+  await modelProvider.click();
+  await page.getByRole('option', { name: 'Claude 3.5 Haiku · Anthropic' }).first().click();
+  await expect(modelProvider).toHaveValue('Claude 3.5 Haiku · Anthropic');
+  const profileVersion = page.getByRole('combobox', { name: 'Version' });
+  await profileVersion.click();
+  await page.getByRole('option', { name: 'v2.4.0' }).click();
+  await expect(profileVersion).toHaveValue('v2.4.0');
+  const profileOwner = page.getByRole('combobox', { name: 'Profile owner' });
+  await profileOwner.click();
+  await page.getByRole('option', { name: 'AI Platform' }).click();
+  await expect(profileOwner).toHaveValue('AI Platform');
+  const profileStatus = page.getByRole('combobox', { name: 'Profile status' });
+  await profileStatus.click();
+  await page.getByRole('option', { name: 'Disabled' }).click();
+  await expect(page.locator('.agents-detail-heading .agent-status')).toHaveText('disabled');
+  await profileStatus.click();
+  await page.getByRole('option', { name: 'Active', exact: true }).click();
+  const previewPerformance = page.locator('.agents-profile-metrics');
+  await expect(previewPerformance).toContainText('+21%');
+  await expect(previewPerformance).toContainText('+1.6pp');
+  await expect(previewPerformance).toContainText('-18%');
+  await expect(previewPerformance).toContainText('-14%');
+  await expect(page.getByRole('img', { name: 'Illustrative performance trend' })).toBeVisible();
+  const trendChart = page.locator('.agents-preview-trend');
+  await expect(trendChart.locator('.recharts-dot').first()).toBeVisible();
+  const trendAxisLabels = await trendChart.locator('svg text').allTextContents();
+  expect(trendAxisLabels).toContain('90%');
+  expect(trendAxisLabels).toContain('$0.4');
+  expect(await trendChart.locator('svg .recharts-line-curve').count()).toBe(3);
+  const history = page.locator('.agents-preview-run-table');
+  await expect(history.locator('thead th')).toHaveText([
+    'Run ID', 'Trigger', 'Input', 'Status', 'Duration', 'Cost', 'Time',
+  ]);
+  await expect(history.locator('tbody tr')).toHaveCount(3);
+  await expect(history).toContainText('feat/auth-improvements');
+  const finalPreviewRun = await history.locator('tbody tr').last().boundingBox();
+  const runHistoryPanel = await history.locator(
+    'xpath=ancestor::div[contains(@class,"agents-overview-card")]').boundingBox();
+  expect(finalPreviewRun && runHistoryPanel).toBeTruthy();
+  expect(finalPreviewRun!.y + finalPreviewRun!.height).toBeLessThanOrEqual(runHistoryPanel!.y + runHistoryPanel!.height);
+  expect(requests).toEqual([]);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.agents-mobile-preview-label')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Agents & Reviews' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
+
+test('Agents local preview filters and sorts profiles without API writes', async ({ page }) => {
+  const requests: string[] = [];
+  for (const endpoint of ['agents', 'agent-runs']) await page.route(`**/api/v1/${endpoint}`, async (route) => {
+    requests.push(route.request().method());
+    await route.fulfill({ status: 401, body: 'authentication required' });
+  });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  const previewURL = new URL('/#agents', test.info().project.use.baseURL as string);
+  previewURL.hostname = '127.0.0.1';
+  await page.goto(previewURL.toString());
+
+  const rows = page.locator('.agent-row');
+  await expect(rows).toHaveCount(6);
+  await page.getByRole('button', { name: 'Filter agents' }).click();
+  await page.getByRole('menuitem', { name: 'Disabled only' }).click();
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('Research Analyst');
+  await page.getByRole('button', { name: 'Filter agents' }).click();
+  await page.getByRole('menuitem', { name: 'All profiles' }).click();
+  await page.getByRole('button', { name: 'Sort agents' }).click();
+  await page.getByRole('menuitem', { name: 'Name Z–A' }).click();
+  await expect(rows.first()).toContainText('Test Generator');
+  await page.getByRole('textbox', { name: 'Search agents' }).fill('no matching agent');
+  await expect(rows).toHaveCount(0);
+  await expect(page.locator('.agents-detail-empty')).toBeVisible();
+  await page.getByRole('textbox', { name: 'Search agents' }).fill('planner');
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('Planner');
+  expect(requests).toEqual([]);
+});
+
+test('Agents preview actions update only the local fixture', async ({ page }) => {
+  const requests: string[] = [];
+  for (const endpoint of ['agents', 'agent-runs']) await page.route(`**/api/v1/${endpoint}`, (route) => {
+    requests.push(endpoint); return route.fulfill({ status: 401, body: 'authentication required' });
+  });
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  const previewURL = new URL('/#agents', test.info().project.use.baseURL as string);
+  previewURL.hostname = '127.0.0.1';
+  await page.goto(previewURL.toString());
+
+  await expect(page.locator('.agent-row')).toHaveCount(6);
+  await expect(page.getByRole('button', { name: 'Code Reviewer options' })).toBeVisible();
+  await page.getByRole('button', { name: 'Test Generator options' }).click();
+  await page.getByRole('menuitem', { name: 'Open profile' }).click();
+  await expect(page.getByRole('heading', { name: 'Test Generator' })).toBeVisible();
+  await page.getByRole('button', { name: 'Create Agent' }).click();
+  const create = page.getByRole('dialog', { name: 'Create agent profile' });
+  await create.getByLabel('Profile name').fill('Preview Writer');
+  await create.getByLabel('Provider identifier').fill('local-preview');
+  await create.getByLabel('Model identifier').fill('writer-v1');
+  await create.getByRole('button', { name: 'Create profile' }).click();
+  await expect(page.locator('.agent-row')).toHaveCount(7);
+  await expect(page.getByRole('heading', { name: 'Preview Writer' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Agent Library' }).click();
+  await page.getByRole('dialog', { name: 'Agent Library' }).getByRole('button', { name: /Code Reviewer/ }).click();
+  await page.getByRole('button', { name: 'Run Agent' }).click();
+  await expect(page.getByRole('tab', { name: 'Run History' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.agents-runs-list')).toContainText('SIMULATED · local preview run');
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await page.getByRole('button', { name: 'Disable', exact: true }).click();
+  await expect(page.locator('.agents-detail-heading .agent-status')).toHaveText('disabled');
+  await page.getByRole('button', { name: 'Enable', exact: true }).click();
+  await page.getByRole('button', { name: 'Duplicate Profile' }).click();
+  await expect(page.locator('.agent-row')).toHaveCount(8);
+  await expect(page.getByRole('heading', { name: 'Code Reviewer Copy' })).toBeVisible();
+  await page.getByRole('button', { name: 'Compare Versions' }).click();
+  await expect(page.getByRole('tabpanel')).toContainText('Profile versions');
+  await page.locator('.agent-row').first().click();
+  await page.getByRole('button', { name: 'More agent actions' }).click();
+  await page.getByRole('menuitem', { name: 'Open run history' }).click();
+  await expect(page.getByRole('tabpanel')).toContainText('SIMULATED · local preview run');
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Import / Export' }).click();
+  await page.getByRole('menuitem', { name: 'Export profiles as JSON' }).click();
+  expect((await downloadPromise).suggestedFilename()).toBe('agents-preview.json');
+  const importedProfile = [{ id: 'imported-preview', name: 'Imported Reviewer', description: '', provider: 'preview',
+    model: 'review-v1', status: 'active', system_prompt: '', goal_prompt: '', tools: [], version: 1,
+    updated_at: new Date().toISOString() }];
+  await page.getByRole('button', { name: 'Import / Export' }).click();
+  await page.getByRole('menuitem', { name: 'Import profiles from JSON' }).click();
+  await page.getByLabel('Import agent profiles JSON').evaluate((element, data) => {
+    const input = element as HTMLInputElement;
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([JSON.stringify(data)], 'agents.json', { type: 'application/json' }));
+    input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, importedProfile);
+  await expect(page.locator('.agent-row')).toHaveCount(1);
+  await expect(page.locator('.agent-row').first()).toContainText('Imported Reviewer');
+  await page.getByRole('button', { name: 'Imported Reviewer options' }).click();
+  await page.getByRole('menuitem', { name: 'Duplicate profile' }).click();
+  await expect(page.locator('.agent-row')).toHaveCount(2);
+  await expect(page.getByRole('heading', { name: 'Imported Reviewer Copy' })).toBeVisible();
+  expect(requests).toEqual([]);
+});
+
 test('Agents empty state uses the primary create action', async ({ page }) => {
+  await authenticateLocalSession(page);
   await page.route('**/api/v1/agents', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: '[]',
   }));
@@ -166,10 +366,13 @@ test('Agents empty state uses the primary create action', async ({ page }) => {
 });
 
 test('Agents queue dialog explains when a worker has no model runtime', async ({ page }) => {
+  await authenticateLocalSession(page);
   await page.route('**/api/v1/workers', async (route) => {
-    const response = await route.fetch({ url: route.request().url().replace('zenchron.test:4173', '127.0.0.1:4173') });
+    const url = new URL(route.request().url());
+    url.hostname = '127.0.0.1';
+    const response = await route.fetch({ url: url.toString() });
     const workers = await response.json() as { agent_runtime_enabled?: boolean }[];
-    await route.fulfill({ response, body: JSON.stringify(workers.map((worker) => ({
+    await route.fulfill({ status: response.status(), headers: response.headers(), body: JSON.stringify(workers.map((worker) => ({
       ...worker, agent_runtime_enabled: false,
     }))) });
   });
@@ -179,9 +382,9 @@ test('Agents queue dialog explains when a worker has no model runtime', async ({
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'Runtime status check', provider: 'custom', model: 'review-v1', tools: [] }),
     });
-    return response.ok;
+    return { ok: response.ok, status: response.status, body: await response.text() };
   });
-  expect(created).toBe(true);
+  expect(created).toEqual({ ok: true, status: 201, body: expect.any(String) });
   await page.reload();
   await page.getByRole('button', { name: 'Queue run' }).click();
   const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
@@ -190,6 +393,7 @@ test('Agents queue dialog explains when a worker has no model runtime', async ({
 });
 
 test('agent profiles can be saved and disabled from the dashboard', async ({ page }) => {
+  await authenticateLocalSession(page);
   const name = `QA Reviewer ${Date.now()}`;
   await page.goto('/');
   await page.getByRole('link', { name: 'Agents' }).click();
@@ -246,6 +450,7 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
 });
 
 test('Agents dashboard completes a run and resumes requested review changes on the same branch', async ({ page }) => {
+  await authenticateLocalSession(page);
   await page.goto('/');
   await page.getByRole('link', { name: 'Agents' }).click();
   const profile = await page.evaluate(async () => {
@@ -326,6 +531,7 @@ test('Agents dashboard completes a run and resumes requested review changes on t
 });
 
 test('Reviews can cancel an active worker run and retain its partial branch diff', async ({ page }) => {
+  await authenticateLocalSession(page);
   await page.goto('/#agents');
   const run = await page.evaluate(async () => {
     const profileResponse = await fetch('/api/v1/agents', {

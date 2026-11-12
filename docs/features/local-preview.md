@@ -38,6 +38,10 @@ sequenceDiagram
         UI-->>Dev: Keep the shell visible and hide API-backed page data
         Dev->>UI: Retry session check
     end
+    Dev->>UI: Search pages with the header search or Ctrl/Cmd+K
+    UI-->>Dev: Navigate to a matching dashboard route
+    Dev->>UI: Open notifications or workspace menu
+    UI-->>Dev: Show local empty state or open Product Workspace
     Dev->>UI: Review live dashboard changes
     Dev->>Start: Ctrl+C
     Start->>API: Stop child services
@@ -51,6 +55,8 @@ configured, an unauthenticated localhost session shows sample fixtures in the sa
 at `/#login`. There is no separate dashboard URL or query-string mode. Exercise real GitHub sign-in by setting the OAuth, session,
 allowlist, and public-origin variables from
 [GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md) before starting the preview.
+The dashboard's local server forwards both `/api/*` and `/healthz` to the configured control plane so live routes show
+the real API health state.
 The launcher reads optional root `.env.local` before starting services; `.env.*` is ignored by Git. Set its permissions to
 `600` and keep client secrets there rather than in tracked files. For loopback login, set `ZENCHRON_PUBLIC_URL` to
 `http://127.0.0.1:4173`; the callback is `http://127.0.0.1:4173/auth/github/callback`.
@@ -72,7 +78,9 @@ Run the preview from the repository root. Install frontend dependencies once wit
 ## Focused verification
 
 Run `sh -n dev.sh dashboard/dev.sh` and `node scripts/test_dev_preview.mjs`; `cd dashboard && npm run test:e2e --
-e2e/auth.spec.ts` verifies the GitHub sign-in gate and shell fallback when session verification fails. Then start the
+e2e/auth.spec.ts` verifies the GitHub sign-in gate and shell fallback when session verification fails. The
+`e2e/shell.spec.ts -g 'header search and menus'` check verifies local route search, the notification empty state, and the
+workspace shortcut. Then start the
 preview with isolated local ports and check `/healthz`,
 `/api/v1/workers/healthz`, and the dashboard URL before stopping it with Ctrl+C. Starting a second preview against an
 already responding API URL must exit before printing the ready message.

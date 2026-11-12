@@ -37,12 +37,14 @@
   font-size: var(--metric-label-size);
   line-height: 1;
 }
+.reports-scope-bar .mantine-Input-section[data-position='left'] { color: #a49caf; }
 .reports-scope-actions {
   display: flex;
   align-items: center;
   gap: 7px;
   padding-bottom: 1px;
 }
+.reports-preview-scope-status { margin: -6px 2px 10px; color: #a9a2b8; font-size: 10px; }
 .reports-apply-filters.mantine-Button-root {
   min-height: 31px;
   padding-inline: 10px;
@@ -108,7 +110,7 @@
 .reports-panel-heading > div > svg { color: #bd8aff; }
 .reports-panel-heading p { line-height: 1.2; }
 .reports-percentiles { display: flex; flex: 0 0 auto; gap: 4px; }
-.reports-percentiles span {
+.reports-percentiles span, .reports-percentiles button {
   padding: 2px 5px;
   border: 1px solid #38324c;
   border-radius: 5px;
@@ -117,10 +119,14 @@
   font-size: 9px;
   line-height: 1.2;
 }
+.reports-percentiles button { cursor: pointer; }
+.reports-percentiles button[aria-pressed="true"] { color: #fff; border-color: #9d62ed; background: #56308a; }
+.reports-percentiles button:focus-visible { outline: 2px solid #c491ff; outline-offset: 2px; }
 .acceptance-panel .reports-panel-heading h3 { font-size: 14px; letter-spacing: -.5px; white-space: nowrap; }
 .reports-insight-filter.mantine-Select-root { width: 122px; flex: 0 0 auto; }
 .reports-insight-filter .mantine-Select-input { min-height: 24px; height: 24px; border-color: #38324c; background: #1b1928; font-size: 8px; }
 .report-summary-table-wrap { overflow-x: auto; }
+.report-summary-table-wrap:focus-visible { outline: 2px solid #bd8aff; outline-offset: 2px; border-radius: 4px; }
 .report-summary-table {
   width: 100%;
   table-layout: fixed;
@@ -338,6 +344,8 @@
 }
 @media (max-width: 720px) {
   .reports-page { padding-top: 14px; }
+  .report-summary-table { min-width: 520px; }
+  .report-summary-table th, .report-summary-table td { white-space: nowrap; }
   .reports-scope-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reports-scope-label, .reports-scope-actions { grid-column: 1 / -1; }
   .reports-scope-label { padding-bottom: 0; }

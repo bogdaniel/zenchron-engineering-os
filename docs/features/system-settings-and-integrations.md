@@ -1,19 +1,27 @@
 # Settings and integrations
 
 The dashboard exposes separate Integrations and Settings routes over one system-status view. Integrations shows the
-live API, worker, local-checkout, Git provider, and worker-side OpenAI-compatible endpoint state. The mockup's profile,
-policy, permission, budget, notification, and audit panels are read-only status summaries; unavailable capabilities are
-labelled instead of shown as configured. GitHub.com repositories support open issue and pull-request sync, plus
+live API, worker, local-checkout, Git provider, and worker-side OpenAI-compatible endpoint state. The live route presents
+profile, policy, permission, budget, notification, and audit capabilities as unavailable or read-only where no backing
+service exists. GitHub.com repositories support open issue and pull-request sync, plus
 top-level pull-request comments and request-changes when a control-plane token has Pull requests write permission.
 Workers that have not sent the endpoint-status field are shown as needing an update; their configuration is not guessed.
-An unauthenticated localhost session at `/#integrations` uses the same dashboard shell with a static, read-only sample of the supplied
-Integrations mock; it does not query protected provider settings or save changes.
+An unauthenticated localhost session at `/#integrations` uses the same dashboard shell with an illustrative Integrations mock.
+The dashboard development server forwards `/api/` requests, including mutation methods, to the configured control plane
+before static-file handling.
+Its category filters, connection switches, secret reveal labels, provider menus, and Add Integration flow update local preview
+state only; they do not query protected provider settings or save changes. Audit log opens the fixture events and Import / Export
+downloads those sample events as JSON. The audit range is a fixed sample label, not a filter. Profile edits, policy and secret list changes, notification rules, Test Connections,
+Save, and Discard also operate only on local preview state. Preview-added providers and secrets use placeholder data.
+Discard restores the last preview save; a reload resets the page to its original fixtures.
+Provider descriptions stay fully readable on the desktop mock, including the Linear / Jira work-tracking label.
+The Integrations Overview subtitle and parenthesized category counts match the supplied mock.
 
 ## Feature diagram
 
 ```mermaid
 flowchart LR
-    Preview[Local unauthenticated Integrations state<br/>static sample only] -->|Read only| Mock[Integrations mock layout]
+    Preview[Local unauthenticated Integrations state<br/>illustrative sample] -->|Local preview actions only| Mock[Integrations mock layout]
     Browser[Dashboard route] --> APIHealth[GET /healthz]
     Browser --> Workers[GET /api/v1/workers]
     Browser --> Projects[GET /api/v1/projects]
@@ -43,7 +51,12 @@ flowchart LR
   settings the service cannot persist or enforce.
 - The Integrations overview uses the mockup's configuration rail and settings-panel layout and the shared dashboard
   panel typography. Its rail uses icon-led category labels; connection status stays in the main cards instead of
-  repeating in the navigation. Panels remain read-only where no backing API exists.
+  repeating in the navigation. The configuration rail filters provider groups or jumps to the related settings card.
+  At tablet widths, the page title and status/actions stack so the system-health badge and
+  provider status controls stay readable. The local preview supports filtering providers, toggling connection and
+  notification/controller switches, editing the sample profile and controller limits, policies and secrets, adding notification rules, revealing
+  placeholder secret labels, adding a preview-only provider, and opening/exporting fixture audit events. Role and budget data
+  remain read-only, and local edits do not persist without a backing API.
 - GitHub App credentials or the `ZENCHRON_GITHUB_TOKEN` fallback are configured in the control-plane environment,
   never in the worker or dashboard. Public repository reads work without credentials; private reads and PR review
   submissions require repository permissions.
@@ -58,4 +71,10 @@ cd dashboard && npm run test:e2e -- e2e/system.spec.ts --grep "settings and inte
 ```
 
 `cd dashboard && npm run test:e2e -- e2e/integrations-preview.spec.ts` verifies the local mock uses frontend data
-without protected reads or writes.
+without protected reads or writes, checks category filtering, local connection updates, preview key labels, adding a
+placeholder integration, editing settings, local policy/secret/rule actions, Save/Discard, connection testing, and
+viewing/exporting audit fixture data, then checks provider descriptions and links at desktop, provider link and badge
+visibility at 682 px, title-case Connected badge text and label styling, and status-dot alignment without badge/toggle overlap.
+The desktop check also keeps the lower settings row within 152 px and aligns Notification Rules with the supplied mock.
+Set `ZENCHRON_E2E_DASHBOARD_PORT` to a free port to force Playwright to start a fresh dashboard instead of reusing
+a running preview.

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { BarChart, CompositeChart, DonutChart, LineChart, Sparkline } from '@mantine/charts';
+import { AreaChart, BarChart, CompositeChart, DonutChart, LineChart, Sparkline } from '@mantine/charts';
 import { Button, Select } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import {
-  IconActivity, IconChartBar, IconCircleCheck, IconCpu, IconFilter, IconFolders,
-  IconInfinity, IconMessageCircle, IconRobot, IconRocket, IconRoute, IconSparkles, IconStack, IconStopwatch,
+  IconActivity, IconCalendar, IconChartBar, IconCircleCheck, IconCode, IconCpu, IconFilter, IconFolders,
+  IconChevronDown, IconInfinity, IconMessageCircle, IconRobot, IconRocket, IconRoute, IconSparkles, IconStack, IconStopwatch,
+  IconUsers,
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { agentsSchema, loadAgentRuns } from './agents';
@@ -22,8 +23,10 @@ import { summarizeProductDelivery } from './reportSummaryMetrics';
 import type { ProductDeliverySummary } from './ReportSummaries';
 import { ProductSummaryPanel, WorkspaceSummaryPanel } from './ReportSummaries';
 import { DownloadableReports } from './DownloadableReports';
-import { reportPreviewCIDistribution, reportPreviewDownloads, reportPreviewInsights, reportPreviewLatency, reportPreviewOutcomes,
-  reportPreviewProducts, reportPreviewSpend, reportPreviewTrend, reportPreviewWorkspaces } from './reports-preview';
+import { reportPreviewCIDistribution, reportPreviewDownloads, reportPreviewInsights, reportPreviewOutcomes,
+  reportPreviewProducts, reportPreviewRepositories, reportPreviewRepositoryProducts, reportPreviewSpend,
+  reportPreviewLatencyPercentiles, reportPreviewTrend, reportPreviewWorkflowProducts, reportPreviewWorkflows,
+  reportPreviewWorkspaces } from './reports-preview';
 import './reports.css';
 import './reports-preview.css';
 
@@ -89,6 +92,8 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
   const [scope, setScope] = useState(defaultScope);
   const [appliedScope, setAppliedScope] = useState(defaultScope);
   const [insightView, setInsightView] = useState('executive');
+  const [latencyPercentile, setLatencyPercentile] = useState<keyof typeof reportPreviewLatencyPercentiles>('P50');
+  const previewSelectChevron = designPreview ? <IconChevronDown size={12} aria-hidden="true" /> : undefined;
   const updateScope = (key: keyof ReportScope, value: string | null) => {
     setScope((current) => ({ ...current, [key]: value ?? 'all' }));
   };
@@ -213,16 +218,46 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
     .sort((left, right) => left.localeCompare(right));
   const productOptions = [
     { value: 'all', label: 'All Products' },
-    ...(products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []),
+    ...(designPreview
+      ? reportPreviewProducts.filter((product) => product.id !== 'total').map(({ id, name }) => ({ value: id, label: name }))
+      : products.data?.map((product) => ({ value: product.id, label: product.name })) ?? []),
   ];
   const repositoryOptions = [
     { value: 'all', label: 'All Repositories' },
-    ...(projects?.map((project) => ({ value: project.id, label: project.name })) ?? []),
+    ...(designPreview
+      ? reportPreviewRepositories.map((name) => ({ value: name, label: name }))
+      : projects?.map((project) => ({ value: project.id, label: project.name })) ?? []),
   ];
+  const workflowOptions = [
+    { value: 'all', label: 'All Workflows' },
+    ...(designPreview ? reportPreviewWorkflows.map((name) => ({ value: name, label: name })) : []),
+  ];
+  const selectedWorkflowLabel = workflowOptions.find(({ value }) => value === appliedScope.workflow)?.label ?? 'All Workflows';
   const ownerOptions = [
     { value: 'all', label: designPreview ? 'All Teams' : 'All Objective Owners' },
-    ...objectiveOwners.map((owner) => ({ value: owner, label: owner })),
+    ...(designPreview
+      ? reportPreviewWorkspaces.filter((workspace) => workspace.name !== 'Total / Avg.')
+        .map(({ name }) => ({ value: name, label: name }))
+      : objectiveOwners.map((owner) => ({ value: owner, label: owner }))),
   ];
+  const previewScopeDescription = [
+    appliedScope.timeRange !== defaultScope.timeRange && timeRanges.find(({ value }) => value === appliedScope.timeRange)?.label,
+    appliedScope.product !== 'all' && productOptions.find(({ value }) => value === appliedScope.product)?.label,
+    appliedScope.objectiveOwner !== 'all' && ownerOptions.find(({ value }) => value === appliedScope.objectiveOwner)?.label,
+    appliedScope.workflow !== 'all' && workflowOptions.find(({ value }) => value === appliedScope.workflow)?.label,
+    appliedScope.repository !== 'all' && repositoryOptions.find(({ value }) => value === appliedScope.repository)?.label,
+  ].filter(Boolean).join(' · ');
+  const matchingPreviewProducts = appliedScope.repository !== 'all'
+    ? reportPreviewRepositoryProducts[appliedScope.repository] ?? [] : undefined;
+  const matchingWorkflowProducts = appliedScope.workflow !== 'all'
+    ? reportPreviewWorkflowProducts[appliedScope.workflow] ?? [] : undefined;
+  const previewProductRows = reportPreviewProducts.filter((product) => product.id === 'total' || (
+    (appliedScope.product === 'all' || product.id === appliedScope.product) &&
+    (!matchingPreviewProducts || matchingPreviewProducts.includes(product.id)) &&
+    (!matchingWorkflowProducts || matchingWorkflowProducts.includes(product.id))
+  ));
+  const previewWorkspaceRows = appliedScope.objectiveOwner === 'all' ? reportPreviewWorkspaces
+    : reportPreviewWorkspaces.filter((workspace) => workspace.name === appliedScope.objectiveOwner || workspace.name === 'Total / Avg.');
   const downloadCSV = (name: string, rows: (string | number | undefined)[][]) => {
     const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -297,24 +332,33 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
     <section className={`reports-page${designPreview ? ' reports-design-preview' : ''}`}>
       <div className="reports-scope-bar" aria-label="Report scope">
         <div className="reports-scope-label"><IconFilter size={16} /><span>Report Scope</span></div>
-        <Select aria-label="Time Range" label="Time Range" data={timeRanges}
-          value={scope.timeRange} onChange={(value) => updateScope('timeRange', value)} disabled={designPreview} />
-        <Select aria-label="Product" label="Product" data={productOptions}
-          value={scope.product} onChange={(value) => updateScope('product', value)} disabled={designPreview} />
+        <Select aria-label="Time Range" label="Time Range" data={timeRanges} rightSection={previewSelectChevron}
+          rightSectionPointerEvents="none" leftSection={<IconCalendar size={13} />} value={scope.timeRange}
+          onChange={(value) => updateScope('timeRange', value)} />
+        <Select aria-label="Product" label="Product" data={productOptions} rightSection={previewSelectChevron}
+          rightSectionPointerEvents="none" leftSection={<IconStack size={13} />} value={scope.product}
+          onChange={(value) => updateScope('product', value)} />
         <Select aria-label={designPreview ? 'Team' : 'Objective owner'} label={designPreview ? 'Team' : 'Objective owner'} data={ownerOptions} value={scope.objectiveOwner}
-          onChange={(value) => updateScope('objectiveOwner', value)} disabled={designPreview} />
-        <Select aria-label="Workflow filter unavailable because runs are not linked to workflows" label="Workflow"
-          data={[{ value: 'all', label: 'All Workflows' }]} value="all" disabled />
+          rightSection={previewSelectChevron} rightSectionPointerEvents="none"
+          leftSection={<IconUsers size={13} />} onChange={(value) => updateScope('objectiveOwner', value)} />
+        <Select aria-label={designPreview ? 'Workflow' : 'Workflow filter unavailable because runs are not linked to workflows'}
+          label="Workflow" leftSection={<IconRoute size={13} />} data={workflowOptions} rightSection={previewSelectChevron}
+          rightSectionPointerEvents="none" disabled={!designPreview}
+          value={scope.workflow} onChange={(value) => updateScope('workflow', value)} />
         <Select aria-label="Repository" label="Repository" data={repositoryOptions}
-          value={scope.repository} onChange={(value) => updateScope('repository', value)} disabled={designPreview} />
+          rightSection={previewSelectChevron} rightSectionPointerEvents="none"
+          leftSection={<IconCode size={13} />} value={scope.repository} onChange={(value) => updateScope('repository', value)} />
         <div className="reports-scope-actions">
-          <Button className="reports-apply-filters" disabled={designPreview} onClick={() => setAppliedScope(scope)}>Apply filters</Button>
+          <Button className="reports-apply-filters" onClick={() => setAppliedScope(scope)}>{designPreview ? 'Apply Filters' : 'Apply filters'}</Button>
           <Button className="reports-reset-filters" variant="subtle" onClick={() => {
             setScope(defaultScope);
             setAppliedScope(defaultScope);
-          }} disabled={designPreview}>Reset</Button>
+          }}>Reset</Button>
         </div>
       </div>
+      {designPreview && previewScopeDescription && <p className="reports-preview-scope-status" role="status">
+        Preview scope applied: {previewScopeDescription}
+      </p>}
 
       <div className="reports-metrics" aria-label="Workspace metrics">
         <Metric tone="velocity" label="Delivery Velocity" value={designPreview ? previewValue('42', '+27%') : pullRequests.deliveryVelocity} detail="PRs / week"
@@ -348,22 +392,25 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
           <ChartLegend items={[{ tone: 'violet', label: 'Delivery Velocity (PRs/week)' }, { tone: 'teal', label: 'Cycle Time (hours)' }]} />
           {designPreview || pullRequests.complete && pullRequests.mergedCount > 0 ? <CompositeChart
             className="reports-pull-request-chart"
-            h={112}
+            h={designPreview ? 128 : 112}
             textColor="#9691a8"
             data={designPreview ? reportPreviewTrend : pullRequests.trend}
             dataKey="date"
             series={[
-              { name: 'merged', label: 'Delivery Velocity (PRs/week)', color: 'violet.5', type: 'line' },
-              { name: 'cycle', label: 'Cycle Time (hours)', color: 'teal.4', type: 'line', yAxisId: 'right' },
+              { name: 'cycle', label: 'Cycle Time (hours)', color: 'teal.4', type: designPreview ? 'area' : 'line', yAxisId: 'right' },
+              { name: 'merged', label: 'Delivery Velocity (PRs/week)', color: 'violet.5', type: designPreview ? 'area' : 'line' },
             ]}
+            areaProps={{ fillOpacity: 0.14 }}
             withRightYAxis
             withLegend={false}
             xAxisProps={{ tick: { fill: '#9691a8', fontSize: 9 }, interval: 'preserveStartEnd' }}
             yAxisProps={{ tick: { fill: '#9691a8', fontSize: 9 }, width: 28 }}
             rightYAxisProps={{ tick: { fill: '#9691a8', fontSize: 9 }, width: 30 }}
+            yAxisLabel={designPreview ? 'PRs / week' : undefined}
+            rightYAxisLabel={designPreview ? 'Cycle time (h)' : undefined}
             gridAxis="xy"
             strokeWidth={2}
-            withDots={false}
+            withDots={designPreview}
             withTooltip
             aria-label="Merged pull requests and average cycle time trend"
           /> : pullRequests.complete
@@ -380,7 +427,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
                 <span>p50 {designPreview ? '6.8' : workflowRunMetrics.p50Minutes!.toFixed(1)}m</span>
                 <span>p95 {designPreview ? '18.4' : workflowRunMetrics.p95Minutes!.toFixed(1)}m</span>
               </div>} />
-          <ChartLegend items={[{ tone: 'teal', label: 'Completed GitHub Actions runs' }]} />
+          {!designPreview && <ChartLegend items={[{ tone: 'teal', label: 'Completed GitHub Actions runs' }]} />}
           {designPreview || workflowRunMetrics.complete && workflowRunMetrics.runCount > 0 ? <BarChart
             className="reports-ci-chart"
             h={112}
@@ -388,23 +435,33 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
             data={designPreview ? reportPreviewCIDistribution : workflowRunMetrics.distribution}
             dataKey="duration"
             series={[{ name: 'runs', label: 'Completed runs', color: 'teal.5' }]}
-            withYAxis={false}
+            withYAxis={designPreview}
+            yAxisLabel={designPreview ? 'Runs' : undefined}
+            yAxisProps={designPreview ? { tick: { fill: '#9691a8', fontSize: 8 }, width: 30, domain: [0, 2500],
+              ticks: [0, 500, 1000, 1500, 2000, 2500], interval: 0,
+              tickFormatter: (value: number) => value >= 1000 ? `${value / 1000}K` : `${value}` } : undefined}
             withLegend={false}
+            getBarColor={designPreview ? (value) => value >= 1500 ? '#27d9a3' : value >= 1000 ? '#43c7af'
+              : value >= 500 ? '#8b54e8' : '#5631a3' : undefined}
             xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 0 }}
             gridAxis="y"
             withTooltip
-            aria-label={designPreview ? 'Mock CI duration distribution' : `CI duration distribution from ${workflowRunMetrics.runCount} completed GitHub Actions runs`}
+            aria-label={designPreview
+              ? 'Mock CI duration distribution by run count and CI duration in minutes'
+              : `CI duration distribution from ${workflowRunMetrics.runCount} completed GitHub Actions runs`}
           /> : workflowRunMetrics.complete
             ? <UnavailableChart detail="No completed GitHub Actions runs in this period." />
             : <UnavailableChart detail={workflowRunMetrics.isError
             ? 'GitHub Actions run history is unavailable.'
             : workflowRunMetrics.githubProjectCount ? 'Waiting for complete GitHub Actions history.'
               : 'Connect a source to view this chart'} />}
+          {designPreview && <span className="reports-ci-axis-title" aria-hidden="true">CI Duration (minutes)</span>}
         </PanelCard>
 
         <PanelCard className="reports-panel work-outcomes-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconRoute size={15} />} title="Work Outcomes"
-            description={designPreview ? 'All Workflows' : `Pull request status · ${selectedRangeLabel}`} />
+          <PanelHeading className="reports-panel-heading" icon={<IconRoute size={15} />}
+            title={designPreview ? <>Work Outcomes <small>({selectedWorkflowLabel})</small></> : 'Work Outcomes'}
+            description={!designPreview ? `Pull request status · ${selectedRangeLabel}` : undefined} />
           {designPreview ? <div className="reports-outcomes-layout reports-outcomes-preview"><div className="reports-outcomes-donut">
             <DonutChart size={120} thickness={15} data={reportPreviewOutcomes}
               aria-label="Mock work outcomes for the last 30 days" />
@@ -432,14 +489,21 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
               </div>}
         </PanelCard>
         {designPreview ? <PanelCard className="reports-panel review-latency-panel" withBorder>
-          <PanelHeading className="reports-panel-heading" icon={<IconMessageCircle size={15} />} title="Review Latency Trend" />
+          <PanelHeading className="reports-panel-heading" icon={<IconMessageCircle size={15} />} title="Review Latency Trend"
+            actions={<div className="reports-percentiles" role="group" aria-label="Illustrative review latency percentile">
+              {(Object.keys(reportPreviewLatencyPercentiles) as (keyof typeof reportPreviewLatencyPercentiles)[]).map((percentile) =>
+                <button key={percentile} type="button" aria-pressed={latencyPercentile === percentile}
+                  onClick={() => setLatencyPercentile(percentile)}>{percentile}</button>)}
+            </div>} />
           <ChartLegend items={[{ tone: 'violet', label: 'Review latency' }]} />
-          <LineChart className="reports-latency-chart" h={76} textColor="#9691a8"
-            data={reportPreviewTrend.map((item, index) => ({ date: item.date, latency: reportPreviewLatency[index] }))}
-            dataKey="date" series={[{ name: 'latency', label: 'Review latency (h)', color: 'violet.5' }]}
-            yAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, width: 28 }}
-            xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 'preserveStartEnd' }}
-            gridAxis="xy" withDots={false} withTooltip aria-label="Mock review latency trend" />
+          <AreaChart className="reports-latency-chart" h={76} textColor="#9691a8"
+            data={reportPreviewTrend.map((item, index) => ({ date: item.date, latency: reportPreviewLatencyPercentiles[latencyPercentile][index] }))}
+            dataKey="date" series={[{ name: 'latency', label: `Review latency ${latencyPercentile} (h)`, color: 'violet.5' }]}
+            yAxisProps={{ domain: [0, latencyPercentile === 'P95' ? 25 : 20],
+              ticks: latencyPercentile === 'P95' ? [0, 5, 10, 15, 20, 25] : [0, 4, 8, 12, 16, 20],
+              interval: 0, tickFormatter: (value) => `${value}h`, tick: { fill: '#9691a8', fontSize: 8 }, width: 28 }}
+            xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 0 }}
+            gridAxis="xy" withDots withTooltip aria-label={`Illustrative ${latencyPercentile} review latency trend`} />
         </PanelCard> : <UnavailableMetricsPanel className="review-latency-panel" title="Review Latency Trend"
           icon={<IconMessageCircle size={15} />} detail="Requires provider review events." />}
         {designPreview ? <PanelCard className="reports-panel agent-spend-panel" withBorder>
@@ -449,10 +513,12 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
             data={reportPreviewTrend.map((item, index) => ({ ...item, spend: reportPreviewSpend[index] }))}
             dataKey="date" series={[{ name: 'spend', label: 'Spend (USD)', color: 'violet.5', type: 'bar' },
               { name: 'autonomy', label: 'Autonomous completion rate', color: 'teal.4', type: 'line', yAxisId: 'right' }]}
-            withRightYAxis withLegend={false} xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 'preserveStartEnd' }}
-            yAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, width: 28 }}
-            rightYAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, width: 28 }}
-            gridAxis="xy" withTooltip aria-label="Mock agent spend and autonomous completion trend" />
+            withRightYAxis withLegend={false} xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 0 }}
+            yAxisProps={{ domain: [0, 20], ticks: [0, 4, 8, 12, 16, 20], interval: 0,
+              tickFormatter: (value: number) => value === 0 ? '$0' : `$${value}K`, tick: { fill: '#9691a8', fontSize: 8 }, width: 34 }}
+            rightYAxisProps={{ domain: [40, 90], ticks: [40, 50, 60, 70, 80, 90], interval: 0,
+              tickFormatter: (value: number) => `${value}%`, tick: { fill: '#9691a8', fontSize: 8 }, width: 30 }}
+            gridAxis="xy" withDots withTooltip aria-label="Mock agent spend and autonomous completion trend" />
         </PanelCard> : <UnavailableMetricsPanel className="agent-spend-panel" title="Agent Spend"
           icon={<IconCpu size={15} />} detail="Requires provider usage records." />}
         <PanelCard className="reports-panel acceptance-panel" withBorder>
@@ -460,13 +526,13 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
             title="Acceptance &amp; Autonomous Completion" />
           <ChartLegend items={[{ tone: 'violet', label: 'Acceptance rate' },
             { tone: 'teal', label: designPreview ? 'Autonomous completion rate' : 'Autonomous completion · unavailable' }]} />
-          {designPreview ? <LineChart className="reports-acceptance-chart" h={76} textColor="#9691a8"
+          {designPreview ? <AreaChart className="reports-acceptance-chart" h={76} textColor="#9691a8"
             data={reportPreviewTrend} dataKey="date" series={[
               { name: 'acceptance', label: 'Acceptance rate', color: 'violet.5' },
               { name: 'autonomy', label: 'Autonomous completion rate', color: 'teal.5' },
             ]} yAxisProps={{ domain: [0, 100], tick: { fill: '#9691a8', fontSize: 8 }, width: 28 }}
-            xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 'preserveStartEnd' }}
-            gridAxis="xy" withDots={false} withTooltip aria-label="Mock acceptance and autonomous completion trends" />
+            xAxisProps={{ tick: { fill: '#9691a8', fontSize: 8 }, interval: 0 }}
+            gridAxis="xy" withDots withTooltip aria-label="Mock acceptance and autonomous completion trends" />
             : pullRequests.complete && pullRequests.acceptanceRate !== undefined ? <LineChart
             className="reports-acceptance-chart" h={76} textColor="#9691a8" data={pullRequests.trend}
             dataKey="date" series={[{ name: 'acceptance', label: 'Acceptance rate', color: 'teal.5' }]}
@@ -483,6 +549,7 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
           <PanelHeading className="reports-panel-heading" icon={<IconSparkles size={15} />} title="Insights &amp; Narrative"
             description={designPreview ? undefined : 'Findings from the selected snapshot'}
             actions={<Select className="reports-insight-filter" aria-label="Insights view" data={insightViews}
+              rightSection={previewSelectChevron} rightSectionPointerEvents="none"
               value={insightView} onChange={(value) => setInsightView(value ?? 'executive')} />} />
           <div className="reports-insights">
             {visibleInsights.map((insight) => <div className="reports-insight" key={insight.title}>
@@ -493,11 +560,11 @@ export function ReportsPage({ apiOnline, objectives, projects, workers, designPr
             {keyTakeaway}</span></div>
         </PanelCard>
 
-        <ProductSummaryPanel rows={designPreview ? reportPreviewProducts : productSummaries} designPreview={designPreview}
+        <ProductSummaryPanel rows={designPreview ? previewProductRows : productSummaries} designPreview={designPreview}
           loading={!designPreview && (products.isLoading || projects === undefined)} error={!designPreview && products.isError}
           checkoutCount={scopedProjects?.length} />
 
-        <WorkspaceSummaryPanel rows={designPreview ? reportPreviewWorkspaces : undefined} designPreview={designPreview} workItems={objectiveCount} metrics={{
+        <WorkspaceSummaryPanel rows={designPreview ? previewWorkspaceRows : undefined} designPreview={designPreview} workItems={objectiveCount} metrics={{
           deliveryVelocity: pullRequests.deliveryVelocity,
           cycleTime: pullRequests.cycleTime,
           ciDuration: workflowRunMetrics.averageMinutes,
