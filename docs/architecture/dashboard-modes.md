@@ -62,14 +62,49 @@ loaders).
 | Overview | One layout | `OverviewSource` | Open objectives and their progress, running agents, online workers, the open PR queue, CI pass rate, recent activity, the last three agent runs, the latest local branch diff with its first changed lines, the saved workflow's stages, and merged-PR, cycle-time, and CI-duration charts are real; budget, plan approvals, trusted-main and evidence health, the sprint timeline, workflow execution, KPI trend deltas, sparklines, and the PR bars are Unavailable, empty, or left out |
 | Objectives | One layout | `ObjectivesSource` | Objectives, their owner, product, status, progress, and due date, the status counts, completed count and completion share, and the plan summary (target, created, and last-updated dates) are real, and objectives are created and edited through the API; approval, linked workflows, blockers, acceptance criteria, related PRs, activity, milestones, the capacity chart, and the KPI trend graphics are Unavailable or left out; favorites are disabled |
 | Workflows | One layout | `WorkflowsSource` | Saved workflows, their graph, name, description, status, and version are real, and workflows are created, edited, laid out, validated, and saved through the API; the Run Preview, the run timeline, runs, schedules, permissions, approvals, earlier versions, publishing, and component settings beyond name and description are Unavailable or empty with the reason; Run, Publish, Simulate Run, and every control on those tabs are disabled; no component carries a passed-step marker |
-| Projects | Single layout already; no fixtures | | |
+| Projects | One layout; no fixtures | props from the shell | Live lists worker checkouts and their worktree requests. Mock has no sample inventory and says so ("Live data only") instead of showing an empty one |
 | Product Workspace | One layout | `WorkspaceSource` | Products, linked repositories with worker and branch, repository health, objectives, the roadmap (bars run from an objective's creation to its due date), workflow definitions, and agent profiles are real, and products are created and edited through the API; files, stakeholders, release streams, decisions, delivery metrics, and every trend graphic are Unavailable with the reason; favorites and the delivery range are disabled |
 | Reviews | One layout | `ReviewsSource` | Open pull requests and issues of a connected GitHub checkout, their state, author, branch, and date, the pull-request diff with its file and line counts, the base branch, agent-run branches with their diff, comments, and evidence, and the counts on the queue tabs are real; GitHub comments, reviews, issue close / reopen, run comments, request changes, and cancel go through the API; review time, merge rate, policy gate pass, commits, risk, evidence completeness, required checks, merge strategy, policy, AI suggestions, artifacts, checklist, approvals, and trusted-main readiness are Unavailable; trend graphics, card signals, and the inline discussion are left out; New PR, Approve, Merge, Export evidence, bookmarks, the date range, and Auto-merge are disabled with the reason |
 | Integrations and Settings | One layout | `SystemSource` | Control plane health, worker heartbeats and coding CLIs, GitHub checkouts, the worker model endpoint, and session auth are real; GitLab, Slack, Linear / Jira, Docker / Registry, and Google are Not connected; profile, policies, roles, budgets, secrets, controller limits, notification rules, and audit are Unavailable or empty with a note; every write control is disabled |
 | Reports | One layout | `ReportsSource` | Delivery velocity, cycle time, acceptance rate, and work outcomes from GitHub pull-request history, CI duration with its distribution and p50 / p95 from GitHub Actions history, agent spend from the cost providers report on agent runs, objective, run, worker, and source insights, the product and workspace summary tables, and four CSV exports are real and follow the report scope; review latency and autonomous completion are Unavailable with the reason and their percentile buttons are disabled; KPI trend deltas, the autonomy series, the summary total rows, and PDF / XLSX exports are left out; the Workflow filter is disabled because runs carry no workflow ID; a chart with no complete history shows an empty plot with the reason |
 
-No page is pending. The shell still lists the migrated pages in `unifiedPages` (every page except Projects, which
-never had a second layout) until that list is removed.
+No page is pending. Every page renders the approved layout in both modes, the approved shell styling always
+applies, and the header has one markup fed by an identity: the sample person in Mock, the signed-in account in Live.
+
+## Mock and Live side by side
+
+Captured at 1672×941 from the final build. Live is a local control plane with one worker, three agent profiles, and
+eleven recorded runs; it has no objectives or products, so those pages show their empty states.
+
+| Page | Mock | Live |
+|---|---|---|
+| Overview | [Mock](../screenshots/one-dashboard/overview-mock.jpg) | [Live](../screenshots/one-dashboard/overview-live.jpg) |
+| Objectives | [Mock](../screenshots/one-dashboard/objectives-mock.jpg) | [Live](../screenshots/one-dashboard/objectives-live.jpg) |
+| Workflows | [Mock](../screenshots/one-dashboard/workflows-mock.jpg) | [Live](../screenshots/one-dashboard/workflows-live.jpg) |
+| Agents | [Mock](../screenshots/one-dashboard/agents-mock.jpg) | [Live](../screenshots/one-dashboard/agents-live.jpg) |
+| Projects | [Mock](../screenshots/one-dashboard/projects-mock.jpg) | [Live](../screenshots/one-dashboard/projects-live.jpg) |
+| Product Workspace | [Mock](../screenshots/one-dashboard/workspace-mock.jpg) | [Live](../screenshots/one-dashboard/workspace-live.jpg) |
+| Reviews | [Mock](../screenshots/one-dashboard/reviews-mock.jpg) | [Live](../screenshots/one-dashboard/reviews-live.jpg) |
+| Integrations | [Mock](../screenshots/one-dashboard/integrations-mock.jpg) | [Live](../screenshots/one-dashboard/integrations-live.jpg) |
+| Reports | [Mock](../screenshots/one-dashboard/reports-mock.jpg) | [Live](../screenshots/one-dashboard/reports-live.jpg) |
+| Settings | [Mock](../screenshots/one-dashboard/settings-mock.jpg) | [Live](../screenshots/one-dashboard/settings-live.jpg) |
+
+## What was removed overall
+
+- Every second layout: the plain live variants of Overview, Objectives, Workflows, Agents, Product Workspace,
+  Reviews, Integrations and Settings, and Reports. The sections below list each page's components, markup, and CSS.
+- Preview-only components that existed beside a live page: `SystemIntegrationsPreview`, `WorkspaceDesignPreview`,
+  `WorkflowDesignPreview`, `WorkflowSectionsPreview`, `WorkflowMobileRunPreview`, `ReviewPreviewSummary`,
+  `AgentsMobilePreview`. Their markup is now the page, fed by a source.
+- Live-only components: `AgentExecutionOverview`, `AgentPerformanceTrend`, `LiveWorkspacePage` and its helpers,
+  `UnavailableMetricsPanel`, and `workspace.css`.
+- Mode selection from the hostname and the session, the `?live` flag, and the temporary `unifiedPages` list.
+- References to the mode flag in page components fell from about 400 to about 50, and those that remain choose a
+  data source or pass the flag down; none of them chooses a layout.
+- Stylesheet rules no component used, including eleven classes left from earlier layouts.
+
+Class and file names that still contain "preview" (for example `agents-design-preview`, `reviews-preview.css`,
+`*-preview-data`) name the approved design's styles and the fixture modules. They apply in both modes.
 
 ## Removed with the Agents migration
 
@@ -206,6 +241,19 @@ never had a second layout) until that list is removed.
   and All Activity lists every row.
 
 ## Verification
+
+- The whole Playwright suite (95 tests) passes on the final head, with `go vet` and `go test ./cmd/...`.
+- Every page was captured in Mock and Live at 1672×941 and 390×844 with no horizontal overflow and no page errors.
+- Final comparison of the approved build against Mock for all ten routes at both sizes: Workflows, Reviews,
+  Integrations, and Reports are identical on desktop; Overview, Workflows, Agents, Product Workspace, Integrations,
+  Reports, and Settings are identical on phones. Overview, Objectives, Product Workspace, and Settings on desktop and
+  Reviews on phones differ by 1 to 49 pixels of at most 2 colour levels, which is not visible. Agents on desktop
+  differs by 73 pixels of up to 13 levels at one icon edge; two captures of the approved build itself differ by 24
+  pixels on that page. Objectives on phones differs in the detail header, deliberately (see below). Projects differs
+  deliberately: Mock states that it has no sample data.
+- Against a real control plane: Agents create, edit, duplicate, disable, and the Status field each sent the expected
+  `POST` or `PUT` and received 200 or 201; the queue dialog listed the project's real GitHub issues and the worker's
+  real readiness; Mock sent no write request for the same actions.
 
 - `dashboard/e2e/z_run_evidence.spec.ts`: "the Mock and Live switch selects the data source, keeps the page, and
   stays in the address".
