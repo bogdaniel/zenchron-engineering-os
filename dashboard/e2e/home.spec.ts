@@ -226,7 +226,8 @@ test('Objectives grid keeps product names while the catalog loads', async ({ pag
 test('Projects page shows the live local worker inventory', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
-  await page.getByRole('link', { name: 'Open repository inventory' }).click();
+  await page.getByRole('button', { name: 'Product actions' }).click();
+  await page.getByRole('menuitem', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.locator('.project-detail-heading h3')).toHaveCSS('font-size', '18px');
   await expect(page.locator('.project-detail-heading h3')).toHaveCSS('font-weight', '650');
@@ -247,7 +248,8 @@ test('worker prepares an isolated Git branch without moving the source checkout'
   const branch = `zenchron/e2e-${Date.now()}`;
   await page.goto('/');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
-  await page.getByRole('link', { name: 'Open repository inventory' }).click();
+  await page.getByRole('button', { name: 'Product actions' }).click();
+  await page.getByRole('menuitem', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await page.getByRole('button', { name: 'Prepare isolated branch' }).click();
   const dialog = page.getByRole('dialog', { name: 'Prepare isolated branch' });
@@ -423,9 +425,9 @@ test('Product Workspace groups live repositories into persisted products', async
   const objectiveTitle = `Product objective ${Date.now()}`;
   await page.goto('/');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
-  await expect(page.locator('.page-heading h2')).toHaveText('Product Workspace');
+  await expect(page.locator('.workspace-mock-directory h3')).toHaveText('Product Workspace');
   await expect(page.getByText('No products yet. Add a product to group repositories.')).toBeVisible();
-  await page.getByRole('button', { name: '+ Add Product' }).first().click();
+  await page.getByRole('button', { name: '＋ Add Product' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Product name').fill('Core Product');
   await dialog.getByLabel('Description').fill('Shared platform and APIs');
@@ -434,8 +436,9 @@ test('Product Workspace groups live repositories into persisted products', async
   await dialog.getByLabel('Repositories').press('Escape');
   await dialog.getByRole('button', { name: 'Save product' }).click();
   await expect(page.getByRole('heading', { name: 'Core Product' })).toBeVisible();
-  await expect(page.locator('.workspace-project-option').filter({ hasText: 'Core Product' }))
+  await expect(page.locator('.workspace-mock-product').filter({ hasText: 'Core Product' }))
     .toContainText('1 linked repositories');
+  await expect(page.locator('.workspace-mock-heading')).toContainText('Shared platform and APIs');
 
   await page.getByRole('link', { name: 'Objectives' }).click();
   await page.getByRole('button', { name: 'New Objective' }).click();
@@ -448,21 +451,21 @@ test('Product Workspace groups live repositories into persisted products', async
 
   await page.getByRole('link', { name: 'Product Workspace' }).click();
   await expect(page.getByText(objectiveTitle, { exact: true })).toBeVisible();
-  await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Objectives' }).click();
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
   await expect(page.getByText(objectiveTitle, { exact: true })).toBeVisible();
 
-  await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Repos' }).click();
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Repos' }).click();
   await expect(page.getByText('zenchron-engineering-os', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Core Product' })).toBeVisible();
-  await expect(page.locator('.workspace-project-option').filter({ hasText: 'Core Product' }))
+  await expect(page.locator('.workspace-mock-product').filter({ hasText: 'Core Product' }))
     .toContainText('1 linked repositories');
 
-  await expect(page.getByRole('heading', { name: 'Open objectives' })).toBeVisible();
-  await expect(page.locator('.workspace-metric').filter({ hasText: 'Open objectives' })
+  await expect(page.getByRole('heading', { name: /^Open Objectives \(\d+\)$/ })).toBeVisible();
+  await expect(page.locator('.workspace-mock-metric').filter({ hasText: 'Open Objectives' })
     .getByText('Assigned to this product', { exact: true })).toBeVisible();
 
-  await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Files' }).click();
-  await expect(page.getByRole('heading', { name: 'Files & evidence' })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Files' }).click();
+  await expect(page.getByRole('heading', { name: 'Design / Docs / Files' })).toBeVisible();
   await expect(page.getByText(/storage integration and agent runs exist/)).toBeVisible();
 });

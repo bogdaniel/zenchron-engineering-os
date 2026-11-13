@@ -17,6 +17,7 @@
 .workspace-mock-filter { display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid #373148; border-radius: 7px; color: #c5bbd3; background: #191824; cursor: pointer; }
 .workspace-mock-directory .mantine-Input-section { color: #aaa3b7; }
 .workspace-mock-empty { color: #a09aae; font-size: 10px; }
+.workspace-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .workspace-mock-products { display: grid; gap: 5px; margin-top: 9px; }
 .workspace-mock-product {
   display: flex; width: 100%; min-width: 0; min-height: 56px; align-items: center; gap: 5px;
@@ -49,6 +50,7 @@
 .workspace-mock-heading p { margin: 0; color: #c5c0d0; font-size: 11px; }
 .workspace-mock-meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: #aaa4b7; font-size: 9px; }
 .workspace-mock-meta b { color: #45dfa1; }
+.workspace-mock-meta b.attention { color: #e8bb56; }
 .workspace-mock-meta i { width: 1px; height: 10px; background: #514b60; }
 .workspace-mock-heading > button:not(.workspace-mock-add) { display: flex; min-height: 31px; align-items: center; justify-content: center; gap: 5px; padding: 0 10px; border: 1px solid #39334b; border-radius: 8px; color: #e4deeb; background: #191824; font-size: 10px; }
 .workspace-mock-heading > .workspace-mock-menu { width: 38px; padding: 0; }
@@ -70,6 +72,7 @@
 .workspace-mock-metric.decisions .metric-value-row > strong { margin: 0; }
 .workspace-mock-initiative-trend { display: flex; align-items: center; gap: 10px; }
 .workspace-mock-initiative-trend b { padding: 3px 7px; border-radius: 12px; color: #43dfa1; background: #17352b; font-size: 9px; white-space: nowrap; }
+.workspace-mock-initiative-trend small { color: #c5bfd0; font-size: 9px; white-space: nowrap; }
 .workspace-mock-initiative-trend svg { width: 64px; height: 26px; overflow: visible; }
 .workspace-mock-initiative-trend path { fill: none; stroke: #bd70f2; stroke-width: 2; }
 .workspace-mock-metric.health > strong { align-self: center; margin-top: 0; }
@@ -97,6 +100,8 @@
 .workspace-mock-health { display: flex; width: 100%; align-items: center; gap: 7px; color: #43dfa1; font-weight: 600; }
 .workspace-mock-health b { padding: 3px 8px; border: 1px solid #1d775d; border-radius: 12px; background: #12392f; white-space: nowrap; }
 .workspace-mock-health svg { width: 66px; height: 20px; margin-left: auto; overflow: visible; }
+.workspace-mock-health.attention { color: #e8bb56; }
+.workspace-mock-health.attention b { border-color: #6b5320; background: #392b13; }
 .workspace-mock-health path { fill: none; stroke: #27dfa0; stroke-width: 2; }
 .workspace-mock-growth, .workspace-mock-metric small b { color: #43dfa1; font-size: 9px; }
 .workspace-mock-tabs { display: flex; min-height: 39px; gap: 4px; margin: 15px 0 12px; padding: 4px; border: 1px solid #302b48; border-radius: 9px; background: #12121d; }
@@ -129,17 +134,21 @@
 .workspace-mock-timeline-row b { color: #e8e3ef; font-size: 10px; font-weight: 500; }
 .workspace-mock-timeline-row small { color: #aaa4b7; font-size: 9px; }
 .workspace-mock-quarter-labels { display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(5, minmax(0, 1fr)); color: #b7b1c2; font-size: 9px; text-align: center; }
-.workspace-mock-quarter-labels span:nth-child(4) { justify-self: center; padding: 4px 7px; border-radius: 7px; color: #fff; background: #a532d2; font-weight: 700; }
+.workspace-mock-quarter-labels span.today { justify-self: center; padding: 4px 7px; border-radius: 7px; color: #fff; background: #a532d2; font-weight: 700; }
 .workspace-mock-roadmap-row { display: grid; grid-template-columns: 10px minmax(105px, 1.2fr) minmax(0, 5fr); align-items: center; gap: 5px; min-height: 20px; }
 .workspace-mock-roadmap-row > b { overflow: hidden; color: #e8e3ef; font-size: 10px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-mock-dot { width: 8px; height: 8px; border-radius: 50%; background: #36c98d; }
 .workspace-mock-dot.purple { background: #b65cf3; }.workspace-mock-dot.blue { background: #4c8ff1; }.workspace-mock-dot.teal { background: #2dc7c3; }
+.workspace-mock-dot.amber { background: #e8bb56; }.workspace-mock-dot.red { background: #d34d68; }
 .workspace-mock-track { position: relative; height: 20px; border: 1px solid #292638; background: repeating-linear-gradient(90deg, transparent 0 calc(20% - 1px), #2b273a calc(20% - 1px) 20%); }
-.workspace-mock-track::after { position: absolute; z-index: 2; top: -12px; bottom: -3px; left: 48%; width: 1px; background: #c55cf0; content: ''; }
+.workspace-mock-track::after { position: absolute; z-index: 2; top: -12px; bottom: -3px; left: var(--workspace-today); width: 1px; background: #c55cf0; content: ''; }
+.workspace-mock-roadmap:not([data-today]) .workspace-mock-track::after { display: none; }
 .workspace-mock-track > span { position: absolute; top: 2px; display: flex; height: 15px; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; color: #fff; background: linear-gradient(90deg, #13bd87, #32d59f); font-size: 9px; font-weight: 700; line-height: 1; white-space: nowrap; }
 .workspace-mock-track > span.purple { background: linear-gradient(90deg, #8e3ada, #cc69f6); }
 .workspace-mock-track > span.blue { background: linear-gradient(90deg, #287de8, #5a9cff); }
 .workspace-mock-track > span.teal { background: linear-gradient(90deg, #22b8b4, #4bd5d0); }
+.workspace-mock-track > span.amber { background: linear-gradient(90deg, #b9832a, #e8bb56); }
+.workspace-mock-track > span.red { background: linear-gradient(90deg, #b83a55, #e0637d); }
 .workspace-mock-objectives { display: grid; gap: 7px; margin-top: 7px; }
 .workspace-mock-objectives > div { display: grid; grid-template-columns: 14px minmax(0, 1fr) 58px 25px; align-items: center; gap: 5px; }
 .workspace-mock-objectives b { overflow: hidden; color: #e9e4f0; font-size: 10px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
@@ -153,16 +162,18 @@
 .workspace-mock-list > div { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .workspace-mock-list b { min-width: 0; flex: 1; overflow: hidden; color: #e6e1ec; font-size: 10px; font-weight: 500; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-mock-list > small { color: #c4bdcf; font-size: 8px; }
+.workspace-mock-row-detail { color: #aaa4b7; font-weight: 400; }
 .workspace-mock-git-icon { flex: 0 0 auto; color: #f2eef7; }
 .workspace-mock-list > div > span:not(.workspace-mock-run) { color: #a78bd1; }
-.workspace-mock-card.repositories .workspace-mock-list > div > .workspace-mock-repo-branch { flex: 0 0 auto; padding: 2px 6px; border: 1px solid #373247; border-radius: 8px; color: #c9c1d3; background: #29263a; font-size: 8px; line-height: 1; }
+.workspace-mock-card.repositories .workspace-mock-list > div > .workspace-mock-repo-branch { flex: 0 0 auto; padding: 2px 6px; border: 1px solid #373247; border-radius: 8px; color: #c9c1d3; background: #29263a; font-size: 8px; line-height: 1; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-mock-list > div > span.workspace-mock-run { color: #30d49b; }
 .workspace-mock-list > div > span:last-child:not(.workspace-mock-run) { color: #aaa5b5; }
 .workspace-mock-list > div > em { padding: 2px 6px; border-radius: 8px; color: #c9c1d3; background: #29263a; font-size: 8px; font-style: normal; }
 .workspace-mock-list.status-list { gap: 6px; }
 .workspace-mock-state { min-height: 15px; padding: 0 5px; border: 0; border-radius: 8px; color: #3cdaa1; background: #14392e; font-size: 8px; text-transform: none; }
-.workspace-mock-state.scheduled, .workspace-mock-state.pending { color: #e8bb56; background: #392b13; }
-.workspace-mock-state.in-progress { color: #a9d4ff; background: #152f51; }
+.workspace-mock-state.scheduled, .workspace-mock-state.pending, .workspace-mock-state.draft,
+.workspace-mock-state.loading, .workspace-mock-state.unavailable { color: #e8bb56; background: #392b13; }
+.workspace-mock-state.in-progress, .workspace-mock-state.agent-profile { color: #a9d4ff; background: #152f51; }
 .workspace-mock-list.files { gap: 6px; }
 .workspace-mock-list.files > div > span { display: grid; width: 16px; place-items: center; color: #c898ff; }
 .workspace-mock-list.files em { color: #d3cbe0; background: #29263b; }

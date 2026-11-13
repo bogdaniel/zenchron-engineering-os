@@ -29,15 +29,17 @@ export async function loadProducts() {
 
 type ProductEditorProps = {
   opened: boolean;
-  product: Product | undefined;
+  product: Pick<Product, 'id' | 'name' | 'description' | 'repository_ids'> | undefined;
   projects: Project[] | undefined;
+  /** Why repositories cannot be linked here; the picker is disabled while it is set. */
+  repositoryNote?: string;
   onClose: () => void;
   onSave: (input: ProductInput) => void;
   isSaving: boolean;
   error: string;
 };
 
-export function ProductEditor({ opened, product, projects, onClose, onSave, isSaving, error }: ProductEditorProps) {
+export function ProductEditor({ opened, product, projects, repositoryNote, onClose, onSave, isSaving, error }: ProductEditorProps) {
   const form = useForm<ProductInput>({
     initialValues: { name: '', description: '', repository_ids: [] },
     validate: (values) => {
@@ -73,7 +75,8 @@ export function ProductEditor({ opened, product, projects, onClose, onSave, isSa
           {...form.getInputProps('description')} />
         <MultiSelect
           label="Repositories"
-          description="Only repository names and worker IDs are shared with the control plane."
+          description={repositoryNote ?? 'Only repository names and worker IDs are shared with the control plane.'}
+          disabled={Boolean(repositoryNote)}
           data={repositoryOptions}
           searchable
           clearable
@@ -83,7 +86,7 @@ export function ProductEditor({ opened, product, projects, onClose, onSave, isSa
         {error && <Text className="form-error" role="alert">{error}</Text>}
         <div className="workspace-form-actions">
           <Button variant="subtle" type="button" onClick={onClose}>Cancel</Button>
-          <Button className="workspace-add-product" type="submit" loading={isSaving}>Save product</Button>
+          <Button className="workspace-mock-add" type="submit" loading={isSaving}>Save product</Button>
         </div>
       </form>
     </Modal>

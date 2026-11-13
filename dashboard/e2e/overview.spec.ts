@@ -68,7 +68,8 @@ test('dashboard displays the connected control plane and local worker', async ({
   await expect(page.getByText('No pull requests yet', { exact: true })).toHaveCount(0);
   await expect(page.locator('.page-footer')).toBeHidden();
   await page.getByRole('link', { name: 'Product Workspace' }).click();
-  await page.getByRole('link', { name: 'Open repository inventory' }).click();
+  await page.getByRole('button', { name: 'Product actions' }).click();
+  await page.getByRole('menuitem', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
 });
 
