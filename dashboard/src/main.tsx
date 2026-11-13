@@ -43,7 +43,7 @@ const searchablePages = [
   ['Reports', 'reports'], ['Settings', 'settings'],
 ] as const;
 // Pages whose Live mode already renders the approved layout. The list goes away once every page is on it.
-const unifiedPages = ['agents'];
+const unifiedPages = ['agents', 'integrations', 'settings'];
 type DashboardMode = 'mock' | 'live';
 /** `?mode=mock|live` wins. Without it, local development starts in Mock and any other host starts in Live. */
 function modeFromLocation(): DashboardMode {
