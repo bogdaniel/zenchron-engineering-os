@@ -43,7 +43,7 @@ const searchablePages = [
   ['Reports', 'reports'], ['Settings', 'settings'],
 ] as const;
 // Pages whose Live mode already renders the approved layout. The list goes away once every page is on it.
-const unifiedPages = ['agents', 'integrations', 'settings', 'overview', 'workspace', 'objectives'];
+const unifiedPages = ['agents', 'integrations', 'settings', 'overview', 'workspace', 'objectives', 'reviews'];
 type DashboardMode = 'mock' | 'live';
 const localDevelopment = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 /**
@@ -273,7 +273,7 @@ function App() {
             objectives={objectives.data} objectivesLoading={objectives.isLoading} objectivesError={objectives.isError}
             agentRuns={agentRuns.data} agentRunsLoading={agentRuns.isLoading} agentRunsError={agentRuns.isError}
             onlineWorkers={onlineWorkers.length} onlineWorkerNames={onlineWorkers.map((worker) => worker.name)}
-          controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} designPreview={previewPage} onNavigate={goToPage} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} designPreview={previewPage} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={previewPage} /> : activePage === 'projects' ? (
+          controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} designPreview={previewPage} onNavigate={goToPage} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} runsLoading={agentRuns.isLoading} runsFailed={agentRuns.isError} projects={projects.data ?? []} designPreview={previewPage} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={previewPage} /> : activePage === 'projects' ? (
             <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} />
           ) : activePage === 'workspace' ? (
             <WorkspacePage

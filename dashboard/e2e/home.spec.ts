@@ -1,5 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+const dashboardPort = Number((globalThis as typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+}).process?.env?.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+
 async function useTestShell(page: Page) {
   await page.route('**/api/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({
@@ -9,7 +13,7 @@ async function useTestShell(page: Page) {
 }
 test('Reviews matches the supplied desktop workspace frame', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 874 });
-  await page.goto('http://127.0.0.1:4173/#reviews');
+  await page.goto(`http://127.0.0.1:${dashboardPort}/#reviews`);
   await expect(page.locator('.reviews-metrics')).toBeVisible();
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
@@ -281,12 +285,28 @@ test('Reviews page shows unavailable provider data without invented pull request
   await page.goto('/');
   await page.getByRole('link', { name: 'Reviews', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible();
-  await expect(page.getByText('GitHub repository not connected')).toBeVisible();
+  const repository = page.getByRole('button', { name: 'Review repository' });
+  await expect(repository).toHaveText('GitHub not connected');
+  await expect(repository).toBeDisabled();
+  await expect(page.locator('.reviews-grid-wrap')).toHaveText('Connect a local GitHub checkout to see issues and pull requests.');
+  await expect(page.locator('.reviews-detail-heading')).toContainText('No open pull requests');
+  await expect(page.locator('.reviews-change-empty')).toContainText('Connect a GitHub repository to see its open items.');
+  await expect(page.getByRole('button', { name: 'New PR' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Review date range' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Local branches' })).toBeVisible();
   await page.getByRole('button', { name: 'Local branches' }).click();
   await expect(page.locator('.reviews-change-empty')).toContainText('Choose a completed agent run');
-  await expect(page.getByRole('region', { name: 'Review metrics' }).getByText('Unavailable')).toHaveCount(6);
-  await expect(page.locator('.reviews-metric strong.metric-unavailable')).toHaveCount(6);
+  // GitHub counts and delivery metrics have no source here; the review queue counts real agent-run branches.
+  const metrics = page.locator('.reviews-metric');
+  await expect(metrics.locator('.metric-top')).toHaveText([
+    'Pull Requests', 'In Review', 'Review Queue', 'Avg. Review Time', 'Merge Success Rate', 'Policy Gate Pass']);
+  await expect(metrics.locator('strong')).toHaveText(['Unavailable', 'Unavailable', '0', 'Unavailable', 'Unavailable', 'Unavailable']);
+  await expect(page.locator('.reviews-metric strong.metric-unavailable')).toHaveCount(5);
+  await expect(page.locator('.reviews-preview-metric-trend, .reviews-preview-metric-change')).toHaveCount(0);
+  await expect(page.locator('.reviews-stage small')).toHaveText(Array(5).fill('Unavailable'));
+  await expect(page.locator('.reviews-summary-stats b')).toHaveText(Array(6).fill('Unavailable'));
+  await expect(page.locator('.reviews-checks-heading')).toContainText('Unavailable');
+  await expect(page.getByRole('switch', { name: 'Auto-merge when ready' })).toBeDisabled();
   await expect(page.locator('.reviews-metric strong.metric-unavailable').first()).toHaveCSS('font-size', '14px');
   await expect(page.getByRole('button', { name: 'Approve' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Request changes' })).toBeDisabled();
@@ -348,11 +368,11 @@ test('Reviews page shows an isolated local branch diff without treating it as a 
   await expect(page.locator('.reviews-code-editor .view-lines')).toContainText('+Local change');
   await expect(page.getByRole('link', { name: 'Open pull request #4827' }))
     .toHaveAttribute('href', 'https://github.com/zenchron/nova-platform/pull/4827');
-  const diffSummary = page.locator('.reviews-summary-stats > div');
-  await expect(diffSummary.nth(0).locator('b')).toHaveText('1');
-  await expect(diffSummary.nth(1).locator('b')).toHaveText('+1');
-  await expect(diffSummary.nth(2).locator('b')).toHaveText('−1');
-  await expect(page.getByText('GitHub repository not connected')).toBeVisible();
+  await expect(page.locator('.reviews-summary-stats > div')).toHaveText([
+    'Files Changed1', 'Lines Added+1', 'CommitsUnavailable', 'Lines Removed−1', 'Risk ScoreUnavailable',
+    'Evidence CompletenessUnavailable']);
+  await expect(page.locator('.reviews-governance-row').filter({ hasText: 'Target branch' }).locator('b')).toHaveText('main');
+  await expect(page.getByRole('button', { name: 'Review repository' })).toHaveText('GitHub not connected');
   await expect(page.getByRole('button', { name: 'Approve' })).toBeDisabled();
   await page.getByRole('textbox', { name: 'Review comment' }).fill('Please explain the new API behavior.');
   await page.getByRole('button', { name: 'Add comment' }).click();

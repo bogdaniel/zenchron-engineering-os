@@ -239,7 +239,7 @@ test('local Reviews mock uses its fixture without provider reads or review write
     return thread.top >= detail.top && thread.bottom <= detail.bottom;
   });
   expect(previewThreadVisible).toBe(true);
-  await expect(page.locator('.reviews-provider-detail .reviews-pr-description')).toBeHidden();
+  await expect(page.locator('.reviews-provider-detail .reviews-pr-description')).toHaveCount(0);
   const previewDiffBounds = await page.locator('.reviews-pr-diff').boundingBox();
   expect(previewDiffBounds!.height).toBeGreaterThanOrEqual(130);
   await expect(page.locator('.reviews-summary-stats')).toContainText('+427');

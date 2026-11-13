@@ -84,6 +84,7 @@
   padding: 7px 9px;
   border-top: 1px solid #302d42;
 }
+.reviews-comment-composer .mantine-Textarea-root { display: block; }
 .reviews-comment-composer .mantine-Textarea-input {
   min-height: 48px;
   border-color: #353149;
