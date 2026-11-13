@@ -147,7 +147,7 @@
 .workspace-mock-track > span.purple { background: linear-gradient(90deg, #8e3ada, #cc69f6); }
 .workspace-mock-track > span.blue { background: linear-gradient(90deg, #287de8, #5a9cff); }
 .workspace-mock-track > span.teal { background: linear-gradient(90deg, #22b8b4, #4bd5d0); }
-.workspace-mock-track > span.amber { background: linear-gradient(90deg, #b9832a, #e8bb56); }
+.workspace-mock-track > span.amber { color: #1b1407; background: linear-gradient(90deg, #b9832a, #e8bb56); }
 .workspace-mock-track > span.red { background: linear-gradient(90deg, #b83a55, #e0637d); }
 .workspace-mock-objectives { display: grid; gap: 7px; margin-top: 7px; }
 .workspace-mock-objectives > div { display: grid; grid-template-columns: 14px minmax(0, 1fr) 58px 25px; align-items: center; gap: 5px; }
