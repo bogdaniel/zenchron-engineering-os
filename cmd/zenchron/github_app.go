@@ -24,7 +24,7 @@ import (
 const maxGitHubAppPrivateKeySize = 64 << 10
 
 type gitHubAppAuth struct {
-	// shortcut: one installation per control plane; select an installation per repository for multi-org support.
+	// ponytail: one installation per control plane; select an installation per repository for multi-org support.
 	appID          string
 	installationID string
 	privateKeyPath string

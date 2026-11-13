@@ -191,7 +191,7 @@ func safeRepositoryPath(repository, requested string) (string, error) {
 	return path, nil
 }
 
-// shortcut: code.write needs an existing parent directory; add safe directory creation if tasks require nested new files.
+// ponytail: code.write needs an existing parent directory; add safe directory creation if tasks require nested new files.
 func safeRepositoryWritePath(repository, requested string) (string, error) {
 	relative, err := safeRepositoryRelativePath(requested)
 	if err != nil {
