@@ -60,7 +60,7 @@ loaders).
 | Shell | One shell | `main.tsx` | Signed-in login and avatar instead of the sample person |
 | Agents | One layout | `AgentsSource` | Runs, success rate, duration, and provider-reported cost from real runs; owner, created date, variables, templates, and earlier versions are Unavailable; safety lists the worker's real safeguards; import is disabled |
 | Overview | One layout | `OverviewSource` | Open objectives and their progress, running agents, online workers, the open PR queue, CI pass rate, recent activity, the last three agent runs, the latest local branch diff with its first changed lines, the saved workflow's stages, and merged-PR, cycle-time, and CI-duration charts are real; budget, plan approvals, trusted-main and evidence health, the sprint timeline, workflow execution, KPI trend deltas, sparklines, and the PR bars are Unavailable, empty, or left out |
-| Objectives | Pending | | |
+| Objectives | One layout | `ObjectivesSource` | Objectives, their owner, product, status, progress, and due date, the status counts, completed count and completion share, and the plan summary (target, created, and last-updated dates) are real, and objectives are created and edited through the API; approval, linked workflows, blockers, acceptance criteria, related PRs, activity, milestones, the capacity chart, and the KPI trend graphics are Unavailable or left out; favorites are disabled |
 | Workflows | Pending | | |
 | Projects | Single layout already; no fixtures | | |
 | Product Workspace | One layout | `WorkspaceSource` | Products, linked repositories with worker and branch, repository health, objectives, the roadmap (bars run from an objective's creation to its due date), workflow definitions, and agent profiles are real, and products are created and edited through the API; files, stakeholders, release streams, decisions, delivery metrics, and every trend graphic are Unavailable with the reason; favorites and the delivery range are disabled |
@@ -104,6 +104,26 @@ until the list is empty.
   editor) moved to `workspace-preview.css`.
 - The fixture-only "Add a product to this preview" dialog; both modes use `ProductEditor`.
 
+## Removed with the Objectives migration
+
+- The mode branches in `objectives.tsx` (57 `sampleData` references, now three that pick the source). The page is
+  `objectives.tsx` (list, filters, views, create dialog) and `ObjectiveDetail.tsx` (detail panel, editor, milestones);
+  `objectivesView.ts` holds the schemas, `ObjectivesSource`, and `useLiveObjectives`; `objective-preview.ts` holds the
+  fixtures and `useMockObjectives`.
+- The Live-only detail header ("Edit objective" / "Cancel edit" button, ID caption), plain meta grid (due date,
+  created), underline tabs, seven-card overview with the "Objective progress" card, and "not included in the available
+  objective data" copy. "Edit objective" moved into the design's "More objective actions" menu; the due date sits
+  beside the completion bar and the created date in Plan Summary.
+- The Live-only "Objective progress" bar list in the capacity card, the plain KPI labels ("Completed objectives",
+  "Completion rate"), the lower-case filter labels, the plain title and owner cells, and AG Grid's own pagination
+  panel; both modes use the numbered footer pager.
+- Thirteen CSS rules only those used (`edit-objective-button`, `objective-detail-head small`, `objective-overview-wide`,
+  `objective-progress-card`, `capacity-empty`, `capacity-bars`, the `ag-paging-panel` rule).
+- The "The mock preview is read-only." refusal: Mock now creates and edits fixture objectives in the tab and says
+  "in this preview only".
+- The editor's mirrored `progress`, `status`, and `product` state. The detail panel reads the saved record and the
+  form is seeded when editing starts, so the summary cannot show a value the record does not hold.
+
 ## Removed with the Overview migration
 
 - The mode branches in `OverviewPage.tsx` (37 `sampleData` references, now one that picks the source). Fixtures moved
@@ -137,6 +157,12 @@ until the list is empty.
   390×844. `home.spec.ts` "overview lists only agent runs with captured local diffs": the Live review frame and its
   diff excerpt. Approved and Mock were pixel-compared at 1672×941, 1672×749, 1024×768, and 390×844 and differ only in
   the mode selector.
+- `dashboard/e2e/objectives-views.spec.ts`: the Objectives frame in Mock with local-only create and edit and no API
+  traffic; in Live with real records, honest unavailable parts, validation, failed loads and saves reported without
+  fixtures, retry, the create and edit payloads, and the phone layout without overflow. `home.spec.ts`: Live create and
+  edit, and the Live frame at 1672×941. Approved and Mock were pixel-compared at 1672×941, 1672×749, 1440×900, and
+  1024×768 and are identical; at 390×844 they differ only in the detail header, where the status badge and the three
+  action buttons are no longer clipped.
 - `dashboard/e2e/workspace.spec.ts`: the Product Workspace frame in Live with real products, repositories, objectives,
   and roadmap; honest unavailable panels and disabled controls; product edit through `PUT /api/v1/products/{id}`;
   product switching on a phone; empty and failed product lists. `workspace-preview.spec.ts`: the same layout in Mock
