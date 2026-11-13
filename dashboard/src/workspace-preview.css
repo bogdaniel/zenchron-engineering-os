@@ -103,7 +103,7 @@
 .workspace-mock-health.attention { color: #e8bb56; }
 .workspace-mock-health.attention b { border-color: #6b5320; background: #392b13; }
 .workspace-mock-health path { fill: none; stroke: #27dfa0; stroke-width: 2; }
-.workspace-mock-growth, .workspace-mock-metric small b { color: #43dfa1; font-size: 9px; }
+.workspace-mock-metric small b { color: #43dfa1; font-size: 9px; }
 .workspace-mock-tabs { display: flex; min-height: 39px; gap: 4px; margin: 15px 0 12px; padding: 4px; border: 1px solid #302b48; border-radius: 9px; background: #12121d; }
 .workspace-mock-tabs button { display: flex; min-width: 103px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 0; border-radius: 7px; color: #d9d4e2; background: transparent; font-size: 10px; }
 .workspace-mock-tabs button.active { color: #fff; background: linear-gradient(105deg, #6738a5, #442566); }

@@ -266,12 +266,6 @@
 .delivery-velocity-panel .reports-empty-chart, .ci-distribution-panel .reports-empty-chart { min-height: 86px; }
 .acceptance-panel .reports-empty-chart { height: 68px; min-height: 68px; }
 .reports-acceptance-chart { height: 76px; margin-top: 2px; }
-.coverage-online {
-  border: 1px solid #285343;
-  color: #63dba8;
-  background: #17352b;
-  font-size: 9px;
-}
 .reports-insights { display: grid; gap: 4px; }
 .reports-insight { display: flex; min-width: 0; align-items: flex-start; gap: 7px; }
 .reports-insight > svg { flex: 0 0 auto; margin-top: 1px; color: #bd8aff; }

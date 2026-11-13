@@ -284,7 +284,6 @@
 .overview-layout .objective-panel { padding-bottom: 2px; }
 .overview-layout .overview-middle-grid .panel-heading { transform: translateY(-4px); }
 .overview-layout .section-icon { width: 26px; height: 26px; border: 1px solid #3a3153; border-radius: 8px; color: #c59bff; background: #2a2139; }
-.overview-layout .section-icon.blue-icon { border-color: #2c3e58; color: #92c7ff; background: #1a2939; }
 .overview-layout .section-icon.green-icon { border-color: #34725d; color: #80e3b3; background: #193128; }
 .overview-layout .overview-design-preview .section-icon { border: 0; border-radius: 0; background: transparent; }
 .overview-layout .section-icon svg { width: 22px; height: 22px; }
@@ -356,7 +355,6 @@
 .preview-approval-list .mantine-Badge-root, .preview-agent-list .mantine-Badge-root { padding: 4px 6px; font-size: 10px; }
 .preview-approval-list .mantine-Badge-root { padding-right: 2px; padding-left: 2px; }
 .preview-approval-list .mantine-Badge-root, .preview-agent-list .mantine-Badge-root { flex: 0 0 auto; }
-.preview-health-tag { padding: 3px 7px; border-radius: 10px; }
 .overview-layout .evidence-health-list > div { padding: 6px; }
 .overview-layout .evidence-health-list > div > svg { width: 20px; height: 20px; }
 .overview-layout .evidence-health-list > div > span { font-size: 13px; }
@@ -476,7 +474,7 @@
   .overview-shell.overview-layout .mock-budget-summary small { font-size: 10px; white-space: nowrap; }
   .overview-shell.overview-layout .mock-budget-progress { width: 95px; }
   /* "Unavailable" is wider than a percentage, so the bar gives up the difference. */
-  .overview-shell.overview-layout .metric-unavailable + .mock-budget-summary .mock-budget-progress { width: 100%; }
+.overview-shell.overview-layout .metric-unavailable + .mock-budget-summary .mock-budget-progress { width: 100%; }
   .content-grid { grid-template-columns: 1fr; gap: 10px; margin-top: 18px; }
   .workflow-panel, .activity-panel, .objective-panel, .plan-panel, .agents-panel,
   .evidence-panel, .review-panel, .timeline-panel, .analytics-panel { grid-column: 1; }
