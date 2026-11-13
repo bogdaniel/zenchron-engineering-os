@@ -259,7 +259,7 @@ test('the Mock and Live switch selects the data source, keeps the page, and stay
   ])));
   await page.route(`**/api/v1/agent-runs/${runID}/pull-request`, (route) => route.fulfill(json({
     number: 23, url: evidenceRun.pull_request_url, state: 'open', merged: false, head_sha: 'a'.repeat(40), checks: [], reviews: [] })));
-  // A local address starts in Mock; the explicit parameter wins on any host.
+  // A local address starts in Mock and offers the selector.
   await page.goto(`${local.origin}/#agents`);
   const mode = page.getByRole('radiogroup', { name: 'Data mode' });
   await expect(mode.getByRole('radio', { name: 'Mock' })).toBeChecked();
@@ -272,8 +272,13 @@ test('the Mock and Live switch selects the data source, keeps the page, and stay
   await expect(page.locator('.agents-design-preview .agent-row')).toContainText('Codex engineer');
   await page.getByRole('link', { name: 'Reviews' }).click();
   await expect(page).toHaveURL(/\?mode=live#reviews$/);
-  await page.goto(`${baseURL}/?mode=mock#agents`);
+  await page.goto(`${local.origin}/?mode=mock#agents`);
   await expect(page.locator('.agents-preview-notice')).toHaveText('ILLUSTRATIVE DATA');
+  // Off a local address there is no selector and no Mock, whatever the address says.
+  await page.goto(`${baseURL}/?mode=mock#agents`);
+  await expect(page.getByRole('heading', { name: 'Agent Profiles (1)' })).toBeVisible();
+  await expect(page.locator('.agents-preview-notice')).toHaveCount(0);
+  await expect(page.getByRole('radiogroup', { name: 'Data mode' })).toHaveCount(0);
   await page.goto(`${local.origin}/?mode=live#reviews`);
   await page.getByRole('button', { name: 'Local branches' }).click();
   await page.getByRole('group', { name: 'Review detail sections' }).getByRole('button', { name: 'Evidence' }).click();

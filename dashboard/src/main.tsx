@@ -45,11 +45,14 @@ const searchablePages = [
 // Pages whose Live mode already renders the approved layout. The list goes away once every page is on it.
 const unifiedPages = ['agents', 'integrations', 'settings', 'workspace'];
 type DashboardMode = 'mock' | 'live';
-/** `?mode=mock|live` wins. Without it, local development starts in Mock and any other host starts in Live. */
+const localDevelopment = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+/**
+ * Mock exists for local development only: a local address starts in Mock and honours `?mode=mock|live`.
+ * Any other host is always Live, so a deployed dashboard can never show sample data.
+ */
 function modeFromLocation(): DashboardMode {
-  const requested = new URLSearchParams(window.location.search).get('mode');
-  if (requested === 'mock' || requested === 'live') return requested;
-  return window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' ? 'mock' : 'live';
+  if (!localDevelopment) return 'live';
+  return new URLSearchParams(window.location.search).get('mode') === 'live' ? 'live' : 'mock';
 }
 function pageFromHash() {
   const page = window.location.hash.slice(1);
@@ -115,7 +118,7 @@ function App() {
     setMode(next);
   };
   // Rendered twice: in the sidebar, and in the header on phones where the sidebar becomes the bottom bar.
-  const modeSwitch = (className: string) => <SegmentedControl className={className} size="xs" aria-label="Data mode"
+  const modeSwitch = (className: string) => localDevelopment && <SegmentedControl className={className} size="xs" aria-label="Data mode"
     value={mode} data={[{ value: 'mock', label: 'Mock' }, { value: 'live', label: 'Live' }]}
     onChange={(value) => chooseMode(value === 'live' ? 'live' : 'mock')} />;
   const goToPage = (href: string) => {

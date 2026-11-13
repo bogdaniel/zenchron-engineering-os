@@ -7,7 +7,7 @@ the child services.
 
 A local address opens in Mock mode (the approved fixtures). Choose Live in the sidebar, or open
 `http://127.0.0.1:4173/?mode=live#reviews`, to see the control plane's real data; `?mode=mock` returns to the
-fixtures. See [One dashboard, two data modes](../architecture/dashboard-modes.md).
+fixtures. The selector and Mock mode exist only on a local address. See [One dashboard, two data modes](../architecture/dashboard-modes.md).
 
 ```mermaid
 sequenceDiagram

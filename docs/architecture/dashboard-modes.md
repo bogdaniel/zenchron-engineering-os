@@ -23,10 +23,11 @@ flowchart LR
 
 ## Behavior
 
-- **Selecting a mode.** `?mode=mock` or `?mode=live` in the address wins on any host. Without it, `127.0.0.1` and
-  `localhost` start in Mock and every other host starts in Live. The selector (labelled "Data mode") is in the sidebar
-  footer, and in the header on phones where the sidebar becomes the bottom bar. Choosing a mode writes `?mode=` to the
-  address and keeps the current page; hash navigation keeps the parameter.
+- **Selecting a mode.** Mock exists for local development only. On `127.0.0.1` or `localhost` the dashboard starts in
+  Mock, honours `?mode=mock` and `?mode=live`, and shows the selector (labelled "Data mode") in the sidebar footer, or
+  in the header on phones where the sidebar becomes the bottom bar. Choosing a mode writes `?mode=` to the address and
+  keeps the current page; hash navigation keeps the parameter. On any other host there is no selector and the
+  dashboard is always Live, whatever the address says, so a deployed dashboard cannot show sample data.
 - **Mock.** Shows the approved fixtures and works with no control plane running. It never sends a write request:
   create, edit, duplicate, import, and "Run Agent" change state in the browser tab only, and their confirmations end
   with "in this preview only". Fixture pages carry an "ILLUSTRATIVE DATA" label and fixture charts are announced as
