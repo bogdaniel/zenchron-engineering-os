@@ -80,7 +80,7 @@ type DetailTab = typeof detailTabs[number][0] | typeof previewDetailTabs[number]
 const diffSchema = z.object({ run_id: z.string(), diff: z.string(), truncated: z.boolean() });
 const pullRequestDiffSchema = z.object({ diff: z.string().max(1 << 20) });
 
-async function loadDiff(runID: string) {
+export async function loadDiff(runID: string) {
   const response = await fetch(`/api/v1/agent-runs/${runID}/diff`);
   if (!response.ok) throw new Error(`Could not load local branch diff (${response.status})`);
   return diffSchema.parse(await response.json());

@@ -27,7 +27,6 @@ export type WorkflowNode = Node<WorkflowData & { kind: ComponentType; previewIco
 export type Workflow = z.infer<typeof workflowSchema>;
 export const workflowNodeWidth = 190;
 export const workflowNodeHeight = 110;
-export const overviewNodeLayout = { width: 190, height: 54, spacing: 8 };
 export const designPreviewPositions: Record<string, { x: number; y: number }> = {
   trigger: { x: 10, y: 72 }, plan: { x: 252, y: 72 }, build: { x: 461, y: 72 },
   test: { x: 666, y: 24 }, review: { x: 666, y: 112 }, merge: { x: 911, y: 72 },
@@ -160,6 +159,8 @@ export async function layoutNodes(
 }
 
 export function mobileWorkflowGraph(workflow: Workflow, designPreview = false, mobile = false) {
+  // The Overview panel draws every workflow, fixture or saved, with the approved stage positions, glyphs, and arrows.
+  const approvedLook = designPreview || !mobile;
   const stageByType = new Map<ComponentType, string>();
   for (const stage of mobileOverviewStages) {
     for (const type of stage.types) stageByType.set(type, stage.id);
@@ -175,9 +176,9 @@ export function mobileWorkflowGraph(workflow: Workflow, designPreview = false, m
   const configuredStages = new Set(stageByNode.values());
   const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id));
   const nodes: WorkflowNode[] = stages.map(({ id, label, description, kind, previewIcon, position }) => ({
-    id, type: 'workflow', position: designPreview && !mobile ? designPreviewPositions[id] ?? position : position,
+    id, type: 'workflow', position: mobile ? position : designPreviewPositions[id] ?? position,
     data: {
-      kind, label, ...(designPreview ? { previewIcon } : {}),
+      kind, label, ...(approvedLook ? { previewIcon } : {}),
       description: designPreview && id === 'trigger' ? 'Objective updated'
         : designPreview && id === 'merge' ? 'To trusted-main' : description,
     },
@@ -193,7 +194,7 @@ export function mobileWorkflowGraph(workflow: Workflow, designPreview = false, m
     if (edgeIDs.has(id)) return [];
     edgeIDs.add(id);
     return [{ id, source, target, type: 'smoothstep' as const, animated: false,
-      ...(designPreview ? { markerEnd: { type: MarkerType.ArrowClosed, color: '#c4d8ff' } } : {}) }];
+      ...(approvedLook ? { markerEnd: { type: MarkerType.ArrowClosed, color: '#c4d8ff' } } : {}) }];
   });
   return { nodes, edges };
 }

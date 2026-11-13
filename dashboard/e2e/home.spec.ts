@@ -58,10 +58,24 @@ test('overview lists only agent runs with captured local diffs', async ({ page }
       },
     ]),
   }));
+  await page.route('**/api/v1/agent-runs/0123456789abcdef0123456789abcdef/diff', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({
+      run_id: '0123456789abcdef0123456789abcdef', truncated: false,
+      diff: 'diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -40,3 +40,4 @@\n context\n-old line\n+new line\n+added line\n tail\n',
+    }),
+  }));
   await page.goto('/');
-  await expect(page.locator('.overview-review-list')).toContainText('zenchron/agent-run/reviewable');
-  await expect(page.locator('.overview-review-list')).toContainText('1 comments');
-  await expect(page.locator('.overview-review-list')).not.toContainText('zenchron/agent-run/no-diff');
+  const review = page.locator('.preview-review-panel');
+  await expect(review.locator('.preview-review-meta')).toHaveText(/Local diff\s*Comments 1\s*Diffs 1\s*Succeeded/);
+  await expect(review.locator('h4')).toHaveText('Code Reviewer · Update the README');
+  await expect(review.locator('.preview-branches')).toContainText('zenchron/agent-run/reviewable');
+  await expect(review.locator('.preview-branches b')).toHaveText('+2 −1');
+  await expect(review.locator('.preview-diff')).toHaveText('- old line\n41  + new line\n42  + added line\n43    tail');
+  await expect(review.getByRole('link', { name: 'Open in Reviews' })).toHaveAttribute('href', '#reviews');
+  await expect(review).not.toContainText('zenchron/agent-run/no-diff');
+  await expect(page.locator('.agents-panel .preview-agent-list > div')).toHaveText([
+    /Code Reviewer\s*Nova Platform\s*Succeeded\s*just now/, /Test Generator\s*Nova Platform\s*Succeeded\s*just now/,
+  ]);
 });
 
 test('objectives can be created and updated from the dashboard', async ({ page }) => {

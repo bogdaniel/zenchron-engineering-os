@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Badge, Button, Menu, Modal, Select, TextInput, Textarea } from '@mantine/core';
 import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
@@ -12,7 +12,7 @@ import {
 import type { Connection, Edge, NodeProps, ReactFlowInstance } from '@xyflow/react';
 import {
   IconArrowLeft, IconCheck, IconChecklist, IconChevronDown, IconChevronRight, IconCirclePlus, IconDeviceFloppy, IconDots, IconGripVertical,
-  IconHierarchy, IconInfoCircle, IconLayoutBoard, IconMaximize, IconPlayerPlay, IconRoute, IconSearch, IconUserCheck, IconX,
+  IconHierarchy, IconInfoCircle, IconLayoutBoard, IconMaximize, IconPlayerPlay, IconSearch, IconUserCheck, IconX,
 } from '@tabler/icons-react';
 import '@xyflow/react/dist/style.css';
 import { PageHeading } from './PageHeading';
@@ -25,7 +25,7 @@ import { WorkflowMobileRunPreview } from './WorkflowMobileRunPreview';
 import { WorkflowSectionPreview, WorkflowSectionTabs } from './WorkflowSectionsPreview';
 import {
   components, componentGroups, defaultDescriptions, designPreviewCanvasPositions, designPreviewWorkflow, layoutNodes, loadWorkflows,
-  mobileWorkflowGraph, overviewNodeLayout, workflowGraph, workflowNodeHeight, workflowNodeIcons, workflowNodeWidth,
+  mobileWorkflowGraph, workflowGraph, workflowNodeHeight, workflowNodeIcons, workflowNodeWidth,
   workflowSchema,
 } from './workflowModel';
 import type { ComponentType, Workflow, WorkflowData, WorkflowNode } from './workflowModel';
@@ -92,84 +92,51 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
   const workflow = designPreview ? designPreviewWorkflow : workflowID
     ? query.data?.find((item) => item.id === workflowID)
     : query.data?.[0];
-  const [nodes, setNodes] = useState<WorkflowNode[]>([]);
-  const [edges, setEdges] = useState<Edge[]>([]);
-  const [layoutError, setLayoutError] = useState(false);
-
-  useEffect(() => {
-    if (!workflow) return;
-    if (mobile) {
-      const graph = mobileWorkflowGraph(workflow, designPreview, mobile);
-      setLayoutError(false);
-      setNodes(graph.nodes);
-      setEdges(graph.edges);
-      return;
-    }
-    if (designPreview) {
-      const graph = mobileWorkflowGraph(workflow, true);
-      setLayoutError(false);
-      setNodes(graph.nodes);
-      setEdges(graph.edges);
-      return;
-    }
-    let isCurrent = true;
-    const graph = mobileWorkflowGraph(workflow, designPreview);
-    setLayoutError(false);
-    void layoutNodes(graph.nodes, graph.edges, overviewNodeLayout).then((laidOut) => {
-      if (!isCurrent) return;
-      setNodes(laidOut);
-      setEdges(graph.edges);
-    }).catch(() => {
-      if (isCurrent) setLayoutError(true);
-    });
-    return () => { isCurrent = false; };
-  }, [workflow, mobile, designPreview]);
+  const { nodes, edges } = useMemo(
+    () => workflow ? mobileWorkflowGraph(workflow, designPreview, mobile) : { nodes: [], edges: [] },
+    [workflow, designPreview, mobile],
+  );
+  // No workflow runner is connected, so only the fixture has a run to report.
+  const execution = designPreview
+    ? { badge: '● Running', badgeClass: 'preview-running-badge', stagesComplete: true }
+    : { badge: 'Execution unavailable', badgeClass: 'muted-tag', stagesComplete: false,
+      note: workflow && `${workflow.nodes.length} components · ${workflow.edges.length} connections · runner not connected` };
 
   return <PanelCard className="panel workflow-panel" id="workflow" withBorder>
-    <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon">
-      {designPreview ? <IconHierarchy size={22} /> : <IconRoute size={18} />}</span>}
-      title={<span className="overview-heading-with-info">Workflow Orchestration{designPreview && <IconInfoCircle className="overview-heading-info" size={14} aria-hidden="true" />}</span>}
-      description={designPreview ? 'Objective: Ship AI code review v2' : workflow?.name ?? 'Saved workflow definition'}
-      actions={<div className={`panel-actions${designPreview ? ' workflow-overview-actions' : ''}`}>
-        <Badge className={designPreview ? 'preview-running-badge' : 'muted-tag'} variant="light">
-          {designPreview ? '● Running' : workflow?.status ?? 'Unavailable'}
-        </Badge>
-        {designPreview ? <>
-          <a className="subtle-button" href="#workflows">View Runs</a>
-          <a className="workflow-icon-link" href="#workflows" aria-label="Open workflow editor"><IconMaximize size={14} /></a>
-          <Menu position="bottom-end" withinPortal>
-            <Menu.Target><button className="workflow-icon-link" aria-label="Workflow options"><IconDots size={16} /></button></Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Item component="a" href="#workflows">Open workflow editor</Menu.Item>
-              <Menu.Item component="a" href="#agents">View agent runs</Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        </> : <a className="subtle-button" href="#workflows">View workflow <IconChevronRight size={13} /></a>}
+    <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconHierarchy size={22} /></span>}
+      title={<span className="overview-heading-with-info">Workflow Orchestration<IconInfoCircle className="overview-heading-info" size={14} aria-hidden="true" /></span>}
+      description={designPreview ? 'Objective: Ship AI code review v2'
+        : workflow ? `${workflow.name} · ${workflow.status}` : 'Saved workflow definition'}
+      actions={<div className="panel-actions workflow-overview-actions">
+        <Badge className={execution.badgeClass} variant="light">{execution.badge}</Badge>
+        <a className="subtle-button" href="#workflows">View Runs</a>
+        <a className="workflow-icon-link" href="#workflows" aria-label="Open workflow editor"><IconMaximize size={14} /></a>
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target><button className="workflow-icon-link" aria-label="Workflow options"><IconDots size={16} /></button></Menu.Target>
+          <Menu.Dropdown>
+            {execution.note && <Menu.Label>{execution.note}</Menu.Label>}
+            <Menu.Item component="a" href="#workflows">Open workflow editor</Menu.Item>
+            <Menu.Item component="a" href="#agents">View agent runs</Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
       </div>} />
     {!designPreview && query.isLoading ? <div className="workflow-overview-message">Loading saved workflow…</div>
       : !workflow || (!designPreview && query.isError) ? <div className="workflow-overview-message" role="status">Workflow definition unavailable</div>
-        : layoutError ? <div className="workflow-overview-message" role="status">Could not arrange workflow graph</div>
-          : <>
-            <div className="workflow-overview-canvas" role="img"
-              aria-label={
-                `Key workflow stages for ${workflow.name}; ${nodes.length} stages summarize ` +
-                `${workflow.nodes.length} components`
-              }>
-              <ReactFlow
-                nodes={nodes} edges={edges} nodeTypes={flowNodeTypes} fitView={!mobile} minZoom={mobile ? 0.9 : 0.15}
-                maxZoom={0.9} defaultViewport={mobile ? { x: 18, y: 8, zoom: 0.9 } : undefined}
-                fitViewOptions={{ padding: designPreview ? 0.015 : 0.03 }}
-                nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} panOnDrag={false}
-                zoomOnScroll={false} zoomOnPinch={false} attributionPosition="bottom-left"
-              >
-                <Background color={designPreview ? "#504665" : "#37324c"} gap={designPreview ? 12 : 18} size={1.2} />
-              </ReactFlow>
-            </div>
-            {!designPreview && <div className="workflow-overview-status" aria-label="Workflow execution status">
-              <span>{workflow.nodes.length} components · {workflow.edges.length} connections</span>
-              <span>Execution unavailable · runner not connected</span>
-            </div>}
-          </>}
+        : <div className={`workflow-overview-canvas${execution.stagesComplete ? ' stages-complete' : ''}`} role="img"
+          aria-label={
+            `Key workflow stages for ${workflow.name}; ${nodes.length} stages summarize ` +
+            `${workflow.nodes.length} components`
+          }>
+          <ReactFlow
+            nodes={nodes} edges={edges} nodeTypes={flowNodeTypes} fitView={!mobile} minZoom={mobile ? 0.9 : 0.15}
+            maxZoom={0.9} defaultViewport={mobile ? { x: 18, y: 8, zoom: 0.9 } : undefined}
+            fitViewOptions={{ padding: 0.015 }}
+            nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} panOnDrag={false}
+            zoomOnScroll={false} zoomOnPinch={false} attributionPosition="bottom-left"
+          >
+            <Background color={designPreview ? "#504665" : "#37324c"} gap={designPreview ? 12 : 18} size={1.2} />
+          </ReactFlow>
+        </div>}
   </PanelCard>;
 }
 

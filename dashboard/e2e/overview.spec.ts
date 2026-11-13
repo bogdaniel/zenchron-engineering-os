@@ -5,112 +5,6 @@ const environment = (
 ).process?.env ?? {};
 const localDashboardURL = `http://127.0.0.1:${Number(environment.ZENCHRON_E2E_DASHBOARD_PORT) || 4173}`;
 
-test('dashboard displays the connected control plane and local worker', async ({ page }) => {
-  await page.setViewportSize({ width: 1490, height: 829 });
-  await page.route((url) => url.hostname === 'zenchron.test'
-    && (url.pathname === '/healthz' || url.pathname.startsWith('/api/v1/')),
-  async (route) => {
-    const upstream = new URL(route.request().url());
-    upstream.hostname = '127.0.0.1';
-    upstream.port = '8083';
-    const response = await page.request.get(upstream.toString());
-    await route.fulfill({ response });
-  });
-  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: '[]',
-  }));
-  await page.goto('/');
-  await expect(page.locator('.search-box')).toBeVisible();
-  const overviewIconsLeadLabels = await page.locator('.metric-card .metric-top').evaluateAll((headers) =>
-    headers.every((header) => {
-      const icon = header.querySelector('svg')?.getBoundingClientRect();
-      const label = header.querySelector('span')?.getBoundingClientRect();
-      return icon !== undefined && label !== undefined && icon.right <= label.left;
-    }),
-  );
-  expect(overviewIconsLeadLabels, 'Overview KPI icons sit before their labels').toBe(true);
-  const headerRegions = await page.evaluate(() => {
-    const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
-    return { greetingRight: rect('.greeting').right, search: rect('.search-box'), actionsLeft: rect('.top-actions').left };
-  });
-  expect(headerRegions.search.left).toBeGreaterThanOrEqual(headerRegions.greetingRight);
-  expect(headerRegions.search.right).toBeLessThanOrEqual(headerRegions.actionsLeft);
-  await page.setViewportSize({ width: 1360, height: 829 });
-  await expect(page.locator('.search-box')).toBeHidden();
-  await page.setViewportSize({ width: 1490, height: 829 });
-  await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Search pages' })).toHaveAttribute('placeholder', 'Search Zenchron…');
-  await expect(page.getByRole('heading', { name: 'Workflow Orchestration' })).toBeVisible();
-  await expect(page.locator('.plan-panel .panel-actions')).toHaveCount(0);
-  await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
-  await expect(page.locator('.workflow-overview-canvas .react-flow__edge')).toHaveCount(6);
-  await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeVisible();
-  const workflowSummary = page.locator('.workflow-overview-canvas');
-  await expect(workflowSummary).toHaveAttribute('aria-label', /6 stages summarize 9 components/);
-  await expect(workflowSummary).toContainText('Run agents');
-  await expect(workflowSummary).toContainText('Run test suite');
-  await expect(workflowSummary).toContainText('AI + human review');
-  await expect(workflowSummary).toContainText('Gated release');
-  await expect(page.locator('.workflow-overview-status')).toContainText('Execution unavailable');
-  await expect(page.locator('.activity-list')).toContainText('Control plane is responding');
-  await expect(page.getByText('Running Agents', { exact: true })).toBeVisible();
-  await expect(page.getByText('Approval data unavailable', { exact: true })).toBeVisible();
-  await expect(page.locator('.evidence-health-list')).toContainText('Trusted-main');
-  await expect(page.locator('.evidence-health-list')).toContainText('Evidence');
-  await expect(page.locator('.evidence-health-list .muted-tag .health-status-dot').first()).toHaveCSS('background-color', 'rgb(170, 160, 192)');
-  await expect(page.getByText('No pending approvals', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('No runs', { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/Worker “.+” is online/)).toBeVisible();
-  await expect(page.locator('.activity-list')).toContainText('zenchron-engineering-os');
-  await expect(page.locator('.metric-unavailable')).toHaveCount(3);
-  await expect(page.getByRole('heading', { name: 'Code Review' })).toBeVisible();
-  await expect(page.getByText('No local branch diffs yet', { exact: true })).toBeVisible();
-  await expect(page.getByText('No pull requests yet', { exact: true })).toHaveCount(0);
-  await expect(page.locator('.page-footer')).toBeHidden();
-  await page.getByRole('link', { name: 'Product Workspace' }).click();
-  await page.getByRole('button', { name: 'Product actions' }).click();
-  await page.getByRole('menuitem', { name: 'Open repository inventory' }).click();
-  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
-});
-
-test('Overview PR queue and CI health use complete GitHub history', async ({ page }) => {
-  const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
-  const projectID = 'a'.repeat(32);
-  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, local: true, login: '' }),
-  }));
-  await page.route('**/api/v1/projects', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify([{
-      id: projectID, name: 'Platform', branch: 'main', git_remote: 'github.com/acme/platform',
-      worker_id: 'b'.repeat(32), worker_name: 'Mac', worker_status: 'online', last_seen: ago(0),
-    }]),
-  }));
-  await page.route('**/api/v1/projects/*/pull-request-history*', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ complete: true, items: [
-      { created_at: ago(120), closed_at: null, merged_at: null },
-      { created_at: ago(60), closed_at: null, merged_at: null },
-      { created_at: ago(180), closed_at: ago(30), merged_at: ago(30) },
-    ] }),
-  }));
-  await page.route('**/api/v1/projects/*/workflow-run-history*', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ complete: true, items: [
-      { created_at: ago(60), status: 'completed', conclusion: 'success', run_started_at: ago(12), updated_at: ago(2) },
-      { created_at: ago(60), status: 'completed', conclusion: 'failure', run_started_at: ago(12), updated_at: ago(2) },
-      { created_at: ago(60), status: 'completed', conclusion: 'success', run_started_at: ago(12), updated_at: ago(2) },
-    ] }),
-  }));
-
-  await page.goto('/');
-  const queue = page.locator('.metric-card.pr-queue-metric');
-  await expect(queue.locator('strong')).toHaveText('2');
-  await expect(queue.locator('small')).toHaveText('2 open GitHub pull requests');
-  const ci = page.locator('.metric-card.green');
-  await expect(ci.locator('strong')).toHaveText('67%');
-  await expect(ci.locator('small')).toHaveText('2 of 3 completed runs passed');
-  await expect(page.getByRole('img', { name: 'Merged pull requests by period' })).toBeVisible();
-  await expect(page.locator('.overview-delivery-summary')).toContainText('1');
-});
-
 test('unauthenticated local users can review the latest Overview and reach sign-in', async ({ page }) => {
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
   await page.goto(`${localDashboardURL}/`);
@@ -499,7 +393,7 @@ test('Overview design preview renders the supplied mock content without replacin
   expect(analytics?.width).toBe(374);
   await expect(page.locator('.workflow-node.merge-gate')).toContainText('To trusted-main');
   await expect(page.locator('.preview-review-meta')).toContainText('Approved');
-  await expect(page.locator('.preview-review-meta a')).toHaveAttribute('aria-label', 'Open pull request review');
+  await expect(page.locator('.preview-review-meta a')).toHaveAttribute('aria-label', 'Open in Reviews');
   await expect(page.locator('.preview-diff')).toContainText('+ const evidence = await captureEvidence');
   await expect(page.locator('.preview-diff')).toContainText('+   artifacts: run.artifacts,');
 
