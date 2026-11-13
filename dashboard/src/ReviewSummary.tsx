@@ -14,7 +14,7 @@ const statTiles = [
 ] as const;
 
 /** The right-hand pane: description, change statistics, required checks, review actions, and merge governance. */
-export function ReviewSummary({ source, context, copy, view, status, pullRequest, issue, onOpenConversations }: {
+export function ReviewSummary({ source, context, copy, view, status, pullRequest, issue, onOpenConversations, onMessage }: {
   source: ReviewsSource;
   context: string;
   copy: string;
@@ -23,6 +23,7 @@ export function ReviewSummary({ source, context, copy, view, status, pullRequest
   pullRequest?: GitHubPullRequest;
   issue?: GitHubIssue;
   onOpenConversations: () => void;
+  onMessage: (message: string) => void;
 }) {
   return <PanelCard className="reviews-summary" withBorder>
     <PanelHeading className="reviews-panel-heading" title="Review Summary" description={context} actions={<IconShieldCheck size={17} />} />
@@ -45,7 +46,7 @@ export function ReviewSummary({ source, context, copy, view, status, pullRequest
       <div className="reviews-summary-review-actions">
         <Button color="green" disabled={!source.approve || !pullRequest}
           title={source.approve ? undefined : 'The control plane cannot approve pull requests; approve on GitHub'}
-          onClick={() => pullRequest && source.approve?.(pullRequest)}>{status?.value === 'approved' ? 'Approved' : 'Approve'}</Button>
+          onClick={() => pullRequest && source.approve && onMessage(source.approve(pullRequest))}>{status?.value === 'approved' ? 'Approved' : 'Approve'}</Button>
         {pullRequest && <Button color="violet" onClick={() => {
           source.requestChanges?.(pullRequest);
           onOpenConversations();
@@ -54,7 +55,7 @@ export function ReviewSummary({ source, context, copy, view, status, pullRequest
       </div>
       <Button className="reviews-merge-button" disabled={!source.merge || !pullRequest} fullWidth
         title={source.merge ? undefined : 'Merging is done on GitHub; the control plane has no merge operation'}
-        onClick={() => pullRequest && source.merge?.(pullRequest)}>{view.mergeLabel}</Button>
+        onClick={() => pullRequest && source.merge && onMessage(source.merge(pullRequest))}>{view.mergeLabel}</Button>
       <Button variant="default" disabled={!source.exportEvidence || !pullRequest} fullWidth
         title={source.exportEvidence ? undefined : 'The control plane holds no evidence bundle for GitHub items'}
         onClick={() => pullRequest && source.exportEvidence?.(pullRequest)}><IconDownload size={14} /> Export evidence</Button>

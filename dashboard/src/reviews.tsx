@@ -198,7 +198,7 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
               : issue ? 'GitHub issue context' : 'Select a GitHub item for context'}
             copy={section === 'local-branches' ? run?.output ?? run?.error ?? 'Select a local branch to review its agent run.'
               : (pullRequest ?? issue)?.body ?? 'Select a GitHub item to review its description.'}
-            onOpenConversations={() => setDetailTab('conversations')} />
+            onOpenConversations={() => setDetailTab('conversations')} onMessage={setMessage} />
         </Panel>
       </Group>
       <Modal opened={newPullRequest !== null} onClose={() => setNewPullRequest(null)} title="New pull request · preview only" centered>

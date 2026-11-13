@@ -121,9 +121,10 @@ export type ReviewsSource = {
   context?: ReviewContextData;
   pagination: { note: string; reason: string };
   createPullRequest?: (title: string, branch: string) => number;
-  approve?: (pullRequest: GitHubPullRequest) => void;
+  /** Approve and merge return the confirmation to show. */
+  approve?: (pullRequest: GitHubPullRequest) => string;
   requestChanges?: (pullRequest: GitHubPullRequest) => void;
-  merge?: (pullRequest: GitHubPullRequest) => void;
+  merge?: (pullRequest: GitHubPullRequest) => string;
   exportEvidence?: (pullRequest: GitHubPullRequest) => void;
   bookmarks?: { has: (number: number) => boolean; toggle: (number: number) => void };
   autoMerge?: { checked: boolean; set: (checked: boolean) => void };

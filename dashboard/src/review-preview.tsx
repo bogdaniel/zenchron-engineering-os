@@ -204,11 +204,15 @@ export function useMockReviews(): ReviewsSource {
       setStatus(number, 'draft');
       return number;
     },
-    approve: (pullRequest) => setStatus(pullRequest.number, 'approved'),
+    approve: (pullRequest) => {
+      setStatus(pullRequest.number, 'approved');
+      return `PR #${pullRequest.number} approved in this preview only`;
+    },
     requestChanges: (pullRequest) => setStatus(pullRequest.number, 'changes-requested'),
     merge: (pullRequest) => {
       setMergedNumbers((current) => current.includes(pullRequest.number) ? current : [...current, pullRequest.number]);
       setStatus(pullRequest.number, 'approved');
+      return `PR #${pullRequest.number} merged in this preview only`;
     },
     exportEvidence: (pullRequest) => {
       const url = URL.createObjectURL(new Blob([JSON.stringify({ pullRequest, diff: reviewPreviewDiff }, null, 2)], { type: 'application/json' }));

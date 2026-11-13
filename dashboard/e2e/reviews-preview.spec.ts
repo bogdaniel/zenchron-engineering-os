@@ -285,6 +285,7 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await basePR.click();
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
   await expect(page.locator('.reviews-detail-heading .reviews-required')).toHaveText('Approved');
+  await expect(page.locator('.reviews-preview-action-message')).toHaveText('PR #4827 approved in this preview only');
   await page.getByRole('button', { name: 'Request changes' }).click();
   await expect(page.locator('.reviews-detail-tab-panel')).toContainText('Changes requested on PR #4827');
   const autoMerge = page.getByRole('switch', { name: 'Auto-merge when ready' });
@@ -296,6 +297,8 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await page.getByRole('button', { name: 'Merge to Trusted-main' }).click();
   await expect(page.locator('.reviews-detail-heading .reviews-required')).toHaveText('Merged');
   await expect(page.getByRole('button', { name: 'Merged to Trusted-main' })).toBeVisible();
+  await expect(page.locator('.reviews-preview-action-message')).toHaveText('PR #4827 merged in this preview only');
+  await expect(page.getByLabel('GitHub pull request review')).toBeDisabled();
   expect(apiRequests.filter(({ path }) => path !== '/api/v1/auth/session')).toEqual([]);
   expect(apiRequests.filter(({ method }) => method !== 'GET')).toEqual([]);
 
