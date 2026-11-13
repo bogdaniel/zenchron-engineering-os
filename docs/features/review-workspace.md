@@ -74,12 +74,32 @@ search uses the same loaded list. Local branch runs continue to use AG Grid.
 On localhost, an unauthenticated session at `/#reviews` renders this same Reviews page with a fixed sample PR, diff, and summary so the
 supplied visual can be reviewed without a GitHub session. The fixture is read-only, makes no provider or protected-data
 requests, and is never used in the authenticated Reviews route.
-Its mock also shows six review tabs, approval and policy context, trusted-main readiness, and merge strategy details; these remain static and the preview actions stay disabled.
+Its mock also shows six icon-labeled summary metrics and an Evidence Completeness bar, six top metric values with
+illustrative trend badges and sparklines, approval and policy context,
+trusted-main readiness, and merge strategy details. The six top navigation tabs switch to their corresponding local
+detail panels, and the queue status chips filter the sample PRs without provider reads or writes. Creating a preview PR, approving,
+requesting changes, exporting fixture evidence, toggling auto-merge, and merging update local preview state only.
+The preview summary keeps the selected PR description visible above its metrics and orders Approve/Request Changes, Merge, then Export Evidence to match the supplied mock.
+The six preview section tabs use the reference's leading icons and Pull Requests count badge.
+The selected PR status badge retains title case, matching the reference label.
+Split and Unified views omit raw Git file headers so the change hunk is visible immediately.
+Unified diff rows tint additions green and removals red in the local mock and live Monaco patch viewers.
+The local mock's unified gutter shows old and new source line numbers from the diff hunk; authenticated diffs keep Monaco's normal row numbering.
+Unified Monaco diffs show the colored minimap used by the reference; prompt editors keep the minimap hidden.
+The desktop mock's inline discussion stays compact and clear of the diff minimap with a maximum width of 210 px; on phones it follows the diff as a full-width card.
+In the wide local preview, PR branch context appears beneath the title, and the selected sample PR shows its opened age, commit count, line totals, and update age from the reference. The pipeline and tab rows use the mock's compact
+height, and the complete illustrative diff hunk fits in the center pane without an inert GitHub link row.
+The selected pull request header also includes local bookmark, copy-link, and overflow actions; copied links retain the selected preview PR.
+The queue identifies its single sample page instead of implying
+additional provider pages. Its five local PR cards show the reference categories, review states, risk/evidence/CI/comment
+signals, and reviewer counts. The local preview's Last 7/14/30 Days and All Repos/Nova Platform menus filter only its illustrative fixture and make no provider requests; all five PRs belong to the sample repository and mock date window. On desktop these scope controls align to the right edge of the section bar; at phone width they remain reachable by horizontally scrolling it. Further pagination remains unavailable because no additional page records exist. The mock's overflow control resets the local queue, date, repository, and search filters. The sample AI suggestion can be marked applied in local preview state;
+this does not modify repository code. The authenticated route still needs provider operations for protected review actions.
 
 ## Verification
 
 `cd dashboard && npm run test:e2e -- e2e/github-reviews.spec.ts` checks safe provider Markdown rendering, detail section controls, PR diff rendering, and review submission.
 `cd dashboard && npm run test:e2e -- e2e/reviews-preview.spec.ts` checks the local visual fixture and verifies that it makes no provider reads or review writes.
+It also checks the Unified diff minimap, colored change rows, and split-view controls.
 `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Reviews page'` checks empty provider state and local branch diffs, comments, request-changes, disabled merge actions, and resizing.
 `go test ./cmd/zenchron -run 'TestGitHub|TestAgentRunQueuePersistsAndFencesClaims'` checks review
 validation/submission, persistence, runtime gating, same-run requeue, feedback prompts, and diff retrieval. The focused worker test

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MantineProvider, TextInput } from '@mantine/core';
+import { MantineProvider, Menu, TextInput } from '@mantine/core';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
@@ -35,6 +35,11 @@ const pageIDs = [
   'overview', 'objectives', 'workflows', 'agents', 'projects', 'workspace', 'reviews', 'integrations', 'reports',
   'settings', 'login',
 ];
+const searchablePages = [
+  ['Overview', 'overview'], ['Objectives', 'objectives'], ['Workflows', 'workflows'], ['Agents', 'agents'],
+  ['Projects', 'projects'], ['Product Workspace', 'workspace'], ['Reviews', 'reviews'], ['Integrations', 'integrations'],
+  ['Reports', 'reports'], ['Settings', 'settings'],
+] as const;
 function pageFromHash() {
   const page = window.location.hash.slice(1);
   return pageIDs.includes(page) ? page : 'overview';
@@ -54,6 +59,9 @@ const workersResponse = z.array(
 );
 function App() {
   const [activePage, setActivePage] = useState(pageFromHash);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
   const localReviewHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
   const loginRoute = activePage === 'login';
   useEffect(() => {
@@ -64,6 +72,16 @@ function App() {
       window.removeEventListener('popstate', syncPage);
       window.removeEventListener('hashchange', syncPage);
     };
+  }, []);
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        searchInput.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', focusSearch);
+    return () => window.removeEventListener('keydown', focusSearch);
   }, []);
   const auth = useQuery({
     queryKey: ['auth-session'],
@@ -85,12 +103,20 @@ function App() {
   const systemPreview = ['integrations', 'settings'].includes(activePage) && mockPreview;
   const agentsPreview = activePage === 'agents' && mockPreview && auth.data?.authenticated !== true;
   const previewPage = mockPreview;
+  const goToPage = (href: string) => {
+    const page = href.slice(1);
+    if (!pageIDs.includes(page)) return;
+    window.history.pushState({}, '', href);
+    setActivePage(page);
+    setSearchTerm('');
+    setSearchOpen(false);
+  };
   const navigatePage = (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (!pageIDs.includes(href.slice(1))) return;
     event.preventDefault();
-    window.history.pushState({}, '', href);
-    setActivePage(href.slice(1));
+    goToPage(href);
   };
+  const searchResults = searchablePages.filter(([label]) => label.toLowerCase().includes(searchTerm.trim().toLowerCase()));
   const health = useQuery({
     queryKey: ['control-plane-health'],
     queryFn: async () => {
@@ -167,33 +193,48 @@ function App() {
                   <span className="greeting-desktop-copy">Your AI-native engineering operating system for objectives, agents, code, and delivery.</span>
                   <span className="greeting-mobile-copy">Your engineering mission at a glance.</span>
                 </> : 'Your engineering control center for objectives, agents, code, and delivery.'} />}
-            <TextInput
-              className="search-box"
-              leftSection={<IconSearch size={17} />}
-              placeholder="Search Zenchron…"
-              disabled
-              rightSection={<kbd>⌘ K</kbd>}
-              aria-label="Search"
-            />
+            <Menu opened={searchOpen && Boolean(searchTerm.trim())} onChange={setSearchOpen} position="bottom-start" withinPortal>
+              <Menu.Target><TextInput ref={searchInput} className="search-box" leftSection={<IconSearch size={17} />}
+                placeholder="Search Zenchron…" value={searchTerm} onChange={(event) => {
+                  setSearchTerm(event.currentTarget.value);
+                  setSearchOpen(true);
+                }} onKeyDown={(event) => {
+                  if (event.key === 'Enter' && searchResults[0]) goToPage(`#${searchResults[0][1]}`);
+                  if (event.key === 'Escape') setSearchOpen(false);
+                }} rightSection={<kbd>⌘ K</kbd>} aria-label="Search pages" /></Menu.Target>
+              <Menu.Dropdown>{searchResults.length ? searchResults.map(([label, page]) => <Menu.Item key={page}
+                onClick={() => goToPage(`#${page}`)}>{label}</Menu.Item>) : <Menu.Item disabled>No pages match your search.</Menu.Item>}</Menu.Dropdown>
+            </Menu>
             <div className="top-actions">
-              <button className="icon-button notification-button" aria-label="Notifications" disabled><IconBell size={19} />
-                {previewPage && <span className="notification-indicator" aria-hidden="true" />}</button>
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target><button className="icon-button notification-button" aria-label="Notifications" type="button"><IconBell size={19} />
+                  {previewPage && <span className="notification-indicator" aria-hidden="true" />}</button></Menu.Target>
+                <Menu.Dropdown><Menu.Label>Notifications</Menu.Label><Menu.Item disabled>No new notifications.</Menu.Item></Menu.Dropdown>
+              </Menu>
               {!previewPage && auth.data?.authenticated && auth.data.local === false && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
                 await fetch('/api/v1/auth/logout', { method: 'POST' });
                 await auth.refetch();
               }}><IconLogout size={17} /></button>}
-              <button className="workspace-button" disabled>
-                <span className="workspace-glyph">{previewPage ? <IconStack2 size={15} /> : 'Z'}</span>
-                {previewPage ? 'Core Product' : 'Workspace'} <IconChevronDown size={15} />
-              </button>
-              <div className="user-chip">
-                {previewPage ? <img className="avatar avatar-image" src="/alex-chen-avatar.jpg" alt="" /> : auth.data?.avatar_url
-                  ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" />
-                  : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?'}</span>}
-                <span>{previewPage ? 'Alex Chen' : auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}
-                  <small>{previewPage ? 'Engineering Lead' : auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Preview only'}</small></span>
-                {previewPage && <IconChevronDown className="user-profile-chevron" size={15} aria-hidden="true" />}
-              </div>
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target><button className="workspace-button" type="button" aria-label="Choose workspace">
+                  <span className="workspace-glyph">{previewPage ? <IconStack2 size={15} /> : 'Z'}</span>
+                  {previewPage ? 'Core Product' : 'Workspace'} <IconChevronDown size={15} />
+                </button></Menu.Target>
+                <Menu.Dropdown><Menu.Label>{previewPage ? 'Core Product' : 'Workspace'}</Menu.Label>
+                  <Menu.Item onClick={() => goToPage('#workspace')}>Open Product Workspace</Menu.Item></Menu.Dropdown>
+              </Menu>
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target><button className="user-chip" type="button" aria-label="User profile menu">
+                  {previewPage ? <img className="avatar avatar-image" src="/alex-chen-avatar.jpg" alt="" /> : auth.data?.avatar_url
+                    ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" />
+                    : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?'}</span>}
+                  <span>{previewPage ? 'Alex Chen' : auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}
+                    <small>{previewPage ? 'Engineering Lead' : auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Preview only'}</small></span>
+                  {previewPage && <IconChevronDown className="user-profile-chevron" size={15} aria-hidden="true" />}
+                </button></Menu.Target>
+                <Menu.Dropdown><Menu.Label>{previewPage ? 'Alex Chen' : auth.data?.login ?? 'Account'}</Menu.Label>
+                  <Menu.Item onClick={() => goToPage('#settings')}>Open Settings</Menu.Item></Menu.Dropdown>
+              </Menu>
             </div>
           </header>
 
@@ -213,7 +254,7 @@ function App() {
             objectives={objectives.data} objectivesLoading={objectives.isLoading} objectivesError={objectives.isError}
             agentRuns={agentRuns.data} agentRunsLoading={agentRuns.isLoading} agentRunsError={agentRuns.isError}
             onlineWorkers={onlineWorkers.length} onlineWorkerNames={onlineWorkers.map((worker) => worker.name)}
-          controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} designPreview={agentsPreview} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} designPreview={reviewPreview} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={workflowPreview} /> : activePage === 'projects' ? (
+          controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} designPreview={agentsPreview} onNavigate={goToPage} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} designPreview={reviewPreview} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={workflowPreview} /> : activePage === 'projects' ? (
             <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} />
           ) : activePage === 'workspace' ? (
             <WorkspacePage

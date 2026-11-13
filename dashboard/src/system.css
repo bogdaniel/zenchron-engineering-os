@@ -72,6 +72,11 @@
   background: transparent;
   font-size: 12px;
 }
+@media (max-width:620px) {
+  .system-tabs { gap: 0; }
+  .system-tabs a, .system-tabs button { flex: 1; justify-content: center; gap: 4px; padding: 0 4px; font-size: 10px; white-space: nowrap; }
+  .system-tabs svg { width: 14px; flex: 0 0 auto; }
+}
 .system-section-heading { margin-bottom: 11px; }
 .system-add-button.mantine-Button-root {
   min-height: 31px;
@@ -103,7 +108,7 @@
 }
 .system-config-nav > b { margin: 0 2px 8px; color: #e7e2ef; font-size: 13px; }
 .system-config-nav > small { margin: 8px 2px 2px; color: #888297; font-size: 10px; font-weight: 650; letter-spacing: .5px; }
-.system-config-nav > span, .system-config-nav > a {
+.system-config-nav > span, .system-config-nav > a, .system-config-nav > button {
   display: flex;
   min-height: 28px;
   align-items: center;
@@ -113,14 +118,16 @@
   color: #a9a5b9;
   font-size: 11px;
 }
-.system-config-nav > span > svg, .system-config-nav > a > svg { flex: 0 0 auto; color: #9c86be; }
+.system-config-nav > button { border: 0; background: transparent; cursor: pointer; text-align: left; }
+.system-config-nav > span > svg, .system-config-nav > a > svg, .system-config-nav > button > svg { flex: 0 0 auto; color: #9c86be; }
 .system-config-nav > a.active { border: 1px solid #604098; color: #efe5ff; background: linear-gradient(100deg,#542683,#261b3d); }
 .system-workspace-main { min-width: 0; }
 .system-integration-header { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
 .system-integration-header .system-section-heading { margin: 0; }
 .system-integration-filters { display: flex; gap: 5px; }
-.system-integration-filters span { padding: 5px 8px; border: 1px solid #37334a; border-radius: 15px; color: #aaa5b9; background: #1a1927; font-size: 9px; white-space: nowrap; }
-.system-integration-filters span.active { border-color: #8050cc; color: #edddff; background: #302044; }
+.system-integration-filters span, .system-integration-filters button { padding: 5px 8px; border: 1px solid #37334a; border-radius: 15px; color: #aaa5b9; background: #1a1927; font-size: 9px; white-space: nowrap; }
+.system-integration-filters button { cursor: pointer; }
+.system-integration-filters span.active, .system-integration-filters button.active { border-color: #8050cc; color: #edddff; background: #302044; }
 .system-integration-filters b { margin-left: 3px; font-weight: 650; }
 .system-service-card {
   position: relative;
@@ -273,6 +280,8 @@
   .system-workspace { grid-template-columns: 1fr; }
   .system-config-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .system-config-nav > b, .system-config-nav > small { grid-column: 1 / -1; }
+  .system-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .system-page-actions { flex-wrap: wrap; }
   .system-integration-header { align-items: flex-start; flex-direction: column; }
   .system-integration-filters { width: 100%; flex-wrap: wrap; }
   .system-operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

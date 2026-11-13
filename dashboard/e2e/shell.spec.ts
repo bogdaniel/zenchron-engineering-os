@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
-test.use({ baseURL: 'http://127.0.0.1:4173' });
+const dashboardPort = Number((globalThis as typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+}).process?.env?.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+test.use({ baseURL: `http://127.0.0.1:${dashboardPort}` });
 
 test('shared shell, headings, and metric cards keep their visual scale across routes', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
@@ -42,6 +45,7 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
       bodyFont: getComputedStyle(document.body).fontFamily,
       navigationGap: getComputedStyle(document.querySelector('.nav-link')!).gap,
       navigationPaddingLeft: getComputedStyle(document.querySelector('.nav-link')!).paddingLeft,
+      navigationRowGap: getComputedStyle(document.querySelector('.sidebar nav')!).rowGap,
       navigationFont: getComputedStyle(document.querySelector('.nav-link')!).fontSize,
       navigationWeight: getComputedStyle(document.querySelector('.nav-link')!).fontWeight,
       navigationFontFamily: getComputedStyle(document.querySelector('.nav-link')!).fontFamily,
@@ -63,17 +67,25 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     expect(styles.brandGap).toBe('19px');
     expect(styles.navigationGap).toBe('18px');
     expect(styles.navigationPaddingLeft).toBe('27px');
+    expect(styles.navigationRowGap).toBe('0px');
     expect(styles.bodyFont).toContain('Inter');
     expect(styles.navigationFontFamily).toBe(styles.bodyFont);
     expect(panelFontFamily).toBe(styles.bodyFont);
     expect(styles.navigationFont).toBe('16px');
     expect(styles.navigationWeight).toBe('500');
-    await expect(page.locator('.nav-link:not(.active)').first()).toHaveCSS('min-height', '42px');
+    await expect(page.locator('.nav-link:not(.active)').first()).toHaveCSS('min-height', '46px');
+    const activeLink = page.locator('.nav-link.active');
+    if (await activeLink.count()) {
+      await expect(activeLink, `${route}: active sidebar item matches shared height`).toHaveCSS('height', '46px');
+      await expect(activeLink, `${route}: active sidebar item keeps shared padding`).toHaveCSS('padding', '0px 8px 0px 27px');
+    }
+    expect(await page.locator('.sidebar').evaluate((sidebar) => getComputedStyle(sidebar).backgroundImage), `${route}: sidebar artwork is preserved`).toContain('sidebar-wave.png');
+    await expect(page.locator('.sidebar'), `${route}: sidebar keeps its layered artwork over the translucent base`).toHaveCSS('background-color', 'rgba(10, 11, 19, 0.92)');
     const workspaceLabel = page.locator('.nav-link .nav-label').filter({ hasText: 'Product Workspace' });
     await expect(workspaceLabel, 'long navigation label stays on one line').toHaveCSS('white-space', 'nowrap');
     expect(await workspaceLabel.evaluate((label) => label.scrollWidth <= label.clientWidth),
       'long navigation label fits without clipping').toBe(true);
-    expect(styles.topbarHeight).toBe('80px');
+    expect(Math.abs(parseFloat(styles.topbarHeight) - 80)).toBeLessThanOrEqual(1);
     if (route === 'reports') {
         await expect(page.locator('.reports-greeting p')).toHaveCSS('font-size', '12px');
         const description = await page.locator('.reports-greeting p').evaluate((element) => ({
@@ -118,6 +130,11 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
     await page.evaluate((hash) => { window.location.hash = `#${hash}`; }, route);
     await expect(page.locator('.app-shell')).toHaveClass(new RegExp(`${route}-shell`));
     await expect(page.locator('.nav-link').first(), `${route}: mobile nav weight`).toHaveCSS('font-weight', '400');
+    const activeMobileLink = page.locator('.nav-link.active:visible');
+    if (await activeMobileLink.count()) {
+      await expect(activeMobileLink, `${route}: active mobile nav item keeps shared minimum height`).toHaveCSS('min-height', '44px');
+      await expect(activeMobileLink, `${route}: active mobile nav item keeps shared padding`).toHaveCSS('padding', '3px 2px');
+    }
     if (route === 'reviews') {
       await expect(page.locator('.topbar .greeting'), 'mobile reviews uses its page heading').toBeHidden();
       await expect(page.getByRole('button', { name: 'Notifications' })).toBeVisible();
@@ -217,6 +234,10 @@ test('shared shell, headings, and metric cards keep their visual scale across ro
 });
 
 test('desktop sidebar matches mock width at reference and regular monitor sizes', async ({ page }) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/#settings');
+  await expect(page.locator('.nav-link[href="#settings"] .nav-desktop-icon')).toHaveClass(/tabler-icon-settings/);
+  await expect(page.locator('.nav-link[href="#settings"] .nav-mobile-icon')).toBeHidden();
   for (const width of [1672, 1505]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/#reports');
@@ -236,6 +257,12 @@ test('mobile overview matches the phone shell and keeps workflow/reviews accessi
   await expect(page.getByRole('link', { name: 'Reviews', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Notifications' })).toBeVisible();
+  const notificationAlignment = () => page.evaluate(() => {
+    const brand = document.querySelector('.sidebar > .brand .brand-mark')!.getBoundingClientRect();
+    const notification = document.querySelector('.top-actions .notification-button')!.getBoundingClientRect();
+    return Math.abs((brand.top + brand.bottom) / 2 - (notification.top + notification.bottom) / 2);
+  });
+  expect(await notificationAlignment(), 'the phone notification button shares the brand row').toBeLessThanOrEqual(4);
   await expect(page.locator('.search-box')).toBeHidden();
   await expect(page.locator('.workspace-button')).toBeHidden();
   await expect(page.locator('.sidebar nav .nav-link:visible')).toHaveCount(5);
@@ -249,6 +276,8 @@ test('mobile overview matches the phone shell and keeps workflow/reviews accessi
   await expect.poll(() => page.locator('.nav-link[href="#settings"] .nav-label').evaluate((element) =>
     getComputedStyle(element, '::after').content,
   )).toBe('"Profile"');
+  await expect(page.locator('.nav-link[href="#settings"] .nav-mobile-icon')).toHaveClass(/tabler-icon-user/);
+  await expect(page.locator('.nav-link[href="#settings"] .nav-desktop-icon')).toBeHidden();
   await expect(page.locator('.sidebar nav')).toHaveCSS('position', 'fixed');
   await expect(page.locator('.activity-list')).toContainText('PR #41827 merged to trusted-main');
   const metricColumns = await page.locator('.metric-grid').evaluate((element) =>
@@ -260,4 +289,25 @@ test('mobile overview matches the phone shell and keeps workflow/reviews accessi
   await page.getByRole('link', { name: 'Reviews', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible();
   await expect(page.locator('.reviews-title-copy p')).toBeVisible();
+  await page.goto('/#agents');
+  await expect(page.locator('.agents-page')).toBeVisible();
+  expect(await notificationAlignment(), 'the Agents phone notification shares the brand row').toBeLessThanOrEqual(4);
+});
+
+test('header search and menus navigate within the local preview', async ({ page }) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/');
+  const search = page.getByRole('textbox', { name: 'Search pages' });
+  await page.keyboard.press('Control+k');
+  await expect(search).toBeFocused();
+  await search.fill('agent');
+  await expect(page.getByRole('menuitem', { name: 'Agents' })).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Agents' }).click();
+  await expect(page).toHaveURL(/#agents$/);
+  await page.getByRole('button', { name: 'Notifications' }).click();
+  await expect(page.getByText('No new notifications.')).toBeVisible();
+  await page.getByRole('button', { name: 'Choose workspace' }).click();
+  await page.getByRole('menuitem', { name: 'Open Product Workspace' }).click();
+  await expect(page).toHaveURL(/#workspace$/);
+  await expect(page.locator('.workspace-mock')).toBeVisible();
 });

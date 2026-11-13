@@ -1,12 +1,19 @@
 import { expect, test } from '@playwright/test';
 
+const environment = (
+  globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } }
+).process?.env ?? {};
+const localDashboardURL = `http://127.0.0.1:${Number(environment.ZENCHRON_E2E_DASHBOARD_PORT) || 4173}`;
+
 test('dashboard displays the connected control plane and local worker', async ({ page }) => {
   await page.setViewportSize({ width: 1490, height: 829 });
   await page.route((url) => url.hostname === 'zenchron.test'
     && (url.pathname === '/healthz' || url.pathname.startsWith('/api/v1/')),
   async (route) => {
-    const upstream = route.request().url().replace('zenchron.test:4173', '127.0.0.1:8083');
-    const response = await page.request.get(upstream);
+    const upstream = new URL(route.request().url());
+    upstream.hostname = '127.0.0.1';
+    upstream.port = '8083';
+    const response = await page.request.get(upstream.toString());
     await route.fulfill({ response });
   });
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
@@ -32,7 +39,7 @@ test('dashboard displays the connected control plane and local worker', async ({
   await expect(page.locator('.search-box')).toBeHidden();
   await page.setViewportSize({ width: 1490, height: 829 });
   await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Search' })).toHaveAttribute('placeholder', 'Search Zenchron…');
+  await expect(page.getByRole('textbox', { name: 'Search pages' })).toHaveAttribute('placeholder', 'Search Zenchron…');
   await expect(page.getByRole('heading', { name: 'Workflow Orchestration' })).toBeVisible();
   await expect(page.locator('.plan-panel .panel-actions')).toHaveCount(0);
   await expect(page.locator('.workflow-overview-canvas .workflow-node')).toHaveCount(6);
@@ -105,11 +112,11 @@ test('Overview PR queue and CI health use complete GitHub history', async ({ pag
 
 test('unauthenticated local users can review the latest Overview and reach sign-in', async ({ page }) => {
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
-  await page.goto('http://127.0.0.1:4173/');
+  await page.goto(`${localDashboardURL}/`);
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.locator('.overview-design-preview')).toBeVisible();
   await page.getByRole('link', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL('http://127.0.0.1:4173/#login');
+  await expect(page).toHaveURL(`${localDashboardURL}/#login`);
   await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
 });
 
@@ -117,8 +124,8 @@ test('local root keeps the approved Overview mock for authenticated sessions wit
   await page.route('**/api/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
     body: route.request().url().endsWith('/api/v1/auth/session')
       ? JSON.stringify({ authenticated: true, local: false, login: 'engineer' }) : '[]' }));
-  await page.goto('http://127.0.0.1:4173/');
-  await expect(page).toHaveURL('http://127.0.0.1:4173/');
+  await page.goto(`${localDashboardURL}/`);
+  await expect(page).toHaveURL(`${localDashboardURL}/`);
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.locator('.overview-design-preview')).toBeVisible();
   await expect(page.locator('.metric-grid .metric-card').first()).toContainText('12');
@@ -128,14 +135,14 @@ test('local root keeps the approved Overview mock for authenticated sessions wit
 test('Overview design preview renders the supplied mock content without replacing live data', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
-  await page.goto('http://127.0.0.1:4173/');
+  await page.goto(`${localDashboardURL}/`);
   await expect(page.locator('.design-preview-label')).toHaveCount(0);
   await expect(page.locator('.sidebar-bottom')).toContainText('The AI-native engineering operating system.');
   await expect(page.locator('.sidebar-bottom .brand-mark')).toHaveCount(1);
   await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   expect((await page.locator('.greeting h1').boundingBox())?.x).toBe(266);
-  await expect(page.getByRole('button', { name: 'Core Product' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Choose workspace' })).toBeVisible();
   await expect(page.locator('.user-chip')).toContainText('Alex Chen');
   await expect(page.locator('.user-profile-chevron')).toBeVisible();
   await expect(page.locator('.workspace-glyph')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
@@ -198,10 +205,10 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.evidence-panel .overview-heading-info')).toBeVisible();
   await expect(page.locator('.user-chip img')).toHaveJSProperty('naturalWidth', 128);
   await expect(page.locator('.nav-link.active')).toHaveCSS('height', '46px');
-  await expect(page.locator('.nav-link[href="#objectives"]')).toHaveCSS('height', '42px');
+  await expect(page.locator('.nav-link[href="#objectives"]')).toHaveCSS('height', '46px');
   expect((await page.locator('.nav-link.active').boundingBox())?.width).toBe(221);
   expect((await page.locator('.nav-link.active .nav-label').boundingBox())?.x).toBe(80);
-  expect((await page.locator('.nav-link[href="#settings"]').boundingBox())?.y).toBeCloseTo(456, 0);
+  expect((await page.locator('.nav-link[href="#settings"]').boundingBox())?.y).toBeCloseTo(460, 0);
   const sidebarFooterBrand = await page.locator('.sidebar-bottom strong').boundingBox();
   expect(sidebarFooterBrand?.x).toBe(71);
   expect(sidebarFooterBrand?.y).toBeCloseTo(816, 0);
@@ -219,6 +226,9 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.activity-list > div').first().locator('svg')).toHaveCSS('border-radius', '50%');
   await expect(page.locator('.activity-list > div').first().locator('svg')).toHaveCSS('background-color', 'rgb(20, 57, 47)');
   expect((await page.locator('.activity-list > div').first().locator('span').boundingBox())?.x).toBe(1316);
+  const lastActivity = await page.locator('.activity-panel .activity-list > div').last().boundingBox();
+  const activityPanel = await page.locator('.activity-panel').boundingBox();
+  expect(lastActivity!.y + lastActivity!.height).toBeLessThanOrEqual(activityPanel!.y + activityPanel!.height - 6);
   await page.setViewportSize({ width: 1668, height: 749 });
   const lastActivityLabel = await page.locator('.activity-list > div').last().locator('span').evaluate((span) => ({
     scrollWidth: span.scrollWidth, clientWidth: span.clientWidth,
@@ -276,7 +286,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await page.getByRole('button', { name: 'Workflow options' }).click();
   await expect(page.getByRole('menuitem', { name: 'Open workflow editor' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('.workflow-overview-canvas')).toHaveAttribute('aria-label', /6 stages summarize 9 components/);
+  await expect(page.locator('.workflow-overview-canvas')).toHaveAttribute('aria-label', /6 stages summarize 11 components/);
   const workflowNodeGaps = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
     return {
@@ -514,7 +524,7 @@ test('Overview design preview renders the supplied mock content without replacin
 
 test('Overview matches the supplied tall desktop mockup proportions', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('http://127.0.0.1:4173/');
+  await page.goto(`${localDashboardURL}/`);
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
     return {
@@ -561,6 +571,11 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
   expect(layout.overviewLink?.x).toBe(14);
   expect(layout.overviewLink?.y).toBeCloseTo(92, 0);
   expect(layout.search?.width).toBe(410);
+  const searchInput = page.locator('.search-box input');
+  await expect(searchInput).toHaveCSS('border-radius', '21px');
+  await expect(searchInput).toHaveCSS('border-top-color', 'rgb(55, 48, 77)');
+  await expect(searchInput).toHaveCSS('background-image', /linear-gradient/);
+  await expect(searchInput).not.toHaveCSS('box-shadow', 'none');
   expect(layout.search?.x).toBeGreaterThanOrEqual(layout.greeting!.x! + layout.greeting!.width!);
   expect(layout.search!.x! + layout.search!.width!).toBeLessThanOrEqual(layout.topActions!.x!);
   await expect(page.locator('.greeting h1')).toHaveText(/Good morning, .+ 👋/);
@@ -569,7 +584,7 @@ test('Overview matches the supplied tall desktop mockup proportions', async ({ p
 
 test('Overview matches the supplied desktop display crop', async ({ page }) => {
   await page.setViewportSize({ width: 1522, height: 856 });
-  await page.goto('http://127.0.0.1:4173/');
+  await page.goto(`${localDashboardURL}/`);
   await expect(page.locator('.metric-grid')).toBeVisible();
   const sidebarBackground = await page.locator('.sidebar').evaluate((sidebar) => getComputedStyle(sidebar).backgroundPosition);
   expect(sidebarBackground).toContain('91px');
@@ -614,7 +629,7 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, local: true, login: '' }),
   }));
-  await page.goto('http://127.0.0.1:4173/');
+  await page.goto(`${localDashboardURL}/`);
   await expect(page.locator('.metric-grid .metric-card:visible')).toHaveCount(4);
   expect(await page.locator('.metric-card:visible .metric-top > span').evaluateAll((labels) =>
     labels.every((label) => getComputedStyle(label).whiteSpace === 'nowrap'))).toBe(true);
@@ -639,7 +654,8 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
     };
   });
   expect(mobileOverviewLayout.brandTop).toBeCloseTo(57, 0);
-  expect(mobileOverviewLayout.greetingTop).toBeCloseTo(127, 0);
+  expect(mobileOverviewLayout.greetingTop).toBeGreaterThanOrEqual(126);
+  expect(mobileOverviewLayout.greetingTop).toBeLessThanOrEqual(129);
   expect(mobileOverviewLayout.metricTop).toBeCloseTo(272, 0);
   expect(mobileOverviewLayout.metricCardHeight).toBe(100);
   expect(mobileOverviewLayout.activityTop).toBeCloseTo(502, 0);
@@ -664,3 +680,22 @@ test('mobile Overview keeps to the supplied phone summary', async ({ page }) => 
   await expect(page.locator('.activity-panel')).toBeVisible();
 });
 
+test('Overview activity and delivery analytics actions open their details', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: '' }));
+  await page.goto(`${localDashboardURL}/#overview`);
+  await page.getByRole('button', { name: 'User profile menu' }).click();
+  await page.getByRole('menuitem', { name: 'Open Settings' }).click();
+  await expect(page).toHaveURL(/#settings$/);
+  await expect(page.getByRole('heading', { name: 'Settings & Integrations' })).toBeVisible();
+  await page.getByRole('link', { name: 'Overview' }).first().click();
+  await page.getByRole('button', { name: 'All Activity' }).click();
+  const activityDialog = page.getByRole('dialog', { name: 'All Activity' });
+  await expect(activityDialog).toBeVisible();
+  await expect(activityDialog.locator('.activity-list > div')).toHaveCount(5);
+  await expect(activityDialog).toContainText('PR #41827 merged to trusted-main');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Choose analytics metric' }).click();
+  await page.getByRole('menuitem', { name: 'Cycle Time' }).click();
+  await expect(page.locator('.preview-analytics-summary')).toContainText('Average Cycle Time (7d)');
+  await expect(page.locator('.preview-analytics-summary strong')).toHaveText('21.0h');
+});

@@ -11,6 +11,35 @@ import (
 	"testing"
 )
 
+func TestValidateWorkerName(t *testing.T) {
+	tests := []struct {
+		label   string
+		name    string
+		wantErr string
+	}{
+		{label: "valid", name: "dev-machine"},
+		{label: "empty", name: "", wantErr: "worker name must be between 1 and 128 bytes"},
+		{label: "too long", name: strings.Repeat("a", 129), wantErr: "worker name must be between 1 and 128 bytes"},
+		{label: "newline", name: "dev\nmachine", wantErr: "worker name must not contain control characters"},
+		{label: "tab", name: "dev\tmachine", wantErr: "worker name must not contain control characters"},
+		{label: "delete", name: "dev\x7fmachine", wantErr: "worker name must not contain control characters"},
+	}
+	for _, test := range tests {
+		t.Run(test.label, func(t *testing.T) {
+			err := validateWorkerName(test.name)
+			if test.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateWorkerName(%q): %v", test.name, err)
+				}
+				return
+			}
+			if err == nil || err.Error() != test.wantErr {
+				t.Fatalf("validateWorkerName(%q) error = %v, want %q", test.name, err, test.wantErr)
+			}
+		})
+	}
+}
+
 func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
 	project := discoveredProject{
 		ID: "abcdef0123456789abcdef0123456789", Name: "repo", Branch: "feature/test",

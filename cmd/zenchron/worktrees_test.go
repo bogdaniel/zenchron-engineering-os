@@ -200,6 +200,8 @@ func TestWorktreeRequestRejectsUnknownProjectsAndMalformedBranches(t *testing.T)
 		`{"project_id":"` + testProjectID + `","branch":" "}`,
 		`{"project_id":"bad","branch":"feature/okay"}`,
 		`{"project_id":"` + testProjectID + `","branch":"feature/okay","unknown":true}`,
+		`{"project_id":"` + testProjectID + `","branch":"-rf"}`,
+		`{"project_id":"` + testProjectID + `","branch":"feature..x"}`,
 	} {
 		response := httptest.NewRecorder()
 		server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/worktrees", strings.NewReader(body)))
@@ -213,5 +215,64 @@ func TestWorktreeRequestRejectsUnknownProjectsAndMalformedBranches(t *testing.T)
 	)))
 	if response.Code != http.StatusConflict {
 		t.Fatalf("create request for unavailable project = HTTP %d, want 409", response.Code)
+	}
+}
+
+func TestValidBranchInput(t *testing.T) {
+	for _, test := range []struct {
+		branch string
+		want   bool
+	}{
+		{"feature/login", true},
+		{"zenchron/agent-run/0123456789abcdef0123456789abcdef", true},
+		{"fix-123_a.b", true},
+		{strings.Repeat("a", 255), true},
+		{"", false},
+		{" lead", false},
+		{strings.Repeat("a", 256), false},
+		{"line\nbreak", false},
+		{"-rf", false},
+		{"/lead", false},
+		{"trail/", false},
+		{"trail.", false},
+		{"feature..x", false},
+		{"feature//x", false},
+		{"x@{1}", false},
+		{".hidden", false},
+		{"feature/.hidden", false},
+		{"topic.lock", false},
+		{"topic.lock/x", false},
+		{"a b", false},
+		{"a~b", false},
+		{"a^b", false},
+		{"a:b", false},
+		{"a?b", false},
+		{"a*b", false},
+		{"a[b", false},
+		{`a\b`, false},
+		{"a\tb", false},
+		{"a\x7fb", false},
+		{"a\u0085b", false},
+	} {
+		if got := validBranchInput(test.branch); got != test.want {
+			t.Errorf("validBranchInput(%q) = %t, want %t", test.branch, got, test.want)
+		}
+	}
+}
+
+func TestWorktreeStoreLoadsBranchesQueuedBeforeGitRefValidation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "worktrees.json")
+	now := time.Now().UTC()
+	store := newWorktreeStore(newWorkerRegistry())
+	store.path = path
+	store.items[testProjectID] = worktreeRequest{
+		ID: testProjectID, ProjectID: testProjectID, ProjectName: "demo", WorkerID: testWorkerID, WorkerName: "local",
+		Branch: "a b", BaseBranch: "main", Status: "failed", CreatedAt: now, UpdatedAt: now,
+	}
+	if err := store.persistLocked(); err != nil {
+		t.Fatalf("persist worktree request: %v", err)
+	}
+	if _, err := openWorktreeStore(path, newWorkerRegistry()); err != nil {
+		t.Fatalf("open store holding a previously accepted branch: %v", err)
 	}
 }
