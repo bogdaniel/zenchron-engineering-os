@@ -121,6 +121,7 @@
 }
 .reports-percentiles button { cursor: pointer; }
 .reports-percentiles button[aria-pressed="true"] { color: #fff; border-color: #9d62ed; background: #56308a; }
+.reports-percentiles button:disabled { cursor: not-allowed; opacity: .55; }
 .reports-percentiles button:focus-visible { outline: 2px solid #c491ff; outline-offset: 2px; }
 .acceptance-panel .reports-panel-heading h3 { font-size: 14px; letter-spacing: -.5px; white-space: nowrap; }
 .reports-insight-filter.mantine-Select-root { width: 122px; flex: 0 0 auto; }
@@ -206,11 +207,6 @@
   justify-content: center;
   gap: 13px;
 }
-.report-chart-label {
-  fill: #f5f1ff;
-  font-size: 21px;
-  font-weight: 650;
-}
 .report-outcome-legend { display: grid; gap: 4px; }
 .report-outcome-legend > div {
   display: grid;
@@ -237,13 +233,6 @@
   font-size: var(--metric-label-size);
   text-align: center;
 }
-.inventory-footnote, .delivery-note {
-  margin: 5px 0 0;
-  color: #89849a;
-  font-size: var(--panel-description-size);
-  line-height: 1.2;
-}
-.inventory-footnote { margin-top: 3px; font-size: 9px; }
 .reports-empty-chart {
   position: relative;
   display: grid;

@@ -1,15 +1,16 @@
-import { IconActivity, IconCode, IconDatabase, IconFolders, IconInfinity, IconPuzzle, IconStack } from '@tabler/icons-react';
+import { IconFolders, IconStack } from '@tabler/icons-react';
 import { Table } from '@mantine/core';
 import type { ReactNode } from 'react';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
 
-export interface DeliveryMetrics {
+interface DeliveryMetrics {
   deliveryVelocity: number | undefined;
   cycleTime: number | undefined;
-  ciDuration: number | undefined;
   acceptanceRate: number | undefined;
   autonomousCompletion: number | undefined;
+  /** Decorative glyph beside the row name. */
+  icon?: ReactNode;
 }
 
 export interface ProductDeliverySummary extends DeliveryMetrics {
@@ -19,15 +20,12 @@ export interface ProductDeliverySummary extends DeliveryMetrics {
   repositories: number | undefined;
   objectives: number | undefined;
   runs: number | undefined;
+  ciDuration: number | undefined;
 }
 
-interface WorkspaceDeliverySummary {
+export interface WorkspaceDeliverySummary extends DeliveryMetrics {
   name: string;
-  workItems: number;
-  deliveryVelocity: number | undefined;
-  cycleTime: number | undefined;
-  acceptanceRate: number | undefined;
-  autonomousCompletion: number | undefined;
+  workItems: number | undefined;
 }
 
 function show(value: number | undefined, unit = ''): ReactNode {
@@ -36,23 +34,12 @@ function show(value: number | undefined, unit = ''): ReactNode {
     : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${unit}`;
 }
 
-const previewRowIcons: Record<string, ReactNode> = {
-  'Core Product': <IconStack className="reports-preview-row-icon violet" size={12} aria-hidden="true" />,
-  'AI Platform': <IconInfinity className="reports-preview-row-icon teal" size={12} aria-hidden="true" />,
-  'Developer Tools': <IconCode className="reports-preview-row-icon violet" size={12} aria-hidden="true" />,
-  Integrations: <IconPuzzle className="reports-preview-row-icon gold" size={12} aria-hidden="true" />,
-  Platform: <IconActivity className="reports-preview-row-icon violet" size={12} aria-hidden="true" />,
-  Product: <IconStack className="reports-preview-row-icon violet" size={12} aria-hidden="true" />,
-  Infrastructure: <IconCode className="reports-preview-row-icon teal" size={12} aria-hidden="true" />,
-  Data: <IconDatabase className="reports-preview-row-icon violet" size={12} aria-hidden="true" />,
-};
-
-export function ProductSummaryPanel({ rows, loading, error, checkoutCount, designPreview = false }: {
+export function ProductSummaryPanel({ rows, loading, error, checkoutCount, autonomyNote }: {
   rows: ProductDeliverySummary[];
   loading: boolean;
   error: boolean;
   checkoutCount: number | undefined;
-  designPreview?: boolean;
+  autonomyNote: string | undefined;
 }) {
   return <PanelCard className="reports-panel product-summary-panel" withBorder>
     <PanelHeading className="reports-panel-heading" icon={<IconFolders size={15} />} title="Product Summary"
@@ -67,14 +54,12 @@ export function ProductSummaryPanel({ rows, loading, error, checkoutCount, desig
               <Table.Th>CI duration</Table.Th><Table.Th>Accept rate</Table.Th><Table.Th>Auto. comp.</Table.Th>
             </Table.Tr></Table.Thead>
             <Table.Tbody>{rows.map((row) => <Table.Tr className={row.id === 'total' ? 'report-summary-total' : undefined} key={row.id}>
-              <Table.Td><span className="reports-preview-row-label">{designPreview && previewRowIcons[row.name]}{row.name}</span></Table.Td>
+              <Table.Td><span className="reports-preview-row-label">{row.icon}{row.name}</span></Table.Td>
               <Table.Td>{show(row.deliveryVelocity, ' / wk')}</Table.Td>
               <Table.Td>{show(row.cycleTime, ' h')}</Table.Td>
               <Table.Td>{show(row.ciDuration, ' min')}</Table.Td>
               <Table.Td>{show(row.acceptanceRate, '%')}</Table.Td>
-              <Table.Td title={designPreview ? undefined : 'Agent runs do not record autonomous-completion evidence.'}>
-                {show(row.autonomousCompletion, '%')}
-              </Table.Td>
+              <Table.Td title={autonomyNote}>{show(row.autonomousCompletion, '%')}</Table.Td>
             </Table.Tr>)}</Table.Tbody>
           </Table>
         </div> : <div className="reports-empty">No products are configured. {checkoutCount ?? 0} local
@@ -82,11 +67,9 @@ export function ProductSummaryPanel({ rows, loading, error, checkoutCount, desig
   </PanelCard>;
 }
 
-export function WorkspaceSummaryPanel({ workItems, metrics, rows, designPreview = false }: {
-  workItems: number | undefined;
-  metrics: DeliveryMetrics;
-  rows?: WorkspaceDeliverySummary[];
-  designPreview?: boolean;
+export function WorkspaceSummaryPanel({ rows, autonomyNote }: {
+  rows: WorkspaceDeliverySummary[];
+  autonomyNote: string | undefined;
 }) {
   return <PanelCard className="reports-panel inventory-panel" withBorder>
     <PanelHeading className="reports-panel-heading" icon={<IconStack size={15} />} title="Workspace Summary"
@@ -98,19 +81,14 @@ export function WorkspaceSummaryPanel({ workItems, metrics, rows, designPreview 
           <Table.Th>Workspace</Table.Th><Table.Th>Work items</Table.Th><Table.Th>Velocity</Table.Th>
           <Table.Th>Cycle time</Table.Th><Table.Th>Accept rate</Table.Th><Table.Th>Auto. comp.</Table.Th>
         </Table.Tr></Table.Thead>
-        <Table.Tbody>{rows?.length ? rows.map((row) => <Table.Tr className={row.name === 'Total / Avg.' ? 'report-summary-total' : undefined} key={row.name}>
-          <Table.Td><span className="reports-preview-row-label">{designPreview && previewRowIcons[row.name]}{row.name}</span></Table.Td><Table.Td>{row.workItems.toLocaleString()}</Table.Td>
+        <Table.Tbody>{rows.map((row) => <Table.Tr className={row.name === 'Total / Avg.' ? 'report-summary-total' : undefined} key={row.name}>
+          <Table.Td><span className="reports-preview-row-label">{row.icon}{row.name}</span></Table.Td>
+          <Table.Td>{row.workItems?.toLocaleString() ?? 'Unavailable'}</Table.Td>
           <Table.Td>{show(row.deliveryVelocity, ' / wk')}</Table.Td><Table.Td>{show(row.cycleTime, ' h')}</Table.Td>
-          <Table.Td>{show(row.acceptanceRate, '%')}</Table.Td><Table.Td>{show(row.autonomousCompletion, '%')}</Table.Td>
-        </Table.Tr>) : <Table.Tr>
-          <Table.Td>Local workspace</Table.Td><Table.Td>{workItems ?? 'Unavailable'}</Table.Td>
-          <Table.Td>{show(metrics.deliveryVelocity, ' / wk')}</Table.Td><Table.Td>{show(metrics.cycleTime, ' h')}</Table.Td>
-          <Table.Td>{show(metrics.acceptanceRate, '%')}</Table.Td>
-          <Table.Td title="Agent runs do not record autonomous-completion evidence.">{show(metrics.autonomousCompletion, '%')}</Table.Td>
-        </Table.Tr>}</Table.Tbody>
+          <Table.Td>{show(row.acceptanceRate, '%')}</Table.Td>
+          <Table.Td title={autonomyNote}>{show(row.autonomousCompletion, '%')}</Table.Td>
+        </Table.Tr>)}</Table.Tbody>
       </Table>
     </div>
-    {!designPreview && <p className="inventory-footnote">Work items count objectives. Delivery metrics use GitHub history; autonomy requires
-      run evidence.</p>}
   </PanelCard>;
 }

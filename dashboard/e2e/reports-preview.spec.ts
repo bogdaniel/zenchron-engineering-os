@@ -16,6 +16,7 @@ test('local Reports mock renders its fixture without protected reads or exports'
   await page.goto('/#reports');
 
   await expect(page.locator('.reports-page')).toHaveClass(/reports-design-preview/);
+  await expect(page.locator('.reports-page')).toHaveAttribute('data-preview', 'mock');
   await expect(page.getByRole('textbox', { name: 'Search pages' })).toHaveAttribute('placeholder', 'Search Zenchron…');
   await expect(page.locator('.reports-scope-bar [data-position="left"] svg')).toHaveCount(5);
   await expect(page.locator('.reports-page .mantine-Select-section[data-position="right"] .tabler-icon-chevron-down')).toHaveCount(6);
