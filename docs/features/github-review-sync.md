@@ -30,7 +30,7 @@ sequenceDiagram
     API->>GH: GET open items (anonymous, App token, or PAT)
     GH-->>API: Up to 100 recently updated records
     API-->>UI: Provider queue data
-    UI->>UI: Search loaded titles, numbers, and authors locally
+    UI->>UI: Search loaded titles, numbers, authors, and PR branches locally
     UI->>API: GET selected pull request diff
     API->>API: Validate project locator and pull request number
     API->>GH: GET /pulls/{number} (diff media type)
@@ -84,8 +84,8 @@ by recent update. Public reads work without credentials. Private reads need repo
 and submitting PR reviews need **Pull requests: write**. Posting issue comments and changing issue state needs **Issues:
 write** or **Pull requests: write** ([GitHub issue comments](https://docs.github.com/en/rest/issues/comments#create-an-issue-comment), [GitHub issues](https://docs.github.com/en/rest/issues/issues#update-an-issue)). The control plane can authenticate with a GitHub App installation configured by `ZENCHRON_GITHUB_APP_ID`, `ZENCHRON_GITHUB_INSTALLATION_ID`, and `ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH`. It signs an RS256 JWT, mints an installation token, and caches the token until one minute before GitHub's one-hour expiry. The PEM key stays on the control-plane machine. A configured `ZENCHRON_GITHUB_TOKEN` takes precedence as a personal-token fallback. Actions: read is optional and enables authenticated GitHub Actions history in Reports. The worker uses workstation Git credentials to push and never receives GitHub API credentials. The dashboard
 never receives them either. The review body is limited to 1,000 bytes, and only `COMMENT` and `REQUEST_CHANGES` events are
-accepted. The Reviews queue search filters the loaded list by item number, title, or author without another provider
-request.
+accepted. The Reviews queue search filters the loaded list by item number, title, author, or pull-request source
+branch without another provider request.
 
 Submitting an issue comment, changing issue state, or submitting a PR review is an external write. Each endpoint requires a loopback client and
 `application/json`; this is a local-preview guard, not user authentication. GitHub records comments and reviews under
@@ -95,7 +95,8 @@ Zenchron-created PR, the control plane matches its isolated branch to the origin
 `REQUEST_CHANGES` requeues that same run and branch when the worker is online, has a model runtime and write permission,
 and has attempts remaining. If the worker cannot accept another pass, the feedback is still stored and the dashboard
 reports that no run was queued. GitHub reviews made directly on github.com are not yet imported; webhook or provider
-polling is not implemented. Approve and merge are not enabled. Issue comments are submitted as top-level comments
+polling is not implemented. Approve and merge are not enabled; Reviews shows both controls disabled in Live and states
+the reason. Issue comments are submitted as top-level comments
 authored as the configured App or personal-token owner.
 
 Issue comment and state endpoints fetch the selected issue first and reject numbers that resolve to pull requests. GitHub's
@@ -108,7 +109,7 @@ sufficient boundary.
 separation, bounded PR diff reads, issue-comment and issue-state payloads, PR-number rejection, review payloads, and
 local-client/auth/event validation. It also verifies GitHub App JWT signature and claims, installation-token caching,
 configuration validation, and private-key file permissions using a local fake GitHub server. `cd dashboard && npm run test:e2e -- e2e/github-reviews.spec.ts` checks live queue rendering, issue comments,
-close/reopen, and both provider review actions. The focused `home.spec.ts`
+close/reopen, both provider review actions, and the write requests they send. The focused `home.spec.ts`
 Reviews test covers unavailable state and local-branch review. These checks use fixtures; a real provider write and
 private repository are not verified.
 

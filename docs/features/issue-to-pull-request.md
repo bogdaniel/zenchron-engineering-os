@@ -137,7 +137,7 @@ in Live.
   request's check runs, every attempt, and the event log, which refreshes every two seconds while the run is active.
   Loading, failure, and empty states are shown per section.
 - **Reviews > Local branches > Code changes / Conversations** are unchanged: the stored diff, comments, request
-  changes, and cancel.
+  changes, and cancel. The Local branches queue exists in Live only; the Mock fixtures hold no agent runs.
 
 - **Agents > Run Agent > Create a new issue.** Creates a GitHub issue from a title and description and selects it for
   the run.

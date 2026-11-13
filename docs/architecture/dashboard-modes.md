@@ -64,7 +64,7 @@ loaders).
 | Workflows | Pending | | |
 | Projects | Single layout already; no fixtures | | |
 | Product Workspace | One layout | `WorkspaceSource` | Products, linked repositories with worker and branch, repository health, objectives, the roadmap (bars run from an objective's creation to its due date), workflow definitions, and agent profiles are real, and products are created and edited through the API; files, stakeholders, release streams, decisions, delivery metrics, and every trend graphic are Unavailable with the reason; favorites and the delivery range are disabled |
-| Reviews | Pending | | |
+| Reviews | One layout | `ReviewsSource` | Open pull requests and issues of a connected GitHub checkout, their state, author, branch, and date, the pull-request diff with its file and line counts, the base branch, agent-run branches with their diff, comments, and evidence, and the counts on the queue tabs are real; GitHub comments, reviews, issue close / reopen, run comments, request changes, and cancel go through the API; review time, merge rate, policy gate pass, commits, risk, evidence completeness, required checks, merge strategy, policy, AI suggestions, artifacts, checklist, approvals, and trusted-main readiness are Unavailable; trend graphics, card signals, and the inline discussion are left out; New PR, Approve, Merge, Export evidence, bookmarks, the date range, and Auto-merge are disabled with the reason |
 | Integrations and Settings | One layout | `SystemSource` | Control plane health, worker heartbeats and coding CLIs, GitHub checkouts, the worker model endpoint, and session auth are real; GitLab, Slack, Linear / Jira, Docker / Registry, and Google are Not connected; profile, policies, roles, budgets, secrets, controller limits, notification rules, and audit are Unavailable or empty with a note; every write control is disabled |
 | Reports | Pending | | |
 
@@ -124,6 +124,29 @@ until the list is empty.
 - The editor's mirrored `progress`, `status`, and `product` state. The detail panel reads the saved record and the
   form is seeded when editing starts, so the summary cannot show a value the record does not hold.
 
+## Removed with the Reviews migration
+
+- The mode branches in `reviews.tsx` (64 `designPreview` references, now seven that pick the source and mark the Mock
+  root). The page is `reviews.tsx` (state, metrics, section bar, panes), `ReviewQueue.tsx`, `ReviewDetail.tsx`,
+  `ReviewSummary.tsx`, and `LocalBranchReview.tsx`; `reviewsView.ts` holds the schemas, `ReviewsSource`, and
+  `useLiveReviews`; `review-preview.tsx` holds the fixtures and `useMockReviews`.
+- `reviews-preview-summary.tsx` (`ReviewPreviewSummary`); its tiles and checks are `ReviewSummary`. `ReviewPreviewContext`
+  and `ReviewPreviewDiff` became the data-driven `ReviewContext` and `PullRequestPatch`.
+- The Live-only title-row badge ("GitHub · name", "GitHub repository not connected", "Connecting to GitHub", "GitHub
+  unavailable"); the repository menu names the checkout and the queue reports connecting, missing, and failed states.
+- The Live-only section bar (text tabs with five permanently disabled entries, the repository `Select`, the disabled
+  "All repos" button); Issues and Local branches are queue tabs beside Pull Requests and the repository is the design's
+  menu.
+- The Live-only queue heading (lower-case titles with an "N items" / "N runs" badge), four-tab detail row, plain
+  "Pull request diff" bar, repeated description above the diff, the "Open pull request on GitHub" row (now in the
+  overflow menu), three-card context row, four-tile statistics grid, and the summary order with Export evidence first
+  and Merge last.
+- Live labels "Open pull requests", "Draft pull requests", and "Open issues" on the metric cards; the draft count is
+  the Draft chip and the issue count is on the Issues tab.
+- Five CSS rules only those used (`reviews-unavailable`, `reviews-provider-available`, their dot rules, and
+  `reviews-filter-select`), and the rule that hid the description inside the detail pane.
+- The fixed 94% width of the evidence bar; it follows the value.
+
 ## Removed with the Overview migration
 
 - The mode branches in `OverviewPage.tsx` (37 `sampleData` references, now one that picks the source). Fixtures moved
@@ -163,6 +186,12 @@ until the list is empty.
   edit, and the Live frame at 1672×941. Approved and Mock were pixel-compared at 1672×941, 1672×749, 1440×900, and
   1024×768 and are identical; at 390×844 they differ only in the detail header, where the status badge and the three
   action buttons are no longer clipped.
+- `dashboard/e2e/github-reviews.spec.ts`: the Reviews frame in Live with real pull requests, issues, diff statistics,
+  honest Unavailable values, disabled controls, the exact GitHub write requests, the repository menu, a copied link, a
+  failed load without fixtures, and the phone layout. `reviews-preview.spec.ts`: the same frame in Mock with local-only
+  actions and no API traffic. `home.spec.ts`, `z_run_evidence.spec.ts`, and `z_agents.spec.ts`: the not-connected
+  state, agent-run branches, and run evidence in that frame. Approved and Mock were pixel-compared at 1672×941,
+  1672×749, 1512×874, 1440×900, 1280×800, 1024×768, and 390×844 and are identical.
 - `dashboard/e2e/workspace.spec.ts`: the Product Workspace frame in Live with real products, repositories, objectives,
   and roadmap; honest unavailable panels and disabled controls; product edit through `PUT /api/v1/products/{id}`;
   product switching on a phone; empty and failed product lists. `workspace-preview.spec.ts`: the same layout in Mock
