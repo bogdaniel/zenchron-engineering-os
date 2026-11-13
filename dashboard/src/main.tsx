@@ -42,8 +42,6 @@ const searchablePages = [
   ['Projects', 'projects'], ['Product Workspace', 'workspace'], ['Reviews', 'reviews'], ['Integrations', 'integrations'],
   ['Reports', 'reports'], ['Settings', 'settings'],
 ] as const;
-// Pages whose Live mode already renders the approved layout. The list goes away once every page is on it.
-const unifiedPages = ['agents', 'integrations', 'settings', 'overview', 'workspace', 'objectives', 'reviews', 'reports', 'workflows'];
 type DashboardMode = 'mock' | 'live';
 const localDevelopment = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 /**
@@ -177,6 +175,14 @@ function App() {
     enabled: auth.data?.authenticated === true && !previewPage,
   });
   const sessionUnavailable = auth.isError && !unauthorized;
+  // Who the header shows: the sample person in Mock, the signed-in account in Live. The header itself is the same.
+  const identity = previewPage
+    ? { greeting: 'Alex', name: 'Alex Chen', role: 'Engineering Lead', avatar: '/alex-chen-avatar.jpg', initial: 'A',
+      workspace: 'Core Product', hasNotifications: true }
+    : { greeting: auth.data?.login ?? '', name: auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable',
+      role: auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Signed out',
+      avatar: auth.data?.avatar_url, initial: auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?',
+      workspace: 'Workspace', hasNotifications: false };
   if (auth.isLoading && !previewPage) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
   if (!previewPage && ((auth.isError && unauthorized) || loginRoute)) return <div className="auth-screen">
     <div className="auth-card">
@@ -191,7 +197,7 @@ function App() {
   </div>;
   return (
     <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
-      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ' overview-layout' : ''}${previewPage || unifiedPages.includes(activePage) ? ' sample-data' : ''}`} id="overview">
+      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ' overview-layout' : ''}${loginRoute ? '' : ' sample-data'}`} id="overview">
         <Sidebar activePage={activePage} showSignIn={mode === 'mock'} modeSwitch={modeSwitch('mode-switch')} onNavigate={navigatePage} />
 
         <main className="main-content">
@@ -202,9 +208,8 @@ function App() {
                   title="Reports" titleAdornment={<span>Engineering Operations Analytics</span>}
                   description="Executive analytics for delivery, quality, productivity, and agent operations across products and workspaces." />
               </div> : <PageHeading className="greeting" titleLevel={1}
-                title={previewPage ? <>Good morning, Alex <span aria-hidden="true">👋</span></>
-                  : <>Good morning{auth.data?.login ? `, ${auth.data.login}` : ''} <span aria-hidden="true">👋</span></>}
-                description={['integrations', 'settings'].includes(activePage) && previewPage
+                title={<>Good morning{identity.greeting ? `, ${identity.greeting}` : ''} <span aria-hidden="true">👋</span></>}
+                description={['integrations', 'settings'].includes(activePage)
                   ? 'Configure your organization, connect integrations, and control how Zenchron runs.'
                   : activePage === 'workflows' ? 'You’re building and orchestrating intelligent engineering workflows.'
                   : activePage === 'overview' ? <>
@@ -227,7 +232,7 @@ function App() {
               {modeSwitch('mode-switch mode-switch-phone')}
               <Menu position="bottom-end" withinPortal>
                 <Menu.Target><button className="icon-button notification-button" aria-label="Notifications" type="button"><IconBell size={19} />
-                  {previewPage && <span className="notification-indicator" aria-hidden="true" />}</button></Menu.Target>
+                  {identity.hasNotifications && <span className="notification-indicator" aria-hidden="true" />}</button></Menu.Target>
                 <Menu.Dropdown><Menu.Label>Notifications</Menu.Label><Menu.Item disabled>No new notifications.</Menu.Item></Menu.Dropdown>
               </Menu>
               {!previewPage && auth.data?.authenticated && auth.data.local === false && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
@@ -236,22 +241,20 @@ function App() {
               }}><IconLogout size={17} /></button>}
               <Menu position="bottom-end" withinPortal>
                 <Menu.Target><button className="workspace-button" type="button" aria-label="Choose workspace">
-                  <span className="workspace-glyph">{previewPage ? <IconStack2 size={15} /> : 'Z'}</span>
-                  {previewPage ? 'Core Product' : 'Workspace'} <IconChevronDown size={15} />
+                  <span className="workspace-glyph"><IconStack2 size={15} /></span>
+                  {identity.workspace} <IconChevronDown size={15} />
                 </button></Menu.Target>
-                <Menu.Dropdown><Menu.Label>{previewPage ? 'Core Product' : 'Workspace'}</Menu.Label>
+                <Menu.Dropdown><Menu.Label>{identity.workspace}</Menu.Label>
                   <Menu.Item onClick={() => goToPage('#workspace')}>Open Product Workspace</Menu.Item></Menu.Dropdown>
               </Menu>
               <Menu position="bottom-end" withinPortal>
                 <Menu.Target><button className="user-chip" type="button" aria-label="User profile menu">
-                  {previewPage ? <img className="avatar avatar-image" src="/alex-chen-avatar.jpg" alt="" /> : auth.data?.avatar_url
-                    ? <img className="avatar avatar-image" src={auth.data.avatar_url} alt="" />
-                    : <span className="avatar">{auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?'}</span>}
-                  <span>{previewPage ? 'Alex Chen' : auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable'}
-                    <small>{previewPage ? 'Engineering Lead' : auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Preview only'}</small></span>
-                  {previewPage && <IconChevronDown className="user-profile-chevron" size={15} aria-hidden="true" />}
+                  {identity.avatar ? <img className="avatar avatar-image" src={identity.avatar} alt="" />
+                    : <span className="avatar">{identity.initial}</span>}
+                  <span>{identity.name}<small>{identity.role}</small></span>
+                  <IconChevronDown className="user-profile-chevron" size={15} aria-hidden="true" />
                 </button></Menu.Target>
-                <Menu.Dropdown><Menu.Label>{previewPage ? 'Alex Chen' : auth.data?.login ?? 'Account'}</Menu.Label>
+                <Menu.Dropdown><Menu.Label>{identity.name}</Menu.Label>
                   <Menu.Item onClick={() => goToPage('#settings')}>Open Settings</Menu.Item></Menu.Dropdown>
               </Menu>
             </div>
@@ -274,7 +277,7 @@ function App() {
             agentRuns={agentRuns.data} agentRunsLoading={agentRuns.isLoading} agentRunsError={agentRuns.isError}
             onlineWorkers={onlineWorkers.length} onlineWorkerNames={onlineWorkers.map((worker) => worker.name)}
           controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} designPreview={previewPage} onNavigate={goToPage} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} runsLoading={agentRuns.isLoading} runsFailed={agentRuns.isError} projects={projects.data ?? []} designPreview={previewPage} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={previewPage} /> : activePage === 'projects' ? (
-            <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} />
+            <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} sampleData={previewPage} />
           ) : activePage === 'workspace' ? (
             <WorkspacePage
               designPreview={previewPage}

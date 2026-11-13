@@ -274,6 +274,13 @@ test('the Mock and Live switch selects the data source, keeps the page, and stay
   await expect(page).toHaveURL(/\?mode=live#reviews$/);
   await page.goto(`${local.origin}/?mode=mock#agents`);
   await expect(page.locator('.agents-preview-notice')).toHaveText('ILLUSTRATIVE DATA');
+  // Projects has no fixtures: Mock says the inventory is Live-only instead of showing an empty one.
+  await page.goto(`${local.origin}/?mode=mock#projects`);
+  await expect(page.locator('.projects-live-badge')).toHaveText('No sample data');
+  await expect(page.getByRole('heading', { name: 'Live data only' })).toBeVisible();
+  await page.goto(`${local.origin}/?mode=live#projects`);
+  await expect(page.locator('.projects-live-badge')).toHaveText(/Worker inventory · live/i);
+  await expect(page.getByRole('gridcell', { name: 'platform' })).toBeVisible();
   // Off a local address there is no selector and no Mock, whatever the address says.
   await page.goto(`${baseURL}/?mode=mock#agents`);
   await expect(page.getByRole('heading', { name: 'Agent Profiles (1)' })).toBeVisible();

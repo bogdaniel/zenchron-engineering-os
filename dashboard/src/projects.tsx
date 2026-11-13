@@ -51,9 +51,10 @@ const projectTheme = themeQuartz.withPart(colorSchemeDark).withParams({
   selectedRowBackgroundColor: '#292039',
 });
 
-type Props = { items: Project[]; isLoading: boolean; isError: boolean };
+/** `sampleData` is Mock mode: this page has no fixtures, so it says the inventory is Live-only instead of looking empty. */
+type Props = { items: Project[]; isLoading: boolean; isError: boolean; sampleData?: boolean };
 
-export function ProjectsPage({ items, isLoading, isError }: Props) {
+export function ProjectsPage({ items, isLoading, isError, sampleData = false }: Props) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [selectedID, setSelectedID] = useState<string | null>(null);
@@ -124,7 +125,7 @@ export function ProjectsPage({ items, isLoading, isError }: Props) {
   return <div className="projects-page">
     <div className="projects-title-row">
       <PageHeading eyebrow="LOCAL REPOSITORIES" title="Projects" description="Git checkouts reported by your connected development workers." />
-      <Badge className="projects-live-badge" variant="light"><i /> Worker inventory · live</Badge>
+      <Badge className="projects-live-badge" variant="light"><i /> {sampleData ? 'No sample data' : 'Worker inventory · live'}</Badge>
     </div>
 
     <section className="projects-metrics" aria-label="Repository inventory">
@@ -158,7 +159,8 @@ export function ProjectsPage({ items, isLoading, isError }: Props) {
               paginationPageSize={8}
               onRowClicked={({ data }) => { if (data) setSelectedID(data.id); }}
               overlayNoRowsTemplate={
-                '<span class="ag-overlay-no-rows-center">No local Git checkouts discovered.</span>'
+                `<span class="ag-overlay-no-rows-center">${sampleData
+                  ? 'Repository inventory has no sample data. Switch to Live to see worker checkouts.' : 'No local Git checkouts discovered.'}</span>`
               }
             />
           )}
@@ -215,10 +217,10 @@ export function ProjectsPage({ items, isLoading, isError }: Props) {
           </div>
         </> : <div className="projects-empty-detail">
           <IconFolders size={23} />
-          <h3>{isError ? 'Inventory unavailable' : 'No repositories found'}</h3>
-          <p>
+          <h3>{sampleData ? 'Live data only' : isError ? 'Inventory unavailable' : 'No repositories found'}</h3>
+          {sampleData ? <p>Worker checkouts are never mocked. Choose Live in the sidebar to see them.</p> : <p>
             Start the local worker with <code>ZENCHRON_PROJECTS_ROOT</code> set to a folder containing Git checkouts.
-          </p>
+          </p>}
         </div>}
       </PanelCard>
     </div>
