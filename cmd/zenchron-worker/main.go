@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 )
 
 func main() {
@@ -47,8 +48,8 @@ func run() error {
 	if name == "" {
 		name = hostname
 	}
-	if name == "" || len(name) > 128 {
-		return fmt.Errorf("worker name must be between 1 and 128 bytes")
+	if err := validateWorkerName(name); err != nil {
+		return err
 	}
 	llm, err := loadAgentRuntime()
 	if err != nil {
@@ -86,6 +87,18 @@ func run() error {
 		case <-ticker.C:
 		}
 	}
+}
+
+func validateWorkerName(name string) error {
+	if name == "" || len(name) > 128 {
+		return fmt.Errorf("worker name must be between 1 and 128 bytes")
+	}
+	for _, character := range name {
+		if unicode.IsControl(character) {
+			return fmt.Errorf("worker name must not contain control characters")
+		}
+	}
+	return nil
 }
 
 func isLoopbackWorkerHost(host string) bool {
