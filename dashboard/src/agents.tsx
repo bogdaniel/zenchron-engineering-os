@@ -522,6 +522,8 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
               <Button className="agents-run-button" disabled={selected.status !== 'active'} onClick={() => {
                 queueRun.reset();
                 setRunProjectID(onlineProjects[0]?.id ?? '');
+                // An issue chosen before the dialog was last closed belongs to that project's list.
+                setRunIssue(null);
                 runForm.reset();
                 setRunOpen(true);
               }}>Queue run</Button></>}</div>} />

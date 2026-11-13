@@ -103,7 +103,8 @@ are limited to one regular file up to 256 KiB, inside the run worktree, with an 
 reject traversal, `.git` metadata, and symlinks. The source checkout remains untouched. It does not offer the saved
 `tests.run` permission to the model. After a successful model run the
 worker commits staged changes on the isolated branch using the fixed local identity `Zenchron Agent
-<agent@zenchron.invalid>`. Failed and cancelled runs are left uncommitted. A diff larger than the 128 KiB display cap is still committed and is
+<agent@zenchron.invalid>`. A run that fails or is cancelled before the commit leaves its changes uncommitted; the commit happens before
+verification, so a run that fails verification, or is cancelled during it, keeps its commit on the isolated branch. A diff larger than the 128 KiB display cap is still committed and is
 marked truncated in the stored copy. Follow-up passes create additional
 commits on the same branch; diff capture compares the full branch against its merge base so the review still includes
 earlier passes. The commit SHA is stored on the run and shown in Agents and Reviews. When the run finishes, the worker

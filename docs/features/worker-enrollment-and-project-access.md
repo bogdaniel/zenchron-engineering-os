@@ -65,7 +65,12 @@ An empty `owner` marks a shared execution machine. Users are GitHub usernames an
 ## Behavior
 
 - A worker token is accepted only on worker endpoints for the id it was enrolled with. A valid token sent with another
-  worker's id is rejected, so a worker cannot heartbeat, claim, report, or finish as another worker.
+  worker's id is rejected, so a worker cannot heartbeat, claim, report, or finish as another worker. The one exception
+  is the readiness probe `GET /api/v1/workers/healthz`, which has no worker id and accepts any enrolled worker's token.
+- A repository grant must equal the remote the worker reports, character for character (`github.com/owner/name`, with
+  the host lower-cased and no `.git` suffix; the path keeps its case). A project whose remote is not granted is left
+  out of the worker's registration and the heartbeat still returns 200, so a grant that differs only in case or suffix
+  shows up as a missing project, not as an error. Reporting such mismatches is tracked in issue #348.
 - The control plane stores only the SHA-256 of each token.
 - With an access file, the shared `ZENCHRON_WORKER_TOKEN` is not accepted by the control plane at all.
 - A worker's heartbeat registers only projects whose repository is in its grant. Other checkouts it reports, and

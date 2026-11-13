@@ -107,9 +107,16 @@ func (harness *deliveryHarness) serveGitHub(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// call sends a request as the local dashboard does, from a loopback address.
 func (harness *deliveryHarness) call(method, path, body string) *httptest.ResponseRecorder {
+	return harness.callFrom("127.0.0.1:41000", method, path, body)
+}
+
+func (harness *deliveryHarness) callFrom(remoteAddr, method, path, body string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	request.RemoteAddr = remoteAddr
 	response := httptest.NewRecorder()
-	harness.server.ServeHTTP(response, httptest.NewRequest(method, path, strings.NewReader(body)))
+	harness.server.ServeHTTP(response, request)
 	return response
 }
 
@@ -498,5 +505,10 @@ func TestIssueRunRejectsPullRequestsAndUnknownIssuesAndCreatesIssues(t *testing.
 	}
 	if response := harness.call(http.MethodPost, "/api/v1/projects/"+testProjectID+"/issues", `{"title":" "}`); response.Code != http.StatusBadRequest {
 		t.Fatalf("blank issue title returned HTTP %d", response.Code)
+	}
+	// Without an access policy, the control plane's GitHub credential may be used only by a local client.
+	if response := harness.callFrom("203.0.113.10:41000", http.MethodPost, "/api/v1/projects/"+testProjectID+"/issues",
+		`{"title":"Remote defect"}`); response.Code != http.StatusForbidden {
+		t.Fatalf("issue creation from a remote client without an access policy returned HTTP %d", response.Code)
 	}
 }
