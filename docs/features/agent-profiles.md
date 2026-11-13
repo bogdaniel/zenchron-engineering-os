@@ -14,46 +14,23 @@ model identifiers, and shows up to three allowed tool IDs with a count for any a
 status stays unknown, and runs queued on a worker without a configured runtime remain queued. Provider identifiers
 are labels only; credentials are not stored.
 
-The Overview tab is read-only by default and shows saved provider/model metadata, version, run count, completed-run
-success rate, prompt previews, executable tool permissions, and enforced execution safeguards. It reports per-run
-worktree isolation, profile-gated file writes, and unavailable test execution from the current worker contract. Average latency and model cost stay unavailable because
-the worker does not record them yet. `Edit profile` enables the profile fields, prompt textareas, and tool selection;
-Cancel restores the saved values, and Save persists the profile through the versioned update API. Disable/Enable acts
-directly on the selected saved profile. Prompt previews are truncated for display, with the full prompt available on
-hover. In the local design preview, the System Prompt and Goal Prompt cards preserve the mock's numbered, read-only
-code lines; Edit opens the full prompt editor. Metrics use recorded data only.
+The page has one layout in both data modes (see [One dashboard, two data modes](../architecture/dashboard-modes.md)).
+The Overview tab shows the profile fields, 30-day performance, numbered prompt previews, Variables & Templates, Tool
+Permissions, Safety & Governance, the three most recent runs, and a success, cost, and latency trend. In Live the
+figures come from recorded runs: run count, completed-run success rate, average attempt duration, and the cost the
+provider reported; a figure with no data reads Unavailable. Owner, creation date, profile variables, templates, and
+earlier versions are not stored by the control plane and say so. Safety & Governance lists the safeguards the worker
+enforces on every run (isolated worktree, profile-gated file writes and test execution, withheld provider credentials).
+`Edit profile` in the "More agent actions" menu, the Edit buttons on the prompt cards, and Tool Permissions > Edit
+enable the profile fields, the prompt editors, and tool selection; Cancel restores the saved values and Save persists
+through the versioned update API. Duplicate Profile creates a saved copy, Disable/Enable and the Status field update
+the saved profile, and Run Agent opens the queue dialog. Export downloads the profiles as JSON; import is not available
+in Live.
 
-The unauthenticated local design preview is fixture-only and makes no agent or run API requests. Its metrics and
-profile history, including performance deltas, sparklines, durations, and costs, are illustrative and carry a visible
-`ILLUSTRATIVE DATA` label; fields absent from the live profile contract, including owner and creation time, stay
-exclusive to that preview. The desktop performance chart keeps its illustrative success percentages, USD costs, and seconds latency on separate scales to match the reference. The preview's Model / Provider, Version, Status, and Owner controls update local fixture
-state only. Search, status filtering, and name sorting operate on the local fixture. Create, edit,
-duplicate, disable, simulated run, library selection, import/export, and version/history controls update or inspect
-preview data only; they never call the agent APIs. Overview card links open the matching Variables & Templates,
-Tools & Permissions, Safety & Governance, or Run History tab. Prompt cards also match the mock's pencil Edit and
-overflow controls; Copy prompt writes the illustrative prompt text to the local clipboard. Tool permission and governance edits stay local. The
-Performance Trends range selector switches the illustrative chart between the 7-day and 30-day sample windows.
-The desktop mock preview uses the full subtitle, including “Define specialized agents for your engineering workflows.” The System Prompt uses numbered 10 px monospace text with 12 px line spacing; the Goal Prompt remains plain 10 px text as shown in the mock.
-Its profile detail tabs use the mock's bordered segmented rail and filled active tab. The local detail actions use the mock's 30 px button height, 10 px labels, and Run, Duplicate, Disable, and Compare icons.
-The mock's Research Analyst row is labeled Idle while its local disabled state remains available to the preview's
-status filter and Enable action.
-Each desktop preview profile also has an options menu to select or duplicate that profile locally; live profile rows do
-not show this preview-only menu. Each preview card shows model/provider first, then icon-labeled last-run, cost, and
-success values on the next compact row, with the status badge aligned at the card's upper right; descriptions remain readable and the initial list shows five
-complete rows before scrolling to the sixth. Its compact detail header and tab inset keep the lower overview panels
-inside the reference frame.
-
-At phone width, the local preview switches to the supplied Agents & Reviews summary: the Agents tab shows recent runs,
-pull request reviews, evidence health, and quick actions; Reviews and Evidence tabs focus their matching panels. Run
-Agent opens the existing queue dialog, New Review navigates to the Reviews page, and All Runs opens the existing
-profile workspace with Run History selected. Its back action returns to the summary. The
-phone-only sample counts and review/evidence summaries are illustrative; the desktop profile manager and all live
-Agents behavior remain unchanged.
-
-The worker enforces `code.search`, `code.write`, `docs.search`, `git.diff`, and `git.read` when an OpenAI-compatible
-runtime endpoint is configured on that worker. `code.write` is opt-in and applies only to the run's isolated Git
-worktree. `tests.run` remains saved profile metadata but is not exposed to the model. Provider identifiers are labels;
-the worker endpoint selects the protocol and credentials. Model spend remains unavailable.
+In Mock the same page shows the approved fixtures under a visible `ILLUSTRATIVE DATA` label and makes no agent or run
+API requests. Its figures, deltas, sparklines, durations, and costs are illustrative. Create, edit, duplicate, import,
+the profile field selects, and Run Agent change fixture state in the browser tab only; confirmations end with "in this
+preview only" and Run Agent records a run labelled SIMULATED.
 
 Setting `provider` to `codex-cli` or `claude-code` runs the profile through the installed CLI on the worker; the
 queue dialog then reports that CLI's readiness and can start the run from a GitHub issue. See

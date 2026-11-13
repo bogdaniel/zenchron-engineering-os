@@ -100,6 +100,12 @@ test('local Integrations mock filters and updates its fixture without provider w
   await page.getByRole('menuitem', { name: 'Disconnect in preview' }).click();
   await expect(githubSwitch).not.toBeChecked();
   await expect(githubProvider.getByText('Disconnected')).toBeVisible();
+  await expect(githubProvider.locator('.mantine-Switch-track'), 'a switched-off connection is not painted green')
+    .toHaveCSS('background-color', 'rgb(72, 68, 84)');
+  await githubProvider.getByRole('button', { name: 'GitHub options' }).click();
+  await page.getByRole('menuitem', { name: 'View status' }).click();
+  await expect(page.getByRole('dialog', { name: 'GitHub · Disconnected' })).toContainText('org/zenchron-engineering');
+  await page.keyboard.press('Escape');
   await githubProvider.locator('.system-preview-switch label').click();
   await expect(githubSwitch).toBeChecked();
   const revealKey = page.getByRole('button', { name: 'Reveal OpenAI preview key' });

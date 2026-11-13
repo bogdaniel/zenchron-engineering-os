@@ -50,9 +50,23 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
     heading.scrollHeight <= parseFloat(getComputedStyle(heading).lineHeight) + 1,
   ), 'Insights heading stays on one line at the mock viewport').toBe(true);
   await expect(page.getByRole('combobox', { name: 'Insights view' })).toBeVisible();
-  await expect(page.locator('.reports-chart-legend')).toHaveCount(3);
+  await expect(page.locator('.reports-page')).not.toHaveAttribute('data-preview');
+  await expect(page.locator('.reports-chart-legend')).toHaveCount(4);
+  await expect(page.locator('.reports-chart-legend').filter({ hasText: 'Autonomous completion · unavailable' })).toHaveCount(2);
+  await expect(page.locator('.reports-page .mantine-Select-section[data-position="right"] .tabler-icon-chevron-down')).toHaveCount(6);
+  const latencyPercentiles = page.getByRole('group', { name: 'Review latency percentile' }).getByRole('button');
+  await expect(latencyPercentiles).toHaveText(['P50', 'P75', 'P95']);
+  for (const percentile of await latencyPercentiles.all()) {
+    await expect(percentile).toBeDisabled();
+    await expect(percentile).toHaveAttribute('title', 'Requires provider review events.');
+  }
+  await expect(page.locator('.review-latency-panel .reports-empty-chart')).toContainText('Requires provider review events.');
+  await expect(page.locator('.agent-spend-panel .reports-empty-chart')).toContainText('No run in this scope reports provider cost.');
+  await expect(page.locator('.reports-ci-axis-title')).toHaveText('CI Duration (minutes)');
+  await expect(page.locator('.reports-metric .reports-preview-value')).toHaveCount(0);
   await expect(page.locator('.report-outcome-legend')).toBeVisible();
-  await expect(page.locator('.reports-outcomes-layout .report-chart-label')).toHaveText('4');
+  await expect(page.locator('.reports-outcomes-label b')).toHaveText('4');
+  await expect(page.locator('.reports-outcomes-label')).toContainText('Pull Requests');
   await expect(page.getByRole('heading', { name: 'Workspace summary' })).toBeVisible();
   await expect(page.locator('.product-summary-panel .report-summary-table tbody tr td')).toHaveText([
     'Unassigned repositories', '0 / wk', 'N/A', '10.5 min', 'N/A', 'N/A',
@@ -77,7 +91,7 @@ test('Reports panel rows match the desktop mockup proportions', async ({ page })
   await expect(page.locator('.downloadable-report-list')).toHaveCSS('row-gap', '0px');
   await expect(page.locator('.downloadable-report').first()).toHaveCSS('min-height', '34px');
   await expect(page.locator('.downloadable-report-copy b').first()).toHaveCSS('font-size', '11px');
-  await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '9px');
+  await expect(page.locator('.downloadable-report-copy span').first()).toHaveCSS('font-size', '8px');
   await expect(page.getByRole('button', { name: 'Download Agent Spend & Utilization CSV' })).toBeEnabled();
   await expect(page.locator('.reports-empty-chart')).toHaveCount(4);
   await expect(page.locator('.reports-empty-chart').first()).toHaveAttribute('role', 'status');
@@ -188,8 +202,14 @@ test('Reports headings fit the mock display viewport', async ({ page }) => {
   const filter = page.locator('.reports-insight-filter');
   const [titleBounds, filterBounds] = await Promise.all([insightsTitle.boundingBox(), filter.boundingBox()]);
   expect(titleBounds && filterBounds).toBeTruthy();
-  expect(Math.abs(titleBounds!.y - filterBounds!.y)).toBeLessThanOrEqual(1);
-  await expect(filter).toHaveCSS('width', '122px');
+  // The approved heading has no subtitle: the title is centred in the row and the selector sits at its top edge.
+  const headingBounds = await page.locator('.reports-summary .reports-panel-heading').boundingBox();
+  expect(headingBounds).toBeTruthy();
+  expect(filterBounds!.y).toBe(headingBounds!.y);
+  expect(Math.abs(titleBounds!.y + titleBounds!.height / 2 - (headingBounds!.y + headingBounds!.height / 2))).toBeLessThanOrEqual(1);
+  expect(titleBounds!.x + titleBounds!.width).toBeLessThanOrEqual(filterBounds!.x);
+  await expect(page.locator('.reports-summary .reports-panel-heading p')).toHaveCount(0);
+  await expect(filter).toHaveCSS('width', '126px');
   await expect(filter.locator('input')).toHaveCSS('font-size', '8px');
   await expect(filter.locator('input')).toHaveValue('Executive Summary');
 
@@ -255,13 +275,14 @@ test('work outcomes count merged, closed unmerged, and open pull requests in ran
   }));
 
   await page.goto('/#reports');
-  await expect(page.locator('.reports-outcomes-layout .report-chart-label')).toHaveText('3');
+  await expect(page.locator('.reports-outcomes-label b')).toHaveText('3');
   const legend = page.locator('.report-outcome-legend');
   await expect(legend.locator('> div')).toHaveText([
     /Merged\s*1/, /Closed unmerged\s*1/, /Open\s*1/,
   ]);
-  await expect(page.locator('.work-outcomes-panel .shared-panel-heading p'))
-    .toHaveText('Pull request status · last 30 days');
+  await expect(page.locator('.work-outcomes-panel .shared-panel-heading h3'))
+    .toHaveText('Work Outcomes (Pull requests · last 30 days)');
+  await expect(page.locator('.work-outcomes-panel .shared-panel-heading p')).toHaveCount(0);
 });
 
 test('workspace summary does not infer autonomy when agent runs fail to load', async ({ page }) => {
@@ -321,9 +342,9 @@ test('Reports derives GitHub delivery metrics from complete pull-request history
   }));
   await page.goto('/#reports');
   await expect(page.locator('.reports-metric').filter({ hasText: /Delivery Velocity/i }).locator('strong')).toHaveText('0.5');
-  await expect(page.locator('.reports-metric').filter({ hasText: /Cycle Time/i }).locator('strong')).toHaveText('42');
+  await expect(page.locator('.reports-metric').filter({ hasText: /Cycle Time/i }).locator('strong')).toHaveText('42h');
   await expect(page.locator('.reports-metric').filter({ hasText: /Acceptance Rate/i }).locator('strong')).toHaveText('67%');
-  await expect(page.locator('.reports-metric').filter({ hasText: /CI Duration/i }).locator('strong')).toHaveText('10');
+  await expect(page.locator('.reports-metric').filter({ hasText: /CI Duration/i }).locator('strong')).toHaveText('10m');
   for (const label of ['Delivery Velocity', 'Cycle Time', 'CI Duration', 'Acceptance Rate']) {
     await expect(page.getByRole('img', { name: `${label} trend` })).toBeVisible();
   }
@@ -337,14 +358,18 @@ test('Reports derives GitHub delivery metrics from complete pull-request history
   });
   expect(chartBounds.chart).toBeLessThanOrEqual(chartBounds.panel - chartBounds.padding);
   await expect(page.locator('.reports-ci-chart .recharts-cartesian-axis-tick-value').first())
-    .toHaveCSS('fill', 'rgb(150, 145, 168)');
+    .toHaveCSS('fill', 'rgb(157, 151, 174)');
   const trend = page.locator('.reports-pull-request-chart');
   await expect(trend).toBeVisible();
   await expect(page.locator('.delivery-velocity-panel .reports-chart-legend')).toContainText('Delivery Velocity (PRs/week)');
   await expect(page.locator('.delivery-velocity-panel .reports-chart-legend')).toContainText('Cycle Time (hours)');
-  await expect(trend.locator('.recharts-line')).toHaveCount(2);
+  await expect(trend.locator('.recharts-area-area')).toHaveCount(2);
+  await expect(trend.locator('.recharts-dot').first()).toBeVisible();
+  const deliveryAxisLabels = await trend.locator('text').allTextContents();
+  expect(deliveryAxisLabels).toEqual(expect.arrayContaining(['PRs / week', 'Cycle time (h)']));
+  await expect(page.locator('.acceptance-panel .recharts-area-curve')).toHaveCount(1);
   await expect(trend.locator('.recharts-cartesian-axis-tick-value').first())
-    .toHaveCSS('fill', 'rgb(150, 145, 168)');
+    .toHaveCSS('fill', 'rgb(157, 151, 174)');
   await expect(page.locator('.reports-insight').filter({ hasText: 'Delivery sources' }))
     .toContainText('1 checkout has no remote');
 });
@@ -469,18 +494,20 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   await expect(page.getByLabel('Workflow filter unavailable because runs are not linked to workflows')).toBeDisabled();
   await expect(page.locator('.work-outcomes-panel .reports-empty'))
     .toHaveText('Connect a supported GitHub repository to view pull-request outcomes.');
-  await expect(page.locator('.work-outcomes-panel .shared-panel-heading p'))
-    .toHaveText('Pull request status · last 30 days');
-  await page.getByRole('combobox', { name: 'Time range' }).click();
-  await page.getByRole('option', { name: 'Last 90 days' }).click();
-  await page.getByRole('button', { name: 'Apply filters' }).click();
-  await expect(page.locator('.work-outcomes-panel .shared-panel-heading p'))
-    .toHaveText('Pull request status · last 90 days');
+  await expect(page.locator('.work-outcomes-panel .shared-panel-heading h3'))
+    .toHaveText('Work Outcomes (Pull requests · last 30 days)');
+  await expect(page.locator('.work-outcomes-panel .shared-panel-heading p')).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Time Range' }).click();
+  await page.getByRole('option', { name: 'Last 90 Days' }).click();
+  await page.getByRole('button', { name: 'Apply Filters' }).click();
+  await expect(page.locator('.work-outcomes-panel .shared-panel-heading h3'))
+    .toHaveText('Work Outcomes (Pull requests · last 90 days)');
+  await expect(page.locator('.reports-preview-scope-status')).toHaveText('Scope applied: Last 90 Days');
   const workspaceItems = page.locator('.inventory-panel .report-summary-table tbody tr td').nth(1);
   await expect(workspaceItems).toHaveText('2');
-  await page.getByRole('combobox', { name: 'Objective owner' }).click();
+  await page.getByRole('combobox', { name: 'Team' }).click();
   await page.getByRole('option', { name: 'Platform', exact: true }).click();
-  await page.getByRole('button', { name: 'Apply filters' }).click();
+  await page.getByRole('button', { name: 'Apply Filters' }).click();
   await expect(workspaceItems).toHaveText('1');
   await expect(page.locator('.reports-insight').filter({ hasText: 'Agent activity' })).toContainText('2 recorded runs');
   await page.getByRole('button', { name: 'Reset' }).click();
@@ -488,7 +515,7 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   await page.getByRole('combobox', { name: 'Product' }).click();
   await page.getByRole('option', { name: 'Nova Platform' }).click();
   await expect(workspaceItems).toHaveText('2');
-  await page.getByRole('button', { name: 'Apply filters' }).click();
+  await page.getByRole('button', { name: 'Apply Filters' }).click();
   await expect(workspaceItems).toHaveText('1');
   await expect(page.locator('.reports-insight').filter({ hasText: 'Agent activity' }))
     .toContainText('1 recorded run in this period');
@@ -531,4 +558,62 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   expect(workspace.csv).toContain('"Workspace","Local workspace"');
   await page.getByRole('button', { name: 'Reset' }).click();
   await expect(workspaceItems).toHaveText('2');
+});
+
+test('Reports shows the cost providers reported for agent runs and never a fixture', async ({ page }) => {
+  const now = Date.now();
+  const run = (id: string, hoursAgo: number, usage?: { input_tokens: number; output_tokens: number; cost_usd?: number }) => {
+    const created_at = new Date(now - hoursAgo * 60 * 60 * 1000).toISOString();
+    return { id, agent_id: 'a'.repeat(32), agent_name: 'Reviewer', project_id: 'b'.repeat(32), project_name: 'Platform',
+      worker_id: 'c'.repeat(32), worker_name: 'Mac', branch: `agent/${id}`, prompt: 'Review changes.',
+      status: 'succeeded', attempts: 1, created_at, updated_at: created_at, usage };
+  };
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify([
+      run('costed', 2, { input_tokens: 1200, output_tokens: 300, cost_usd: 1.25 }),
+      run('older', 20 * 24, { input_tokens: 10, output_tokens: 5, cost_usd: 0.5 }),
+      run('tokens-only', 3, { input_tokens: 40, output_tokens: 2 }),
+      run('unreported', 4),
+      run('out-of-range', 40 * 24, { input_tokens: 1, output_tokens: 1, cost_usd: 99 }),
+    ]) }));
+  await page.addInitScript(() => {
+    const originalClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      if (this.download.endsWith('.csv')) {
+        (window as Window & { downloadedCSV?: Promise<string> }).downloadedCSV = fetch(this.href)
+          .then((response) => response.text());
+      }
+      originalClick.call(this);
+    };
+  });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/#reports');
+
+  const spendCard = page.locator('.reports-metric.agent-spend');
+  await expect(spendCard.locator('strong')).toHaveText('$1.75');
+  await expect(spendCard.getByRole('img', { name: 'Agent Spend trend' })).toBeVisible();
+  const spendChart = page.locator('.agent-spend-panel .reports-spend-chart');
+  await expect(spendChart).toHaveAttribute('aria-label', 'Agent spend reported by providers for 2 runs');
+  await expect(spendChart.locator('.recharts-bar-rectangle path')).toHaveCount(2);
+  await expect(spendChart.locator('.recharts-line')).toHaveCount(0);
+  await expect(page.locator('.agent-spend-panel .reports-chart-legend')).toContainText('Autonomous completion · unavailable');
+  await expect(page.locator('.reports-metric.autonomous-completion strong')).toHaveText('Unavailable');
+  await expect(page.locator('.reports-metric.review-latency strong')).toHaveText('Unavailable');
+  await expect(page.locator('.reports-page')).not.toContainText('$13.6K');
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download Agent Spend & Utilization CSV' }).click();
+  await downloadPromise;
+  const csv = await page.evaluate(async () => await (window as Window & { downloadedCSV?: Promise<string> }).downloadedCSV);
+  expect(csv).toContain('"agent/costed","succeeded","1.25","1200 input / 300 output tokens","Reported by the provider"');
+  expect(csv).toContain('"agent/tokens-only","succeeded","Unavailable","40 input / 2 output tokens","Reported by the provider"');
+  expect(csv).toContain('"agent/unreported","succeeded","Unavailable","Unavailable","Provider usage records are not connected"');
+  expect(csv).not.toContain('out-of-range');
+
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({ status: 503, body: 'Unavailable' }));
+  await page.reload();
+  await expect(spendCard.locator('strong')).toHaveText('Unavailable');
+  // TanStack Query retries a failed read with backoff before it reports the error.
+  await expect(page.locator('.agent-spend-panel .reports-empty-chart'))
+    .toContainText('Agent run data unavailable.', { timeout: 20_000 });
 });

@@ -137,7 +137,7 @@
 .overview-layout .workflow-node.planner,
 .overview-layout .workflow-node.test-generator,
 .overview-layout .workflow-node.code-reviewer { --workflow-accent: #43dda6; --workflow-border: #318b6d; --workflow-tint: #133a2d; --workflow-icon-bg: #1e5842; --workflow-glow: #43dda066; }
-.overview-layout.sample-data .workflow-overview-canvas .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 12px; right: 8px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
+.overview-layout .workflow-overview-canvas.stages-complete .workflow-node:not(.trigger):not(.merge-gate)::after { position: absolute; top: 12px; right: 8px; z-index: 1; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #073624; background: #28d99c; content: '✓'; font-size: 9px; font-weight: 700; }
 .overview-layout.sample-data .overview-design-preview .workflow-overview-canvas .react-flow__attribution { display: none; }
 .overview-layout.sample-data .overview-design-preview .workflow-panel {
   background-color: #141321;
@@ -148,9 +148,11 @@
 .overview-layout.sample-data .workflow-overview-canvas .react-flow__background { display: none; }
 .overview-layout.sample-data .workflow-panel .workflow-overview-actions { gap: 8px; }
 .overview-layout.sample-data .workflow-overview-actions .preview-running-badge,
+.overview-layout.sample-data .workflow-overview-actions .muted-tag,
 .overview-layout.sample-data .workflow-overview-actions .subtle-button,
 .overview-layout.sample-data .workflow-overview-actions .workflow-icon-link { height: 32px; }
-.overview-layout.sample-data .workflow-overview-actions .preview-running-badge { padding: 0 14px; font-size: 12px; }
+.overview-layout.sample-data .workflow-overview-actions .preview-running-badge,
+.overview-layout.sample-data .workflow-overview-actions .muted-tag { padding: 0 14px; font-size: 12px; text-transform: none; }
 .overview-layout.sample-data .workflow-overview-actions .subtle-button { padding: 0 16px; font-size: 12px; }
 .overview-layout.sample-data .timeline-panel .panel-heading .text-link { font-size: 12px; }
 .overview-layout .workflow-overview-canvas .react-flow__viewport { translate: 1px 5px; }
@@ -168,7 +170,6 @@
 .overview-layout .workflow-node.agent-router { width: 165px; }
 .overview-layout .workflow-node.test-generator, .overview-layout .workflow-node.code-reviewer { width: 183px; }
 .overview-layout .workflow-node.merge-gate { width: 167px; }
-.workflow-overview-status { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; color: #a49cb5; font-size: 9px; }
 .workflow-overview-message { display: grid; min-height: 144px; place-items: center; color: #a49cb5; font-size: 11px; }
 .text-link { color: #c7a1ff; font-size: 10px; white-space: nowrap; }
 .activity-panel .text-link { display: flex; align-items: center; gap: 2px; padding: 0; border: 0; color: #c7a1ff; background: transparent; font: inherit; font-size: 10px; font-weight: 500; cursor: pointer; }
@@ -187,7 +188,6 @@
 .activity-list > div:last-child { border-bottom: 0; }
 .activity-list > div > svg { flex: 0 0 auto; }
 .activity-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.activity-list small { display: block; margin-top: 3px; color: #9993aa; font-size: 10px; }
 .activity-list time { margin-left: auto; color: #9a94aa; font-size: 9px; white-space: nowrap; }
 .activity-green { color: #5bdbac; }
 .activity-blue { color: #80bfff; }
@@ -230,7 +230,6 @@
 .chart-empty { display: flex; min-height: 112px; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border-radius: 8px; color: #7ddde1; text-align: center; }
 .chart-empty span { color: #e6e1ef; font-size: 10px; }
 .chart-empty small { max-width: 190px; color: #9690a8; font-size: 9px; line-height: 1.4; }
-.sample-data .workflow-overview-status { display: none; }
 .overview-layout .workflow-overview-canvas { height: 124px; }
 @media (min-width: 1622px) {
   .overview-layout .metric-card { min-height: 100px; }
@@ -285,7 +284,6 @@
 .overview-layout .objective-panel { padding-bottom: 2px; }
 .overview-layout .overview-middle-grid .panel-heading { transform: translateY(-4px); }
 .overview-layout .section-icon { width: 26px; height: 26px; border: 1px solid #3a3153; border-radius: 8px; color: #c59bff; background: #2a2139; }
-.overview-layout .section-icon.blue-icon { border-color: #2c3e58; color: #92c7ff; background: #1a2939; }
 .overview-layout .section-icon.green-icon { border-color: #34725d; color: #80e3b3; background: #193128; }
 .overview-layout .overview-design-preview .section-icon { border: 0; border-radius: 0; background: transparent; }
 .overview-layout .section-icon svg { width: 22px; height: 22px; }
@@ -335,7 +333,7 @@
 .preview-objective-list b { grid-column: 2; grid-row: 2; color: #f4effb; font-size: 13px; }
 .preview-objective-list .mantine-Progress-root { grid-column: 1; grid-row: 2; height: 6px; margin-right: 5px; }
 .preview-objective-list .mantine-Progress-section { background: linear-gradient(90deg, #08c58a, #35dda5); }
-.preview-objective-list > div:last-child .mantine-Progress-section { background: linear-gradient(90deg, #e8a719, #f5c34a); }
+.preview-objective-list > div:has(small[data-risk]) .mantine-Progress-section { background: linear-gradient(90deg, #e8a719, #f5c34a); }
 .preview-objective-list small { padding: 3px 7px; border: 1px solid #276a50; border-radius: 10px; color: #5de0ac; background: #12392e; font-size: 11px; line-height: 1; white-space: nowrap; }
 .preview-objective-list small::before { margin-right: 4px; color: #39dda0; content: '●'; font-size: 7px; }
 .preview-objective-list small[data-risk='true'] { border-color: #73551f; color: #f1c75f; background: #3b2d12; }
@@ -349,17 +347,19 @@
 .preview-agent-list time { color: #a19ab0; font-size: 10px; white-space: nowrap; }
 .preview-approval-list .mantine-Badge-label svg { width: 10px; height: 10px; margin-right: 2px; vertical-align: -2px; }
 .preview-chip-dot { display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: #39dda0; box-shadow: 0 0 6px #39dda088; vertical-align: 1px; }
-.preview-approval-list small, .preview-agent-list small { display: block; margin-top: 2px; color: #9791a7; font-size: 8px; }
-.preview-approval-list .mantine-Badge-root[data-pending="true"] { border-color: #73551f; color: #f1c75f; background: #3b2d12; }
+.preview-approval-list small, .preview-agent-list small { display: block; margin-top: 1px; overflow: hidden; color: #9791a7; font-size: 10px; line-height: 1.1; text-overflow: ellipsis; }
+.preview-agent-list > div > span:has(small) { line-height: 1.15; }
+.preview-approval-list .mantine-Badge-root[data-pending="true"], .preview-agent-list .mantine-Badge-root[data-pending="true"],
+.preview-review-meta .mock-approved-badge[data-pending="true"] { border-color: #73551f; color: #f1c75f; background: #3b2d12; }
+.preview-agent-list [data-pending="true"] .preview-chip-dot { background: #f1bd47; box-shadow: 0 0 6px #f1bd4788; }
 .preview-approval-list .mantine-Badge-root, .preview-agent-list .mantine-Badge-root { padding: 4px 6px; font-size: 10px; }
 .preview-approval-list .mantine-Badge-root { padding-right: 2px; padding-left: 2px; }
 .preview-approval-list .mantine-Badge-root, .preview-agent-list .mantine-Badge-root { flex: 0 0 auto; }
-.preview-health-tag { padding: 3px 7px; border-radius: 10px; }
 .overview-layout .evidence-health-list > div { padding: 6px; }
 .overview-layout .evidence-health-list > div > svg { width: 20px; height: 20px; }
 .overview-layout .evidence-health-list > div > span { font-size: 13px; }
 .overview-layout .evidence-health-list small { font-size: 11px; }
-.overview-layout .mock-health-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; font-size: 11px; }
+.overview-layout .mock-health-tag, .overview-layout .evidence-health-list .muted-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; font-size: 11px; text-transform: none; }
 .overview-layout .mock-health-tag .mantine-Badge-label, .overview-layout .muted-tag .mantine-Badge-label { display: flex; align-items: center; gap: 5px; }
 .health-status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: currentColor; }
 .mock-analytics-filter { display: flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid #3a3453; border-radius: 9px; color: #d9d3e5; background: #171625; font-size: 12px; font-weight: 500; text-decoration: none; text-transform: none; white-space: nowrap; }
@@ -473,6 +473,8 @@
   .overview-shell.overview-layout .mock-budget-summary { width: 95px; margin-right: 0; }
   .overview-shell.overview-layout .mock-budget-summary small { font-size: 10px; white-space: nowrap; }
   .overview-shell.overview-layout .mock-budget-progress { width: 95px; }
+  /* "Unavailable" is wider than a percentage, so the bar gives up the difference. */
+.overview-shell.overview-layout .metric-unavailable + .mock-budget-summary .mock-budget-progress { width: 100%; }
   .content-grid { grid-template-columns: 1fr; gap: 10px; margin-top: 18px; }
   .workflow-panel, .activity-panel, .objective-panel, .plan-panel, .agents-panel,
   .evidence-panel, .review-panel, .timeline-panel, .analytics-panel { grid-column: 1; }
@@ -480,11 +482,6 @@
   .workflow-overview-canvas { height: 210px; }
   .workflow-overview-canvas .workflow-node { width: 150px; }
 }
-.overview-review-list { display: grid; gap: 7px; margin-top: 12px; }
-.overview-review-list > div { display: flex; align-items: center; gap: 9px; padding: 9px; border: 1px solid #302b42; border-radius: 8px; background: #14131e; }
-.overview-review-list > div > svg { flex: 0 0 auto; color: #c497ff; }
-.overview-review-list > div > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.overview-review-list small { display: block; margin-top: 3px; color: #9690a8; font-size: 9px; }
 @media (max-width: 760px) {
   .review-panel, .timeline-panel, .analytics-panel { min-height: 175px; }
 }

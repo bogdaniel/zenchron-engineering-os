@@ -55,7 +55,7 @@ for (const viewport of viewports) {
       return route.fulfill(json({ ...evidenceRun, status: 'queued', attempts: 0, attempt_log: [] }, 202));
     });
     await page.goto('/#agents');
-    await page.getByRole('button', { name: 'Queue run' }).click();
+    await page.getByRole('button', { name: 'Run Agent' }).click();
     const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
     await expect(dialog.getByLabel('Project')).toHaveValue('platform · dev-laptop · codex-cli ready');
     await expect(dialog.locator('.agents-queue-note')).toHaveText('dev-laptop reports codex-cli 0.167.0 installed and signed in.');
@@ -83,7 +83,7 @@ test('queue dialog blocks a CLI profile whose worker has not signed in and repor
     return route.fulfill(json({ ...evidenceRun, status: 'queued', attempts: 0, attempt_log: [] }, 202));
   });
   await page.goto('/#agents');
-  await page.getByRole('button', { name: 'Queue run' }).click();
+  await page.getByRole('button', { name: 'Run Agent' }).click();
   const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
   await expect(dialog.getByLabel('Project')).toHaveValue('platform · dev-laptop · codex-cli not ready');
   await expect(dialog.locator('.agents-queue-note')).toHaveText(
@@ -191,7 +191,7 @@ test('queue dialog creates a GitHub issue and selects it for the run', async ({ 
     return route.fulfill(json({ ...evidenceRun, status: 'queued', attempts: 0, attempt_log: [] }, 202));
   });
   await page.goto('/#agents');
-  await page.getByRole('button', { name: 'Queue run' }).click();
+  await page.getByRole('button', { name: 'Run Agent' }).click();
   const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
   await dialog.getByRole('button', { name: 'Create a new issue' }).click();
   const draft = dialog.getByRole('group', { name: 'New GitHub issue' });
@@ -248,7 +248,7 @@ test('Reviews evidence imports GitHub change requests and retries a failed pull 
   expect(calls).toEqual(['publish', 'sync-reviews', 'sync-reviews']);
 });
 
-test('a developer on a local host reaches live run evidence with ?live and the design preview without it', async ({ page, baseURL }) => {
+test('the Mock and Live switch selects the data source, keeps the page, and stays in the address', async ({ page, baseURL }) => {
   const local = new URL(baseURL!);
   local.hostname = '127.0.0.1';
   await mockWorkspace(page, { providerReady: true });
@@ -259,11 +259,34 @@ test('a developer on a local host reaches live run evidence with ?live and the d
   ])));
   await page.route(`**/api/v1/agent-runs/${runID}/pull-request`, (route) => route.fulfill(json({
     number: 23, url: evidenceRun.pull_request_url, state: 'open', merged: false, head_sha: 'a'.repeat(40), checks: [], reviews: [] })));
-  await page.goto(`${local.origin}/#reviews`);
-  await expect(page.locator('.app-shell')).toHaveClass(/sample-data/);
-  await expect(page.getByLabel('Run evidence summary')).toHaveCount(0);
-  await page.goto(`${local.origin}/?live#reviews`);
-  await expect(page.locator('.app-shell')).not.toHaveClass(/sample-data/);
+  // A local address starts in Mock and offers the selector.
+  await page.goto(`${local.origin}/#agents`);
+  const mode = page.getByRole('radiogroup', { name: 'Data mode' });
+  await expect(mode.getByRole('radio', { name: 'Mock' })).toBeChecked();
+  await expect(page.locator('.agents-preview-notice')).toHaveText('ILLUSTRATIVE DATA');
+  await expect(page.getByRole('heading', { name: 'Agent Profiles (6)' })).toBeVisible();
+  await mode.getByText('Live').click();
+  await expect(page).toHaveURL(/\?mode=live#agents$/);
+  await expect(page.locator('.agents-preview-notice')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Agent Profiles (1)' })).toBeVisible();
+  await expect(page.locator('.agents-design-preview .agent-row')).toContainText('Codex engineer');
+  await page.getByRole('link', { name: 'Reviews' }).click();
+  await expect(page).toHaveURL(/\?mode=live#reviews$/);
+  await page.goto(`${local.origin}/?mode=mock#agents`);
+  await expect(page.locator('.agents-preview-notice')).toHaveText('ILLUSTRATIVE DATA');
+  // Projects has no fixtures: Mock says the inventory is Live-only instead of showing an empty one.
+  await page.goto(`${local.origin}/?mode=mock#projects`);
+  await expect(page.locator('.projects-live-badge')).toHaveText('No sample data');
+  await expect(page.getByRole('heading', { name: 'Live data only' })).toBeVisible();
+  await page.goto(`${local.origin}/?mode=live#projects`);
+  await expect(page.locator('.projects-live-badge')).toHaveText(/Worker inventory · live/i);
+  await expect(page.getByRole('gridcell', { name: 'platform' })).toBeVisible();
+  // Off a local address there is no selector and no Mock, whatever the address says.
+  await page.goto(`${baseURL}/?mode=mock#agents`);
+  await expect(page.getByRole('heading', { name: 'Agent Profiles (1)' })).toBeVisible();
+  await expect(page.locator('.agents-preview-notice')).toHaveCount(0);
+  await expect(page.getByRole('radiogroup', { name: 'Data mode' })).toHaveCount(0);
+  await page.goto(`${local.origin}/?mode=live#reviews`);
   await page.getByRole('button', { name: 'Local branches' }).click();
   await page.getByRole('group', { name: 'Review detail sections' }).getByRole('button', { name: 'Evidence' }).click();
   await expect(page.getByLabel('Run evidence summary')).toContainText('#7 Bound the claim response body');

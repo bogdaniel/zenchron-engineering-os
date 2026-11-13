@@ -2,7 +2,7 @@
 .reviews-design-preview .reviews-queue-tools { padding: 5px 8px; }
 .reviews-design-preview .reviews-queue-tools .mantine-Input-input { min-height: 24px; }
 .reviews-design-preview .reviews-queue-states { gap: 3px; padding: 0 8px 5px; }
-.reviews-design-preview .reviews-queue-states button { padding: 2px 5px; font-size: 10px; }
+.reviews-design-preview .reviews-queue-states :is(button, span) { padding: 2px 5px; font-size: 10px; }
 .reviews-design-preview .reviews-provider-card { min-height: 76px; gap: 2px; padding: 4px; }
 .reviews-design-preview .reviews-provider-list { gap: 3px; padding: 4px; }
 .reviews-preview-header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 5px; }
@@ -54,7 +54,6 @@
 .reviews-preview-pagination button.selected { border-color: #8050cc; color: #f3eaff; background: #4a2b70; }
 .reviews-preview-pagination button:disabled { cursor: default; opacity: .55; }
 .reviews-preview-pagination > span { color: #827b91; font-size: 9px; }
-.reviews-design-preview .reviews-pr-description { display: none; }
 .reviews-design-preview .reviews-detail-tabs { flex-wrap: nowrap; overflow-x: auto; }
 .reviews-design-preview .reviews-detail-tabs button { flex: 0 0 auto; gap: 3px; padding: 5px; font-size: 10px; white-space: nowrap; }
 .reviews-design-preview .reviews-detail-tabs button small {
@@ -119,7 +118,10 @@
 .reviews-preview-metric-bars { display: flex; width: 42px; height: 26px; align-items: flex-end; justify-content: space-between; }
 .reviews-preview-metric-bars i { width: 5px; border-radius: 2px 2px 0 0; background: #a65cf4; }
 .reviews-design-preview .reviews-summary-actions .mantine-Button-root { opacity: 1; }
-.reviews-design-preview .reviews-summary-copy { flex: 0 0 auto; max-height: 52px; margin: 5px 9px; overflow: hidden; font-size: 9px; line-height: 1.3; }
+/* The design reserves four lines for the description. A longer one scrolls, and shows every line while it is
+   hovered or focused, so nothing in it is unreadable. */
+.reviews-design-preview .reviews-summary-copy { flex: 0 0 auto; max-height: 52px; margin: 5px 9px; overflow: auto; font-size: 9px; line-height: 1.3; }
+.reviews-design-preview .reviews-summary-copy:not(:hover, :focus, :focus-within) p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .reviews-design-preview .reviews-summary-stats { gap: 4px; padding: 0 8px 6px; }
 .reviews-design-preview .reviews-summary-stats > div { min-height: 32px; padding: 3px 5px; }
 .reviews-design-preview .reviews-summary-stats span,
@@ -134,7 +136,7 @@
 .reviews-preview-summary-metric.risk svg { color: #fa6467; }
 .reviews-preview-summary-metric.evidence svg { color: #48ddb0; }
 .reviews-preview-evidence-progress { position: absolute; right: 5px; bottom: 4px; left: 5px; height: 3px; border-radius: 3px; background: #2c2a37; }
-.reviews-preview-evidence-progress i { display: block; width: 94%; height: 100%; border-radius: inherit; background: #40dfa6; }
+.reviews-preview-evidence-progress i { display: block; height: 100%; border-radius: inherit; background: #40dfa6; }
 .reviews-design-preview .reviews-preview-summary-metric.evidence { position: relative; padding-bottom: 7px; }
 .reviews-design-preview .reviews-checks-heading,
 .reviews-design-preview .reviews-governance-heading,
@@ -144,7 +146,6 @@
 .reviews-design-preview .reviews-summary-actions > .mantine-Button-root { min-height: 26px; height: 26px; }
 .reviews-design-preview .reviews-summary-review-actions .mantine-Button-root { min-height: 27px; height: 27px; }
 .reviews-design-preview .reviews-merge-button { flex-shrink: 0; }
-.reviews-design-preview .reviews-summary-copy p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .reviews-design-preview .reviews-context-panels { flex-basis: 226px; grid-template-rows: 1.2fr 1fr; }
 .reviews-design-preview .reviews-context-secondary { gap: 4px; }
 .reviews-design-preview .reviews-context-secondary span { font-size: 8px; }
@@ -243,3 +244,14 @@
 @media (max-width: 760px) {
   .reviews-design-preview .reviews-summary { overflow-y: auto; }
 }
+/* A value the data source does not hold, and a control it cannot perform, must not read as healthy or active. */
+.reviews-design-preview .reviews-summary-stats > div b.reviews-unavailable-value { color: #a19bad; }
+.reviews-design-preview .reviews-stage.unavailable small { color: #8f899f; }
+@media (max-width: 760px) {
+  /* Five 12px "Unavailable" captions touch each other in the phone-width pipeline row. */
+  .reviews-design-preview .reviews-stage.unavailable small { font-size: 10px; }
+}
+.reviews-design-preview .reviews-stage.unavailable .reviews-stage-icon { border-color: #514166; color: #c69aff; background: #211a2c; }
+.reviews-design-preview .reviews-summary-actions .mantine-Button-root:disabled,
+.reviews-design-preview .reviews-new-pr.mantine-Button-root:disabled,
+.reviews-preview-header-actions > button:disabled { cursor: not-allowed; opacity: .5; }

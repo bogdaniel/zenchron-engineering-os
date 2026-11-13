@@ -1,39 +1,34 @@
 # Objective management
 
-The Objectives screen follows the supplied planning mockup and adds a working control-plane flow for creating, listing,
-filtering, and updating objectives. It uses Mantine forms and controls, Zod validation, TanStack Query, Tabler icons,
-and the installed AG Grid Community table.
-
-In the local mock table, status and approval badges use compact horizontal padding so complete labels remain visible in
-the narrow reference columns.
+The Objectives screen follows the supplied planning mockup in one layout for both data modes
+(`docs/architecture/dashboard-modes.md`). Mock shows the approved fixtures; Live lists, filters, creates, and updates
+objectives through the control plane. It uses Mantine forms and controls, Zod validation, TanStack Query, Tabler
+icons, and the installed AG Grid Community table.
 
 ## Feature diagram
 
 ```mermaid
 flowchart LR
-    User[Engineering user] -->|Create / update| Dashboard[Objectives dashboard]
-    LocalPreview[Local unauthenticated Objectives state] -->|Read only| Fixture[Supplied objective mock data]
-    Fixture --> Dashboard
-    Dashboard -->|Validate form| Zod[Zod schema]
-    Dashboard -->|GET /api/v1/objectives + /api/v1/products| API[Go control plane]
-    Dashboard -->|POST /api/v1/objectives with product_id| API
-    Dashboard -->|PATCH /api/v1/objectives/{id} with editable fields| API
+    User[Engineering user] --> Page["ObjectivesPage · objectives.tsx<br/>filters, views, create dialog"]
+    Page --> Detail["ObjectiveDetail.tsx<br/>summary, tabs, editor, milestones"]
+    Page -->|reads| Source{"ObjectivesSource · objectivesView.ts"}
+    Detail -->|reads| Source
+    Source -->|Mock| Mock["useMockObjectives · objective-preview.ts<br/>fixtures in useState, no requests"]
+    Source -->|Live| Live["useLiveObjectives<br/>TanStack Query"]
+    Page -->|"create(input) after Zod validation"| Source
+    Detail -->|"update(id, input) after Zod validation"| Source
+    Live -->|"GET /api/v1/objectives"| API[Go control plane]
+    Live -->|"GET /api/v1/products"| API
+    Live -->|"POST /api/v1/objectives"| API
+    Live -->|"PATCH /api/v1/objectives/{id}"| API
     API --> Store[(Versioned JSON snapshot)]
     API --> Products[(products.json)]
     Products -->|Validate product id and resolve current name| API
-    Store -->|Validated objective records| API
-    API -->|JSON response| Dashboard
-    Dashboard -->|Text, product, owner, status, due-quarter filters| Records[Filtered objective records]
-    Records -->|Table view| Grid[AG Grid objective list]
-    Records -->|Cards and Kanban views| Views[Cards grouped by status]
-    Records -->|Planning| Plan[Due-date ordered objective cards]
-    Records -->|Roadmap| Roadmap[Cards grouped by due quarter]
-    Views -->|Select objective| Detail[Objective overview panel]
-    Plan --> Detail
-    Roadmap --> Detail
-    Grid --> Detail
-    Detail --> Tabs[Overview milestones pull requests activity tabs]
-    Detail -->|Edit objective| Editor[Objective fields editor]
+    Page -->|Text, product, owner, status, due-quarter filters| Records[Filtered objective records]
+    Records -->|Table| Grid[AG Grid list with numbered pager]
+    Records -->|Cards, Kanban, Planning, Roadmap| Views[Objective cards]
+    Grid -->|Select| Detail
+    Views -->|Select| Detail
 ```
 
 ## Behavior
@@ -50,32 +45,33 @@ flowchart LR
   sync after creates and edits.
 - The dashboard searches title, description, owner, and product, and filters by product, owner, status, and due-date
   quarter. The default is This Quarter; All due dates includes unscheduled objectives.
-- The local read-only table preview uses a numbered footer pager that stays in sync with AG Grid; authenticated data
-  keeps the standard AG Grid pagination panel.
+- The table uses a numbered footer pager that stays in sync with AG Grid, six rows to a page, in both modes.
 - The Objective, Planning, and Roadmap tabs sit in a separate toolbar above the table card, with the table and capacity
   chart kept as distinct cards below it.
-- An unauthenticated localhost session at `/#objectives` uses the same Objectives page with sample KPI, approval, workflow, and milestone data. The fixture is read only and does not call protected objective or product APIs.
-- The mock KPI row keeps the success-rate change beside its value and omits extra captions from the four compact count cards, matching the supplied layout. Live objective cards retain their explanatory details.
-- Preview product, owner, status, and due-quarter filters use the mock's single down-chevron indicator; live selectors keep Mantine's default indicator.
-- Preview filter defaults use the mock labels `All Products`, `All Owners`, and `All Status`; live filter copy remains unchanged.
-- The mock's Blocked KPI uses the supplied red circled-minus icon; live objective metrics retain the warning icon.
-- The selected objective preview shows its due date beside the completion bar, with the bar capped at the mock's compact width.
-- The selected preview objective ID appears as a badge inline with its title, matching the supplied detail header.
-- Related PRs in the sample overview use pull-request icons and distinct Review, Merged, and Open badges; live objective data stays unchanged.
-- The mock preview uses larger table and detail text than the dense live table. Its title, status, product, and due-date columns fit the sample rows at the reference viewport without horizontal clipping.
-- Objective IDs appear below titles in the mock table, and the planned/completed capacity series retain a visible area fill.
-- Mock table titles include the reference target glyph; live objective rows retain their existing title presentation.
-- The local preview keeps the capacity chart below the objective list and places Milestone Progress inside the selected objective's detail panel. Its four milestone rows fit the fixed desktop mock card and the card grows to fit on tablet and phone layouts.
-- The local milestone rows show the fixture completion percentage beside each progress bar, including the planned 0% item.
-- In the read-only preview, favorite toggles locally, Copy objective link copies a deep link that selects that objective, and the more-actions menu opens the related PR or activity tab. Overview card shortcuts open the matching Related PRs or Activity tab, and each table row menu selects its objective before opening either tab. These actions do not write objective data.
-- Approval and linked-workflow counts in the mock preview are illustrative fields; they remain unavailable in live mode until their sources are part of the objective API.
+- Mock (local addresses only) shows the approved fixtures and never calls the objective or product APIs. Create, edit,
+  and favorite change the fixtures in the browser tab only, and their confirmations end with "in this preview only".
+- Live shows only control-plane data in the same frame. The KPI row reports the completed count, the completed share,
+  and the status counts, without the fixture trend badges and graphics. Table IDs and the detail ID badge show the
+  first eight characters of the objective ID.
+- Parts of the design the objective API does not hold say so in Live: Approval and Workflows read "Unavailable" in the
+  detail panel and "—" in the table; Blockers, Acceptance Criteria, Related PRs, Activity Feed, the Milestones,
+  Related PRs, and Activity tabs, Milestone Progress, and the capacity chart show "Unavailable" with the reason; the
+  favorite button is disabled with the reason. Plan Summary lists the target, created, and last-updated dates.
+- A failed list request shows "Could not load objectives." with a retry and "—" in the KPI cards; fixtures are never
+  shown in Live. Failed creates and edits show the server's message in the form.
+- The detail header shows the objective ID as a badge beside the title and the due date beside the completion bar.
+  Copy objective link copies a deep link (`?objective=<id>#objectives`) that selects that objective. The more-actions
+  menu holds **Edit objective**, View related PRs, and View activity; overview card shortcuts and each table row menu
+  open the matching tab.
+- On a phone the status badge and the three header actions keep their full width; the title wraps instead.
+- The search row above the table is hidden only in Mock at the approved desktop frame (1351px or wider and 840px or
+  taller), which has no room for it; Live keeps search, the count, and retry visible at every size.
 - Empty workspaces prompt the user to create the first objective. When filters hide all records, the table and toolbar say no objectives match instead of implying the workspace is empty.
-- Table, Cards, and Kanban views render the same filtered records; selecting any record opens the read-only objective overview. The title, description, owner, due date, status, progress, and product editor appears only after choosing **Edit objective**. Kanban groups by the saved objective status.
+- Table, Cards, and Kanban views render the same filtered records; selecting any record opens the read-only objective overview. The title, description, owner, due date, status, progress, and product editor replaces the tab body only after choosing **Edit objective** from the more-actions menu; **Cancel edit** or any tab closes it, and the panel keeps showing the saved record while editing. Kanban groups by the saved objective status.
 - The overview, milestones, related pull requests, and activity tabs switch the detail panel. Tabs without supported data show an unavailable state.
-- The desktop mock preview renders those detail tabs as a bordered segmented control with a filled selected tab; live tabs keep their underline style.
-- The overview lays out description, blockers, acceptance criteria, related pull requests, plan summary, activity feed, and progress; fields absent from the current objective data are labeled unavailable rather than populated with sample records.
+- The detail tabs are a bordered segmented control with a filled selected tab.
+- The overview lays out description, blockers, acceptance criteria, related pull requests, plan summary, and activity feed; fields absent from the current objective data are labeled unavailable rather than populated with sample records.
 - Planning sorts the filtered objectives by due date, with undated records last. Roadmap groups those same records by calendar quarter and places missing or invalid dates under Unscheduled. Both views use saved objective data and open the overview panel when a card is selected.
-- The progress panel shows each objective's current completion percentage; it does not infer a schedule or time range.
 - Product assignment uses the durable product ID; the control plane resolves the current product name in the objective
   response, so a product rename does not break the relationship or wait on a second dashboard query. Older free-text
   product values remain visible as unlinked legacy labels.
@@ -88,7 +84,8 @@ flowchart LR
 ## Verification
 
 `go test ./cmd/zenchron` covers objective API updates, product linking, validation, and persistence. The focused E2E
-suite covers the read-only mock preview and its KPI icons, overview shortcuts and row menus, empty/error states, search and filters,
+suite covers the Mock frame with its KPI icons, overview shortcuts, row menus, and local-only create and edit; the Live frame with
+honest unavailable parts, validation, and failed loads and saves; empty states, search and filters,
 table/cards/Kanban/planning/roadmap views, full objective create/edit payloads, and responsive layouts. The mobile layout check asserts that every
 milestone row remains inside the preview card:
 `cd dashboard && npm run test:e2e -- e2e/objectives-views.spec.ts`.

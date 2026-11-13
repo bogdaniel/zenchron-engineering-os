@@ -39,10 +39,14 @@ const objectives = [
   },
 ];
 
-test('local Objectives mock preview renders the supplied screen without protected reads or writes', async ({ page }) => {
+test('Objectives in Mock renders the supplied screen and keeps create and edit local', async ({ page }) => {
   const objectiveRequests: string[] = [];
   const productRequests: string[] = [];
   await page.route('**/api/v1/objectives', (route) => {
+    objectiveRequests.push(route.request().method());
+    return route.fulfill({ status: 401, body: 'authentication required' });
+  });
+  await page.route('**/api/v1/objectives/*', (route) => {
     objectiveRequests.push(route.request().method());
     return route.fulfill({ status: 401, body: 'authentication required' });
   });
@@ -250,8 +254,18 @@ test('local Objectives mock preview renders the supplied screen without protecte
   await page.getByRole('button', { name: 'New Objective' }).click();
   await page.getByRole('textbox', { name: 'Objective title' }).fill('Preview-only objective');
   await page.getByRole('button', { name: 'Create objective' }).click();
-  await expect(page.getByText('The mock preview is read-only.')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.objective-detail-head h3')).toContainText('Preview-only objective');
+  await expect(page.locator('.objective-action-notice')).toHaveText('Objective created in this preview only');
+  await expect(page.locator('.objective-metric').nth(2)).toContainText('43');
+  await page.getByRole('button', { name: 'More objective actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit objective' }).click();
+  await page.locator('.detail-edit-grid').getByRole('textbox', { name: 'Progress' }).fill('40');
+  await page.getByRole('button', { name: 'Save updates' }).click();
+  await expect(page.locator('.objective-action-notice')).toHaveText('Objective updated in this preview only');
+  await expect(page.locator('.detail-summary')).toContainText('40% complete');
   expect(objectiveRequests).toEqual([]);
+  expect(productRequests).toEqual([]);
 });
 
 test('Objectives preview deep link selects the referenced objective', async ({ page }) => {
@@ -384,23 +398,24 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await page.getByRole('option', { name: 'Alex Chen' }).click();
   await expect(objectiveRows).toHaveCount(1);
   await page.getByRole('combobox', { name: 'Filter by owner' }).click();
-  await page.getByRole('option', { name: 'All owners' }).click();
+  await page.getByRole('option', { name: 'All Owners' }).click();
   await page.getByRole('combobox', { name: 'Filter by status' }).click();
   await page.getByRole('option', { name: 'At Risk' }).click();
   await expect(objectiveRows).toHaveCount(1);
   await page.getByRole('combobox', { name: 'Filter by status' }).click();
-  await page.getByRole('option', { name: 'All statuses' }).click();
+  await page.getByRole('option', { name: 'All Status' }).click();
   await page.getByRole('combobox', { name: 'Filter by product' }).click();
   await page.getByRole('option', { name: 'Core Product' }).click();
   await expect(objectiveRows).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Filter by product' }).click();
-  await page.getByRole('option', { name: 'All products' }).click();
+  await page.getByRole('option', { name: 'All Products' }).click();
   await expect(objectiveRows.first()).toHaveCSS('height', '42px');
   await page.locator('.objective-grid-wrap .ag-cell[col-id=title]').filter({ hasText: 'Reduce CI time' }).click();
   await expect(page.locator('.objective-grid-wrap [role="row"].ag-row-selected')).toContainText('Reduce CI time');
-  await expect(page.locator('.objective-detail-head h3')).toHaveText('Reduce CI time');
-  await expect(page.locator('.objective-grid-wrap .ag-cell').first()).toHaveCSS('font-size', '11px');
-  await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').first()).toHaveCSS('font-size', '10px');
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Reduce CI time22222222');
+  await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="title"]').first()).toHaveCSS('font-size', '11px');
+  await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="status"]').first()).toHaveCSS('font-size', '11.5px');
+  await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').first()).toHaveCSS('font-size', '8.5px');
   await page.getByRole('combobox', { name: 'Filter by due quarter' }).click();
   await page.getByRole('option', { name: 'All due dates' }).click();
   await expect(objectiveRows).toHaveCount(4);
@@ -413,7 +428,7 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await expect(shipCard).toBeVisible();
   await shipCard.click();
   await expect(shipCard).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.objective-detail-head h3')).toHaveText('Ship API v2');
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Ship API v211111111');
 
   await page.getByRole('button', { name: 'Kanban' }).click();
   await expect(page.getByRole('region', { name: 'On Track' }).getByRole('button', { name: /Ship API v2/ }))
@@ -486,7 +501,7 @@ test('objective create and edit submit the expected API payloads', async ({ page
   await page.getByRole('textbox', { name: 'Owner' }).fill('Sam Rivera');
   await page.getByLabel('Due date').fill('2026-12-10');
   await page.getByRole('button', { name: 'Create objective' }).click();
-  await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability testing');
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability testing55555555');
   await expect(page.locator('.objective-grid-wrap [role="row"].ag-row-selected'))
     .toContainText('Expand reliability testing');
   expect(createdPayloads).toEqual([{
@@ -494,7 +509,8 @@ test('objective create and edit submit the expected API payloads', async ({ page
     product_id: '', due_date: '2026-12-10',
   }]);
 
-  await page.getByRole('button', { name: 'Edit objective' }).click();
+  await page.getByRole('button', { name: 'More objective actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit objective' }).click();
   const editForm = page.locator('.detail-edit-grid');
   await editForm.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability review');
   await editForm.getByRole('textbox', { name: 'Description' }).fill('Expand critical-path coverage.');
@@ -517,7 +533,100 @@ test('objective create and edit submit the expected API payloads', async ({ page
   }]);
   await expect(page.locator('.detail-edit-grid')).toHaveCount(0);
   await expect(page.locator('.detail-summary')).toContainText('100% complete');
-  await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability review');
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability review55555555');
   await expect(page.locator('.detail-meta-grid')).toContainText('Sam Rivera');
-  await expect(page.locator('.detail-meta-grid')).toContainText('Jan 15, 2027');
+  await expect(page.locator('.objective-detail-due-date')).toHaveText('Due Jan 15, 2027');
+  await expect(page.locator('.objective-action-notice')).toHaveText('Objective updated');
+});
+
+test('Objectives in Live uses the approved layout with honest unavailable parts', async ({ page }) => {
+  await useLocalSession(page);
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() !== 'GET') writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+  });
+  await page.route('**/api/v1/objectives', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify(objectives),
+  }));
+  await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  // A deployed host is always Live, whatever the address asks for.
+  await page.goto(`http://zenchron.test:${dashboardPort}/?mode=mock#objectives`);
+
+  const metrics = page.locator('.objective-metrics-preview .objective-metric');
+  await expect(metrics).toHaveCount(6);
+  await expect(metrics.nth(0)).toContainText('Objective Throughput0Completed objectives');
+  await expect(metrics.nth(1)).toContainText('Objective Success Rate0%');
+  await expect(metrics.nth(2)).toContainText('4');
+  await expect(page.locator('.objective-metric-trend')).toHaveCount(0);
+  await expect(page.locator('.objective-preview-layout .objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(2);
+  await expect(page.locator('.objective-grid-wrap .objective-title-cell small').first()).toHaveText('11111111');
+  await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="approval"]').first()).toHaveText('—');
+  await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="workflow_count"]').first()).toHaveText('—');
+  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 1–2 of 2 objectives');
+  await expect(page.getByRole('textbox', { name: 'Search objectives' })).toBeVisible();
+  await expect(page.locator('.objective-capacity')).toContainText('Unavailable: the control plane does not record when objectives were planned or completed.');
+  await expect(page.locator('.objective-capacity-chart')).toHaveCount(0);
+
+  await expect(page.locator('.objective-detail-head .objective-preview-id')).toHaveText('11111111');
+  await expect(page.locator('.objective-detail-due-date')).toHaveText('Due Nov 30, 2026');
+  await expect(page.locator('.detail-meta-grid')).toHaveText(/Owner\s*Alex Chen\s*Product\s*Core Product\s*Approval\s*Unavailable\s*Workflows\s*Unavailable/);
+  await expect(page.getByRole('button', { name: 'Favorite objective' })).toBeDisabled();
+  const overview = page.locator('.objective-preview-overview .objective-overview-card');
+  await expect(overview).toHaveCount(6);
+  await expect(overview.nth(0)).toContainText('Finish the API launch.');
+  await expect(overview.nth(1)).toContainText('Unavailable: the control plane does not record blockers');
+  await expect(overview.nth(2)).toContainText('Unavailable: the control plane does not record acceptance criteria');
+  await expect(overview.nth(3)).toContainText('Unavailable: the control plane does not record linked pull requests');
+  await expect(overview.nth(4)).toContainText('Target date: Nov 30, 2026');
+  await expect(overview.nth(4)).toContainText('Created: Oct 1, 2026');
+  await expect(overview.nth(5)).toContainText('Unavailable: the control plane does not record activity');
+  await expect(page.locator('.objective-milestones-card')).toContainText('Unavailable');
+  await expect(page.locator('.objective-milestones-list')).toHaveCount(0);
+  for (const [tab, what] of [['Milestones', 'milestones'], ['Related PRs', 'linked pull requests'], ['Activity', 'activity']]) {
+    await page.getByRole('tab', { name: tab, exact: true }).click();
+    await expect(page.getByRole('tabpanel')).toContainText(`Unavailable: the control plane does not record ${what} for objectives.`);
+  }
+  await expect(page.locator('.objectives-page')).not.toContainText(/OBJ-|Model training run|86\.7%/);
+
+  await page.getByRole('button', { name: 'New Objective' }).click();
+  await page.getByRole('textbox', { name: 'Objective title' }).fill('   ');
+  await page.getByRole('button', { name: 'Create objective' }).click();
+  await expect(page.getByRole('dialog')).toContainText('Add an objective title');
+  expect(writes).toEqual([]);
+  await page.keyboard.press('Escape');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const moreActions = page.getByRole('button', { name: 'More objective actions' });
+  await moreActions.scrollIntoViewIfNeeded();
+  await expect(moreActions).toBeInViewport({ ratio: 1 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+test('Objectives in Live reports failed loads and saves without showing fixtures', async ({ page }) => {
+  await useLocalSession(page);
+  let listStatus = 500;
+  await page.route('**/api/v1/objectives', (route) => route.request().method() === 'POST'
+    ? route.fulfill({ status: 400, body: 'owner is too long' })
+    : route.fulfill({ status: listStatus, contentType: 'application/json', body: JSON.stringify(listStatus === 200 ? objectives : {}) }));
+  await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+
+  await expect(page.locator('.objective-grid-wrap').getByRole('alert')).toContainText('Could not load objectives.');
+  await expect(page.locator('.objective-metric').nth(2)).toContainText('—');
+  await expect(page.locator('.objective-metric').nth(0)).toContainText('—');
+  await expect(page.locator('.objectives-page')).not.toContainText(/Launch AI code review v2|OBJ-/);
+  await expect(page.locator('.objective-detail-empty')).toBeVisible();
+
+  await page.getByRole('button', { name: 'New Objective' }).click();
+  await page.getByRole('textbox', { name: 'Objective title' }).fill('Rejected objective');
+  await page.getByRole('dialog').getByRole('button', { name: 'Create objective' }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('owner is too long');
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+
+  listStatus = 200;
+  await page.getByRole('button', { name: 'Retry loading objectives' }).click();
+  await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(2);
+  await expect(page.locator('.objective-detail-head h3')).toContainText('Ship API v2');
 });

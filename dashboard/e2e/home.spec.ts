@@ -1,5 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+const dashboardPort = Number((globalThis as typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+}).process?.env?.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+
 async function useTestShell(page: Page) {
   await page.route('**/api/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({
@@ -9,7 +13,7 @@ async function useTestShell(page: Page) {
 }
 test('Reviews matches the supplied desktop workspace frame', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 874 });
-  await page.goto('http://127.0.0.1:4173/#reviews');
+  await page.goto(`http://127.0.0.1:${dashboardPort}/#reviews`);
   await expect(page.locator('.reviews-metrics')).toBeVisible();
   const layout = await page.evaluate(() => {
     const bounds = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON();
@@ -58,10 +62,24 @@ test('overview lists only agent runs with captured local diffs', async ({ page }
       },
     ]),
   }));
+  await page.route('**/api/v1/agent-runs/0123456789abcdef0123456789abcdef/diff', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({
+      run_id: '0123456789abcdef0123456789abcdef', truncated: false,
+      diff: 'diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -40,3 +40,4 @@\n context\n-old line\n+new line\n+added line\n tail\n',
+    }),
+  }));
   await page.goto('/');
-  await expect(page.locator('.overview-review-list')).toContainText('zenchron/agent-run/reviewable');
-  await expect(page.locator('.overview-review-list')).toContainText('1 comments');
-  await expect(page.locator('.overview-review-list')).not.toContainText('zenchron/agent-run/no-diff');
+  const review = page.locator('.preview-review-panel');
+  await expect(review.locator('.preview-review-meta')).toHaveText(/Local diff\s*Comments 1\s*Diffs 1\s*Succeeded/);
+  await expect(review.locator('h4')).toHaveText('Code Reviewer · Update the README');
+  await expect(review.locator('.preview-branches')).toContainText('zenchron/agent-run/reviewable');
+  await expect(review.locator('.preview-branches b')).toHaveText('+2 −1');
+  await expect(review.locator('.preview-diff')).toHaveText('- old line\n41  + new line\n42  + added line\n43    tail');
+  await expect(review.getByRole('link', { name: 'Open in Reviews' })).toHaveAttribute('href', '#reviews');
+  await expect(review).not.toContainText('zenchron/agent-run/no-diff');
+  await expect(page.locator('.agents-panel .preview-agent-list > div')).toHaveText([
+    /Code Reviewer\s*Nova Platform\s*Succeeded\s*just now/, /Test Generator\s*Nova Platform\s*Succeeded\s*just now/,
+  ]);
 });
 
 test('objectives can be created and updated from the dashboard', async ({ page }) => {
@@ -87,7 +105,7 @@ test('objectives can be created and updated from the dashboard', async ({ page }
     Object.assign(item, route.request().postDataJSON(), { updated_at: new Date().toISOString() });
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(item) });
   });
-  await page.goto('http://zenchron.test:4173/');
+  await page.goto('/');
   await page.getByRole('link', { name: 'Objectives' }).click();
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   await page.getByRole('button', { name: 'New Objective' }).click();
@@ -99,13 +117,15 @@ test('objectives can be created and updated from the dashboard', async ({ page }
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   await expect(page.locator('.objective-detail-head h3')).toHaveCSS('font-size', '18px');
   await expect(page.locator('.objective-detail-head h3')).toHaveCSS('font-weight', '650');
-  await expect(page.locator('.objective-overview-grid')).toContainText('Acceptance criteria');
+  await expect(page.locator('.objective-overview-grid')).toContainText('Acceptance Criteria');
   await expect(page.getByLabel('Progress')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Edit objective' }).click();
+  await page.getByRole('button', { name: 'More objective actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit objective' }).click();
   await page.getByLabel('Progress').fill('30');
   await page.getByRole('button', { name: 'Cancel edit' }).click();
   await expect(page.getByText('0% complete')).toBeVisible();
-  await page.getByRole('button', { name: 'Edit objective' }).click();
+  await page.getByRole('button', { name: 'More objective actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit objective' }).click();
   await page.getByLabel('Progress').fill('45');
   await page.getByRole('button', { name: 'Save updates' }).click();
   await expect(page.getByText('45% complete')).toBeVisible();
@@ -140,7 +160,7 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
     }]),
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('http://zenchron.test:4173/#objectives');
+  await page.goto('/#objectives');
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   const objectiveRows = page.locator('[role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(6);
@@ -150,22 +170,23 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   const linkedProductCell = objectiveRows.first().locator('.ag-cell[col-id="product"]');
   await expect(linkedProductCell).toHaveText('Core Product');
   expect(await linkedProductCell.evaluate((cell) => cell.scrollWidth <= cell.clientWidth)).toBe(true);
-  await expect(page.locator('.objective-detail-head h3')).toHaveText('Launch AI code review v2');
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Launch AI code review v211111111');
   await expect(page.locator('.detail-meta-grid')).toContainText('Alex Chen');
   await expect(page.locator('.detail-meta-grid')).toContainText('Core Product');
   expect(await page.locator('.detail-meta-grid').evaluate((grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').length)).toBe(4);
   await expect(page.locator('.detail-summary')).toContainText('78% complete');
-  await expect(page.locator('.objective-overview-grid')).toContainText('Related pull requests');
+  await expect(page.locator('.objective-overview-grid')).toContainText('Related PRs');
   await expect(page.getByLabel('Progress')).toHaveCount(0);
   const milestonesTab = page.getByRole('tab', { name: 'Milestones' });
   await milestonesTab.click();
   await expect(milestonesTab).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel')).toContainText('not included in the available objective data');
+  await expect(page.getByRole('tabpanel')).toContainText('Unavailable: the control plane does not record milestones for objectives.');
   await page.getByRole('tab', { name: 'Overview' }).click();
-  await expect(page.locator('.capacity-bars > div')).toHaveCount(6);
+  const capacityNote = page.locator('.objective-capacity .objective-unavailable-note');
+  await expect(capacityNote).toHaveText('Unavailable: the control plane does not record when objectives were planned or completed.');
   await expect(page.getByRole('region', { name: 'Objective metrics' }).locator('.objective-metric')).toHaveCount(6);
   const capacityBounds = await Promise.all([
-    page.locator('.capacity-bars > div').last().boundingBox(),
+    capacityNote.boundingBox(),
     page.locator('.objective-capacity').boundingBox(),
   ]);
   expect(capacityBounds[0]!.y + capacityBounds[0]!.height).toBeLessThanOrEqual(capacityBounds[1]!.y + capacityBounds[1]!.height - 6);
@@ -188,7 +209,7 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   expect(layout.content?.y).toBeCloseTo(251.5, 0);
   expect(layout.content?.height).toBe(615);
   await expect(page.locator('.objective-grid-wrap .ag-header-cell').last()).toBeVisible();
-  await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').last()).toHaveText('Workflows');
+  await expect(page.locator('.objective-grid-wrap .ag-header-cell[col-id="workflow_count"] .ag-header-cell-text')).toHaveText('Workflows');
   expect((layout.table?.width ?? 0) / (layout.detail?.width ?? 1)).toBeGreaterThan(0.94);
   expect((layout.table?.width ?? 0) / (layout.detail?.width ?? 1)).toBeLessThan(0.98);
   expect(layout.capacity?.bottom).toBeLessThanOrEqual(867);
@@ -215,7 +236,7 @@ test('Objectives grid keeps product names while the catalog loads', async ({ pag
     }]),
   }));
   await page.setViewportSize({ width: 1522, height: 856 });
-  await page.goto('http://zenchron.test:4173/#objectives');
+  await page.goto('/#objectives');
   const objectiveRows = page.locator('[role="row"]:has([role="gridcell"])');
   const productCell = objectiveRows.first().locator('.ag-cell[col-id="product"]');
   await expect(productCell).toHaveText('Nova Platform');
@@ -226,7 +247,8 @@ test('Objectives grid keeps product names while the catalog loads', async ({ pag
 test('Projects page shows the live local worker inventory', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
-  await page.getByRole('link', { name: 'Open repository inventory' }).click();
+  await page.getByRole('button', { name: 'Product actions' }).click();
+  await page.getByRole('menuitem', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await expect(page.locator('.project-detail-heading h3')).toHaveCSS('font-size', '18px');
   await expect(page.locator('.project-detail-heading h3')).toHaveCSS('font-weight', '650');
@@ -247,7 +269,8 @@ test('worker prepares an isolated Git branch without moving the source checkout'
   const branch = `zenchron/e2e-${Date.now()}`;
   await page.goto('/');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
-  await page.getByRole('link', { name: 'Open repository inventory' }).click();
+  await page.getByRole('button', { name: 'Product actions' }).click();
+  await page.getByRole('menuitem', { name: 'Open repository inventory' }).click();
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   await page.getByRole('button', { name: 'Prepare isolated branch' }).click();
   const dialog = page.getByRole('dialog', { name: 'Prepare isolated branch' });
@@ -262,12 +285,28 @@ test('Reviews page shows unavailable provider data without invented pull request
   await page.goto('/');
   await page.getByRole('link', { name: 'Reviews', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible();
-  await expect(page.getByText('GitHub repository not connected')).toBeVisible();
+  const repository = page.getByRole('button', { name: 'Review repository' });
+  await expect(repository).toHaveText('GitHub not connected');
+  await expect(repository).toBeDisabled();
+  await expect(page.locator('.reviews-grid-wrap')).toHaveText('Connect a local GitHub checkout to see issues and pull requests.');
+  await expect(page.locator('.reviews-detail-heading')).toContainText('No open pull requests');
+  await expect(page.locator('.reviews-change-empty')).toContainText('Connect a GitHub repository to see its open items.');
+  await expect(page.getByRole('button', { name: 'New PR' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Review date range' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Local branches' })).toBeVisible();
   await page.getByRole('button', { name: 'Local branches' }).click();
   await expect(page.locator('.reviews-change-empty')).toContainText('Choose a completed agent run');
-  await expect(page.getByRole('region', { name: 'Review metrics' }).getByText('Unavailable')).toHaveCount(6);
-  await expect(page.locator('.reviews-metric strong.metric-unavailable')).toHaveCount(6);
+  // GitHub counts and delivery metrics have no source here; the review queue counts real agent-run branches.
+  const metrics = page.locator('.reviews-metric');
+  await expect(metrics.locator('.metric-top')).toHaveText([
+    'Pull Requests', 'In Review', 'Review Queue', 'Avg. Review Time', 'Merge Success Rate', 'Policy Gate Pass']);
+  await expect(metrics.locator('strong')).toHaveText(['Unavailable', 'Unavailable', '0', 'Unavailable', 'Unavailable', 'Unavailable']);
+  await expect(page.locator('.reviews-metric strong.metric-unavailable')).toHaveCount(5);
+  await expect(page.locator('.reviews-preview-metric-trend, .reviews-preview-metric-change')).toHaveCount(0);
+  await expect(page.locator('.reviews-stage small')).toHaveText(Array(5).fill('Unavailable'));
+  await expect(page.locator('.reviews-summary-stats b')).toHaveText(Array(6).fill('Unavailable'));
+  await expect(page.locator('.reviews-checks-heading')).toContainText('Unavailable');
+  await expect(page.getByRole('switch', { name: 'Auto-merge when ready' })).toBeDisabled();
   await expect(page.locator('.reviews-metric strong.metric-unavailable').first()).toHaveCSS('font-size', '14px');
   await expect(page.getByRole('button', { name: 'Approve' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Request changes' })).toBeDisabled();
@@ -329,11 +368,11 @@ test('Reviews page shows an isolated local branch diff without treating it as a 
   await expect(page.locator('.reviews-code-editor .view-lines')).toContainText('+Local change');
   await expect(page.getByRole('link', { name: 'Open pull request #4827' }))
     .toHaveAttribute('href', 'https://github.com/zenchron/nova-platform/pull/4827');
-  const diffSummary = page.locator('.reviews-summary-stats > div');
-  await expect(diffSummary.nth(0).locator('b')).toHaveText('1');
-  await expect(diffSummary.nth(1).locator('b')).toHaveText('+1');
-  await expect(diffSummary.nth(2).locator('b')).toHaveText('−1');
-  await expect(page.getByText('GitHub repository not connected')).toBeVisible();
+  await expect(page.locator('.reviews-summary-stats > div')).toHaveText([
+    'Files Changed1', 'Lines Added+1', 'CommitsUnavailable', 'Lines Removed−1', 'Risk ScoreUnavailable',
+    'Evidence CompletenessUnavailable']);
+  await expect(page.locator('.reviews-governance-row').filter({ hasText: 'Target branch' }).locator('b')).toHaveText('main');
+  await expect(page.getByRole('button', { name: 'Review repository' })).toHaveText('GitHub not connected');
   await expect(page.getByRole('button', { name: 'Approve' })).toBeDisabled();
   await page.getByRole('textbox', { name: 'Review comment' }).fill('Please explain the new API behavior.');
   await page.getByRole('button', { name: 'Add comment' }).click();
@@ -423,9 +462,9 @@ test('Product Workspace groups live repositories into persisted products', async
   const objectiveTitle = `Product objective ${Date.now()}`;
   await page.goto('/');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
-  await expect(page.locator('.page-heading h2')).toHaveText('Product Workspace');
+  await expect(page.locator('.workspace-mock-directory h3')).toHaveText('Product Workspace');
   await expect(page.getByText('No products yet. Add a product to group repositories.')).toBeVisible();
-  await page.getByRole('button', { name: '+ Add Product' }).first().click();
+  await page.getByRole('button', { name: '＋ Add Product' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Product name').fill('Core Product');
   await dialog.getByLabel('Description').fill('Shared platform and APIs');
@@ -434,8 +473,9 @@ test('Product Workspace groups live repositories into persisted products', async
   await dialog.getByLabel('Repositories').press('Escape');
   await dialog.getByRole('button', { name: 'Save product' }).click();
   await expect(page.getByRole('heading', { name: 'Core Product' })).toBeVisible();
-  await expect(page.locator('.workspace-project-option').filter({ hasText: 'Core Product' }))
+  await expect(page.locator('.workspace-mock-product').filter({ hasText: 'Core Product' }))
     .toContainText('1 linked repositories');
+  await expect(page.locator('.workspace-mock-heading')).toContainText('Shared platform and APIs');
 
   await page.getByRole('link', { name: 'Objectives' }).click();
   await page.getByRole('button', { name: 'New Objective' }).click();
@@ -448,21 +488,21 @@ test('Product Workspace groups live repositories into persisted products', async
 
   await page.getByRole('link', { name: 'Product Workspace' }).click();
   await expect(page.getByText(objectiveTitle, { exact: true })).toBeVisible();
-  await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Objectives' }).click();
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
   await expect(page.getByText(objectiveTitle, { exact: true })).toBeVisible();
 
-  await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Repos' }).click();
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Repos' }).click();
   await expect(page.getByText('zenchron-engineering-os', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Core Product' })).toBeVisible();
-  await expect(page.locator('.workspace-project-option').filter({ hasText: 'Core Product' }))
+  await expect(page.locator('.workspace-mock-product').filter({ hasText: 'Core Product' }))
     .toContainText('1 linked repositories');
 
-  await expect(page.getByRole('heading', { name: 'Open objectives' })).toBeVisible();
-  await expect(page.locator('.workspace-metric').filter({ hasText: 'Open objectives' })
+  await expect(page.getByRole('heading', { name: /^Open Objectives \(\d+\)$/ })).toBeVisible();
+  await expect(page.locator('.workspace-mock-metric').filter({ hasText: 'Open Objectives' })
     .getByText('Assigned to this product', { exact: true })).toBeVisible();
 
-  await page.getByRole('navigation', { name: 'Workspace sections' }).getByRole('button', { name: 'Files' }).click();
-  await expect(page.getByRole('heading', { name: 'Files & evidence' })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Files' }).click();
+  await expect(page.getByRole('heading', { name: 'Design / Docs / Files' })).toBeVisible();
   await expect(page.getByText(/storage integration and agent runs exist/)).toBeVisible();
 });

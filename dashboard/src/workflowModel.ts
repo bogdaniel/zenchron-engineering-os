@@ -25,18 +25,19 @@ export const workflowsSchema = z.array(workflowSchema);
 export type WorkflowData = z.infer<typeof nodeDataSchema>;
 export type WorkflowNode = Node<WorkflowData & { kind: ComponentType; previewIcon?: typeof IconRoute }>;
 export type Workflow = z.infer<typeof workflowSchema>;
-export const workflowNodeWidth = 190;
-export const workflowNodeHeight = 110;
-export const overviewNodeLayout = { width: 190, height: 54, spacing: 8 };
+const fullNodeSize = { width: 190, height: 110 };
+const compactNodeSizes: Partial<Record<ComponentType, { width: number; height: number }>> = {
+  'code-reviewer': { width: 128, height: 53 }, 'test-generator': { width: 128, height: 53 },
+  'coverage-analyzer': { width: 128, height: 68 }, condition: { width: 126, height: 48 }, loop: { width: 154, height: 53 },
+};
+/** The card sizes workflows.css draws: compact cards from 1051px up, full cards on narrower canvases. */
+export function workflowNodeSize(kind: ComponentType, compact: boolean) {
+  if (!compact) return fullNodeSize;
+  return compactNodeSizes[kind] ?? { width: 89, height: 100 };
+}
 export const designPreviewPositions: Record<string, { x: number; y: number }> = {
   trigger: { x: 10, y: 72 }, plan: { x: 252, y: 72 }, build: { x: 461, y: 72 },
   test: { x: 666, y: 24 }, review: { x: 666, y: 112 }, merge: { x: 911, y: 72 },
-};
-export const designPreviewCanvasPositions: Record<string, { x: number; y: number }> = {
-  trigger: { x: 0, y: 53 }, plan: { x: 111, y: 53 }, build: { x: 216, y: 53 },
-  retry: { x: 208, y: -51 }, review: { x: 327, y: -8 }, tests: { x: 327, y: 57 },
-  coverage: { x: 327, y: 134 }, condition: { x: 515, y: -55 }, approval: { x: 482, y: 53 },
-  merge: { x: 590, y: 53 }, publish: { x: 698, y: 53 },
 };
 export const mobileOverviewStages: {
   id: string; label: string; description: string; kind: ComponentType; types: ComponentType[];
@@ -138,19 +139,17 @@ export async function loadWorkflows(): Promise<Workflow[]> {
   return workflowsSchema.parse(await response.json());
 }
 
-export async function layoutNodes(
-  nodes: WorkflowNode[], edges: Edge[],
-  size = { width: workflowNodeWidth, height: workflowNodeHeight, spacing: 15 },
-): Promise<WorkflowNode[]> {
+const layoutSpacing = '20';
+export async function layoutNodes(nodes: WorkflowNode[], edges: Edge[], compact: boolean): Promise<WorkflowNode[]> {
   const elk = new ELK();
   const graph = await elk.layout({
     id: 'workflow',
     layoutOptions: {
-      'elk.algorithm': 'layered', 'elk.direction': 'RIGHT', 'elk.spacing.nodeNode': String(size.spacing),
-      'elk.layered.spacing.nodeNodeBetweenLayers': String(size.spacing),
+      'elk.algorithm': 'layered', 'elk.direction': 'RIGHT', 'elk.spacing.nodeNode': layoutSpacing,
+      'elk.layered.spacing.nodeNodeBetweenLayers': layoutSpacing,
       'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
     },
-    children: nodes.map((node) => ({ id: node.id, width: size.width, height: size.height })),
+    children: nodes.map((node) => ({ id: node.id, ...workflowNodeSize(node.data.kind, compact) })),
     edges: edges.map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
   });
   return nodes.map((node) => {
@@ -175,9 +174,9 @@ export function mobileWorkflowGraph(workflow: Workflow, designPreview = false, m
   const configuredStages = new Set(stageByNode.values());
   const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id));
   const nodes: WorkflowNode[] = stages.map(({ id, label, description, kind, previewIcon, position }) => ({
-    id, type: 'workflow', position: designPreview && !mobile ? designPreviewPositions[id] ?? position : position,
+    id, type: 'workflow', position: mobile ? position : designPreviewPositions[id] ?? position,
     data: {
-      kind, label, ...(designPreview ? { previewIcon } : {}),
+      kind, label, previewIcon,
       description: designPreview && id === 'trigger' ? 'Objective updated'
         : designPreview && id === 'merge' ? 'To trusted-main' : description,
     },
@@ -193,25 +192,26 @@ export function mobileWorkflowGraph(workflow: Workflow, designPreview = false, m
     if (edgeIDs.has(id)) return [];
     edgeIDs.add(id);
     return [{ id, source, target, type: 'smoothstep' as const, animated: false,
-      ...(designPreview ? { markerEnd: { type: MarkerType.ArrowClosed, color: '#c4d8ff' } } : {}) }];
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#c4d8ff' } }];
   });
   return { nodes, edges };
 }
 
-export function workflowGraph(workflow: Workflow, designPreview = false) {
-  const loopNodeIDs = new Set(workflow.nodes.filter((node) => node.type === 'loop').map((node) => node.id));
-  const nodeTypes = new Map(workflow.nodes.map((node) => [node.id, node.type]));
+/** Connectors are dashed around a loop and otherwise take the colour of the component they lead to. */
+export function workflowEdgeClass(source: ComponentType | undefined, target: ComponentType | undefined) {
+  if (source === 'loop' || target === 'loop') return 'workflow-loop-edge';
+  return target ? `workflow-preview-edge workflow-preview-edge-${target}` : undefined;
+}
+
+export function workflowGraph(workflow: Workflow) {
+  const kinds = new Map(workflow.nodes.map((node) => [node.id, node.type]));
   return {
     nodes: workflow.nodes.map((node) => ({
       ...node, type: 'workflow', data: { ...node.data, kind: node.type },
     })),
-    edges: workflow.edges.map((edge) => {
-      const targetType = nodeTypes.get(edge.target);
-      const loopEdge = loopNodeIDs.has(edge.source) || loopNodeIDs.has(edge.target);
-      return { ...edge, type: 'smoothstep', animated: false,
-        ...(loopEdge ? { className: 'workflow-loop-edge' } : designPreview && targetType
-          ? { className: `workflow-preview-edge workflow-preview-edge-${targetType}` } : {}) };
-    }),
+    edges: workflow.edges.map((edge) => ({
+      ...edge, type: 'smoothstep', animated: false,
+      className: workflowEdgeClass(kinds.get(edge.source), kinds.get(edge.target)),
+    })),
   };
 }
-

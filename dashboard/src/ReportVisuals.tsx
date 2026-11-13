@@ -1,7 +1,4 @@
-import type { ReactNode } from 'react';
 import { IconChartBar } from '@tabler/icons-react';
-import { PanelCard } from './PanelCard';
-import { PanelHeading } from './PanelHeading';
 
 export function ChartLegend({ items }: { items: { tone: string; label: string }[] }) {
   return <div className="reports-chart-legend" role="group" aria-label="Chart legend">
@@ -9,10 +6,10 @@ export function ChartLegend({ items }: { items: { tone: string; label: string }[
   </div>;
 }
 
-export function ReportOutcomeLegend({ items, valueSuffix = '', label = 'Pull request outcomes legend' }: {
+export function ReportOutcomeLegend({ items, valueSuffix = '', label }: {
   items: { name: string; value: number; color: string }[];
   valueSuffix?: string;
-  label?: string;
+  label: string;
 }) {
   return <div className="report-outcome-legend" role="group" aria-label={label}>
     {items.map(({ name, value, color }) => <div key={name}>
@@ -22,21 +19,7 @@ export function ReportOutcomeLegend({ items, valueSuffix = '', label = 'Pull req
   </div>;
 }
 
-export function UnavailableMetricsPanel({ className, title, icon, detail }: {
-  className: string;
-  title: string;
-  icon: ReactNode;
-  detail: string;
-}) {
-  return (
-    <PanelCard className={`reports-panel ${className}`} withBorder>
-      <PanelHeading className="reports-panel-heading" icon={icon} title={title} />
-      <UnavailableChart detail="Connect a source to view this chart" />
-      <p className="delivery-note">{detail}</p>
-    </PanelCard>
-  );
-}
-
+/** The plot area of a chart that has nothing to draw, with the reason. */
 export function UnavailableChart({ detail }: { detail: string }) {
   return (
     <div className="reports-empty-chart" role="status" aria-label={detail}>

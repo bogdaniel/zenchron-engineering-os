@@ -8,9 +8,10 @@
   color: #fff;
   background-image: linear-gradient(135deg, #7542bb, #572f91) !important;
 }
-.workflow-design-preview .workflow-section-primary-action:disabled {
-  opacity: 1;
-}
+.workflow-section-preview .mantine-Button-root:disabled { opacity: .5; cursor: not-allowed; }
+.workflow-section-link:disabled { color: #8f899f; cursor: not-allowed; }
+.workflow-detail-tabs button:disabled { cursor: not-allowed; }
+.workflow-section-empty { margin: 0; padding: 14px; color: #a69fb3; font-size: 11px; line-height: 1.5; }
 .workflow-section-card { min-width: 0; border: 1px solid #373148; border-radius: 12px; background: #171522; }
 .workflow-section-card .panel-heading { min-height: 50px; padding: 10px 14px; border-bottom: 1px solid #302b40; }
 .workflow-section-card .panel-heading h3 { color: #e9e4f0; font-size: 13px; }
@@ -113,7 +114,9 @@
 .workflow-static-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0 14px 12px; }
 .workflow-static-fields.one { grid-template-columns: 1fr; }
 .workflow-static-fields label, .workflow-static-field { display: grid; gap: 5px; color: #a39cae; font-size: 9px; }
-.workflow-static-fields output, .workflow-static-field output { display: flex; min-height: 34px; align-items: center; padding: 0 10px; border: 1px solid #40394f; border-radius: 8px; color: #e5dfeb; background: #1b1928; font-size: 10px; }
+.workflow-static-fields output, .workflow-static-field output, .workflow-static-fields input, .workflow-static-fields select { display: flex; min-height: 34px; align-items: center; padding: 0 10px; border: 1px solid #40394f; border-radius: 8px; color: #e5dfeb; background: #1b1928; font-size: 10px; }
+.workflow-static-fields input, .workflow-static-fields select { min-width: 0; font-family: inherit; }
+.workflow-static-fields input:focus-visible, .workflow-static-fields select:focus-visible { outline: 2px solid #b978f5; outline-offset: 1px; }
 .workflow-schedule-calendar > .workflow-section-kicker { margin: 10px 12px 12px; }
 .workflow-schedule-calendar > footer { margin-top: auto; }
 .workflow-schedule-calendar > footer .mantine-Button-root { width: 149px; min-height: 32px; font-size: 9px; }

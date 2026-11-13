@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-test.use({ baseURL: 'http://127.0.0.1:4173' });
+const environment = (
+  globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } }
+).process?.env ?? {};
+const dashboardPort = Number(environment.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+test.use({ baseURL: `http://127.0.0.1:${dashboardPort}` });
 
 test('local Product Workspace mock matches the supplied overview without protected API traffic', async ({ page }) => {
   const apiRequests: { method: string; path: string }[] = [];
@@ -117,7 +121,9 @@ test('local Product Workspace mock matches the supplied overview without protect
   await page.getByRole('button', { name: 'Product actions' }).click();
   await page.getByRole('menuitem', { name: 'Add another product' }).click();
   await page.getByRole('textbox', { name: 'Product name' }).fill('Local Preview Product');
-  await page.getByRole('button', { name: 'Add product', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Add product' })).toContainText('stay in this preview only');
+  await expect(page.getByRole('dialog', { name: 'Add product' }).getByLabel('Repositories')).toBeDisabled();
+  await page.getByRole('button', { name: 'Save product', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Local Preview Product', exact: true })).toBeVisible();
   await expect(page.locator('.workspace-mock-product')).toHaveCount(6);
   const addProduct = page.getByRole('button', { name: /Add Product/ });

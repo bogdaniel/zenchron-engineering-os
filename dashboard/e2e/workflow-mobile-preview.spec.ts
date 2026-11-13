@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
-test.use({ baseURL: 'http://127.0.0.1:4173' });
+const dashboardPort = Number((globalThis as typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+}).process?.env?.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+test.use({ baseURL: `http://127.0.0.1:${dashboardPort}` });
 
 test('phone Workflow mock shows the sample run, task progress, and approvals without API reads', async ({ page }) => {
   const apiRequests: { method: string; path: string }[] = [];

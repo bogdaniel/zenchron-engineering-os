@@ -1,12 +1,10 @@
 .system-preview-workspace { margin-top: 5px; }
 .system-preview-workspace .system-config-nav { gap: 4px; }
-.system-preview-workspace .system-config-nav > a,
-.system-preview-workspace .system-config-nav > span { min-height: 27px; padding: 4px 5px; font-size: 11px; }
+.system-preview-workspace .system-config-nav > a { min-height: 27px; padding: 4px 5px; font-size: 11px; }
 .system-preview-integration-header { min-height: 34px; margin-bottom: 8px; }
 .system-preview-integration-header .system-section-heading h3 { font-size: 15px; }
 .system-preview-integration-header .system-section-heading p { margin-top: 3px; font-size: 10px; }
 .system-preview-integration-header .system-integration-filters { gap: 4px; }
-.system-preview-integration-header .system-integration-filters span,
 .system-preview-integration-header .system-integration-filters button { padding: 4px 7px; font-size: 9px; }
 .system-preview-category-more { display: grid; width: 25px; height: 24px; flex: 0 0 25px; place-items: center; padding: 0; border: 1px solid #353148; border-radius: 9px; color: #bbb5c9; background: #181725; }
 .system-preview-category-more:disabled { opacity: 1; }
@@ -79,7 +77,8 @@
 }
 .system-preview-switch { cursor: pointer; }
 .system-preview-switch .mantine-Switch-track { width: 24px; height: 13px; min-height: 13px; border: 0; background: #484454; }
-.system-preview-switch[data-checked] .mantine-Switch-track { background: #29c987; }
+/* Mantine renders data-checked="false" when off, so match the value, not the attribute. */
+.system-preview-switch[data-checked="true"] .mantine-Switch-track { background: #29c987; }
 .system-preview-switch .mantine-Switch-thumb { width: 9px; height: 9px; border: 0; }
 .system-preview-status[data-healthy] { color: #51d9a1; background: #12352a; }
 .system-preview-status:not([data-healthy]) { color: #e5b56d; background: #352c1b; }
@@ -117,6 +116,7 @@
 .system-preview-settings-badge { padding: 3px 6px; border-radius: 8px; color: #d8c9fa; background: #393057; font-size: 8px; font-weight: 500; line-height: 1; }
 .system-preview-card-action { position: absolute; top: 10px; right: 9px; color: #c29aff; font-size: 9px; }
 button.system-preview-card-action { padding: 0; border: 0; background: transparent; cursor: pointer; }
+button.system-preview-card-action:disabled, .system-preview-add-integration:disabled { opacity: .55; cursor: default; }
 .system-preview-audit-table { width: 100%; border-collapse: collapse; }
 .system-preview-audit-table th, .system-preview-audit-table td { padding: 8px; border-bottom: 1px solid #292638; color: #c8c2d4; font-size: 11px; text-align: left; white-space: nowrap; }
 .system-preview-audit-table th { color: #8e899e; font-weight: 500; }
@@ -140,6 +140,8 @@ button.system-preview-card-action { padding: 0; border: 0; background: transpare
 .system-preview-policies button { padding: 0; border: 0; color: #8d859d; background: transparent; cursor: pointer; font-size: 10px; line-height: 1; }
 .system-preview-add-policy { margin-top: 6px; padding: 3px 7px; border: 1px solid #423b52; border-radius: 10px; color: #d9c7f3; background: #1c1926; font-size: 9px; }
 .system-preview-add-policy:disabled { opacity: .85; }
+/* States why a card has no data or cannot be changed; only a source without that data sets one. */
+.system-preview-note { margin: 6px 0 0; color: #a9a5b9; font-size: 9px; line-height: 1.35; }
 .system-preview-settings-grid table { width: 100%; border-collapse: collapse; margin-top: 7px; table-layout: auto; }
 .system-preview-settings-grid th {
   padding: 3px 3px;

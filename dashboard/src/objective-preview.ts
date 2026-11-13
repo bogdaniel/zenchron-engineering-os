@@ -1,4 +1,5 @@
-import type { Objective } from './objectives';
+import { useState } from 'react';
+import type { Objective, ObjectivesSource } from './objectivesView';
 
 const visibleObjectives = [
   { id: 'OBJ-1487', title: 'Launch AI code review v2', description: 'Launch the next iteration of AI code review with higher accuracy, lower latency, and expanded repository coverage.', owner: 'Alex Chen', product: 'Core Product', product_id: '', status: 'on_track', progress: 78, due_date: '2025-01-27', created_at: '2024-12-01T00:00:00Z', updated_at: '2025-01-10T00:00:00Z', approval: 'Approved', workflow_count: 3 },
@@ -28,14 +29,14 @@ const extraObjectives = Array.from({ length: 36 }, (_, index) => {
   };
 });
 
-export const objectivePreviewRecords: Objective[] = [...visibleObjectives, ...extraObjectives].map((item) => ({
+const objectivePreviewRecords: Objective[] = [...visibleObjectives, ...extraObjectives].map((item) => ({
   ...item,
   product_id: '',
   created_at: '2024-12-01T00:00:00Z',
   updated_at: '2025-01-10T00:00:00Z',
 }));
 
-export const objectivePreviewDetails = {
+const objectivePreviewDetails = {
   blocker: 'Model training run (PR #1462) is still validating on the full dataset.',
   acceptanceCriteria: [
     '≥ 90% review suggestion precision', 'p95 review latency ≤ 10s', 'Coverage for Core Product, CI Health, and Build repos',
@@ -60,6 +61,7 @@ export const objectivePreviewDetails = {
     { text: 'Priya S. added a blocker: Model training run…', time: '1h ago' },
     { text: 'Objective approved by Product (Alex Chen)', time: '3h ago' },
   ],
+  milestoneSummary: '3 of 4 complete (75%)',
   milestones: [
     { title: 'Model v2 ready', progress: 100, status: 'Complete', date: 'Jan 10, 2025' },
     { title: 'Review UI updates', progress: 100, status: 'Complete', date: 'Jan 15, 2025' },
@@ -68,10 +70,56 @@ export const objectivePreviewDetails = {
   ],
 };
 
-export const objectivePreviewCapacity = [
+const objectivePreviewCapacity = [
   { week: 'Jan 6', planned: 6, completed: 5 }, { week: 'Jan 13', planned: 12, completed: 10 },
   { week: 'Jan 20', planned: 16, completed: 13 }, { week: 'Jan 27', planned: 19, completed: 16 },
   { week: 'Feb 3', planned: 23, completed: 18 }, { week: 'Feb 10', planned: 27, completed: 22 },
   { week: 'Feb 17', planned: 33, completed: 25 }, { week: 'Feb 24', planned: 37, completed: 29 },
   { week: 'Mar 3', planned: 41, completed: 32 },
 ];
+
+const firstLocalObjectiveNumber = 1556;
+
+/** The approved fixtures. Create, edit, and favorite change this tab's state only and send nothing. */
+export function useMockObjectives(): ObjectivesSource {
+  const [items, setItems] = useState(objectivePreviewRecords);
+  const [favoriteIDs, setFavoriteIDs] = useState<string[]>([]);
+  return {
+    items,
+    loading: false,
+    failed: false,
+    products: [],
+    productsLoading: false,
+    productsFailed: false,
+    view: {
+      today: new Date(2025, 0, 20),
+      referenceFrame: true,
+      throughput: { value: '28', detail: 'Completed this quarter', change: '↑ +40%', bars: [10, 14, 18, 16, 22, 27, 31] },
+      successRate: { value: '86.7%', change: '↑ +6.9 pp', points: [3, 4, 3, 6, 5, 7, 8] },
+      capacity: objectivePreviewCapacity,
+      details: () => objectivePreviewDetails,
+    },
+    create: (input) => {
+      const now = new Date().toISOString();
+      const item: Objective = {
+        ...input, id: `OBJ-${firstLocalObjectiveNumber + items.length - objectivePreviewRecords.length}`, product: '',
+        status: 'in_progress', progress: 0, created_at: now, updated_at: now,
+      };
+      setItems((current) => [...current, item]);
+      return Promise.resolve(item);
+    },
+    update: (id, input) => {
+      const current = items.find((item) => item.id === id);
+      if (!current) return Promise.reject(new Error('This objective is no longer in the preview.'));
+      const updated = { ...current, ...input, updated_at: new Date().toISOString() };
+      setItems((list) => list.map((item) => item.id === id ? updated : item));
+      return Promise.resolve(updated);
+    },
+    favorites: {
+      ids: favoriteIDs,
+      toggle: (id) => setFavoriteIDs((current) => current.includes(id)
+        ? current.filter((favorite) => favorite !== id) : [...current, id]),
+    },
+    savedSuffix: ' in this preview only',
+  };
+}

@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
-test.use({ baseURL: 'http://127.0.0.1:4173' });
+const dashboardPort = Number((globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } })
+  .process?.env?.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+// A local address, so the page opens in Mock; the port follows the suite so this never tests another checkout's server.
+test.use({ baseURL: `http://127.0.0.1:${dashboardPort}` });
 
 test('Agents phone preview matches the compact mobile reference and keeps profile management reachable', async ({ page }) => {
   const protectedReads: string[] = [];
@@ -48,9 +51,12 @@ test('Agents phone dashboard tabs and quick actions respond locally', async ({ p
   await page.getByRole('tab', { name: 'Evidence' }).click();
   await expect(page.getByRole('heading', { name: 'Evidence Health' })).toBeVisible();
   await page.getByRole('tab', { name: 'Agents' }).click();
+  // In Mock, Run Agent records a labelled simulated run and opens the profile's run history; nothing is queued.
   await page.getByRole('button', { name: /Run Agent/ }).click();
-  await expect(page.getByRole('dialog', { name: 'Queue agent run' })).toBeVisible();
-  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('dialog', { name: 'Queue agent run' })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Run History' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.agents-runs-list')).toContainText('SIMULATED · local preview run');
+  await page.getByRole('button', { name: '← Agents & Reviews' }).click();
   await page.getByRole('button', { name: /New Review/ }).click();
   await expect(page).toHaveURL(/#reviews$/);
   await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible();

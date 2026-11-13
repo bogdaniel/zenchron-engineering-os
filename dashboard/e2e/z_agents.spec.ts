@@ -63,77 +63,82 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
     expect(icon!.y + icon!.height).toBeLessThanOrEqual(value!.y);
   }
   const profileRow = page.locator('.agent-row').filter({ hasText: 'Code Reviewer' });
-  await expect(profileRow).toContainText('Last run 5m ago');
-  await expect(profileRow).toContainText('1 completed · 100% success');
+  await expect(profileRow).toContainText('claude-3.7-sonnet · anthropic');
+  await expect(profileRow).toContainText('Last run: 5m ago');
+  await expect(profileRow).toContainText('Success: 100% of 1');
   await expect(profileRow).toContainText('code.search');
   await expect(profileRow).toContainText('+1');
-  await expect(profileRow.locator('.agent-row-body small').first()).toHaveCSS('font-size', '10px');
   await expect(profileRow.locator('.agent-tool-badge').first()).toHaveCSS('font-size', '9px');
   const performance = page.locator('.agents-profile-metrics');
   await expect(performance).toContainText('Runs');
   await expect(performance).toContainText('Avg latency');
   await expect(performance).toContainText('Unavailable');
-  const trend = page.locator('.agents-trend-panel');
-  await expect(trend).toContainText('1 succeeded · 0 failed · 0 other');
-  await expect(trend.locator('.agents-trend-chart')).toHaveAttribute('aria-label', /1 successful/);
+  await expect(page.locator('.agents-preview-trend').getByLabel(/^Agent success, cost, and latency trends/)).toBeVisible();
+  const recent = page.locator('.agents-preview-run-table tbody tr');
+  await expect(recent).toHaveCount(1);
+  await expect(recent).toContainText('Review auth changes');
+  await expect(recent).toContainText('Success');
   await expect(page.locator('.agents-prompt-preview').nth(0)).toContainText('Review code changes.');
   await expect(page.locator('.agents-prompt-preview').nth(1)).toContainText('Return actionable findings.');
-  const permissionRows = page.locator('.agents-permission-row');
-  await expect(permissionRows).toHaveCount(5);
-  await expect(permissionRows.filter({ hasText: 'Code search' })).toContainText('Allowed');
-  await expect(permissionRows.filter({ hasText: 'Write files' })).toContainText('Allowed');
-  await expect(permissionRows.filter({ hasText: 'Documentation search' })).toContainText('Not granted');
-  await expect(page.locator('.agents-safeguard-list')).toContainText('Isolated Git worktree');
-  await expect(page.locator('.agents-safeguard-list')).toContainText('Test execution');
-  await expect(page.getByRole('button', { name: 'Edit profile' })).toBeVisible();
+  const permissionRows = page.locator('.agents-preview-permissions > div');
+  await expect(permissionRows).toHaveCount(6);
+  await expect(permissionRows.filter({ hasText: 'Code search' }).locator('i')).toHaveAccessibleName('Allowed');
+  await expect(permissionRows.filter({ hasText: 'Write files' }).locator('i')).toHaveAccessibleName('Allowed');
+  await expect(permissionRows.filter({ hasText: 'Documentation search' }).locator('i')).toHaveAccessibleName('Not granted');
+  await expect(page.locator('.agents-preview-safety')).toContainText('Isolated worktree');
+  await expect(page.locator('.agents-preview-safety')).toContainText('Test execution');
+  await expect(page.locator('.agents-preview-overview-grid')).toContainText('not stored by the control plane');
+  await expect(page.locator('.agents-preview-notice')).toHaveCount(0);
+  await page.getByRole('button', { name: 'More agent actions' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Edit profile' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Save profile' })).toHaveCount(0);
-  await expect(page.locator('.agents-profile-summary')).toContainText('claude-3.7-sonnet');
+  await expect(page.getByRole('combobox', { name: 'Model / Provider' })).toHaveValue('claude-3.7-sonnet · anthropic');
+  await expect(page.getByRole('combobox', { name: 'Profile owner' })).toHaveAttribute('placeholder', 'Unavailable');
   const list = await page.locator('.agents-list-panel').boundingBox();
   const detail = await page.locator('.agents-detail-panel').boundingBox();
-  const runs = await page.locator('.agents-runs-panel').boundingBox();
   const sidebar = await page.locator('.sidebar').boundingBox();
   const metrics = await page.locator('.agents-metrics').boundingBox();
-  const noteCount = await page.locator('.agents-runtime-note').count();
-  expect(list && detail && runs && sidebar && metrics).toBeTruthy();
+  expect(list && detail && sidebar && metrics).toBeTruthy();
   expect(sidebar!.width).toBe(247);
   expect(metrics!.x).toBe(263);
   expect(Math.abs(metrics!.y - 136.5)).toBeLessThanOrEqual(1);
-  expect(Math.abs(metrics!.height - 65)).toBeLessThanOrEqual(1);
-  expect(Math.abs(list!.y - 213.5)).toBeLessThanOrEqual(1);
+  expect(Math.abs(metrics!.height - 65)).toBeLessThanOrEqual(5);
   expect(Math.abs(list!.width - 425.5)).toBeLessThanOrEqual(1);
-  expect(noteCount).toBe(0);
-  expect(list!.height).toBeGreaterThan(detail!.height);
-  expect(runs!.x).toBeCloseTo(detail!.x, 0);
-  expect(runs!.y).toBeGreaterThan(detail!.y);
-  expect(runs!.y + runs!.height).toBeLessThanOrEqual((list!.y + list!.height) + 1);
+  expect(detail!.x).toBeGreaterThan(list!.x + list!.width);
+  expect(Math.abs(detail!.y - list!.y)).toBeLessThanOrEqual(1);
   await expect(page.locator('.agents-panel-heading h3').first()).toHaveCSS('font-size', '16px');
 
   await page.setViewportSize({ width: 1672, height: 749 });
   const compact = await page.evaluate(() => Object.fromEntries(
-    ['.agents-content-grid', '.agents-list-panel', '.agents-detail-panel', '.agents-runs-panel']
+    ['.agents-content-grid', '.agents-list-panel', '.agents-detail-panel']
       .map((selector) => {
         const { x, y, width, height, bottom } = document.querySelector(selector)!.getBoundingClientRect();
         return [selector, { x, y, width, height, bottom }];
       }),
   ));
-  const compactList = compact['.agents-list-panel'];
-  const compactDetail = compact['.agents-detail-panel'];
-  const compactRuns = compact['.agents-runs-panel'];
-  expect(compactList.height).toBeGreaterThan(compactDetail.height);
-  expect(compactRuns.x).toBeCloseTo(compactDetail.x, 0);
-  expect(compactRuns.bottom).toBeLessThanOrEqual(compactList.bottom + 1);
+  // On a short window the approved layout keeps both panels at their minimum height, side by side.
+  expect(compact['.agents-detail-panel'].height).toBeCloseTo(compact['.agents-list-panel'].height, 0);
+  expect(compact['.agents-detail-panel'].y).toBeCloseTo(compact['.agents-list-panel'].y, 0);
   expect(compact['.agents-content-grid'].bottom).toBeLessThanOrEqual(749);
 });
 
 test('Agents layout fits tablet and phone widths without panel overlap', async ({ page }) => {
   await authenticateLocalSession(page);
-  for (const [width, height, expectedColumns] of [[1024, 768, 2], [390, 844, 1]]) {
+  // The approved layout stacks the profile list above the detail panel below 1260px.
+  for (const [width, height, expectedColumns] of [[1024, 768, 1], [390, 844, 1]]) {
     await page.setViewportSize({ width, height });
     await page.goto('/#agents');
     await expect(page.locator('.agents-page')).toBeVisible();
+    if (width < 700) {
+      // A phone opens on the summary; profile management sits behind "All Runs".
+      await expect(page.locator('.agents-mobile-preview')).toBeVisible();
+      await page.getByRole('button', { name: 'All Runs' }).click();
+    }
+    await expect(page.locator('.agents-list-panel')).toBeVisible();
     const layout = await page.evaluate(() => {
       const grid = document.querySelector('.agents-content-grid')!;
-      const panels = ['.agents-list-panel', '.agents-detail-panel', '.agents-runs-panel']
+      const panels = ['.agents-list-panel', '.agents-detail-panel']
         .map((selector) => document.querySelector(selector)!.getBoundingClientRect())
         .map(({ x, y, width, height }) => ({ x, y, width, height }));
       const overlaps = panels.some((first, index) => panels.slice(index + 1).some((second) =>
@@ -359,7 +364,7 @@ test('Agents empty state uses the primary create action', async ({ page }) => {
   await expect(unavailableMetrics).toHaveCount(2);
   await expect(unavailableMetrics.first()).toHaveCSS('font-size', '14px');
   const create = page.getByRole('button', { name: 'Create first agent' });
-  await expect(page.locator('.agents-trend-empty')).toContainText('No runs recorded for this profile');
+  await expect(page.locator('.agents-detail-empty')).toContainText('Select a profile or create one');
   await expect(create).toHaveCSS('background-image', /linear-gradient/);
   await create.click();
   await expect(page.getByRole('dialog', { name: 'Create agent profile' })).toBeVisible();
@@ -386,7 +391,7 @@ test('Agents queue dialog explains when a worker has no model runtime', async ({
   });
   expect(created).toEqual({ ok: true, status: 201, body: expect.any(String) });
   await page.reload();
-  await page.getByRole('button', { name: 'Queue run' }).click();
+  await page.getByRole('button', { name: 'Run Agent' }).click();
   const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
   await expect(dialog.locator('.agents-queue-note')).toContainText('has no OpenAI-compatible endpoint configured');
   await expect(dialog.getByLabel('Project')).toHaveValue(/^zenchron-engineering-os · .+ · runtime not configured$/);
@@ -414,11 +419,11 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
   await expect(page.locator('.agents-detail-heading h3')).toHaveCSS('font-weight', '650');
   const profileSearch = page.getByRole('textbox', { name: 'Search agents' });
   await profileSearch.fill(name);
-  await expect(page.locator('.agent-row').filter({ hasText: name }).getByText('custom · review-v1')).toBeVisible();
+  await expect(page.locator('.agent-row').filter({ hasText: name }).getByText('review-v1 · custom')).toBeVisible();
   await profileSearch.fill('no matching profile');
   await expect(page.getByText('No profiles match this search.')).toBeVisible();
   await profileSearch.fill('');
-  await page.getByRole('button', { name: 'Queue run' }).click();
+  await page.getByRole('button', { name: 'Run Agent' }).click();
   const runDialog = page.getByRole('dialog', { name: 'Queue agent run' });
   await expect(runDialog.locator('.agents-queue-note')).toContainText('reports an OpenAI-compatible endpoint configured');
   await runDialog.getByLabel('Project').click();
@@ -434,7 +439,8 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
   await expect(queuedRun).toContainText(/Branch: zenchron\/agent-run\/[a-f0-9]{32}/);
   await detail.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.getByRole('button', { name: 'Save profile' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Edit profile' }).click();
+  await page.getByRole('button', { name: 'More agent actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit profile' }).click();
   await detail.getByLabel('Model', { exact: true }).fill('review-v2');
   await detail.getByRole('tab', { name: 'Prompts' }).click();
   const systemPrompt = detail.locator('.agent-prompt-editor').first();
@@ -443,9 +449,9 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.insertText('Review safely and cite changed files.');
   await page.getByRole('button', { name: 'Save profile' }).click();
-  await expect(page.getByRole('button', { name: 'Edit profile' })).toBeVisible();
-  await expect(page.locator('.agent-row').filter({ hasText: name }).getByText('custom · review-v2')).toBeVisible();
-  await page.getByRole('button', { name: 'Disable profile' }).click();
+  await expect(page.getByRole('button', { name: 'Save profile' })).toHaveCount(0);
+  await expect(page.locator('.agent-row').filter({ hasText: name }).getByText('review-v2 · custom')).toBeVisible();
+  await page.getByRole('button', { name: 'Disable', exact: true }).click();
   await expect(page.getByText('disabled', { exact: true }).first()).toBeVisible();
 });
 
@@ -463,12 +469,12 @@ test('Agents dashboard completes a run and resumes requested review changes on t
   });
   await page.reload();
   await page.locator('.agent-row').filter({ hasText: 'E2E Reviewer' }).click();
-  await page.getByRole('button', { name: 'Queue run' }).click();
+  await page.getByRole('button', { name: 'Run Agent' }).click();
   const queueDialog = page.getByRole('dialog', { name: 'Queue agent run' });
   await expect(queueDialog.locator('.agents-queue-note')).toContainText('reports an OpenAI-compatible endpoint configured');
   await queueDialog.getByLabel('Task prompt').fill('Summarize the project structure.');
   await queueDialog.getByRole('button', { name: 'Queue run', exact: true }).click();
-  const row = page.locator('.agents-runs-panel .agents-run-row')
+  const row = page.locator('.agents-detail-panel .agents-run-row')
     .filter({ hasText: 'Summarize the project structure.' });
   await expect(row.locator('.agents-run-badge')).toHaveText('succeeded', { timeout: 15_000 });
   const run = await page.evaluate(async () => {

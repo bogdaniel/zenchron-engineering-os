@@ -1,83 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from '@mantine/form';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CompositeChart, LineChart, Sparkline } from '@mantine/charts';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CompositeChart, Sparkline } from '@mantine/charts';
 import { YAxis } from 'recharts';
 import { Badge, Button, Checkbox, Menu, Modal, Select, Tabs, Text, Textarea, TextInput } from '@mantine/core';
 import {
-  IconActivity, IconBrandGithub, IconBook2, IconChartBar, IconCode, IconCpu, IconFlask, IconHierarchy,
+  IconActivity, IconChartBar, IconCode, IconCpu, IconFlask, IconHierarchy,
   IconPlus, IconRobot, IconRocket, IconSearch, IconShieldCheck, IconSparkles, IconChevronDown, IconDots,
   IconEye, IconPlayerPlay, IconFilter, IconArrowsSort, IconCalendar, IconCurrencyDollar, IconCircleCheck,
   IconCopy, IconBan, IconGitCompare,
 } from '@tabler/icons-react';
-import { z } from 'zod';
 import type { Project } from './projects';
 import { MetricCard } from './MetricCard';
 import { PanelHeading } from './PanelHeading';
 import { PanelCard } from './PanelCard';
 import { PageHeading } from './PageHeading';
-import { runsInLast30Days } from './runMetrics';
-import { AgentPerformanceTrend } from './AgentPerformanceTrend';
 import { AgentPromptEditor } from './AgentPromptEditor';
-import { AgentExecutionOverview } from './AgentExecutionOverview';
 import { blocksQueueing, RunIssueSelect, runReadiness, type RunWorker } from './agentRunQueue';
-import { runEvidenceFields } from './runEvidence';
 import { AgentPromptCardActions } from './AgentPromptCardActions';
-import { AgentsMobilePreview } from './AgentsMobilePreview';
+import { AgentsMobileSummary } from './AgentsMobileSummary';
 import {
-  agentsPreviewProfiles as previewAgents,
-  agentsPreviewRuns as previewRuns,
-  agentsPreviewTrend as previewPerformanceTrend,
-  agentsPreviewTools as previewToolPermissions,
-  agentsPreviewTags,
-  agentsPreviewListMetrics,
-} from './agents-preview-data';
+  agentInputSchema, agentRunSchema, agentsSchema, blankProfile, runInputSchema, toolOptions, validateAgentInput,
+  type Agent, type AgentInput, type AgentRun, type RunInput,
+} from './agentsData';
+import { useLiveAgents, type Choice, type Figure } from './agentsView';
+import { useMockAgents } from './agents-preview-data';
 import './agents.css';
 import './agents-layout.css';
 
-const agentToolSchema = z.enum(['code.search', 'code.write', 'docs.search', 'git.diff', 'git.read', 'tests.run']);
-const agentSchema = z.object({
-  id: z.string(), name: z.string(), description: z.string(), provider: z.string(), model: z.string(),
-  status: z.enum(['active', 'disabled']), system_prompt: z.string(), goal_prompt: z.string(),
-  tools: z.array(agentToolSchema), version: z.number(), updated_at: z.string(),
-});
-const agentRunSchema = z.object({
-  id: z.string(), agent_id: z.string(), agent_name: z.string(), project_id: z.string(), project_name: z.string(),
-  worker_id: z.string(), worker_name: z.string(), branch: z.string(), prompt: z.string(), output: z.string().optional(),
-  base_branch: z.string().optional(),
-  commit_sha: z.string().optional(),
-  diff_attempt: z.number().optional().default(0),
-  diff_available: z.boolean().optional().default(false), diff_truncated: z.boolean().optional().default(false),
-  pull_request_enabled: z.boolean().optional().default(false), pull_request_url: z.string().optional(),
-  pull_request_number: z.number().optional(), pull_request_error: z.string().optional(),
-  can_request_changes: z.boolean().optional().default(false),
-  cancel_requested: z.boolean().optional().default(false),
-  review_comments: z.array(z.object({ body: z.string(), request_changes: z.boolean(), created_at: z.string() })).optional().default([]),
-  error: z.string().optional(), status: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']),
-  attempts: z.number(), created_at: z.string(), updated_at: z.string(),
-}).extend(runEvidenceFields);
-export const agentRunsSchema = z.array(agentRunSchema);
-export const agentsSchema = z.array(agentSchema);
-const previewProfileVersions = ['v2.4.1', 'v2.4.0', 'v2.3.8'];
-const inputSchema = z.object({
-  name: z.string().trim().min(1, 'Add an agent name').max(100),
-  description: z.string().max(500),
-  provider: z.string().trim().min(1, 'Add a provider identifier').max(100),
-  model: z.string().trim().min(1, 'Add a model identifier').max(200),
-  status: z.enum(['active', 'disabled']),
-  system_prompt: z.string().max(20_000),
-  goal_prompt: z.string().max(5_000),
-  tools: z.array(agentToolSchema),
-});
-const runInputSchema = z.object({
-  project_id: z.string().min(1, 'Choose an online project'),
-  prompt: z.string().trim().max(5000),
-  issue_number: z.number().int().positive().optional(),
-}).refine((input) => input.prompt !== '' || input.issue_number !== undefined, { path: ['prompt'], message: 'Add a task prompt or choose an issue' });
-export type Agent = z.infer<typeof agentSchema>;
-export type AgentRun = z.infer<typeof agentRunSchema>;
-type AgentInput = z.infer<typeof inputSchema>;
-type RunInput = z.infer<typeof runInputSchema>;
 function AgentToolBadges({ tools, limit }: { tools: string[]; limit?: number }) {
   if (!tools.length) return <span className="agent-tool-empty">None configured</span>;
   const visibleTools = limit === undefined ? tools : tools.slice(0, limit);
@@ -96,7 +46,7 @@ function AgentPromptPreview({ label, value, numbered = false }: { label: string;
     </span>) : prompt}
   </div>;
 }
-function AgentPreviewKpi({ change, color = '#c65bff' }: { change: string; color?: string }) {
+function AgentKpiChange({ change, color = '#c65bff' }: { change: string; color?: string }) {
   return <span className="agents-preview-kpi">
     <small>{change}</small>
     <svg viewBox="0 0 72 24" aria-hidden="true">
@@ -113,45 +63,17 @@ function AgentProfileIcon({ name, size }: { name: string; size: number }) {
   if (name === 'Coverage Analyzer') return <IconChartBar size={size} />;
   return <IconRobot size={size} />;
 }
-const toolOptions = [
-  { value: 'code.search', label: 'Code search' }, { value: 'docs.search', label: 'Documentation search' },
-  { value: 'code.write', label: 'Write files in isolated branch' },
-  { value: 'git.diff', label: 'Read Git diffs' }, { value: 'git.read', label: 'Read repository files' },
-  { value: 'tests.run', label: 'Run tests' },
-];
-
-async function loadAgents(): Promise<Agent[]> {
-  const response = await fetch('/api/v1/agents');
-  if (!response.ok) throw new Error(`Could not load agents (${response.status})`);
-  return agentsSchema.parse(await response.json());
+function ProfileChoice({ label, choice }: { label: string; choice: Choice }) {
+  return <Select aria-label={label} data={choice.options} value={choice.value} placeholder="Unavailable"
+    readOnly={!choice.onChange} allowDeselect={false} onChange={(value) => { if (value) choice.onChange?.(value); }} />;
 }
-
-export async function loadAgentRuns(): Promise<AgentRun[]> {
-  const response = await fetch('/api/v1/agent-runs');
-  if (!response.ok) throw new Error(`Could not load agent runs (${response.status})`);
-  return agentRunsSchema.parse(await response.json());
+function PerformanceFigure({ label, figure }: { label: string; figure: Figure }) {
+  return <div><small>{label}</small><b>{figure.value}</b>{figure.change && <i>{figure.change}</i>}</div>;
 }
-
-function validateInput(values: AgentInput) {
-  const result = inputSchema.safeParse(values);
-  if (result.success) return {};
-  return Object.fromEntries(result.error.issues.map((issue) => [String(issue.path[0]), issue.message]));
-}
-
-function relativeRunTime(timestamp: string) {
-  const elapsed = Date.now() - Date.parse(timestamp);
-  if (!Number.isFinite(elapsed)) return 'time unknown';
-  if (Math.abs(elapsed) < 60_000) return 'just now';
-  const units = [{ size: 86_400_000, label: 'd' }, { size: 3_600_000, label: 'h' }, { size: 60_000, label: 'm' }];
-  const unit = units.find(({ size }) => Math.abs(elapsed) >= size) ?? units[2];
-  const value = Math.floor(Math.abs(elapsed) / unit.size);
-  return elapsed > 0 ? `${value}${unit.label} ago` : `in ${value}${unit.label}`;
-}
-
-const blankProfile: AgentInput = {
-  name: '', description: '', provider: '', model: '', status: 'active',
-  system_prompt: '', goal_prompt: '', tools: [],
-};
+const axisTick = { fill: '#9691a8', fontSize: 7 };
+const evenTicks = ([low, high]: [number, number], count: number) =>
+  Array.from({ length: count }, (_, index) => Number((low + (high - low) * index / (count - 1)).toFixed(2)));
+const kpiColors = { total: undefined, active: '#16cfcb', runs: undefined, success: '#10dba0', cost: undefined };
 
 type Worker = RunWorker;
 
@@ -162,14 +84,11 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   onNavigate: (href: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const mock = useMockAgents();
+  const live = useLiveAgents(!designPreview);
+  const source = designPreview ? mock : live;
+  const { view, items, runs: runItems } = source;
   const [selectedID, setSelectedID] = useState<string | null>(null);
-  const [previewItems, setPreviewItems] = useState<Agent[]>(previewAgents);
-  const [previewOwners, setPreviewOwners] = useState<Record<string, string>>({});
-  const [previewVersions, setPreviewVersions] = useState<Record<string, string>>({});
-  const [previewRunItems, setPreviewRunItems] = useState<AgentRun[]>(previewRuns);
-  const [previewSafety, setPreviewSafety] = useState<Record<string, boolean>>({
-    'Content Safety': true, 'PII/Secret Detection': true, 'Policy Compliance': true, 'Allow Code Changes': false,
-  });
   const [performanceRange, setPerformanceRange] = useState<'Last 7 Days' | 'Last 30 Days'>('Last 30 Days');
   const [detailTab, setDetailTab] = useState<string | null>('overview');
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -182,21 +101,9 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   const [runProjectID, setRunProjectID] = useState('');
   const [runIssue, setRunIssue] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState('');
-  const [previewNotice, setPreviewNotice] = useState('');
+  const [notice, setNotice] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [mobileManagerOpen, setMobileManagerOpen] = useState(false);
-  const agents = useQuery({ queryKey: ['agents'], queryFn: loadAgents, enabled: !designPreview });
-  const runs = useQuery({
-    queryKey: ['agent-runs'], queryFn: loadAgentRuns, refetchInterval: 3_000, enabled: !designPreview,
-  });
-  const sampleMode = designPreview;
-  const performanceTrend = performanceRange === 'Last 7 Days' ? previewPerformanceTrend.slice(-3) : previewPerformanceTrend;
-  const items = sampleMode ? previewItems : agents.data ?? [];
-  const runItems = sampleMode ? previewRunItems : runs.data ?? [];
-  const profilesLoading = !sampleMode && agents.isLoading;
-  const runsLoading = !sampleMode && runs.isLoading;
-  const profilesError = !sampleMode && agents.isError;
-  const runsError = !sampleMode && runs.isError;
   const searchTerm = agentSearch.trim().toLowerCase();
   const visibleItems = items.filter((agent) =>
     (agentStatusFilter === 'all' || agent.status === agentStatusFilter) &&
@@ -205,13 +112,13 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   if (agentSort !== 'default') visibleItems.sort((a, b) =>
     agentSort === 'ascending' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
   const selected = visibleItems.find((item) => item.id === selectedID) ?? visibleItems[0];
-  const selectedPreviewVersion = selected ? previewVersions[selected.id] ?? previewProfileVersions[0] : '';
-  const createForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateInput });
-  const editForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateInput });
+  const createForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateAgentInput });
+  const editForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateAgentInput });
   const runForm = useForm<{ prompt: string }>({ initialValues: { prompt: '' }, validate: (values) => {
     const result = runInputSchema.safeParse({ project_id: runProjectID || '-', prompt: values.prompt, issue_number: runIssue ?? undefined });
     return result.success ? {} : { prompt: result.error.issues[0].message };
   } });
+  const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 
   function resetEditForm() {
     if (!selected) return;
@@ -221,30 +128,37 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
       tools: selected.tools,
     });
   }
-  function editPreviewPrompts() {
+  function editSection(tab: string) {
     resetEditForm();
-    setDetailTab('prompts');
+    setSubmitError('');
+    setDetailTab(tab);
     setIsEditing(true);
   }
-  async function copyPreviewPrompt(prompt: string) {
+  async function copyPrompt(prompt: string) {
     try {
       await navigator.clipboard.writeText(prompt);
-      setPreviewNotice('Prompt copied to clipboard');
+      setNotice('Prompt copied to clipboard');
     } catch (error) {
-      setPreviewNotice(`Could not copy prompt: ${error instanceof Error ? error.message : String(error)}`);
+      setNotice(`Could not copy prompt: ${message(error)}`);
     }
   }
-  function duplicatePreviewProfile(agent: Agent) {
-    const copy = agentSchema.parse({ ...agent, id: crypto.randomUUID(), name: `${agent.name} Copy`,
-      version: 1, updated_at: new Date().toISOString() });
-    setPreviewItems((current) => [...current, copy]);
-    setSelectedID(copy.id);
+  function openProfile(item: Agent, confirmation: string) {
+    setSelectedID(item.id);
     setDetailTab('overview');
+    setSubmitError('');
+    setNotice(confirmation + source.savedSuffix);
   }
-  function updatePreviewProfile(patch: Partial<Agent>) {
-    if (!selected) return;
-    setPreviewItems((current) => current.map((item) => item.id === selected.id
-      ? agentSchema.parse({ ...item, ...patch }) : item));
+  function duplicateProfile(agent: Agent) {
+    const copy = agentInputSchema.safeParse({ ...agent, name: `${agent.name} Copy` });
+    if (!copy.success) { setNotice(`Could not duplicate ${agent.name}: ${copy.error.issues[0].message}`); return; }
+    source.create(copy.data).then((item) => openProfile(item, `${item.name} created`))
+      .catch((error: unknown) => setNotice(`Could not duplicate ${agent.name}: ${message(error)}`));
+  }
+  function toggleStatus(agent: Agent) {
+    const status = agent.status === 'active' ? 'disabled' : 'active';
+    source.update(agent.id, agentInputSchema.parse({ ...agent, status }))
+      .then(() => setNotice(`${agent.name} ${status === 'active' ? 'enabled' : 'disabled'}${source.savedSuffix}`))
+      .catch((error: unknown) => setNotice(`Could not change ${agent.name}: ${message(error)}`));
   }
   useEffect(() => {
     if (!selected) return;
@@ -252,40 +166,6 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
     setIsEditing(false);
   }, [selected?.id, selected?.version]);
 
-  const createAgent = useMutation({
-    mutationFn: async (input: AgentInput) => {
-      const response = await fetch('/api/v1/agents', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
-      });
-      if (!response.ok) throw new Error(await response.text());
-      return agentSchema.parse(await response.json());
-    },
-    onSuccess: async (item) => {
-      await queryClient.invalidateQueries({ queryKey: ['agents'] });
-      setSelectedID(item.id);
-      createForm.reset();
-      setSubmitError('');
-      setCreateOpen(false);
-    },
-    onError: (error) => setSubmitError(error.message),
-  });
-  const updateAgent = useMutation({
-    mutationFn: async (input: AgentInput & { id: string }) => {
-      const { id, ...profile } = input;
-      const response = await fetch(`/api/v1/agents/${id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile),
-      });
-      if (!response.ok) throw new Error(await response.text());
-      return agentSchema.parse(await response.json());
-    },
-    onSuccess: async (item) => {
-      await queryClient.invalidateQueries({ queryKey: ['agents'] });
-      setSelectedID(item.id);
-      setSubmitError('');
-      setIsEditing(false);
-    },
-    onError: (error) => setSubmitError(error.message),
-  });
   const queueRun = useMutation({
     mutationFn: async (input: RunInput & { agent_id: string }) => {
       const response = await fetch('/api/v1/agent-runs', {
@@ -299,9 +179,9 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
       runForm.reset();
       setRunIssue(null);
       setRunOpen(false);
+      setDetailTab('history');
     },
   });
-  const activeCount = items.filter((item) => item.status === 'active').length;
   const onlineProjects = projects.filter((project) => project.worker_status === 'online');
   const workersByID = new Map(workers.map((worker) => [worker.id, worker]));
   const runProjectOptions = onlineProjects.map((project) => {
@@ -311,34 +191,46 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   });
   const selectedRunProject = onlineProjects.find((project) => project.id === runProjectID);
   const selectedRunWorker = selectedRunProject ? workersByID.get(selectedRunProject.worker_id) : undefined;
-  const totalValue = profilesLoading ? 'Loading…' : profilesError ? 'Unavailable' : items.length;
-  const activeValue = profilesLoading ? 'Loading…' : profilesError ? 'Unavailable' : activeCount;
-  const runs30d = runsInLast30Days(runItems);
-  const finishedRuns = runs30d.filter((run) => run.status === 'succeeded' || run.status === 'failed');
-  const successRate = finishedRuns.length
-    ? `${Math.round(finishedRuns.filter((run) => run.status === 'succeeded').length / finishedRuns.length * 100)}%`
-    : 'Unavailable';
   const selectedRuns = runItems.filter((run) => run.agent_id === selected?.id);
-  const selectedRuns30d = runsInLast30Days(selectedRuns);
-  const selectedFinishedRuns = selectedRuns30d.filter((run) => run.status === 'succeeded' || run.status === 'failed');
-  const selectedSuccessRate = selectedFinishedRuns.length
-    ? `${Math.round(selectedFinishedRuns.filter((run) => run.status === 'succeeded').length / selectedFinishedRuns.length * 100)}%`
-    : 'Unavailable';
+  /** Mock records a labelled simulated run; Live opens the queue dialog for a real worker. */
+  function runAgent(agent: Agent) {
+    if (source.simulateRun) {
+      source.simulateRun(agent);
+      setDetailTab('history');
+      return;
+    }
+    queueRun.reset();
+    setRunProjectID(onlineProjects[0]?.id ?? '');
+    setRunIssue(null);
+    runForm.reset();
+    setRunOpen(true);
+  }
+  const kpi = (key: keyof typeof kpiColors) => {
+    const { value, detail, change } = view.kpis[key];
+    // The caption takes the trend's place, so a card is the same height whether or not a change is known.
+    return { value, trend: change ? <AgentKpiChange change={change} color={kpiColors[key]} />
+      : <span className="agents-preview-kpi"><small className="agents-kpi-caption" title={detail}>{detail}</small></span> };
+  };
+  const fields = selected && view.fields(selected);
+  const performance = selected && view.performance(selected);
+  const trend = selected && view.trend(selected, performanceRange === 'Last 7 Days' ? 7 : 30);
+  const safety = selected ? view.safety(selected) : [];
+  const recentRuns = selected ? view.recentRuns(selected) : [];
 
-  return <div className={`agents-page${sampleMode ? ` agents-design-preview${mobileManagerOpen ? ' mobile-manager-open' : ''}` : ''}`}>
-    {sampleMode && <AgentsMobilePreview onRunAgent={() => setRunOpen(true)}
+  return <div className={`agents-page agents-design-preview${mobileManagerOpen ? ' mobile-manager-open' : ''}`}>
+    <AgentsMobileSummary dataLabel={view.dataLabel} summary={view.mobile}
+      onRunAgent={() => { setMobileManagerOpen(true); if (selected) runAgent(selected); }}
       onOpenRunHistory={() => { setMobileManagerOpen(true); setDetailTab('history'); }}
-      onOpenReviews={() => onNavigate('#reviews')} />}
-    {sampleMode && <Button className="agents-mobile-back agents-mobile-return" variant="default"
-      onClick={() => setMobileManagerOpen(false)}>← Agents &amp; Reviews</Button>}
+      onOpenReviews={() => onNavigate('#reviews')} />
+    <Button className="agents-mobile-back agents-mobile-return" variant="default"
+      onClick={() => setMobileManagerOpen(false)}>← Agents &amp; Reviews</Button>
     <div className="agents-preview-main">
     <div className="agents-title-row">
       <div className="agents-title-heading"><span className="agents-title-icon"><IconRobot size={22} /></span>
-        <PageHeading title="Agents" description={sampleMode
-          ? 'Manage AI agents, profiles, prompts, tools, and governance. Define specialized agents for your engineering workflows.'
-          : 'Manage AI agents, profiles, prompts, tools, and governance.'} /></div>
-      {sampleMode ? <div className="agents-preview-actions">
-        <Badge className="agents-preview-notice" variant="light">ILLUSTRATIVE DATA</Badge>
+        <PageHeading title="Agents"
+          description="Manage AI agents, profiles, prompts, tools, and governance. Define specialized agents for your engineering workflows." /></div>
+      <div className="agents-preview-actions">
+        {view.dataLabel && <Badge className="agents-preview-notice" variant="light">{view.dataLabel}</Badge>}
         <Button className="agents-create-button" leftSection={<IconPlus size={15} />}
           rightSection={<IconChevronDown size={13} />} onClick={() => { createForm.reset(); setSubmitError(''); setCreateOpen(true); }}>Create Agent</Button>
         <Button variant="default" onClick={() => setLibraryOpen(true)}>Agent Library</Button>
@@ -348,58 +240,42 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
             <Menu.Item onClick={() => {
               const url = URL.createObjectURL(new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' }));
               const link = document.createElement('a');
-              link.href = url; link.download = 'agents-preview.json'; link.click();
+              link.href = url; link.download = view.exportName; link.click();
               window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-              setPreviewNotice('Exported illustrative profiles');
+              setNotice(`Exported ${items.length} profiles`);
             }}>Export profiles as JSON</Menu.Item>
-            <Menu.Item onClick={() => importInput.current?.click()}>Import profiles from JSON</Menu.Item>
+            <Menu.Item disabled={!source.importProfiles} onClick={() => importInput.current?.click()}
+              title={source.importProfiles ? undefined : 'Importing profiles is not available from the control plane yet'}>
+              Import profiles from JSON</Menu.Item>
           </Menu.Dropdown>
         </Menu>
         <input ref={importInput} hidden type="file" accept="application/json,.json" aria-label="Import agent profiles JSON"
           onChange={async (event) => {
             const file = event.currentTarget.files?.[0]; event.currentTarget.value = '';
-            if (!file) return;
-            if (file.size > 1_000_000) { setPreviewNotice('Import failed · file exceeds 1 MB'); return; }
+            if (!file || !source.importProfiles) return;
+            if (file.size > 1_000_000) { setNotice('Import failed · file exceeds 1 MB'); return; }
             try {
               const parsed = agentsSchema.safeParse(JSON.parse(await file.text()));
-              if (!parsed.success) { setPreviewNotice('Import failed · invalid agent profile JSON'); return; }
-              setPreviewItems(parsed.data); setSelectedID(parsed.data[0]?.id ?? null);
-              setPreviewNotice(`Imported ${parsed.data.length} illustrative profiles`);
-            } catch { setPreviewNotice('Import failed · invalid agent profile JSON'); }
+              if (!parsed.success) { setNotice('Import failed · invalid agent profile JSON'); return; }
+              source.importProfiles(parsed.data); setSelectedID(parsed.data[0]?.id ?? null);
+              setNotice(`Imported ${parsed.data.length} profiles${source.savedSuffix}`);
+            } catch { setNotice('Import failed · invalid agent profile JSON'); }
           }} />
-        {previewNotice && <Text className="agents-preview-feedback" role="status">{previewNotice}</Text>}
+        {(notice || source.saveError) && <Text className="agents-preview-feedback" role="status">{source.saveError || notice}</Text>}
       </div>
-        : <Button className="agents-create-button" leftSection={<IconPlus size={15} />} onClick={() => {
-          setSubmitError(''); createForm.reset(); setCreateOpen(true);
-        }}>Create Agent</Button>}
     </div>
     <section className="agents-metrics" aria-label="Agent profile metrics">
-      <MetricCard className="agents-metric purple" label="Total Agents" value={sampleMode ? items.length : totalValue}
-        detail={sampleMode ? undefined : 'Saved profiles'} trend={sampleMode && <AgentPreviewKpi change="↑ +2" />}
-        icon={<IconRobot size={18} />} />
-      <MetricCard className="agents-metric blue" label="Active Agents" value={sampleMode ? activeCount : activeValue}
-        detail={sampleMode ? undefined : 'Enabled profiles'} trend={sampleMode && <AgentPreviewKpi change="↑ +1" color="#16cfcb" />}
-        icon={<IconActivity size={18} />} />
-      <MetricCard className="agents-metric" label="Total Runs (30d)"
-        value={sampleMode ? '1,842' : runsLoading ? 'Loading…' : runsError ? 'Unavailable' : runs30d.length}
-        detail={sampleMode ? undefined : 'Recorded runs'} trend={sampleMode && <AgentPreviewKpi change="↑ +18%" />}
-        icon={<IconSparkles size={18} />} />
-      <MetricCard className="agents-metric green" label="Success Rate"
-        value={sampleMode ? '96.7%' : runsLoading ? 'Loading…' : runsError ? 'Unavailable' : successRate}
-        detail={sampleMode ? undefined : 'Completed runs · last 30d'}
-        trend={sampleMode && <AgentPreviewKpi change="↑ +1.9pp" color="#10dba0" />}
-        icon={<IconShieldCheck size={18} />} />
-      <MetricCard className="agents-metric" label="Total Cost (30d)"
-        value={sampleMode ? '$412.36' : 'Unavailable'}
-        detail={sampleMode ? undefined : 'Provider usage records are unavailable'}
-        trend={sampleMode && <AgentPreviewKpi change="↓ -12%" />} icon={<IconCpu size={18} />} />
+      <MetricCard className="agents-metric purple" label="Total Agents" {...kpi('total')} icon={<IconRobot size={18} />} />
+      <MetricCard className="agents-metric blue" label="Active Agents" {...kpi('active')} icon={<IconActivity size={18} />} />
+      <MetricCard className="agents-metric" label="Total Runs (30d)" {...kpi('runs')} icon={<IconSparkles size={18} />} />
+      <MetricCard className="agents-metric green" label="Success Rate" {...kpi('success')} icon={<IconShieldCheck size={18} />} />
+      <MetricCard className="agents-metric" label="Total Cost (30d)" {...kpi('cost')} icon={<IconCpu size={18} />} />
     </section>
     <div className="agents-content-grid">
       <PanelCard className="agents-list-panel" withBorder>
-        <PanelHeading className="agents-panel-heading" title={sampleMode ? `Agent Profiles (${visibleItems.length})` : 'Agent Profiles'} description={sampleMode ? undefined : 'Reusable role and permission definitions'}
+        <PanelHeading className="agents-panel-heading" title={`Agent Profiles (${visibleItems.length})`}
           actions={<><TextInput className="agents-profile-search" aria-label="Search agents" leftSection={<IconSearch size={13} />}
             placeholder="Search agents…" value={agentSearch} onChange={(event) => setAgentSearch(event.currentTarget.value)} />
-          {sampleMode && <>
             <Menu position="bottom-end" withinPortal>
               <Menu.Target><Button className="agents-list-tool" variant="default" aria-label="Filter agents"><IconFilter size={13} /></Button></Menu.Target>
               <Menu.Dropdown aria-label="Filter agents">
@@ -415,60 +291,38 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                 <Menu.Item onClick={() => setAgentSort('ascending')}>Name A–Z</Menu.Item>
                 <Menu.Item onClick={() => setAgentSort('descending')}>Name Z–A</Menu.Item>
               </Menu.Dropdown>
-            </Menu>
-          </>}
-          {!sampleMode && <Badge className="agents-count" variant="light">{visibleItems.length}</Badge>}</>} />
-        {profilesError ? <div className="agents-empty">Agent profiles could not be loaded.</div> : profilesLoading ? (
+            </Menu></>} />
+        {source.profilesError ? <div className="agents-empty">Agent profiles could not be loaded.</div> : source.profilesLoading ? (
           <div className="agents-empty">Loading agent profiles…</div>
         ) : items.length && visibleItems.length ? (
           <div className="agents-list">
             {visibleItems.map((agent) => {
-              const profileRuns = runItems.filter((run) => run.agent_id === agent.id);
-              const completedRuns = profileRuns.filter((run) => run.status === 'succeeded' || run.status === 'failed');
-              const successCount = completedRuns.filter((run) => run.status === 'succeeded').length;
-              const latestRun = profileRuns.reduce<AgentRun | undefined>((latest, run) =>
-                !latest || Date.parse(run.updated_at) > Date.parse(latest.updated_at) ? run : latest, undefined);
-              const successRate = completedRuns.length
-                ? Math.round(successCount / completedRuns.length * 100)
-                : undefined;
-              const previewStatus = sampleMode && agent.id === 'preview-research-analyst' && agent.status === 'disabled'
-                ? 'idle' : agent.status;
-              return <div className={`agent-row${selected?.id === agent.id ? ' selected' : ''}${sampleMode ? ' has-options' : ''}`}
-                key={agent.id}>
+              const row = view.row(agent);
+              return <div className={`agent-row has-options${selected?.id === agent.id ? ' selected' : ''}`} key={agent.id}>
                 <button className="agent-row-select" type="button"
                   onClick={() => { setSelectedID(agent.id); setSubmitError(''); setDetailTab('overview'); }}>
                   <span className="agent-row-icon"><AgentProfileIcon name={agent.name} size={17} /></span>
                   <span className="agent-row-body">
                     <b>{agent.name}</b><small>{agent.description || 'No description'}</small>
-                    {sampleMode ? <>
-                      <small className="agent-preview-provider">{agent.model} · {agent.provider}</small>
-                      <span className="agent-preview-meta">
-                        <small><IconCalendar size={11} />{agentsPreviewListMetrics[agent.id]?.lastRun ?? 'No runs yet'}</small>
-                        <small><IconCurrencyDollar size={11} />Cost: {agentsPreviewListMetrics[agent.id]?.cost ?? '—'}</small>
-                        <small><IconCircleCheck size={11} />Success: {agentsPreviewListMetrics[agent.id]?.success ?? '—'}</small>
-                      </span>
-                    </> : <>
-                      <small>{agent.provider} · {agent.model}</small>
-                      <small>{runsLoading ? 'Run history loading' : runsError ? 'Run history unavailable'
-                        : latestRun ? `Last run ${relativeRunTime(latestRun.updated_at)}` : 'No runs yet'}</small>
-                      <small>{successRate !== undefined ? `${completedRuns.length} completed · ${successRate}% success` : ''}</small>
-                    </>}
-                    <AgentToolBadges tools={sampleMode ? agentsPreviewTags[agent.id] ?? agent.tools : agent.tools} limit={3} />
+                    <small className="agent-preview-provider">{row.provider}</small>
+                    <span className="agent-preview-meta">
+                      <small><IconCalendar size={11} />{row.lastRun}</small>
+                      <small><IconCurrencyDollar size={11} />Cost: {row.cost}</small>
+                      <small><IconCircleCheck size={11} />Success: {row.success}</small>
+                    </span>
+                    <AgentToolBadges tools={row.tags} limit={3} />
                   </span>
-                  {!sampleMode && <Badge className={`agent-status ${previewStatus}`} variant="light">{previewStatus}</Badge>}
                 </button>
-                {sampleMode && <>
-                  <Badge className={`agent-status ${previewStatus}`} variant="light">{previewStatus}</Badge>
-                  <Menu position="bottom-end" withinPortal>
+                <Badge className={`agent-status ${row.status}`} variant="light">{row.status}</Badge>
+                <Menu position="bottom-end" withinPortal>
                   <Menu.Target><button className="agent-row-options" type="button" aria-label={`${agent.name} options`}>
                     <IconDots size={15} />
                   </button></Menu.Target>
                   <Menu.Dropdown>
                     <Menu.Item onClick={() => { setSelectedID(agent.id); setDetailTab('overview'); }}>Open profile</Menu.Item>
-                    <Menu.Item onClick={() => duplicatePreviewProfile(agent)}>Duplicate profile</Menu.Item>
+                    <Menu.Item onClick={() => duplicateProfile(agent)}>Duplicate profile</Menu.Item>
                   </Menu.Dropdown>
-                  </Menu>
-                </>}
+                </Menu>
               </div>;
             })}
           </div>
@@ -478,76 +332,44 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
           <Button className="agents-create-button" onClick={() => setCreateOpen(true)}>Create first agent</Button></div>}
       </PanelCard>
       <PanelCard className="agents-detail-panel" withBorder>
-        {selected ? <>
+        {selected && fields && performance && trend ? <>
           <PanelHeading className="agents-detail-heading entity-detail-heading" title={selected.name}
             description={selected.description || 'Agent profile'}
             icon={<span className="agent-detail-icon"><AgentProfileIcon name={selected.name} size={20} /></span>}
             actions={<div className="agents-detail-actions"><Badge className={`agent-status ${selected.status}`} variant="light">{selected.status}</Badge>
-              {sampleMode && <>
-                <Button className="agents-run-button" disabled={selected.status !== 'active'} leftSection={<IconPlayerPlay size={13} />}
-                  onClick={() => {
-                    const now = new Date().toISOString();
-                    setPreviewRunItems((current) => [{
-                      id: crypto.randomUUID(), agent_id: selected.id, agent_name: selected.name, project_id: 'preview-project',
-                      project_name: 'Illustrative project', worker_id: 'preview-worker', worker_name: 'Preview worker',
-                      branch: 'preview/simulated-run', prompt: 'SIMULATED · local preview run', output: 'Illustrative run only.',
-                      status: 'succeeded', attempts: 1, created_at: now, updated_at: now, diff_available: false,
-                      diff_attempt: 0, diff_truncated: false, pull_request_enabled: false, can_request_changes: false,
-                      cancel_requested: false, review_comments: [],
-                    }, ...current]);
-                    setDetailTab('history');
-                  }}>Run Agent</Button>
-                <Button variant="default" leftSection={<IconCopy size={13} />} onClick={() => duplicatePreviewProfile(selected)}>Duplicate Profile</Button>
-                <Button variant="default" onClick={() => setPreviewItems((current) => current.map((item) =>
-                  item.id === selected.id ? { ...item, status: item.status === 'active' ? 'disabled' : 'active' } : item))}>
-                  {selected.status === 'active' ? <IconBan size={13} /> : <IconCircleCheck size={13} />}
-                  {selected.status === 'active' ? 'Disable' : 'Enable'}
-                </Button>
-                <Button variant="default" leftSection={<IconGitCompare size={13} />} onClick={() => setDetailTab('versions')}>Compare Versions</Button>
-                <Menu position="bottom-end" withinPortal>
-                  <Menu.Target><Button variant="default" aria-label="More agent actions"><IconDots size={15} /></Button></Menu.Target>
-                  <Menu.Dropdown>
-                    <Menu.Item onClick={() => setDetailTab('history')}>Open run history</Menu.Item>
-                    <Menu.Item onClick={() => setDetailTab('versions')}>Compare versions</Menu.Item>
-                  </Menu.Dropdown>
-                </Menu>
-              </>}
-              {sampleMode ? null : <>
-              {isEditing ? <Button variant="default" onClick={() => { resetEditForm(); setIsEditing(false); }}>Cancel</Button>
-                : <Button variant="default" onClick={() => setIsEditing(true)}>Edit profile</Button>}
-              <Button variant="default" disabled={updateAgent.isPending} onClick={() => updateAgent.mutate({
-                ...inputSchema.parse({ ...selected, status: selected.status === 'active' ? 'disabled' : 'active' }),
-                id: selected.id,
-              })}>{selected.status === 'active' ? 'Disable profile' : 'Enable profile'}</Button>
-              <Button className="agents-run-button" disabled={selected.status !== 'active'} onClick={() => {
-                queueRun.reset();
-                setRunProjectID(onlineProjects[0]?.id ?? '');
-                // An issue chosen before the dialog was last closed belongs to that project's list.
-                setRunIssue(null);
-                runForm.reset();
-                setRunOpen(true);
-              }}>Queue run</Button></>}</div>} />
+              <Button className="agents-run-button" disabled={selected.status !== 'active'} leftSection={<IconPlayerPlay size={13} />}
+                onClick={() => runAgent(selected)}>Run Agent</Button>
+              <Button variant="default" leftSection={<IconCopy size={13} />} onClick={() => duplicateProfile(selected)}>Duplicate Profile</Button>
+              <Button variant="default" disabled={source.saving} onClick={() => toggleStatus(selected)}>
+                {selected.status === 'active' ? <IconBan size={13} /> : <IconCircleCheck size={13} />}
+                {selected.status === 'active' ? 'Disable' : 'Enable'}
+              </Button>
+              <Button variant="default" leftSection={<IconGitCompare size={13} />} onClick={() => setDetailTab('versions')}>Compare Versions</Button>
+              <Menu position="bottom-end" withinPortal>
+                <Menu.Target><Button variant="default" aria-label="More agent actions"><IconDots size={15} /></Button></Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Item onClick={() => editSection('overview')}>Edit profile</Menu.Item>
+                  <Menu.Item onClick={() => setDetailTab('history')}>Open run history</Menu.Item>
+                  <Menu.Item onClick={() => setDetailTab('versions')}>Compare versions</Menu.Item>
+                </Menu.Dropdown>
+              </Menu></div>} />
           <form onSubmit={editForm.onSubmit((values) => {
-            const profile = inputSchema.parse(values);
-            if (sampleMode) {
-              const updated = agentSchema.parse({ ...selected, ...profile, version: selected.version + 1, updated_at: new Date().toISOString() });
-              setPreviewItems((current) => current.map((item) => item.id === selected.id ? updated : item));
-              setPreviewNotice(`${selected.name} saved in this preview only`);
+            source.update(selected.id, agentInputSchema.parse(values)).then((item) => {
               setIsEditing(false);
-              setDetailTab('overview');
-            } else updateAgent.mutate({ ...profile, id: selected.id });
+              openProfile(item, `${item.name} saved`);
+            }).catch((error: unknown) => setSubmitError(message(error)));
           })}>
             <Tabs value={detailTab} onChange={setDetailTab} className="agents-detail-tabs">
               <Tabs.List aria-label="Agent profile sections">
                 <Tabs.Tab value="overview">Overview</Tabs.Tab>
                 <Tabs.Tab value="prompts">Prompts</Tabs.Tab>
-                {sampleMode && <Tabs.Tab value="variables">Variables &amp; Templates</Tabs.Tab>}
+                <Tabs.Tab value="variables">Variables &amp; Templates</Tabs.Tab>
                 <Tabs.Tab value="tools">Tools &amp; Permissions</Tabs.Tab>
-                {sampleMode && <Tabs.Tab value="safety">Safety &amp; Governance</Tabs.Tab>}
+                <Tabs.Tab value="safety">Safety &amp; Governance</Tabs.Tab>
                 <Tabs.Tab value="history">Run History</Tabs.Tab>
-                {sampleMode && <Tabs.Tab value="versions">Versions</Tabs.Tab>}
+                <Tabs.Tab value="versions">Versions</Tabs.Tab>
               </Tabs.List>
-              <Tabs.Panel value="overview" pt={sampleMode ? 10 : 'sm'}>
+              <Tabs.Panel value="overview" pt={10}>
                 <div className="agents-overview-top">
                   <PanelCard className="agents-overview-card" withBorder>
                     <PanelHeading title="Agent profile" />
@@ -560,113 +382,82 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                         <TextInput label="Profile name" {...editForm.getInputProps('name')} />
                         <TextInput label="Description" {...editForm.getInputProps('description')} />
                       </div>
-                    </> : <div className={`agents-profile-summary${sampleMode ? ' agents-preview-profile-fields' : ''}`}>
-                      {sampleMode ? <>
-                        <div><small>Model / Provider</small><Select aria-label="Model / Provider"
-                          data={previewAgents.map((agent) => ({ value: agent.id, label: `${agent.model} · ${agent.provider}` }))}
-                          value={previewAgents.find((agent) => agent.model === selected.model && agent.provider === selected.provider)?.id ?? selected.id}
-                          onChange={(id) => {
-                            const agent = previewAgents.find((candidate) => candidate.id === id);
-                            if (agent) updatePreviewProfile({ model: agent.model, provider: agent.provider });
-                          }} /></div>
-                        <div><small>Version</small><Select aria-label="Version" data={previewProfileVersions}
-                          value={selectedPreviewVersion} onChange={(version) => version && setPreviewVersions((current) => ({
-                            ...current, [selected.id]: version,
-                          }))} /></div>
-                        <div><small>Status</small><Select aria-label="Profile status"
-                          data={[{ value: 'active', label: 'Active' }, { value: 'disabled', label: 'Disabled' }]}
-                          value={selected.status} onChange={(status) => {
-                            if (status === 'active' || status === 'disabled') updatePreviewProfile({ status });
-                          }} /></div>
-                        <div><small>Owner</small><Select aria-label="Profile owner"
-                          data={['Platform Engineering', 'AI Platform']} value={previewOwners[selected.id] ?? 'Platform Engineering'}
-                          onChange={(owner) => owner && setPreviewOwners((current) => ({ ...current, [selected.id]: owner }))} /></div>
-                        <div><small>Created</small><b>Jan 12, 2025</b></div>
-                        <div><small>Last Updated</small><b>Jan 26, 2025, 10:24 AM</b></div>
-                      </> : <>
-                        <div><small>Provider</small><b>{selected.provider}</b></div>
-                        <div><small>Model</small><b>{selected.model}</b></div>
-                        <div><small>Version</small><b>v{selected.version}</b></div>
-                        <div><small>Updated</small><b>{new Date(selected.updated_at).toLocaleString()}</b></div>
-                      </>}
+                    </> : <div className="agents-profile-summary agents-preview-profile-fields">
+                      <div><small>Model / Provider</small><ProfileChoice label="Model / Provider" choice={fields.modelProvider} /></div>
+                      <div><small>Version</small><ProfileChoice label="Version" choice={fields.version} /></div>
+                      <div><small>Status</small><ProfileChoice label="Profile status" choice={fields.status} /></div>
+                      <div><small>Owner</small><ProfileChoice label="Profile owner" choice={fields.owner} /></div>
+                      <div><small>Created</small><b>{fields.created}</b></div>
+                      <div><small>Last Updated</small><b>{fields.updated}</b></div>
                     </div>}
                   </PanelCard>
                   <PanelCard className="agents-overview-card" withBorder>
-                    <PanelHeading title="Performance (30d)" actions={sampleMode && <button type="button" className="agents-preview-link"
+                    <PanelHeading title="Performance (30d)" actions={<button type="button" className="agents-preview-link"
                       onClick={() => setDetailTab('history')}>View Details →</button>} />
                     <div className="agents-profile-metrics" aria-label="Selected agent performance">
-                      <div><small>Runs</small><b>{sampleMode ? '482' : runsLoading ? 'Loading…' : runsError ? 'Unavailable' : selectedRuns30d.length}</b>
-                        {sampleMode && <i>↑ +21%</i>}</div>
-                      <div><small>Success rate</small><b>
-                        {sampleMode ? '98.4%' : runsLoading ? 'Loading…' : runsError ? 'Unavailable' : selectedSuccessRate}
-                      </b>{sampleMode && <i>↑ +1.6pp</i>}</div>
-                      <div><small>Avg latency</small><b>{sampleMode ? '8.7s' : 'Unavailable'}</b>
-                        {sampleMode && <i>↓ -18%</i>}</div>
-                      <div><small>Total cost</small><b>{sampleMode ? '$203.86' : 'Unavailable'}</b>
-                        {sampleMode && <i>↓ -14%</i>}</div>
+                      <PerformanceFigure label="Runs" figure={performance.runs} />
+                      <PerformanceFigure label="Success rate" figure={performance.success} />
+                      <PerformanceFigure label="Avg latency" figure={performance.latency} />
+                      <PerformanceFigure label="Total cost" figure={performance.cost} />
                     </div>
-                    {sampleMode && <Sparkline className="agents-profile-sparkline" role="img"
-                      aria-label="Illustrative performance trend" data={previewPerformanceTrend.map(({ success }) => success - 90)}
+                    {performance.sparkline && <Sparkline className="agents-profile-sparkline" role="img"
+                      aria-label={view.chartLabels.sparkline} data={performance.sparkline}
                       color="violet.5" h={26} fillOpacity={0.14} withGradient={false} />}
                   </PanelCard>
                 </div>
                 <div className="agents-overview-previews">
                   <PanelCard className="agents-overview-card" withBorder>
-                    <PanelHeading title="System Prompt" actions={sampleMode && <AgentPromptCardActions label="System Prompt"
-                      onEdit={editPreviewPrompts} onCopy={() => { void copyPreviewPrompt(selected.system_prompt); }} />} />
-                    {sampleMode ? <AgentPromptPreview label="System prompt preview" value={selected.system_prompt} numbered />
-                      : <p className="agents-prompt-preview" title={selected.system_prompt}>
-                        {selected.system_prompt || 'No system prompt configured.'}
-                      </p>}
+                    <PanelHeading title="System Prompt" actions={<AgentPromptCardActions label="System Prompt"
+                      onEdit={() => editSection('prompts')} onCopy={() => { void copyPrompt(selected.system_prompt); }} />} />
+                    <AgentPromptPreview label="System prompt preview" value={selected.system_prompt} numbered />
                   </PanelCard>
                   <PanelCard className="agents-overview-card" withBorder>
-                    <PanelHeading title="Goal Prompt" actions={sampleMode && <AgentPromptCardActions label="Goal Prompt"
-                      onEdit={editPreviewPrompts} onCopy={() => { void copyPreviewPrompt(selected.goal_prompt); }} />} />
-                    {sampleMode ? <AgentPromptPreview label="Goal prompt preview" value={selected.goal_prompt} />
-                      : <p className="agents-prompt-preview" title={selected.goal_prompt}>
-                        {selected.goal_prompt || 'No goal prompt configured.'}
-                      </p>}
+                    <PanelHeading title="Goal Prompt" actions={<AgentPromptCardActions label="Goal Prompt"
+                      onEdit={() => editSection('prompts')} onCopy={() => { void copyPrompt(selected.goal_prompt); }} />} />
+                    <AgentPromptPreview label="Goal prompt preview" value={selected.goal_prompt} />
                   </PanelCard>
                 </div>
-                {sampleMode ? <div className="agents-preview-overview-grid">
+                <div className="agents-preview-overview-grid">
                   <PanelCard className="agents-overview-card" withBorder><PanelHeading title="Variables & Templates" actions={<button type="button" className="agents-preview-link"
                     onClick={() => setDetailTab('variables')}>Manage →</button>} />
-                    <div className="agents-preview-variable"><code>{'{ repo_url }'}</code><span>Git repository URL or PR link</span></div>
-                    <div className="agents-preview-variable"><code>{'{ diff }'}</code><span>Code diff or change set</span></div>
-                    <div className="agents-preview-variable"><code>{'{ standards }'}</code><span>Engineering standards</span></div>
-                    <div className="agents-preview-template">Templates <Badge variant="light">Default Review</Badge></div>
+                    {view.variables.length ? view.variables.map(({ name, description }) => <div className="agents-preview-variable" key={name}>
+                      <code>{`{ ${name} }`}</code><span>{description}</span></div>)
+                      : <p className="agents-card-note">{view.notes.variables}</p>}
+                    <div className="agents-preview-template">Templates {view.templates.length
+                      ? view.templates.map((template) => <Badge variant="light" key={template}>{template}</Badge>) : <span>None</span>}</div>
                   </PanelCard>
                   <PanelCard className="agents-overview-card" withBorder><PanelHeading title="Tool Permissions" actions={<button type="button" className="agents-preview-link"
-                    onClick={() => { resetEditForm(); setIsEditing(true); setDetailTab('tools'); }}>Edit →</button>} />
-                    <div className="agents-preview-permissions">{previewToolPermissions.map(({ label, icon }, index) => <div key={label}><span>{icon}{label}</span><i className={index < 4 ? 'enabled' : ''} /></div>)}</div>
+                    onClick={() => editSection('tools')}>Edit →</button>} />
+                    <div className="agents-preview-permissions">{view.toolPermissions(selected).map(({ label, icon, enabled }) =>
+                      <div key={label}><span>{icon}{label}</span>
+                        <i className={enabled ? 'enabled' : ''} role="img" aria-label={enabled ? 'Allowed' : 'Not granted'} /></div>)}</div>
                   </PanelCard>
                   <PanelCard className="agents-overview-card" withBorder><PanelHeading title="Safety & Governance" actions={<button type="button" className="agents-preview-link"
                     onClick={() => setDetailTab('safety')}>Edit →</button>} />
-                    <div className="agents-preview-safety">{['Content Safety', 'PII/Secret Detection', 'Policy Compliance'].map((label) => <div key={label}><span><IconShieldCheck size={12} />{label}</span><Badge className="agents-permission-enabled" variant="light">{previewSafety[label] ? 'Enabled' : 'Disabled'}</Badge></div>)}<div><span><IconEye size={12} />Allow Code Changes</span><Badge variant="light">{previewSafety['Allow Code Changes'] ? 'Allowed' : 'Restricted'}</Badge></div><div><span><IconActivity size={12} />Data Retention</span><b>30 days</b></div></div>
+                    <div className="agents-preview-safety">{safety.map(({ label, state, tone }) => <div key={label}>
+                      <span>{tone === 'enabled' ? <IconShieldCheck size={12} /> : tone === 'restricted' ? <IconEye size={12} /> : <IconActivity size={12} />}{label}</span>
+                      {tone === 'plain' ? <b>{state}</b>
+                        : <Badge className={tone === 'enabled' ? 'agents-permission-enabled' : undefined} variant="light">{state}</Badge>}
+                    </div>)}</div>
                   </PanelCard>
-                </div> : <AgentExecutionOverview tools={selected.tools} />}
-                {sampleMode && <div className="agents-preview-bottom">
+                </div>
+                <div className="agents-preview-bottom">
                   <PanelCard className="agents-overview-card" withBorder><PanelHeading title="Run History (Recent)" actions={<button type="button" className="agents-preview-link"
                     onClick={() => setDetailTab('history')}>View All Runs →</button>} />
-                    <div className="agents-preview-run-table-wrap" role="region"
-                      aria-label="Recent illustrative agent runs" tabIndex={0}>
+                    <div className="agents-preview-run-table-wrap" role="region" aria-label="Recent agent runs" tabIndex={0}>
                       <table className="agents-preview-run-table">
                         <thead><tr>
                           <th>Run ID</th><th>Trigger</th><th>Input</th><th>Status</th><th>Duration</th><th>Cost</th><th>Time</th>
                         </tr></thead>
                         <tbody>
-                          <tr>
-                            <td>PR #4827</td><td>PR Review</td><td>feat/auth-improvements</td><td><b>Success</b></td>
-                            <td>7.9s</td><td>$0.42</td><td>2m ago</td>
-                          </tr>
-                          <tr>
-                            <td>PR #4819</td><td>PR Review</td><td>fix/rate-limit-edgecase</td><td><b>Success</b></td>
-                            <td>8.4s</td><td>$0.39</td><td>18m ago</td>
-                          </tr>
-                          <tr>
-                            <td>PR #4812</td><td>Scheduled</td><td>main (daily)</td><td><b>Success</b></td>
-                            <td>9.1s</td><td>$0.41</td><td>1h ago</td>
-                          </tr>
+                          {recentRuns.map((run) => <tr key={run.id}>
+                            <td>{run.label}</td><td>{run.trigger}</td><td title={run.input}>{run.input}</td>
+                            <td><b className={run.status.toLowerCase()}>{run.status}</b></td>
+                            <td>{run.duration}</td><td>{run.cost}</td><td>{run.time}</td>
+                          </tr>)}
+                          {!recentRuns.length && <tr><td colSpan={7}>
+                            {source.runsLoading ? 'Loading agent runs…' : source.runsError ? 'Agent run history is unavailable.'
+                              : 'No runs recorded for this profile.'}</td></tr>}
                         </tbody>
                       </table>
                     </div>
@@ -677,21 +468,23 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                       <Menu.Item onClick={() => setPerformanceRange('Last 30 Days')}>Last 30 Days</Menu.Item></Menu.Dropdown>
                   </Menu>} />
                     <div className="agents-preview-chart-legend"><span><i className="success" />Success Rate</span><span><i className="cost" />Cost (USD)</span><span><i className="latency" />Latency (s)</span></div>
-                    <CompositeChart h={72} data={performanceTrend} dataKey="date" series={[
+                    {trend.points.length ? <CompositeChart h={72} data={trend.points} dataKey="date" series={[
                       { name: 'success', type: 'line', color: 'teal.4', label: 'Success Rate' },
                       { name: 'cost', type: 'line', color: 'violet.5', label: 'Cost (USD)', yAxisId: 'right' },
                       { name: 'latency', type: 'line', color: 'blue.4', label: 'Latency (s)', yAxisId: 'latency' },
-                    ]} withRightYAxis
-                      yAxisProps={{ domain: [90, 100], ticks: [90, 92, 94, 96, 98, 100],
-                        tick: { fill: '#9691a8', fontSize: 7 }, tickFormatter: (value) => `${value}%`, interval: 0, width: 24 }}
-                      rightYAxisProps={{ domain: [0.4, 1.2], ticks: [0.4, 0.6, 0.8, 1, 1.2],
-                        tick: { fill: '#9691a8', fontSize: 7 }, tickFormatter: (value) => `$${Number(value).toFixed(1)}`, interval: 0, width: 31 }}
-                      xAxisProps={{ tick: { fill: '#9691a8', fontSize: 7 }, interval: 3 }} gridAxis="xy" withDots
-                      aria-label={`Mock agent success, cost, and latency trends · ${performanceRange}`}>
-                      <YAxis yAxisId="latency" orientation="right" domain={[0.8, 1.9]} hide />
-                    </CompositeChart>
+                    ]} withRightYAxis connectNulls
+                      yAxisProps={{ domain: trend.successDomain, ticks: evenTicks(trend.successDomain, 6),
+                        tick: axisTick, tickFormatter: (value) => `${value}%`, interval: 0, width: 24 }}
+                      rightYAxisProps={{ ...(trend.costDomain && { domain: trend.costDomain, ticks: evenTicks(trend.costDomain, 5) }),
+                        tick: axisTick, tickFormatter: (value) => `$${Number(value).toFixed(1)}`, interval: 0, width: 31 }}
+                      xAxisProps={{ tick: axisTick, interval: trend.points.length > 6 ? 3 : 0 }} gridAxis="xy" withDots
+                      aria-label={`${view.chartLabels.trend} · ${performanceRange}`}>
+                      <YAxis yAxisId="latency" orientation="right" domain={trend.latencyDomain ?? ['auto', 'auto']} hide />
+                    </CompositeChart> : <p className="agents-card-note">{source.runsLoading ? 'Loading performance data…'
+                      : source.runsError ? 'Performance data is unavailable.'
+                        : `No runs recorded for this profile in the ${performanceRange.toLowerCase()}.`}</p>}
                   </PanelCard>
-                </div>}
+                </div>
               </Tabs.Panel>
               <Tabs.Panel value="prompts" pt="sm">
                 <div className="agents-prompts-grid">
@@ -701,10 +494,13 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                     onChange={(value) => editForm.setFieldValue('goal_prompt', value)} />
                 </div>
               </Tabs.Panel>
-              {sampleMode && <Tabs.Panel value="variables" pt="sm"><div className="agents-preview-variable-panel"><h4>Variables available to this profile</h4><p>Values are supplied by workflow or repository context for each run.</p><code>{'{ repo_url }'}</code><code>{'{ diff }'}</code><code>{'{ standards }'}</code></div></Tabs.Panel>}
+              <Tabs.Panel value="variables" pt="sm"><div className="agents-preview-variable-panel">
+                <h4>Variables available to this profile</h4><p>{view.notes.variables}</p>
+                {view.variables.map(({ name }) => <code key={name}>{`{ ${name} }`}</code>)}
+              </div></Tabs.Panel>
               <Tabs.Panel value="tools" pt="sm">
                 <div className="agents-tools-block"><div><h4>Tool permissions</h4>
-                  <p>Code writes stay on the isolated run branch. Test execution is not enabled yet.</p></div>
+                  <p>Code writes stay on the isolated run branch. Tests run only for profiles granted “Run tests”.</p></div>
                   <Checkbox.Group {...editForm.getInputProps('tools')}>
                     <div className="agents-tool-options">
                       {toolOptions.map((tool) => <Checkbox key={tool.value} value={tool.value} label={tool.label} disabled={!isEditing} />)}
@@ -712,48 +508,45 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                   </Checkbox.Group>
                 </div>
               </Tabs.Panel>
-              {sampleMode && <Tabs.Panel value="safety" pt="sm"><div className="agents-preview-variable-panel"><h4>Safety &amp; Governance</h4><p>Changes apply to this preview only.</p>{Object.entries(previewSafety).map(([label, checked]) => <Checkbox key={label} label={label} checked={checked}
-                onChange={(event) => setPreviewSafety((current) => ({ ...current, [label]: event.currentTarget.checked }))} />)}</div></Tabs.Panel>}
+              <Tabs.Panel value="safety" pt="sm"><div className="agents-preview-variable-panel">
+                <h4>Safety &amp; Governance</h4><p>{view.notes.safety}</p>
+                {safety.map(({ label, state, onToggle }) => onToggle
+                  ? <Checkbox key={label} label={label} checked={state === 'Enabled' || state === 'Allowed'}
+                    onChange={(event) => onToggle(event.currentTarget.checked)} />
+                  : <div className="agents-preview-variable" key={label}><span>{label}</span><small>{state}</small></div>)}
+              </div></Tabs.Panel>
               <Tabs.Panel value="history" pt="sm">
-                {sampleMode && <div className="agents-preview-variable-panel">Illustrative local preview · simulated runs are not submitted.</div>}
-                {runsLoading ? <div className="agents-run-empty">Loading agent runs…</div>
-                  : runsError ? <div className="agents-run-empty">Agent run history is unavailable.</div>
+                {view.notes.history && <div className="agents-preview-variable-panel">{view.notes.history}</div>}
+                {source.runsLoading ? <div className="agents-run-empty">Loading agent runs…</div>
+                  : source.runsError ? <div className="agents-run-empty">Agent run history is unavailable.</div>
                     : selectedRuns.length ? <div className="agents-runs-list">
                       {selectedRuns.slice(0, 8).map((run) => <AgentRunRow run={run} key={run.id} />)}
                     </div> : <div className="agents-run-empty">No runs recorded for this profile.</div>}
               </Tabs.Panel>
-              {sampleMode && <Tabs.Panel value="versions" pt="sm"><div className="agents-preview-variable-panel"><h4>Profile versions</h4>{previewProfileVersions.map((version, index) => <div className="agents-preview-variable" key={version}><span>{version}{version === selectedPreviewVersion ? ' · Selected' : ''}</span><small>Updated {['Jan 26, 2025', 'Jan 20, 2025', 'Jan 12, 2025'][index]}</small></div>)}</div></Tabs.Panel>}
+              <Tabs.Panel value="versions" pt="sm"><div className="agents-preview-variable-panel"><h4>Profile versions</h4>
+                {view.notes.versions && <p>{view.notes.versions}</p>}
+                {view.versions(selected).map((version) => <div className="agents-preview-variable" key={version.label}>
+                  <span>{version.label}{version.selected ? ' · Selected' : ''}</span><small>{version.updated}</small></div>)}
+              </div></Tabs.Panel>
             </Tabs>
             {isEditing && <div className="agents-form-status">
-              {submitError && <Text className="agents-error">{submitError}</Text>}
-              <Button className="agents-save-button" type="submit" loading={updateAgent.isPending}>Save profile</Button>
+              {submitError && <Text className="agents-error" role="alert">{submitError}</Text>}
+              <Button variant="default" type="button" onClick={() => { resetEditForm(); setIsEditing(false); }}>Cancel</Button>
+              <Button className="agents-save-button" type="submit" loading={source.saving}>Save profile</Button>
             </div>}
           </form>
         </> : <div className="agents-detail-empty"><IconRobot size={26} /><h3>Agent profile</h3>
           <p>Select a profile or create one to manage prompts and tool permissions.</p></div>}
       </PanelCard>
-      {!sampleMode && <div className="agents-bottom-panels">
-        <PanelCard className="agents-runs-panel" withBorder>
-          <PanelHeading className="agents-panel-heading" title="Run history" description="Live control-plane status"
-            actions={<Badge className="agents-count" variant="light">{runs.data?.length ?? 0}</Badge>} />
-          {runsLoading ? <div className="agents-run-empty">Loading agent runs…</div> : runsError ? (
-            <div className="agents-run-empty">Agent run history is unavailable.</div>
-          ) : runItems.length ? <div className="agents-runs-list">
-            {runItems.slice(0, 8).map((run) => <AgentRunRow run={run} key={run.id} />)}
-          </div> : <div className="agents-run-empty">No agent runs recorded. Configure an OpenAI-compatible endpoint on a worker to enable execution.</div>}
-        </PanelCard>
-        <AgentPerformanceTrend runs={selectedRuns30d} isLoading={runsLoading} isError={runsError} />
-      </div>}
     </div>
     </div>
     <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="Create agent profile" centered>
       <form onSubmit={createForm.onSubmit((values) => {
-        const profile = inputSchema.parse(values);
-        if (sampleMode) {
-          const item = agentSchema.parse({ ...profile, id: crypto.randomUUID(), version: 1, updated_at: new Date().toISOString() });
-          setPreviewItems((current) => [...current, item]); setSelectedID(item.id); setCreateOpen(false); createForm.reset(); setDetailTab('overview');
-          setPreviewNotice('Agent profile added to this preview only');
-        } else createAgent.mutate(profile);
+        source.create(agentInputSchema.parse(values)).then((item) => {
+          setCreateOpen(false);
+          createForm.reset();
+          openProfile(item, `${item.name} created`);
+        }).catch((error: unknown) => setSubmitError(message(error)));
       })}>
         <TextInput
           label="Profile name" placeholder="e.g. Code Reviewer" required {...createForm.getInputProps('name')}
@@ -783,10 +576,10 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
             </div>
           </Checkbox.Group>
         </div>
-        {submitError && <Text className="agents-error">{submitError}</Text>}
+        {submitError && <Text className="agents-error" role="alert">{submitError}</Text>}
         <div className="agents-modal-actions">
           <Button variant="subtle" type="button" onClick={() => setCreateOpen(false)}>Cancel</Button>
-          <Button className="agents-save-button" type="submit" loading={createAgent.isPending}>
+          <Button className="agents-save-button" type="submit" loading={source.saving}>
             Create profile
           </Button>
         </div>

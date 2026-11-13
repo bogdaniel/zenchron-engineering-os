@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { IconActivity, IconBook2, IconBrandGithub, IconSearch, IconShieldCheck } from '@tabler/icons-react';
-import type { Agent, AgentRun } from './agents';
+import { agentSchema, type Agent, type AgentInput, type AgentRun } from './agentsData';
+import type { AgentsSource, AgentsView } from './agentsView';
 
 // shortcut: visual-only mock profiles, replace their values after the agent schema is approved.
 const updatedAt = new Date().toISOString();
@@ -119,3 +120,147 @@ export const agentsPreviewListMetrics: Record<string, { lastRun: string; cost: s
   'preview-research-analyst': { lastRun: 'Last run: 3h ago', cost: '$0.38', success: '94.2%' },
   'preview-coverage-analyzer': { lastRun: 'Last run: 1h ago', cost: '$0.21', success: '95.4%' },
 };
+
+const previewVersions = [
+  { label: 'v2.4.1', updated: 'Jan 26, 2025' }, { label: 'v2.4.0', updated: 'Jan 20, 2025' },
+  { label: 'v2.3.8', updated: 'Jan 12, 2025' },
+];
+const previewOwners = ['Platform Engineering', 'AI Platform'];
+const previewRecentRuns = [
+  { id: 'preview-recent-1', label: 'PR #4827', trigger: 'PR Review', input: 'feat/auth-improvements', status: 'Success', duration: '7.9s', cost: '$0.42', time: '2m ago' },
+  { id: 'preview-recent-2', label: 'PR #4819', trigger: 'PR Review', input: 'fix/rate-limit-edgecase', status: 'Success', duration: '8.4s', cost: '$0.39', time: '18m ago' },
+  { id: 'preview-recent-3', label: 'PR #4812', trigger: 'Scheduled', input: 'main (daily)', status: 'Success', duration: '9.1s', cost: '$0.41', time: '1h ago' },
+];
+
+/** The Agents page's Mock data source: the approved fixtures, changed only in this browser tab. */
+export function useMockAgents(): AgentsSource {
+  const [items, setItems] = useState<Agent[]>(agentsPreviewProfiles);
+  const [runs, setRuns] = useState<AgentRun[]>(agentsPreviewRuns);
+  const [owners, setOwners] = useState<Record<string, string>>({});
+  const [versions, setVersions] = useState<Record<string, string>>({});
+  const [safety, setSafety] = useState<Record<string, boolean>>({
+    'Content Safety': true, 'PII/Secret Detection': true, 'Policy Compliance': true, 'Allow Code Changes': false,
+  });
+  const patch = (id: string, change: Partial<Agent>) => setItems((current) => current.map((item) =>
+    item.id === id ? agentSchema.parse({ ...item, ...change }) : item));
+  const modelOptions = agentsPreviewProfiles.map((agent) => ({ value: agent.id, label: `${agent.model} · ${agent.provider}` }));
+  const view: AgentsView = {
+    dataLabel: 'ILLUSTRATIVE DATA',
+    chartLabels: { trend: 'Mock agent success, cost, and latency trends', sparkline: 'Illustrative performance trend' },
+    exportName: 'agents-preview.json',
+    kpis: {
+      total: { value: items.length, change: '↑ +2' },
+      active: { value: items.filter((item) => item.status === 'active').length, change: '↑ +1' },
+      runs: { value: '1,842', change: '↑ +18%' },
+      success: { value: '96.7%', change: '↑ +1.9pp' },
+      cost: { value: '$412.36', change: '↓ -12%' },
+    },
+    row: (agent) => ({
+      provider: `${agent.model} · ${agent.provider}`,
+      lastRun: agentsPreviewListMetrics[agent.id]?.lastRun ?? 'No runs yet',
+      cost: agentsPreviewListMetrics[agent.id]?.cost ?? '—',
+      success: agentsPreviewListMetrics[agent.id]?.success ?? '—',
+      tags: agentsPreviewTags[agent.id] ?? agent.tools,
+      status: agent.id === 'preview-research-analyst' && agent.status === 'disabled' ? 'idle' : agent.status,
+    }),
+    fields: (agent) => ({
+      modelProvider: {
+        value: agentsPreviewProfiles.find((item) => item.model === agent.model && item.provider === agent.provider)?.id ?? agent.id,
+        options: modelOptions,
+        onChange: (id) => {
+          const chosen = agentsPreviewProfiles.find((item) => item.id === id);
+          if (chosen) patch(agent.id, { model: chosen.model, provider: chosen.provider });
+        },
+      },
+      version: {
+        value: versions[agent.id] ?? previewVersions[0].label, options: previewVersions.map(({ label }) => ({ value: label, label })),
+        onChange: (version) => setVersions((current) => ({ ...current, [agent.id]: version })),
+      },
+      status: {
+        value: agent.status, options: [{ value: 'active', label: 'Active' }, { value: 'disabled', label: 'Disabled' }],
+        onChange: (status) => { if (status === 'active' || status === 'disabled') patch(agent.id, { status }); },
+      },
+      owner: {
+        value: owners[agent.id] ?? previewOwners[0], options: previewOwners.map((owner) => ({ value: owner, label: owner })),
+        onChange: (owner) => setOwners((current) => ({ ...current, [agent.id]: owner })),
+      },
+      created: 'Jan 12, 2025',
+      updated: 'Jan 26, 2025, 10:24 AM',
+    }),
+    performance: () => ({
+      runs: { value: '482', change: '↑ +21%' }, success: { value: '98.4%', change: '↑ +1.6pp' },
+      latency: { value: '8.7s', change: '↓ -18%' }, cost: { value: '$203.86', change: '↓ -14%' },
+      sparkline: agentsPreviewTrend.map(({ success }) => success - 90),
+    }),
+    trend: (_agent, days) => ({
+      points: days === 7 ? agentsPreviewTrend.slice(-3) : agentsPreviewTrend, successDomain: [90, 100], costDomain: [0.4, 1.2],
+      latencyDomain: [0.8, 1.9],
+    }),
+    recentRuns: () => previewRecentRuns,
+    variables: [
+      { name: 'repo_url', description: 'Git repository URL or PR link' }, { name: 'diff', description: 'Code diff or change set' },
+      { name: 'standards', description: 'Engineering standards' },
+    ],
+    templates: ['Default Review'],
+    notes: {
+      variables: 'Values are supplied by workflow or repository context for each run.',
+      safety: 'Changes apply to this preview only.',
+      history: 'Illustrative local preview · simulated runs are not submitted.',
+    },
+    toolPermissions: () => agentsPreviewTools.map((tool, index) => ({ ...tool, enabled: index < 4 })),
+    safety: () => [
+      ...['Content Safety', 'PII/Secret Detection', 'Policy Compliance'].map((label) => ({
+        label, state: safety[label] ? 'Enabled' : 'Disabled', tone: 'enabled' as const,
+        onToggle: (enabled: boolean) => setSafety((current) => ({ ...current, [label]: enabled })),
+      })),
+      {
+        label: 'Allow Code Changes', state: safety['Allow Code Changes'] ? 'Allowed' : 'Restricted', tone: 'restricted' as const,
+        onToggle: (enabled: boolean) => setSafety((current) => ({ ...current, 'Allow Code Changes': enabled })),
+      },
+      { label: 'Data Retention', state: '30 days', tone: 'plain' as const },
+    ],
+    versions: (agent) => previewVersions.map((version) => ({
+      ...version, updated: `Updated ${version.updated}`, selected: version.label === (versions[agent.id] ?? previewVersions[0].label),
+    })),
+    mobile: {
+      metrics: {
+        runs: { value: '18', change: '↑ +4' }, reviews: { value: '42', change: '↑ +27%' }, evidence: { value: '99.4%' },
+      },
+      runs: [
+        { id: 'mobile-1', name: 'Code Reviewer', detail: 'PR #4827 · Review and comment', status: 'Success', time: '2m ago' },
+        { id: 'mobile-2', name: 'Test Generator', detail: 'Generate unit and integration tests', status: 'Success', time: '4m ago' },
+        { id: 'mobile-3', name: 'Coverage Analyzer', detail: 'Analyze coverage and gaps', status: 'Success', time: '7m ago' },
+      ],
+      review: { title: 'PR #4827', badge: '✓ Approved', detail: 'Add usage analytics (v1.3)', added: '+12', removed: '−3' },
+      evidence: { title: 'Trusted-main', detail: 'Evidence · Test results · Reviews · Traces', badge: 'Healthy' },
+    },
+  };
+  const add = (input: AgentInput, name = input.name) => {
+    const item = agentSchema.parse({ ...input, name, id: crypto.randomUUID(), version: 1, updated_at: new Date().toISOString() });
+    setItems((current) => [...current, item]);
+    return Promise.resolve(item);
+  };
+  return {
+    items, runs, view, profilesLoading: false, profilesError: false, runsLoading: false, runsError: false, saving: false,
+    savedSuffix: ' in this preview only',
+    create: (input) => add(input),
+    update: (id, input) => {
+      const current = items.find((item) => item.id === id);
+      const updated = agentSchema.parse({ ...current, ...input, id, version: (current?.version ?? 0) + 1, updated_at: new Date().toISOString() });
+      setItems((list) => list.map((item) => item.id === id ? updated : item));
+      return Promise.resolve(updated);
+    },
+    importProfiles: setItems,
+    simulateRun: (agent) => {
+      const now = new Date().toISOString();
+      setRuns((current) => [{
+        id: crypto.randomUUID(), agent_id: agent.id, agent_name: agent.name, project_id: 'preview-project',
+        project_name: 'Illustrative project', worker_id: 'preview-worker', worker_name: 'Preview worker',
+        branch: 'preview/simulated-run', prompt: 'SIMULATED · local preview run', output: 'Illustrative run only.',
+        status: 'succeeded', attempts: 1, created_at: now, updated_at: now, diff_available: false,
+        diff_attempt: 0, diff_truncated: false, pull_request_enabled: false, can_request_changes: false,
+        cancel_requested: false, review_comments: [],
+      }, ...current]);
+    },
+  };
+}

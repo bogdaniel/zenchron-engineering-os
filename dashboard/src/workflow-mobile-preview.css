@@ -26,5 +26,6 @@
   .workflow-mobile-approval-row b { overflow: hidden; font-size: 10px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
   .workflow-mobile-approval-row small { color: #aaa3b7; font-size: 10px; white-space: nowrap; }
   .workflow-mobile-approval-row .mantine-Button-root { min-height: 23px; height: 23px; padding: 0 7px; border: 1px solid #9c50e4; border-radius: 6px; color: #fff; background: #602b98; font-size: 9px; }
-  .workflow-mobile-approval-row .mantine-Button-root:disabled { opacity: 1; }
+  .workflow-mobile-idle { flex: 0 0 auto; min-height: 20px; padding: 0 7px; border: 1px solid #4c455c; border-radius: 10px; color: #c2bccd; background: #282434; font-size: 9px; }
+  .workflow-mobile-run-empty { margin: 0; color: #aaa3b7; font-size: 10px; }
 }

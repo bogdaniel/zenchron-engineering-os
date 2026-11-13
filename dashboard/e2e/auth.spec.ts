@@ -41,12 +41,15 @@ test('keeps the dashboard shell visible until a failed session check can be retr
   expect(protectedRequests).toBeGreaterThan(0);
 });
 
-test('local dashboard has a direct sign-in screen and explains when OAuth is unconfigured', async ({ page }) => {
+test('local dashboard has a direct sign-in screen and explains when OAuth is unconfigured', async ({ page, baseURL }) => {
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }) }));
-  await page.goto('http://127.0.0.1:4173/');
+  // The local origin on the suite's own port, so this never tests another checkout's server.
+  const local = new URL(baseURL!);
+  local.hostname = '127.0.0.1';
+  await page.goto(`${local.origin}/`);
   await page.getByRole('link', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL('http://127.0.0.1:4173/#login');
+  await expect(page).toHaveURL(`${local.origin}/#login`);
   await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeDisabled();
   await expect(page.getByText('GitHub sign-in is not configured in this local preview.')).toBeVisible();

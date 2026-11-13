@@ -15,6 +15,11 @@ manual-review preview; focused tests use their own temporary ports. The preview 
 Ctrl+C. Set `ZENCHRON_LISTEN_ADDR`, `ZENCHRON_DASHBOARD_PORT`, `ZENCHRON_PROJECTS_ROOT`, or `ZENCHRON_DATA_DIR`
 before launch to change the local setup.
 
+On a local address the dashboard opens in **Mock** mode, which shows the approved sample data and never writes to the
+control plane. Choose **Live** in the sidebar, or open <http://127.0.0.1:4173/?mode=live>, to work with the control
+plane's real data; `?mode=mock` returns to the sample data. Both modes render the same pages. On any other host the
+dashboard is always Live and has no selector.
+
 To enable queued agent runs, set an OpenAI-compatible Chat Completions endpoint before starting the preview. The
 root `./dev.sh` passes these settings only to the local worker; the API and dashboard do not inherit the model key. Keep
 the optional API key on the worker machine, use HTTPS for remote endpoints, and loopback HTTP for local models:
@@ -78,7 +83,8 @@ Feature docs:
 - [One-command local preview](docs/features/local-preview.md)
 - [GitHub issue sync and pull-request reviews](docs/features/github-review-sync.md)
 
-See [Backend architecture and decisions](docs/architecture/backend-architecture.md) for component ownership, the
+See [One dashboard, two data modes](docs/architecture/dashboard-modes.md) for how Mock and Live share one layout, and
+[Backend architecture and decisions](docs/architecture/backend-architecture.md) for component ownership, the
 control-plane and worker boundary, and what is not implemented, and the
 [Control plane roadmap](docs/architecture/roadmap.md) for delivery phases and acceptance evidence.
 
