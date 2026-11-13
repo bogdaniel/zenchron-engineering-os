@@ -61,15 +61,15 @@ loaders).
 | Agents | One layout | `AgentsSource` | Runs, success rate, duration, and provider-reported cost from real runs; owner, created date, variables, templates, and earlier versions are Unavailable; safety lists the worker's real safeguards; import is disabled |
 | Overview | One layout | `OverviewSource` | Open objectives and their progress, running agents, online workers, the open PR queue, CI pass rate, recent activity, the last three agent runs, the latest local branch diff with its first changed lines, the saved workflow's stages, and merged-PR, cycle-time, and CI-duration charts are real; budget, plan approvals, trusted-main and evidence health, the sprint timeline, workflow execution, KPI trend deltas, sparklines, and the PR bars are Unavailable, empty, or left out |
 | Objectives | One layout | `ObjectivesSource` | Objectives, their owner, product, status, progress, and due date, the status counts, completed count and completion share, and the plan summary (target, created, and last-updated dates) are real, and objectives are created and edited through the API; approval, linked workflows, blockers, acceptance criteria, related PRs, activity, milestones, the capacity chart, and the KPI trend graphics are Unavailable or left out; favorites are disabled |
-| Workflows | Pending | | |
+| Workflows | One layout | `WorkflowsSource` | Saved workflows, their graph, name, description, status, and version are real, and workflows are created, edited, laid out, validated, and saved through the API; the Run Preview, the run timeline, runs, schedules, permissions, approvals, earlier versions, publishing, and component settings beyond name and description are Unavailable or empty with the reason; Run, Publish, Simulate Run, and every control on those tabs are disabled; no component carries a passed-step marker |
 | Projects | Single layout already; no fixtures | | |
 | Product Workspace | One layout | `WorkspaceSource` | Products, linked repositories with worker and branch, repository health, objectives, the roadmap (bars run from an objective's creation to its due date), workflow definitions, and agent profiles are real, and products are created and edited through the API; files, stakeholders, release streams, decisions, delivery metrics, and every trend graphic are Unavailable with the reason; favorites and the delivery range are disabled |
 | Reviews | One layout | `ReviewsSource` | Open pull requests and issues of a connected GitHub checkout, their state, author, branch, and date, the pull-request diff with its file and line counts, the base branch, agent-run branches with their diff, comments, and evidence, and the counts on the queue tabs are real; GitHub comments, reviews, issue close / reopen, run comments, request changes, and cancel go through the API; review time, merge rate, policy gate pass, commits, risk, evidence completeness, required checks, merge strategy, policy, AI suggestions, artifacts, checklist, approvals, and trusted-main readiness are Unavailable; trend graphics, card signals, and the inline discussion are left out; New PR, Approve, Merge, Export evidence, bookmarks, the date range, and Auto-merge are disabled with the reason |
 | Integrations and Settings | One layout | `SystemSource` | Control plane health, worker heartbeats and coding CLIs, GitHub checkouts, the worker model endpoint, and session auth are real; GitLab, Slack, Linear / Jira, Docker / Registry, and Google are Not connected; profile, policies, roles, budgets, secrets, controller limits, notification rules, and audit are Unavailable or empty with a note; every write control is disabled |
 | Reports | One layout | `ReportsSource` | Delivery velocity, cycle time, acceptance rate, and work outcomes from GitHub pull-request history, CI duration with its distribution and p50 / p95 from GitHub Actions history, agent spend from the cost providers report on agent runs, objective, run, worker, and source insights, the product and workspace summary tables, and four CSV exports are real and follow the report scope; review latency and autonomous completion are Unavailable with the reason and their percentile buttons are disabled; KPI trend deltas, the autonomy series, the summary total rows, and PDF / XLSX exports are left out; the Workflow filter is disabled because runs carry no workflow ID; a chart with no complete history shows an empty plot with the reason |
 
-"Pending" pages still switch between two layouts with the mode; the shell marks migrated pages in `unifiedPages`
-until the list is empty.
+No page is pending. The shell still lists the migrated pages in `unifiedPages` (every page except Projects, which
+never had a second layout) until that list is removed.
 
 ## Removed with the Agents migration
 
@@ -164,6 +164,32 @@ until the list is empty.
 - The fixture-name icon table in `ReportSummaries.tsx`; a summary row carries its own icon.
 - "Agent Spend: Unavailable" for every run. Live adds up the cost providers reported on the scoped runs.
 
+## Removed with the Workflows migration
+
+- The mode branches in `workflows.tsx` (61 lines naming `designPreview`, now 15: four in `WorkflowsPage` for the prop,
+  the two source picks, and the phone overview graph; the rest are the shared `WorkflowOverview` panel and an import).
+  The page is `workflows.tsx` (state, heading, canvas, inspector), `WorkflowPalette.tsx`, `WorkflowRun.tsx`,
+  `WorkflowNodeSettings.tsx`, and `WorkflowSections.tsx`; `workflowsView.ts` holds `WorkflowsSource` and
+  `useLiveWorkflows`; `workflow-preview-data.ts` holds the fixtures and `useMockWorkflows`.
+- `WorkflowDesignPreview.tsx`, `WorkflowMobileRunPreview.tsx`, and `WorkflowSectionsPreview.tsx` as fixture-only
+  components; their markup is now data-driven and their fixtures are in `workflow-preview-data.ts`.
+- The Live-only canvas bar (the workflow `Select`, "New Workflow", "Auto layout"), React Flow's `Controls` and
+  `Background`, the full-width status row with "Runner not connected", and the "ORCHESTRATION" eyebrow. Switching,
+  creating, and auto layout are in the workflow menu on the version badge.
+- The Live-only inspector tail: the "Delete component" button (now in the Component options menu), the "Workflow
+  settings" disclosure (name, description, and status are edited on the Settings tab), and the "Version N · saved to
+  local control plane" hint (the version badge and the Versions tab).
+- The Live-only Run Preview body ("Runner unavailable" badge, the empty panel, the Graph definition summary) and the
+  Live-only phone summary, task list, and approval state; the design's paused panel and phone cards carry those facts.
+- The disabled Runs, Versions, Schedules, Permissions, and Settings tabs in Live; each opens the design's frame.
+- CSS only those used: `workflow-select`, `workflow-canvas-actions`, `workflow-settings`, `workflow-field`,
+  `workflow-divider`, `workflow-preview-empty`, `workflow-preview-summary`, `workflow-mobile-summary`,
+  `workflow-mobile-details`, `workflow-mobile-detail-panel`, `workflow-mobile-task-list`, `workflow-mobile-task-row`,
+  `workflow-mobile-approval-state`, `.workflow-status small`, the React Flow controls rules, and the disabled
+  section-tab rule.
+- The Mock refusal to create a workflow: Mock adds one in the tab and says "in this preview only".
+- The 190×110 card size passed to ELK; saved graphs are laid out with the compact card sizes the design draws.
+
 ## Removed with the Overview migration
 
 - The mode branches in `OverviewPage.tsx` (37 `sampleData` references, now one that picks the source). Fixtures moved
@@ -215,6 +241,13 @@ until the list is empty.
   the four CSV exports, and the phone layout. `reports-preview.spec.ts`: the same frame in Mock with local scope and
   no API traffic. `home.spec.ts`: Reports against the real control plane. Approved and Mock were pixel-compared at
   1672×941, 1672×749, 1512×874, 1440×900, 1280×800, 1024×768, and 390×844 and are identical.
+- `dashboard/e2e/workflows-live.spec.ts`: the Workflows frame in Live with the saved graph laid out automatically, the
+  workflow menu, real add, rename, delete, drag placement, save, create, and the Settings rename with their request
+  bodies, honest Unavailable parts and disabled controls on every tab, failed loads, an empty list, and rejected saves
+  and creates without fixtures, and the phone run detail without overflow. `workflows.spec.ts` and
+  `workflow-mobile-preview.spec.ts`: the same frame in Mock with local-only actions and no workflow requests. Approved
+  and Mock were pixel-compared on the Builder at 1672×941, 1672×749, 1512×874, 1440×900, 1280×800, 1024×768, and
+  390×844, and on the five other tabs at 1672×941, 1024×768, and 390×844, and are identical.
 - `dashboard/e2e/workspace.spec.ts`: the Product Workspace frame in Live with real products, repositories, objectives,
   and roadmap; honest unavailable panels and disabled controls; product edit through `PUT /api/v1/products/{id}`;
   product switching on a phone; empty and failed product lists. `workspace-preview.spec.ts`: the same layout in Mock
