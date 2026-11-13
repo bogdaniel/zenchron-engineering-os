@@ -59,7 +59,7 @@ loaders).
 |---|---|---|---|
 | Shell | One shell | `main.tsx` | Signed-in login and avatar instead of the sample person |
 | Agents | One layout | `AgentsSource` | Runs, success rate, duration, and provider-reported cost from real runs; owner, created date, variables, templates, and earlier versions are Unavailable; safety lists the worker's real safeguards; import is disabled |
-| Overview | Pending | | |
+| Overview | One layout | `OverviewSource` | Open objectives and their progress, running agents, online workers, the open PR queue, CI pass rate, recent activity, the last three agent runs, the latest local branch diff with its first changed lines, the saved workflow's stages, and merged-PR, cycle-time, and CI-duration charts are real; budget, plan approvals, trusted-main and evidence health, the sprint timeline, workflow execution, KPI trend deltas, sparklines, and the PR bars are Unavailable, empty, or left out |
 | Objectives | Pending | | |
 | Workflows | Pending | | |
 | Projects | Single layout already; no fixtures | | |
@@ -104,6 +104,21 @@ until the list is empty.
   editor) moved to `workspace-preview.css`.
 - The fixture-only "Add a product to this preview" dialog; both modes use `ProductEditor`.
 
+## Removed with the Overview migration
+
+- The mode branches in `OverviewPage.tsx` (37 `sampleData` references, now one that picks the source). Fixtures moved
+  to `mockOverview` in `overview-preview-data.tsx`; Live values come from `useLiveOverview` in `overviewView.tsx`.
+- The Live-only run list in Code Review (`overview-review-list` and its five rules); the latest reviewable run now
+  fills the design's review frame, with a count of reviewable diffs and the link to Reviews.
+- The Live-only workflow header ("View workflow" link, raw status badge), the `workflow-overview-status` line, and the
+  ELK layout pass for the Overview graph (`overviewNodeLayout`, "Could not arrange workflow graph"). Saved workflows
+  use the approved stage positions, glyphs, and arrows; component and connection counts and "runner not connected"
+  moved into the Workflow options menu, and the badge reads "Execution unavailable".
+- Invented Live graphics: the placeholder sparklines and PR bars the old Live cards drew from constant arrays.
+- The fixture sprint dates and "Protected · Verified · Up to date" caption that the old Live layout showed unchanged.
+- The second worker caption line in Recent Activity (`.activity-list small`); the panel shows five single-line rows
+  and All Activity lists every row.
+
 ## Verification
 
 - `dashboard/e2e/z_run_evidence.spec.ts`: "the Mock and Live switch selects the data source, keeps the page, and
@@ -116,6 +131,12 @@ until the list is empty.
 - `dashboard/e2e/system.spec.ts`: the Settings & Integrations layout in Live with real status, honest "Not connected"
   and "Unavailable" states, disabled controls, and no write requests; `integrations-preview.spec.ts`: the same layout
   in Mock.
+- `dashboard/e2e/overview-live.spec.ts`: the Overview frame in Live with real objectives, runs, activity, PR queue, CI
+  health, and analytics; honest unavailable panels; failed requests reported without fixtures; no write requests; the
+  phone summary without overflow. `overview.spec.ts`: the same layout in Mock at 1672×941, 1672×749, 1522×856, and
+  390×844. `home.spec.ts` "overview lists only agent runs with captured local diffs": the Live review frame and its
+  diff excerpt. Approved and Mock were pixel-compared at 1672×941, 1672×749, 1024×768, and 390×844 and differ only in
+  the mode selector.
 - `dashboard/e2e/workspace.spec.ts`: the Product Workspace frame in Live with real products, repositories, objectives,
   and roadmap; honest unavailable panels and disabled controls; product edit through `PUT /api/v1/products/{id}`;
   product switching on a phone; empty and failed product lists. `workspace-preview.spec.ts`: the same layout in Mock
