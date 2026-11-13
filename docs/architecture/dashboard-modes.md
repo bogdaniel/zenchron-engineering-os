@@ -66,7 +66,7 @@ loaders).
 | Product Workspace | One layout | `WorkspaceSource` | Products, linked repositories with worker and branch, repository health, objectives, the roadmap (bars run from an objective's creation to its due date), workflow definitions, and agent profiles are real, and products are created and edited through the API; files, stakeholders, release streams, decisions, delivery metrics, and every trend graphic are Unavailable with the reason; favorites and the delivery range are disabled |
 | Reviews | One layout | `ReviewsSource` | Open pull requests and issues of a connected GitHub checkout, their state, author, branch, and date, the pull-request diff with its file and line counts, the base branch, agent-run branches with their diff, comments, and evidence, and the counts on the queue tabs are real; GitHub comments, reviews, issue close / reopen, run comments, request changes, and cancel go through the API; review time, merge rate, policy gate pass, commits, risk, evidence completeness, required checks, merge strategy, policy, AI suggestions, artifacts, checklist, approvals, and trusted-main readiness are Unavailable; trend graphics, card signals, and the inline discussion are left out; New PR, Approve, Merge, Export evidence, bookmarks, the date range, and Auto-merge are disabled with the reason |
 | Integrations and Settings | One layout | `SystemSource` | Control plane health, worker heartbeats and coding CLIs, GitHub checkouts, the worker model endpoint, and session auth are real; GitLab, Slack, Linear / Jira, Docker / Registry, and Google are Not connected; profile, policies, roles, budgets, secrets, controller limits, notification rules, and audit are Unavailable or empty with a note; every write control is disabled |
-| Reports | Pending | | |
+| Reports | One layout | `ReportsSource` | Delivery velocity, cycle time, acceptance rate, and work outcomes from GitHub pull-request history, CI duration with its distribution and p50 / p95 from GitHub Actions history, agent spend from the cost providers report on agent runs, objective, run, worker, and source insights, the product and workspace summary tables, and four CSV exports are real and follow the report scope; review latency and autonomous completion are Unavailable with the reason and their percentile buttons are disabled; KPI trend deltas, the autonomy series, the summary total rows, and PDF / XLSX exports are left out; the Workflow filter is disabled because runs carry no workflow ID; a chart with no complete history shows an empty plot with the reason |
 
 "Pending" pages still switch between two layouts with the mode; the shell marks migrated pages in `unifiedPages`
 until the list is empty.
@@ -147,6 +147,23 @@ until the list is empty.
   `reviews-filter-select`), and the rule that hid the description inside the detail pane.
 - The fixed 94% width of the evidence bar; it follows the value.
 
+## Removed with the Reports migration
+
+- The mode branches in `reports.tsx` (66 `designPreview` references, now five that pick the source and mark the Mock
+  root). The page is `reports.tsx` (scope bar, KPI cards, charts, insights); `reportsView.tsx` holds `ReportsSource`
+  and `useLiveReports` with every query, scope filter, and CSV export; `reports-preview.tsx` holds the fixtures and
+  `mockReports`.
+- `UnavailableMetricsPanel` with its "Connect a source to view this chart" plot and `delivery-note` line. Review
+  Latency Trend and Agent Spend keep the design's heading, legend, and percentile buttons and show the reason in the
+  plot area.
+- The Live-only line charts (112px delivery chart without axis titles or dots, the teal acceptance line), the
+  "Completed GitHub Actions runs" legend, the SVG donut label (`report-chart-label`), the "Pull request status · range"
+  subtitle (now the caption beside the Work Outcomes title), the "Findings from the selected snapshot" subtitle, the
+  Workspace Summary footnote (`inventory-footnote`), and the "Objective owner" / "Apply filters" labels (now "Team" and
+  "Apply Filters").
+- The fixture-name icon table in `ReportSummaries.tsx`; a summary row carries its own icon.
+- "Agent Spend: Unavailable" for every run. Live adds up the cost providers reported on the scoped runs.
+
 ## Removed with the Overview migration
 
 - The mode branches in `OverviewPage.tsx` (37 `sampleData` references, now one that picks the source). Fixtures moved
@@ -192,6 +209,12 @@ until the list is empty.
   actions and no API traffic. `home.spec.ts`, `z_run_evidence.spec.ts`, and `z_agents.spec.ts`: the not-connected
   state, agent-run branches, and run evidence in that frame. Approved and Mock were pixel-compared at 1672×941,
   1672×749, 1512×874, 1440×900, 1280×800, 1024×768, and 390×844 and are identical.
+- `dashboard/e2e/reports.spec.ts`, `report-summary-metrics.spec.ts`: the Reports frame in Live with real delivery, CI,
+  outcome, and spend figures, area charts with the design's axis titles, honest Unavailable cards and empty plots,
+  disabled percentile and Workflow controls, scope apply and reset, failed and truncated histories without fixtures,
+  the four CSV exports, and the phone layout. `reports-preview.spec.ts`: the same frame in Mock with local scope and
+  no API traffic. `home.spec.ts`: Reports against the real control plane. Approved and Mock were pixel-compared at
+  1672×941, 1672×749, 1512×874, 1440×900, 1280×800, 1024×768, and 390×844 and are identical.
 - `dashboard/e2e/workspace.spec.ts`: the Product Workspace frame in Live with real products, repositories, objectives,
   and roadmap; honest unavailable panels and disabled controls; product edit through `PUT /api/v1/products/{id}`;
   product switching on a phone; empty and failed product lists. `workspace-preview.spec.ts`: the same layout in Mock
