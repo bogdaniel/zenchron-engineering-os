@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 const (
@@ -89,14 +90,31 @@ func validStoredWorktreeRequest(item worktreeRequest) bool {
 	return err == nil && len(id) == 16 && projectErr == nil && len(projectID) == 16 &&
 		workerErr == nil && len(workerID) == 16 && item.Attempts >= 0 && item.Attempts <= maxWorktreeAttempts &&
 		item.ProjectName != "" && len(item.ProjectName) <= 255 && item.WorkerName != "" && len(item.WorkerName) <= 128 &&
-		validBranchInput(item.Branch) && validBranchInput(item.BaseBranch) && validWorktreeStatus(item.Status) &&
+		validStoredBranch(item.Branch) && validStoredBranch(item.BaseBranch) && validWorktreeStatus(item.Status) &&
 		(item.Status == "preparing") == !item.LeaseUntil.IsZero() &&
 		len(item.Error) <= 255 && !item.CreatedAt.IsZero() && !item.UpdatedAt.IsZero()
 }
 
-func validBranchInput(branch string) bool {
+// Records persisted before create enforced Git's ref rules must still load, so stored branches keep the older rule.
+func validStoredBranch(branch string) bool {
 	return branch != "" && branch == strings.TrimSpace(branch) && len(branch) <= 255 &&
 		!strings.ContainsAny(branch, "\r\n")
+}
+
+// validBranchInput rejects names `git check-ref-format --branch` would refuse, before a request is queued.
+func validBranchInput(branch string) bool {
+	if !validStoredBranch(branch) || strings.HasPrefix(branch, "-") || strings.HasSuffix(branch, ".") ||
+		strings.Contains(branch, "..") || strings.Contains(branch, "@{") ||
+		strings.ContainsAny(branch, " ~^:?*[\\") || strings.ContainsFunc(branch, unicode.IsControl) {
+		return false
+	}
+	// An empty component covers a leading or trailing "/" and "//".
+	for _, component := range strings.Split(branch, "/") {
+		if component == "" || strings.HasPrefix(component, ".") || strings.HasSuffix(component, ".lock") {
+			return false
+		}
+	}
+	return true
 }
 
 func validWorktreeStatus(status string) bool {

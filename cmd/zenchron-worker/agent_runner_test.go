@@ -81,7 +81,8 @@ func newRunHarness(t *testing.T, script string, verify [][]string) *runHarness {
 			Environment: map[string]string{"ZC_TEST_CACHE": "/tmp/zc-cache"}}}},
 		providers: map[string]*cliProvider{workerapi.ProviderCodex: {
 			id: workerapi.ProviderCodex, path: binary, version: "fake 1.0", ready: true,
-			args: func(workerapi.AgentRunCommand, runWorkspace) []string { return nil }, parse: parseCodexEvent,
+			args:  func(workerapi.AgentRunCommand, runWorkspace) []string { return nil },
+			parse: func(line []byte) []cliEvent { return []cliEvent{parseCodexEvent(line)} },
 		}},
 	}
 	return harness
@@ -526,7 +527,9 @@ func TestCleanupWorktreesKeepsLockedAndModifiedWorktrees(t *testing.T) {
 func TestProviderEnvironmentRemovesWorkerAndBillingCredentials(t *testing.T) {
 	environment := providerEnvironment([]string{"PATH=/bin", "HOME=/home/dev", "ZENCHRON_WORKER_TOKEN=secret",
 		"ZENCHRON_LLM_API_KEY=secret", "GH_TOKEN=secret", "GITHUB_TOKEN=secret", "ANTHROPIC_API_KEY=secret",
-		"OPENAI_API_KEY=secret", "CODEX_API_KEY=secret"})
+		"OPENAI_API_KEY=secret", "CODEX_API_KEY=secret", "SSH_AUTH_SOCK=/tmp/agent.sock", "GH_ENTERPRISE_TOKEN=secret",
+		"GITHUB_ENTERPRISE_TOKEN=secret", "AWS_ACCESS_KEY_ID=id", "AWS_SECRET_ACCESS_KEY=secret", "AWS_SESSION_TOKEN=secret",
+		"GOOGLE_APPLICATION_CREDENTIALS=/home/dev/key.json"})
 	if strings.Join(environment, " ") != "PATH=/bin HOME=/home/dev" {
 		t.Fatalf("provider environment = %v", environment)
 	}
@@ -582,19 +585,42 @@ func TestProviderEventParsersNormalizeRecordedOutput(t *testing.T) {
 		t.Fatalf("unparseable line produced %#v", event)
 	}
 	claude := parseClaudeEvent([]byte(`{"type":"result","subtype":"success","is_error":false,"result":"ok","total_cost_usd":0.01325,` +
-		`"usage":{"input_tokens":2,"cache_creation_input_tokens":730,"cache_read_input_tokens":6970,"output_tokens":4}}`))
+		`"usage":{"input_tokens":2,"cache_creation_input_tokens":730,"cache_read_input_tokens":6970,"output_tokens":4}}`))[0]
 	if claude.output != "ok" || claude.failure != "" || claude.usage.InputTokens != 7702 || claude.usage.OutputTokens != 4 ||
 		claude.usage.CostUSD == nil || *claude.usage.CostUSD != 0.01325 {
 		t.Fatalf("claude result = %#v, usage %#v", claude, claude.usage)
 	}
-	failed := parseClaudeEvent([]byte(`{"type":"result","subtype":"error_max_turns","is_error":true,"usage":{}}`))
+	failed := parseClaudeEvent([]byte(`{"type":"result","subtype":"error_max_turns","is_error":true,"usage":{}}`))[0]
 	if failed.failure != "error_max_turns" || failed.output != "" {
 		t.Fatalf("claude failure = %#v", failed)
 	}
-	tool := parseClaudeEvent([]byte(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Edit","input":{"file_path":"/work/tree/a.txt"}}]}}`))
-	done := parseClaudeEvent([]byte(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}`))
+	tool := parseClaudeEvent([]byte(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Edit","input":{"file_path":"/work/tree/a.txt"}}]}}`))[0]
+	done := parseClaudeEvent([]byte(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}`))[0]
 	if tool.toolStarted != "t1" || tool.message != "Edit a.txt" || done.toolFinished != "t1" {
 		t.Fatalf("claude tool events = %#v / %#v", tool, done)
+	}
+	// Text before a tool start, and two tools started by one message, must all be reported.
+	mixed := parseClaudeEvent([]byte(`{"type":"assistant","message":{"content":[{"type":"text","text":"Running the tests."},` +
+		`{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"go test ./..."}},{"type":"tool_use","id":"t3","name":"Grep","input":{"pattern":"TODO"}}]}}`))
+	if len(mixed) != 3 || mixed[0].message != "Running the tests." || mixed[1].toolStarted != "t2" ||
+		mixed[1].message != "Bash go test ./..." || mixed[2].toolStarted != "t3" {
+		t.Fatalf("claude multi-block message = %#v", mixed)
+	}
+	if events := parseClaudeEvent([]byte(`not json`)); events != nil {
+		t.Fatalf("unparseable claude line produced %#v", events)
+	}
+}
+
+func TestSessionKeepsEveryToolStartedByOneLineOpen(t *testing.T) {
+	session := &cliSession{parse: parseClaudeEvent, emit: func(string, string) {}, openTools: map[string]bool{}}
+	session.handle([]byte(`{"type":"assistant","message":{"content":[{"type":"text","text":"Checking."},` +
+		`{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"sleep 600"}},{"type":"tool_use","id":"t3","name":"Grep","input":{"pattern":"x"}}]}}`))
+	if !session.openTools["t2"] || !session.openTools["t3"] {
+		t.Fatalf("open tools after a multi-block message = %v", session.openTools)
+	}
+	session.handle([]byte(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t3","content":"ok"}]}}`))
+	if !session.openTools["t2"] || session.openTools["t3"] {
+		t.Fatalf("open tools after one result = %v", session.openTools)
 	}
 }
 

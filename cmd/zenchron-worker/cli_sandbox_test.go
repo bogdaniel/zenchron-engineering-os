@@ -149,7 +149,8 @@ func TestProviderArgumentsBoundAgentPermissions(t *testing.T) {
 	if !strings.Contains(claudeWrite, "--permission-mode acceptEdits --tools Read,Edit,Write,Glob,Grep --model=gpt-test") ||
 		!strings.Contains(claudeRead, "--permission-mode default --tools Read,Glob,Grep") ||
 		strings.Contains(claudeWrite+claudeRead, "Bash") || strings.Contains(claudeWrite+claudeRead, "dangerously") ||
-		!strings.Contains(claudeRead, "--strict-mcp-config") {
+		!strings.Contains(claudeRead, "--strict-mcp-config") ||
+		!strings.Contains(claudeWrite, `--settings {"disableAllHooks":true}`) || !strings.Contains(claudeRead, `--settings {"disableAllHooks":true}`) {
 		t.Errorf("claude arguments = %s / %s", claudeWrite, claudeRead)
 	}
 	// Shell access is offered only together with settings that force every command into the sandbox.
@@ -160,7 +161,8 @@ func TestProviderArgumentsBoundAgentPermissions(t *testing.T) {
 		t.Fatalf("claude test-running arguments = %v", arguments)
 	}
 	var settings struct {
-		Sandbox struct {
+		DisableAllHooks bool `json:"disableAllHooks"`
+		Sandbox         struct {
 			Enabled                  bool  `json:"enabled"`
 			AllowUnsandboxedCommands *bool `json:"allowUnsandboxedCommands"`
 			Filesystem               struct {
@@ -168,7 +170,7 @@ func TestProviderArgumentsBoundAgentPermissions(t *testing.T) {
 			} `json:"filesystem"`
 		} `json:"sandbox"`
 	}
-	if err := json.Unmarshal([]byte(arguments[settingsIndex+1]), &settings); err != nil || !settings.Sandbox.Enabled ||
+	if err := json.Unmarshal([]byte(arguments[settingsIndex+1]), &settings); err != nil || !settings.Sandbox.Enabled || !settings.DisableAllHooks ||
 		settings.Sandbox.AllowUnsandboxedCommands == nil || *settings.Sandbox.AllowUnsandboxedCommands ||
 		!slices.Equal(settings.Sandbox.Filesystem.DenyRead, []string{home}) ||
 		!slices.Equal(settings.Sandbox.Filesystem.AllowRead, []string{"/work/tree", "/repo/.git", home + "/go/pkg/mod"}) ||

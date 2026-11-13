@@ -56,13 +56,16 @@ func (client gitHubClient) get(ctx context.Context, path string, query url.Value
 func (client gitHubClient) issueComments(ctx context.Context, owner, repository string, number int) ([]gitHubIssueComment, error) {
 	comments := make([]gitHubIssueComment, 0)
 	path := "/repos/" + owner + "/" + repository + "/issues/" + strconv.Itoa(number) + "/comments"
-	return comments, client.get(ctx, path, url.Values{"per_page": {"50"}}, &comments)
+	// Decode before returning: Go does not fix when a plain operand is read relative to a call beside it.
+	err := client.get(ctx, path, url.Values{"per_page": {"50"}}, &comments)
+	return comments, err
 }
 
 func (client gitHubClient) pullRequestReviews(ctx context.Context, owner, repository string, number int) ([]gitHubReview, error) {
 	reviews := make([]gitHubReview, 0)
 	path := "/repos/" + owner + "/" + repository + "/pulls/" + strconv.Itoa(number) + "/reviews"
-	return reviews, client.get(ctx, path, url.Values{"per_page": {"100"}}, &reviews)
+	err := client.get(ctx, path, url.Values{"per_page": {"100"}}, &reviews)
+	return reviews, err
 }
 
 func (client gitHubClient) commitCheckRuns(ctx context.Context, owner, repository, commit string) ([]gitHubCheckRun, error) {
@@ -70,7 +73,8 @@ func (client gitHubClient) commitCheckRuns(ctx context.Context, owner, repositor
 		CheckRuns []gitHubCheckRun `json:"check_runs"`
 	}
 	path := "/repos/" + owner + "/" + repository + "/commits/" + commit + "/check-runs"
-	return result.CheckRuns, client.get(ctx, path, url.Values{"per_page": {"100"}}, &result)
+	err := client.get(ctx, path, url.Values{"per_page": {"100"}}, &result)
+	return result.CheckRuns, err
 }
 
 func (client gitHubClient) createIssue(ctx context.Context, owner, repository, title, body string) (gitHubIssue, error) {
@@ -90,10 +94,15 @@ func (client gitHubClient) createIssue(ctx context.Context, owner, repository, t
 	if err != nil {
 		return issue, err
 	}
-	return issue, json.Unmarshal(response, &issue)
+	err = json.Unmarshal(response, &issue)
+	return issue, err
 }
 
 func (registry *workerRegistry) createGitHubIssue(w http.ResponseWriter, r *http.Request) {
+	if !localOrAuthorizedClient(r) {
+		http.Error(w, "GitHub issue creation is available only from a local client", http.StatusForbidden)
+		return
+	}
 	owner, repository, ok := registry.projectRepository(w, r)
 	if !ok {
 		return

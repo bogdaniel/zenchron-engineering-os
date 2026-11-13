@@ -20,6 +20,7 @@ import (
 const (
 	maxAgentRunOutputSize = 20_000
 	maxAgentRunDiffSize   = 128 << 10
+	maxClaimResponseSize  = 1 << 20
 )
 
 type agentRuntime struct {
@@ -185,8 +186,21 @@ func claimAgentRun(
 		return workerapi.AgentRunCommand{}, false, fmt.Errorf("agent run claim returned HTTP %d", response.StatusCode)
 	}
 	var command workerapi.AgentRunCommand
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&command); err != nil {
+	if err := decodeClaimResponse(response.Body, &command); err != nil {
 		return workerapi.AgentRunCommand{}, false, fmt.Errorf("decode agent run claim: %w", err)
 	}
 	return command, true, nil
+}
+
+// decodeClaimResponse rejects a body over the claim limit as a whole. A limited reader alone would let a
+// valid command followed by padding through, because the decoder stops at the end of the first value.
+func decodeClaimResponse(body io.Reader, command any) error {
+	data, err := io.ReadAll(io.LimitReader(body, maxClaimResponseSize+1))
+	if err != nil {
+		return err
+	}
+	if len(data) > maxClaimResponseSize {
+		return fmt.Errorf("claim response exceeds %d bytes", maxClaimResponseSize)
+	}
+	return json.Unmarshal(data, command)
 }

@@ -97,7 +97,9 @@ that exits successfully is therefore not reported as delivered work unless verif
   denies reading the home directory outside the worktree and the listed read paths.
 - Every provider starts under `zenchron-worker guard`. If the worker process dies for any reason, the guard stops the
   provider's whole process group within seconds, so no agent keeps editing a worktree without a worker.
-  Worker, GitHub, and provider API-key environment variables are removed, so a subscription sign-in is never replaced
+  Claude Code hooks are disabled for every run, because a project hook is a worktree script that would run outside the
+  sandbox. Worker, GitHub, SSH-agent, AWS, Google application-credential, and provider API-key environment variables
+  are removed from the provider and from verification commands, so a subscription sign-in is never replaced
   by API billing.
 - The profile's model is passed to the CLI; the model name `default` leaves the choice to the CLI's own configuration.
 - Events and the final message are redacted for known credential formats, the worker token, and local absolute paths,

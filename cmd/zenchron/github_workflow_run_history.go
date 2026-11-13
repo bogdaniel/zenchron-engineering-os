@@ -32,7 +32,7 @@ const maxWorkflowRunHistoryPages = 10
 
 func (client gitHubClient) workflowRunHistory(ctx context.Context, owner, repository string, since time.Time) (gitHubWorkflowRunHistory, error) {
 	result := gitHubWorkflowRunHistory{Items: make([]gitHubWorkflowRunHistoryItem, 0), Complete: true}
-	// shortcut: caps one report at 1,000 workflow runs; add incremental sync if repositories exceed that window.
+	// ponytail: caps one report at 1,000 workflow runs; add incremental sync if repositories exceed that window.
 	for page := 1; page <= maxWorkflowRunHistoryPages; page++ {
 		query := make(url.Values)
 		query.Set("per_page", "100")

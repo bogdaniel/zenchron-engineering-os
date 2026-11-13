@@ -32,7 +32,7 @@ const (
 	publicationNoChanges         = "no_changes"
 )
 
-// shortcut: 200 runs × 3 attempts × 128 KiB bounds diff storage; add retention if run history grows.
+// ponytail: 200 runs × 3 attempts × 128 KiB bounds diff storage; add retention if run history grows.
 
 type agentRun struct {
 	ID                 string            `json:"id"`

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
@@ -53,8 +54,8 @@ func run() error {
 	if name == "" {
 		name = hostname
 	}
-	if name == "" || len(name) > 128 {
-		return fmt.Errorf("worker name must be between 1 and 128 bytes")
+	if err := validateWorkerName(name); err != nil {
+		return err
 	}
 	identity, err := os.UserConfigDir()
 	if err != nil {
@@ -155,6 +156,18 @@ func runWorktreeCleanup(ctx context.Context, projectsRoot, workerID string, conf
 		fmt.Println("kept " + label)
 	}
 	return err
+}
+
+func validateWorkerName(name string) error {
+	if name == "" || len(name) > 128 {
+		return fmt.Errorf("worker name must be between 1 and 128 bytes")
+	}
+	for _, character := range name {
+		if unicode.IsControl(character) {
+			return fmt.Errorf("worker name must not contain control characters")
+		}
+	}
+	return nil
 }
 
 func isLoopbackWorkerHost(host string) bool {
