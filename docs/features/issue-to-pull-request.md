@@ -18,7 +18,7 @@ sequenceDiagram
   participant Tree as Run worktree
   participant CLI as Codex or Claude Code CLI
   participant Remote as GitHub Git remote
-  User->>UI: Agents > Queue run: choose project and GitHub issue
+  User->>UI: Agents > Run Agent: choose project and GitHub issue
   UI->>API: GET /api/v1/projects/{id}/issues, GET /api/v1/workers
   UI->>API: POST /api/v1/agent-runs {agent_id, project_id, issue_number}
   API->>GH: GET issue and comments
@@ -121,11 +121,11 @@ that exits successfully is therefore not reported as delivered work unless verif
 
 ## Dashboard
 
-On `127.0.0.1` or `localhost` most pages show design previews with sample data. Add `?live` before the `#` (for
-example `http://127.0.0.1:4173/?live#reviews`) to see the control plane's real data on every page; on any other host
-name the pages are always live.
+A local address opens in Mock mode. Choose Live in the sidebar, or add `?mode=live` before the `#` (for example
+`http://127.0.0.1:4173/?mode=live#reviews`), to see the control plane's real data on every page; any other host starts
+in Live.
 
-- **Agents > Queue run.** The dialog lists the selected project's open GitHub issues; choosing one makes the prompt
+- **Agents > Run Agent.** The queue dialog lists the selected project's open GitHub issues; choosing one makes the prompt
   optional and states that the pull request will close the issue. The project line and the note under it say whether
   the project's worker reports the agent profile's CLI as installed and signed in. Until it does, "Queue run" is
   disabled for a CLI profile and the note says to sign in on the worker and restart it.
@@ -137,7 +137,7 @@ name the pages are always live.
 - **Reviews > Local branches > Code changes / Conversations** are unchanged: the stored diff, comments, request
   changes, and cancel.
 
-- **Agents > Queue run > Create a new issue.** Creates a GitHub issue from a title and description and selects it for
+- **Agents > Run Agent > Create a new issue.** Creates a GitHub issue from a title and description and selects it for
   the run.
 - **Integrations and Settings.** The Local workers card lists which coding CLIs are ready on online workers.
 - **Evidence actions.** "Import change requests from GitHub" on a run with a pull request, and "Retry pull request"
@@ -236,7 +236,7 @@ Automated, deterministic:
   the chat runtime.
 
 - `cd dashboard && npm run test:e2e -- e2e/z_run_evidence.spec.ts` covers the queue dialog (issue selection and
-  creation, the request body, a blocked unready provider, issues unavailable), the `?live` switch on a local host,
+  creation, the request body, a blocked unready provider, issues unavailable), the Mock/Live switch,
   Settings readiness, the Evidence actions, and the Evidence panel (summary, checks, attempts,
   events, failure and empty states, no horizontal overflow) at 1672×941 and 390×844 against mocked API responses.
   `npm run test:e2e -- e2e/z_agents.spec.ts --grep 'real worker run'` checks the panel against a run executed by the
@@ -273,9 +273,9 @@ Git deadline had started before the provider ran. That defect is fixed and cover
 1. Start the control plane with GitHub credentials and a worker with `ZENCHRON_PROJECTS_ROOT` on a clone of the target
    repository and a `ZENCHRON_WORKER_CONFIG` that lists it.
 2. `GET /api/v1/workers` must show the provider with `"ready": true`; `GET /api/v1/projects` gives the project id.
-3. Open the dashboard with `?live` when using a local address. Agents > Create Agent: provider `codex-cli` or `claude-code`, model `default`, tools including
+3. Open the dashboard in Live mode (`?mode=live` on a local address). Agents > Create Agent: provider `codex-cli` or `claude-code`, model `default`, tools including
    "Write files in isolated branch" (and "Run tests" for a sandboxed Claude Code shell).
-4. Agents > Queue run: choose the project, choose or create the GitHub issue, Queue run.
+4. Agents > Run Agent: choose the project, choose or create the GitHub issue, Queue run.
 5. Reviews > Local branches: select the run's branch, open Evidence, and watch the events until the run is terminal;
    then read Verification, Publication, the pull-request link, and its checks. The same data is available from
    `GET /api/v1/agent-runs`, `.../events`, and `.../pull-request`.

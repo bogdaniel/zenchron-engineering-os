@@ -78,7 +78,8 @@ Feature docs:
 - [One-command local preview](docs/features/local-preview.md)
 - [GitHub issue sync and pull-request reviews](docs/features/github-review-sync.md)
 
-See [Backend architecture and decisions](docs/architecture/backend-architecture.md) for component ownership, the
+See [One dashboard, two data modes](docs/architecture/dashboard-modes.md) for how Mock and Live share one layout, and
+[Backend architecture and decisions](docs/architecture/backend-architecture.md) for component ownership, the
 control-plane and worker boundary, and what is not implemented, and the
 [Control plane roadmap](docs/architecture/roadmap.md) for delivery phases and acceptance evidence.
 
