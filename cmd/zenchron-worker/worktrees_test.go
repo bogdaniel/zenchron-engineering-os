@@ -67,6 +67,19 @@ func TestClaimWorktreeCommandRejectsOversizedResponse(t *testing.T) {
 	if _, _, err := claimWorktreeCommand(context.Background(), client, baseURL, workerTestID); err == nil {
 		t.Fatal("claimWorktreeCommand() accepted a response larger than 1 MiB")
 	}
+
+	// A valid command followed by padding past the limit is still an oversized response.
+	padded := &http.Client{Transport: workerRoundTripper(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"id":"` + workerTestID + `"}` + strings.Repeat(" ", maxClaimResponseSize))),
+			Header:     make(http.Header),
+			Request:    request,
+		}, nil
+	})}
+	if _, _, err := claimWorktreeCommand(context.Background(), padded, baseURL, workerTestID); err == nil {
+		t.Fatal("claimWorktreeCommand() accepted a valid command padded past 1 MiB")
+	}
 }
 
 func TestPushAgentBranchRestrictsOriginAndPushesOnlyTheRunBranch(t *testing.T) {

@@ -289,10 +289,23 @@ func claimAgentRun(
 		return agentRunCommand{}, false, fmt.Errorf("agent run claim returned HTTP %d", response.StatusCode)
 	}
 	var command agentRunCommand
-	if err := json.NewDecoder(io.LimitReader(response.Body, maxClaimResponseSize)).Decode(&command); err != nil {
+	if err := decodeClaimResponse(response.Body, &command); err != nil {
 		return agentRunCommand{}, false, fmt.Errorf("decode agent run claim: %w", err)
 	}
 	return command, true, nil
+}
+
+// decodeClaimResponse rejects a body over the claim limit as a whole. A limited reader alone would let a
+// valid command followed by padding through, because the decoder stops at the end of the first value.
+func decodeClaimResponse(body io.Reader, command any) error {
+	data, err := io.ReadAll(io.LimitReader(body, maxClaimResponseSize+1))
+	if err != nil {
+		return err
+	}
+	if len(data) > maxClaimResponseSize {
+		return fmt.Errorf("claim response exceeds %d bytes", maxClaimResponseSize)
+	}
+	return json.Unmarshal(data, command)
 }
 
 func finishAgentRun(
