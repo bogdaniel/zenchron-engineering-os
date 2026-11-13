@@ -1,4 +1,4 @@
-import type { MouseEvent } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import {
   IconChartBar, IconCode, IconHome, IconHierarchy, IconPuzzle, IconRobot, IconSettings, IconStack2, IconTarget, IconUser,
 } from '@tabler/icons-react';
@@ -15,9 +15,10 @@ const navigation = [
   { label: 'Settings', href: '#settings', icon: IconSettings, mobileIcon: IconUser },
 ];
 
-export function Sidebar({ activePage, localReviewHost, onNavigate }: {
+export function Sidebar({ activePage, showSignIn, modeSwitch, onNavigate }: {
   activePage: string;
-  localReviewHost: boolean;
+  showSignIn: boolean;
+  modeSwitch: ReactNode;
   onNavigate: (event: MouseEvent<HTMLAnchorElement>, href: string) => void;
 }) {
   return <aside className="sidebar">
@@ -43,7 +44,10 @@ export function Sidebar({ activePage, localReviewHost, onNavigate }: {
         <strong>Zenchron Engineering</strong>
       </div>
       <p>The AI-native engineering operating system.</p>
-      {localReviewHost && <a className="preview-login-link" href="#login">Sign in</a>}
+      <div className="sidebar-mode">{modeSwitch}</div>
+      {/* The row is always there so the footer sits at the same height in both modes. */}
+      {showSignIn ? <a className="preview-login-link" href="#login">Sign in</a>
+        : <span className="preview-login-link" aria-hidden="true">&nbsp;</span>}
     </div>
   </aside>;
 }

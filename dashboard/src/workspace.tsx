@@ -16,7 +16,7 @@ import {
   IconTarget,
   IconUsers,
 } from '@tabler/icons-react';
-import { agentsSchema } from './agents';
+import { agentsSchema } from './agentsData';
 import type { Objective } from './objectives';
 import type { Project } from './projects';
 import { workflowsSchema } from './workflowModel';

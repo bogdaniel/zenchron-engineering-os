@@ -8,7 +8,7 @@ import {
   IconUsers,
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
-import { agentsSchema, loadAgentRuns } from './agents';
+import { agentsSchema, loadAgentRuns } from './agentsData';
 import type { Objective } from './objectives';
 import type { Project } from './projects';
 import { loadProducts } from './productEditor';

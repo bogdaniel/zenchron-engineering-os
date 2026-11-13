@@ -638,3 +638,14 @@ button:disabled, input:disabled {
   .app-shell .main-content .page-heading h1,
   .app-shell .main-content .page-heading h2 { font-size: var(--page-title-size-mobile); }
 }
+
+.mode-switch.mantine-SegmentedControl-root { flex: 0 0 auto; border: 1px solid #302d49; background: #151523; }
+.mode-switch .mantine-SegmentedControl-label { padding: 3px 9px; color: #bab6cb; font-size: 10px; }
+.mode-switch .mantine-SegmentedControl-indicator { background: #3b2a5c; }
+/* Out of flow, so the approved footer keeps its position whether or not the selector is there. */
+.sidebar-bottom { position: relative; }
+.sidebar-mode { position: absolute; right: 12px; bottom: 0; }
+.mode-switch-phone { display: none; }
+@media (max-width: 760px) {
+  .mode-switch-phone.mantine-SegmentedControl-root { display: flex; }
+}

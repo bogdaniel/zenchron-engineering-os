@@ -28,7 +28,7 @@ import './reviews.css';
 import './reviews-detail.css';
 import './reviews-preview.css';
 import './reviews-feedback.css';
-import type { AgentRun } from './agents';
+import type { AgentRun } from './agentsData';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 

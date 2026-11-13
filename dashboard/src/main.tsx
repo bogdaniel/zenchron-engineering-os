@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MantineProvider, Menu, TextInput } from '@mantine/core';
+import { MantineProvider, Menu, SegmentedControl, TextInput } from '@mantine/core';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
@@ -19,7 +19,8 @@ import { objectivesSchema, ObjectivesPage } from './objectives';
 import { projectsSchema, ProjectsPage } from './projects';
 import { WorkflowsPage } from './workflows';
 import { ReviewsPage } from './reviews';
-import { AgentsPage, loadAgentRuns } from './agents';
+import { AgentsPage } from './agents';
+import { loadAgentRuns } from './agentsData';
 import { SystemPage } from './system';
 import { ReportsPage } from './reports';
 import { WorkspacePage } from './workspace';
@@ -41,6 +42,15 @@ const searchablePages = [
   ['Projects', 'projects'], ['Product Workspace', 'workspace'], ['Reviews', 'reviews'], ['Integrations', 'integrations'],
   ['Reports', 'reports'], ['Settings', 'settings'],
 ] as const;
+// Pages whose Live mode already renders the approved layout. The list goes away once every page is on it.
+const unifiedPages = ['agents'];
+type DashboardMode = 'mock' | 'live';
+/** `?mode=mock|live` wins. Without it, local development starts in Mock and any other host starts in Live. */
+function modeFromLocation(): DashboardMode {
+  const requested = new URLSearchParams(window.location.search).get('mode');
+  if (requested === 'mock' || requested === 'live') return requested;
+  return window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' ? 'mock' : 'live';
+}
 function pageFromHash() {
   const page = window.location.hash.slice(1);
   return pageIDs.includes(page) ? page : 'overview';
@@ -61,13 +71,13 @@ const workersResponse = z.array(
 );
 function App() {
   const [activePage, setActivePage] = useState(pageFromHash);
+  const [mode, setMode] = useState(modeFromLocation);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
-  const localReviewHost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
   const loginRoute = activePage === 'login';
   useEffect(() => {
-    const syncPage = () => setActivePage(pageFromHash());
+    const syncPage = () => { setActivePage(pageFromHash()); setMode(modeFromLocation()); };
     window.addEventListener('popstate', syncPage);
     window.addEventListener('hashchange', syncPage);
     return () => {
@@ -95,19 +105,19 @@ function App() {
     retry: false,
   });
   const unauthorized = (auth.error as (Error & { status?: number }) | null)?.status === 401;
-  // On a local host the pages show design previews with sample data. `?live` in the address turns that
-  // off so a developer running everything locally sees the control plane's real data on every page.
-  const liveData = new URLSearchParams(window.location.search).has('live');
-  const mockPreview = localReviewHost && !loginRoute && !liveData;
-  const designPreview = activePage === 'overview' && mockPreview;
-  const objectivePreview = activePage === 'objectives' && mockPreview;
-  const workspacePreview = activePage === 'workspace' && mockPreview;
-  const workflowPreview = activePage === 'workflows' && mockPreview;
-  const reviewPreview = activePage === 'reviews' && mockPreview;
-  const reportPreview = activePage === 'reports' && mockPreview;
-  const systemPreview = ['integrations', 'settings'].includes(activePage) && mockPreview;
-  const agentsPreview = activePage === 'agents' && mockPreview && auth.data?.authenticated !== true;
-  const previewPage = mockPreview;
+  // Mock shows the approved fixtures and never calls a mutation endpoint; Live uses the control plane and
+  // requires a session. Both render the same pages. Hash-only navigation keeps `?mode=` in the address.
+  const previewPage = mode === 'mock' && !loginRoute;
+  const chooseMode = (next: DashboardMode) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', next);
+    window.history.pushState({}, '', url);
+    setMode(next);
+  };
+  // Rendered twice: in the sidebar, and in the header on phones where the sidebar becomes the bottom bar.
+  const modeSwitch = (className: string) => <SegmentedControl className={className} size="xs" aria-label="Data mode"
+    value={mode} data={[{ value: 'mock', label: 'Mock' }, { value: 'live', label: 'Live' }]}
+    onChange={(value) => chooseMode(value === 'live' ? 'live' : 'mock')} />;
   const goToPage = (href: string) => {
     const page = href.slice(1);
     if (!pageIDs.includes(page)) return;
@@ -178,8 +188,8 @@ function App() {
   </div>;
   return (
     <MantineProvider defaultColorScheme="dark" theme={{ primaryColor: 'violet', fontFamily: 'var(--font-family)' }}>
-      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ` overview-layout${designPreview ? ' sample-data' : ''}` : objectivePreview || workflowPreview || reviewPreview || reportPreview || systemPreview || workspacePreview || agentsPreview ? ' sample-data' : ''}`} id="overview">
-        <Sidebar activePage={activePage} localReviewHost={localReviewHost} onNavigate={navigatePage} />
+      <div className={`app-shell ${activePage}-shell${activePage === 'overview' ? ' overview-layout' : ''}${previewPage || unifiedPages.includes(activePage) ? ' sample-data' : ''}`} id="overview">
+        <Sidebar activePage={activePage} showSignIn={mode === 'mock'} modeSwitch={modeSwitch('mode-switch')} onNavigate={navigatePage} />
 
         <main className="main-content">
           <header className="topbar">
@@ -191,7 +201,7 @@ function App() {
               </div> : <PageHeading className="greeting" titleLevel={1}
                 title={previewPage ? <>Good morning, Alex <span aria-hidden="true">👋</span></>
                   : <>Good morning{auth.data?.login ? `, ${auth.data.login}` : ''} <span aria-hidden="true">👋</span></>}
-                description={['integrations', 'settings'].includes(activePage) && systemPreview
+                description={['integrations', 'settings'].includes(activePage) && previewPage
                   ? 'Configure your organization, connect integrations, and control how Zenchron runs.'
                   : activePage === 'workflows' ? 'You’re building and orchestrating intelligent engineering workflows.'
                   : activePage === 'overview' ? <>
@@ -211,6 +221,7 @@ function App() {
                 onClick={() => goToPage(`#${page}`)}>{label}</Menu.Item>) : <Menu.Item disabled>No pages match your search.</Menu.Item>}</Menu.Dropdown>
             </Menu>
             <div className="top-actions">
+              {modeSwitch('mode-switch mode-switch-phone')}
               <Menu position="bottom-end" withinPortal>
                 <Menu.Target><button className="icon-button notification-button" aria-label="Notifications" type="button"><IconBell size={19} />
                   {previewPage && <span className="notification-indicator" aria-hidden="true" />}</button></Menu.Target>
@@ -254,16 +265,16 @@ function App() {
             <h2 id="session-preview-title">Session check unavailable</h2>
             <p>The dashboard shell is available, but page data stays hidden until your session can be verified.</p>
             <button className="github-login-button" onClick={() => void auth.refetch()}>Retry session check</button>
-          </PanelCard></section> : activePage === 'overview' ? <OverviewPage sampleData={designPreview}
+          </PanelCard></section> : activePage === 'overview' ? <OverviewPage sampleData={previewPage}
             projects={projects.data} projectsLoading={projects.isLoading} projectsError={projects.isError}
             objectives={objectives.data} objectivesLoading={objectives.isLoading} objectivesError={objectives.isError}
             agentRuns={agentRuns.data} agentRunsLoading={agentRuns.isLoading} agentRunsError={agentRuns.isError}
             onlineWorkers={onlineWorkers.length} onlineWorkerNames={onlineWorkers.map((worker) => worker.name)}
-          controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} designPreview={agentsPreview} onNavigate={goToPage} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} designPreview={reviewPreview} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={workflowPreview} /> : activePage === 'projects' ? (
+          controlPlaneOnline={health.isSuccess} /> : activePage === 'agents' ? <AgentsPage projects={projects.data ?? []} workers={workers.data ?? []} designPreview={previewPage} onNavigate={goToPage} /> : activePage === 'reviews' ? <ReviewsPage runs={agentRuns.data ?? []} projects={projects.data ?? []} designPreview={previewPage} /> : activePage === 'workflows' ? <WorkflowsPage designPreview={previewPage} /> : activePage === 'projects' ? (
             <ProjectsPage items={projects.data ?? []} isLoading={projects.isLoading} isError={projects.isError} />
           ) : activePage === 'workspace' ? (
             <WorkspacePage
-              designPreview={workspacePreview}
+              designPreview={previewPage}
               projects={projects.data}
               objectives={objectives.data}
               projectsLoading={projects.isLoading}
@@ -271,10 +282,10 @@ function App() {
               objectivesLoading={objectives.isLoading}
               objectivesError={objectives.isError}
             />
-          ) : activePage === 'objectives' ? <ObjectivesPage sampleData={objectivePreview} /> : ['integrations', 'settings'].includes(activePage) ? (
+          ) : activePage === 'objectives' ? <ObjectivesPage sampleData={previewPage} /> : ['integrations', 'settings'].includes(activePage) ? (
             <SystemPage
               section={activePage === 'settings' ? 'settings' : 'integrations'}
-              designPreview={systemPreview}
+              designPreview={previewPage}
               apiOnline={health.isSuccess}
               githubLogin={auth.data?.local === false}
               workerCount={workers.data?.length ?? 0}
@@ -287,7 +298,7 @@ function App() {
                 onlineWorkers.filter((worker) => worker.providers?.some((item) => item.id === id && item.ready)).length]))}
             />
           ) : activePage === 'reports' ? (
-            <ReportsPage designPreview={reportPreview}
+            <ReportsPage designPreview={previewPage}
               apiOnline={health.isSuccess}
               objectives={objectives.data}
               projects={projects.data}

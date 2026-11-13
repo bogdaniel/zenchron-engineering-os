@@ -13,7 +13,7 @@ import { PanelHeading } from './PanelHeading';
 import { WorkflowOverview } from './workflows';
 import type { Project } from './projects';
 import type { Objective } from './objectives';
-import type { AgentRun } from './agents';
+import type { AgentRun } from './agentsData';
 import { useReportPullRequestMetrics } from './reportPullRequests';
 import { useReportWorkflowRunMetrics } from './reportWorkflowRuns';
 
