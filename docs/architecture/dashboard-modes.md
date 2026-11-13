@@ -62,7 +62,7 @@ loaders).
 | Objectives | Pending | | |
 | Workflows | Pending | | |
 | Projects | Single layout already; no fixtures | | |
-| Product Workspace | Pending | | |
+| Product Workspace | One layout | `WorkspaceSource` | Products, linked repositories with worker and branch, repository health, objectives, the roadmap (bars run from an objective's creation to its due date), workflow definitions, and agent profiles are real, and products are created and edited through the API; files, stakeholders, release streams, decisions, delivery metrics, and every trend graphic are Unavailable with the reason; favorites and the delivery range are disabled |
 | Reviews | Pending | | |
 | Integrations and Settings | One layout | `SystemSource` | Control plane health, worker heartbeats and coding CLIs, GitHub checkouts, the worker model endpoint, and session auth are real; GitLab, Slack, Linear / Jira, Docker / Registry, and Google are Not connected; profile, policies, roles, budgets, secrets, controller limits, notification rules, and audit are Unavailable or empty with a note; every write control is disabled |
 | Reports | Pending | | |
@@ -91,6 +91,18 @@ until the list is empty.
   `system-setting-card`, `system-setting-heading`, `system-setting-icon`, `system-add-button`) and the `span`
   variants of the rail and filter rules.
 
+## Removed with the Product Workspace migration
+
+- `WorkspaceDesignPreview.tsx`; its markup is now the only layout in `workspace.tsx`, its fixtures and local state are
+  `useMockWorkspace` in `workspace-preview-data.tsx`.
+- The live-only layout in `workspace.tsx`: the page title row, the directory with its count badge and footer note, the
+  product heading with "Edit Product", the four plain metric cards, and the `ProductRoadmap`, `WorkspaceMetric`,
+  `WorkspacePanel`, `UnavailablePanel`, `WorkspaceObjectives`, `WorkspaceRepositories`, and `DefinitionNames`
+  components. "Edit product" and "Open repository inventory" moved into the design's Product actions menu.
+- `workspace.css` and every `workspace-*` class only that layout used; `workspace-form-actions` (the shared product
+  editor) moved to `workspace-preview.css`.
+- The fixture-only "Add a product to this preview" dialog; both modes use `ProductEditor`.
+
 ## Verification
 
 - `dashboard/e2e/z_run_evidence.spec.ts`: "the Mock and Live switch selects the data source, keeps the page, and
@@ -103,3 +115,8 @@ until the list is empty.
 - `dashboard/e2e/system.spec.ts`: the Settings & Integrations layout in Live with real status, honest "Not connected"
   and "Unavailable" states, disabled controls, and no write requests; `integrations-preview.spec.ts`: the same layout
   in Mock.
+- `dashboard/e2e/workspace.spec.ts`: the Product Workspace frame in Live with real products, repositories, objectives,
+  and roadmap; honest unavailable panels and disabled controls; product edit through `PUT /api/v1/products/{id}`;
+  product switching on a phone; empty and failed product lists. `workspace-preview.spec.ts`: the same layout in Mock
+  with no protected API traffic. Approved and Mock were pixel-compared on all six tabs at 1672×941, 1024×768, and
+  390×844 and are identical.
