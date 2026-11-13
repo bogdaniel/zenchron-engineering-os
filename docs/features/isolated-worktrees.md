@@ -4,7 +4,8 @@ Prototype status: the request queue and lease behavior describe the current loca
 
 The Projects page can ask the local worker to prepare an isolated worktree for a discovered checkout. The control plane
 stores a durable request, binds it to the worker that reported the project, and leases it to that worker over its
-outbound polling connection. The worker validates the Git branch names and runs the fixed `git worktree add` operation.
+outbound polling connection. The control plane rejects branch names Git cannot accept with HTTP 400 before persisting
+a request. The worker validates the Git branch names again and runs the fixed `git worktree add` operation.
 The original checkout and branch stay in place. Absolute repository and worktree paths remain on the worker.
 
 Requests move through `queued`, `preparing`, and `ready` or `failed`. Queued requests can be cancelled. Leases expire
@@ -36,7 +37,7 @@ sequenceDiagram
     participant R as Local Git checkout
     participant T as Isolated worktree
     D->>C: POST /api/v1/worktrees (project ID, branch)
-    C->>C: Validate online project and persist queued request
+    C->>C: Validate branch names and online project, persist queued request
     W->>C: Heartbeat with opaque project ID
     W->>C: POST /api/v1/workers/{id}/worktrees/claim
     C-->>W: Lease fixed prepare-worktree request
@@ -49,8 +50,9 @@ sequenceDiagram
 
 ## Verification
 
-- `go test ./cmd/zenchron -run 'TestWorktree'` covers queue validation, duplicate claims, restart recovery after an
-  expired lease, stale-attempt rejection, and cancellation. `go test ./cmd/zenchron-worker -run 'TestPrepareWorktree'`
+- `go test ./cmd/zenchron -run 'TestWorktree|TestValidBranchInput'` covers queue validation, Git branch-name
+  rejection, duplicate claims, restart recovery after an expired lease, stale-attempt rejection, and cancellation.
+  `go test ./cmd/zenchron-worker -run 'TestPrepareWorktree'`
   covers real Git worktree creation, retry idempotence, invalid-branch rejection, and base-branch preservation.
 - `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep "isolated Git branch"` uses a temporary Git checkout
   and confirms the worker completes the request through the dashboard.
