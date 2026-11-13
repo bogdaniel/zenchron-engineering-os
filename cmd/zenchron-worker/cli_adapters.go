@@ -22,7 +22,7 @@ func newCLIProviders() map[string]*cliProvider {
 			id: workerapi.ProviderCodex, binary: "codex", versionArgs: []string{"--version"},
 			readyArgs: []string{"login", "status"},
 			isReady:   func(_ []byte, err error) bool { return err == nil },
-			args:      codexArguments, parse: parseCodexEvent,
+			args:      codexArguments, parse: func(line []byte) []cliEvent { return []cliEvent{parseCodexEvent(line)} },
 		},
 		workerapi.ProviderClaude: {
 			id: workerapi.ProviderClaude, binary: "claude", versionArgs: []string{"--version"},
@@ -155,30 +155,35 @@ func codexCompletedItem(id, itemType, text, command string, exitCode *int, chang
 }
 
 // claudeArguments uses print mode with stream-json events. The prompt arrives on stdin. User settings and
-// MCP servers are not loaded, which keeps personal plugins and connectors out of runs. Profiles get file
-// tools only, unless they may run tests: then Bash is offered, but only inside Claude Code's own sandbox.
+// MCP servers are not loaded, which keeps personal plugins and connectors out of runs, and hooks are
+// disabled for every profile: a project hook is a script in the worktree that would run outside any sandbox,
+// and a writing agent could change it first. Profiles get file tools only, unless they may run tests: then
+// Bash is offered, but only inside Claude Code's own sandbox.
 func claudeArguments(command workerapi.AgentRunCommand, workspace runWorkspace) []string {
 	tools, mode := "Read,Glob,Grep", "default"
 	if canWrite(command) {
 		tools, mode = "Read,Edit,Write,Glob,Grep", "acceptEdits"
 	}
-	args := []string{"--print", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
-		"--setting-sources", "project", "--strict-mcp-config", "--permission-mode", mode}
-	if canWrite(command) && slices.Contains(command.Profile.Tools, "tests.run") {
+	sandboxed := canWrite(command) && slices.Contains(command.Profile.Tools, "tests.run")
+	if sandboxed {
 		tools += ",Bash"
-		args = append(args, "--settings", claudeSandboxSettings(workspace))
 	}
-	args = append(args, "--tools", tools)
+	args := []string{"--print", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
+		"--setting-sources", "project", "--strict-mcp-config", "--settings", claudeSettings(workspace, sandboxed),
+		"--permission-mode", mode, "--tools", tools}
 	if command.Profile.Model != defaultModel {
 		args = append(args, "--model="+command.Profile.Model)
 	}
 	return args
 }
 
-// claudeSandboxSettings confines every shell command of a run: commands that cannot be sandboxed are
-// refused, writes are limited to the worktree and the temporary directory, and the home directory cannot
-// be read apart from the worktree itself.
-func claudeSandboxSettings(workspace runWorkspace) string {
+// claudeSettings disables hooks for every run. With sandboxed set it also confines every shell command:
+// commands that cannot be sandboxed are refused, writes are limited to the worktree and the temporary
+// directory, and the home directory cannot be read apart from the worktree itself.
+func claudeSettings(workspace runWorkspace, sandboxed bool) string {
+	if !sandboxed {
+		return `{"disableAllHooks":true}`
+	}
 	type filesystem struct {
 		DenyRead   []string `json:"denyRead,omitempty"`
 		AllowRead  []string `json:"allowRead"`
@@ -196,17 +201,20 @@ func claudeSandboxSettings(workspace runWorkspace) string {
 		rules.DenyRead = []string{home}
 	}
 	settings, err := json.Marshal(struct {
-		Sandbox sandbox `json:"sandbox"`
-	}{sandbox{Enabled: true, AutoAllowBashIfSandboxed: true, Filesystem: rules}})
+		DisableAllHooks bool    `json:"disableAllHooks"`
+		Sandbox         sandbox `json:"sandbox"`
+	}{true, sandbox{Enabled: true, AutoAllowBashIfSandboxed: true, Filesystem: rules}})
 	if err != nil {
 		// The value is built from strings only; if it cannot be encoded, give the CLI settings that enable
 		// the sandbox and nothing else rather than running without one.
-		return `{"sandbox":{"enabled":true,"allowUnsandboxedCommands":false}}`
+		return `{"disableAllHooks":true,"sandbox":{"enabled":true,"allowUnsandboxedCommands":false}}`
 	}
 	return string(settings)
 }
 
-func parseClaudeEvent(line []byte) cliEvent {
+// parseClaudeEvent returns one event per content block: a message can carry text and then start several tools,
+// and a tool start that is dropped would leave a long tool run to the shorter inactivity limit.
+func parseClaudeEvent(line []byte) []cliEvent {
 	var event struct {
 		Type    string   `json:"type"`
 		Subtype string   `json:"subtype"`
@@ -236,12 +244,12 @@ func parseClaudeEvent(line []byte) cliEvent {
 		} `json:"message"`
 	}
 	if json.Unmarshal(line, &event) != nil {
-		return cliEvent{}
+		return nil
 	}
 	switch event.Type {
 	case "system":
 		if event.Subtype == "init" {
-			return cliEvent{kind: "status", message: "session started with model " + event.Model}
+			return []cliEvent{{kind: "status", message: "session started with model " + event.Model}}
 		}
 	case "result":
 		usage := &workerapi.Usage{InputTokens: event.Usage.Input + event.Usage.CacheCreation + event.Usage.CacheRead,
@@ -250,27 +258,29 @@ func parseClaudeEvent(line []byte) cliEvent {
 			message: fmt.Sprintf("%d input tokens, %d output tokens", usage.InputTokens, usage.OutputTokens)}
 		if event.IsError || event.Subtype != "success" {
 			result.failure = nonEmpty(event.Result, event.Subtype)
-			return result
+			return []cliEvent{result}
 		}
 		result.output = event.Result
-		return result
+		return []cliEvent{result}
 	case "assistant", "user":
+		var events []cliEvent
 		for _, block := range event.Message.Content {
 			switch block.Type {
 			case "text":
-				return cliEvent{kind: "message", message: block.Text}
+				events = append(events, cliEvent{kind: "message", message: block.Text})
 			case "tool_use":
 				target := nonEmpty(block.Input.Pattern, block.Input.Command)
 				if block.Input.FilePath != "" {
 					target = filepath.Base(block.Input.FilePath)
 				}
-				return cliEvent{kind: "tool", message: strings.TrimSpace(block.Name + " " + target), toolStarted: block.ID}
+				events = append(events, cliEvent{kind: "tool", message: strings.TrimSpace(block.Name + " " + target), toolStarted: block.ID})
 			case "tool_result":
-				return cliEvent{toolFinished: block.ToolUseID}
+				events = append(events, cliEvent{toolFinished: block.ToolUseID})
 			}
 		}
+		return events
 	}
-	return cliEvent{}
+	return nil
 }
 
 func nonEmpty(value, fallback string) string {

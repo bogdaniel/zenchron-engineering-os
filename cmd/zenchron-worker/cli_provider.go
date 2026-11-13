@@ -43,7 +43,7 @@ type cliProvider struct {
 	// guard, when set, is a command prefix that runs the provider under a process that stops it if the
 	// worker dies. It is this worker binary's own `guard` command.
 	guard []string
-	parse func(line []byte) cliEvent
+	parse func(line []byte) []cliEvent
 
 	path    string
 	version string
@@ -103,13 +103,16 @@ func (provider *cliProvider) status() workerapi.ProviderStatus {
 	return workerapi.ProviderStatus{ID: provider.id, Version: provider.version, Ready: provider.ready}
 }
 
-// providerEnvironment keeps worker and GitHub credentials away from the agent and removes provider API
-// keys so a subscription-authenticated CLI is never silently switched to paid API billing.
+// providerEnvironment keeps worker, GitHub, SSH-agent, and cloud credentials away from the agent and from
+// verification commands, and removes provider API keys so a subscription-authenticated CLI is never
+// silently switched to paid API billing. The worker's own Git push does not use this environment.
+// ponytail: a denylist of well-known names; switch to an allowlist if operators need a stricter boundary.
 func providerEnvironment(environment []string) []string {
-	blocked := []string{"GH_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY"}
+	blocked := []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
+		"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "SSH_AUTH_SOCK", "GOOGLE_APPLICATION_CREDENTIALS"}
 	return slices.DeleteFunc(slices.Clone(environment), func(entry string) bool {
 		name, _, _ := strings.Cut(entry, "=")
-		return strings.HasPrefix(name, "ZENCHRON_") || slices.Contains(blocked, name)
+		return strings.HasPrefix(name, "ZENCHRON_") || strings.HasPrefix(name, "AWS_") || slices.Contains(blocked, name)
 	})
 }
 
@@ -210,7 +213,7 @@ func ownProcessGroup(command *exec.Cmd) {
 
 // cliSession tracks one provider process: its normalized result and how recently it showed activity.
 type cliSession struct {
-	parse func(line []byte) cliEvent
+	parse func(line []byte) []cliEvent
 	emit  func(kind, message string)
 
 	mu           sync.Mutex
@@ -223,25 +226,30 @@ type cliSession struct {
 }
 
 func (session *cliSession) handle(line []byte) {
-	event := session.parse(line)
+	// One provider line can carry several events, for example a message followed by the tool it starts.
+	events := session.parse(line)
 	session.mu.Lock()
 	session.lastActivity = time.Now()
-	if event.toolStarted != "" {
-		session.openTools[event.toolStarted] = true
-	}
-	delete(session.openTools, event.toolFinished)
-	if event.output != "" {
-		session.output = event.output
-	}
-	if event.failure != "" {
-		session.failure = event.failure
-	}
-	if event.usage != nil {
-		session.usage = event.usage
+	for _, event := range events {
+		if event.toolStarted != "" {
+			session.openTools[event.toolStarted] = true
+		}
+		delete(session.openTools, event.toolFinished)
+		if event.output != "" {
+			session.output = event.output
+		}
+		if event.failure != "" {
+			session.failure = event.failure
+		}
+		if event.usage != nil {
+			session.usage = event.usage
+		}
 	}
 	session.mu.Unlock()
-	if event.kind != "" && event.message != "" {
-		session.emit(event.kind, event.message)
+	for _, event := range events {
+		if event.kind != "" && event.message != "" {
+			session.emit(event.kind, event.message)
+		}
 	}
 }
 
