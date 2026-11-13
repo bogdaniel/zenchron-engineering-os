@@ -29,7 +29,7 @@ type workerRegistry struct {
 	runs     *agentRunStore
 }
 
-// shortcut: worker presence resets on restart; persist it only if offline history becomes a requirement.
+// ponytail: worker presence resets on restart; persist it only if offline history becomes a requirement.
 
 type workerRecord struct {
 	ID                  string    `json:"id"`
