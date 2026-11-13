@@ -64,7 +64,7 @@ loaders).
 | Projects | Single layout already; no fixtures | | |
 | Product Workspace | Pending | | |
 | Reviews | Pending | | |
-| Integrations and Settings | Pending | | |
+| Integrations and Settings | One layout | `SystemSource` | Control plane health, worker heartbeats and coding CLIs, GitHub checkouts, the worker model endpoint, and session auth are real; GitLab, Slack, Linear / Jira, Docker / Registry, and Google are Not connected; profile, policies, roles, budgets, secrets, controller limits, notification rules, and audit are Unavailable or empty with a note; every write control is disabled |
 | Reports | Pending | | |
 
 "Pending" pages still switch between two layouts with the mode; the shell marks migrated pages in `unifiedPages`
@@ -79,6 +79,18 @@ until the list is empty.
   `agents-permission-row`, `agents-safeguard-list`, and related).
 - Mode selection from `localReviewHost` and `auth.data.authenticated`, and the `?live` switch.
 
+## Removed with the Integrations and Settings migration
+
+- `SystemIntegrationsPreview.tsx`; its markup is now the only layout in `system.tsx`, its fixtures and local state
+  are `useMockSystem` in `system-preview-data.tsx`.
+- The live-only branches of `system.tsx`: the runtime service cards, the eight status panels, the six Settings cards,
+  the static configuration rail, and the footer notice. Their facts moved into the design's provider cards, the
+  Controller Configuration rows, and the per-card notes.
+- Twelve CSS classes only those used (`system-service-icon`, `system-operations-grid`, `system-operation-card`,
+  `system-setting-values`, `system-audit-card`, `system-status`, `system-notice`, `system-settings-grid`,
+  `system-setting-card`, `system-setting-heading`, `system-setting-icon`, `system-add-button`) and the `span`
+  variants of the rail and filter rules.
+
 ## Verification
 
 - `dashboard/e2e/z_run_evidence.spec.ts`: "the Mock and Live switch selects the data source, keeps the page, and
@@ -88,3 +100,6 @@ until the list is empty.
 - `dashboard/e2e/agents-desktop-preview.spec.ts`, `agents-mobile-preview.spec.ts`: the approved desktop and phone
   design in Mock.
 - Approved (`main`), Mock, and Live panels were measured at 1672×941 and 1672×749 and are identical.
+- `dashboard/e2e/system.spec.ts`: the Settings & Integrations layout in Live with real status, honest "Not connected"
+  and "Unavailable" states, disabled controls, and no write requests; `integrations-preview.spec.ts`: the same layout
+  in Mock.
