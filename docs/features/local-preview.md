@@ -5,6 +5,9 @@ development session. Reserve `127.0.0.1:4173` for the latest dashboard source an
 plane and worker so the manual-review URL stays fixed. Focused browser tests use separate temporary ports. Ctrl+C stops
 the child services.
 
+Pages that show sample data on a local address switch to the control plane's real data when the address contains
+`?live`, for example `http://127.0.0.1:4173/?live#reviews`.
+
 ```mermaid
 sequenceDiagram
     participant Dev as Developer
@@ -49,7 +52,7 @@ sequenceDiagram
 The control plane and dashboard bind to loopback by default. Without OAuth settings, the local dashboard signs in as
 `Local workspace`; **Sign in** opens `/#login`, where the GitHub button explains that OAuth is not configured. With OAuth
 configured, an unauthenticated localhost session shows sample fixtures in the same dashboard shell; sign-in is available
-at `/#login`. There is no separate dashboard URL or query-string mode. Exercise real GitHub sign-in by setting the OAuth, session,
+at `/#login`. Exercise real GitHub sign-in by setting the OAuth, session,
 allowlist, and public-origin variables from
 [GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md) before starting the preview.
 The dashboard's local server forwards both `/api/*` and `/healthz` to the configured control plane so live routes show

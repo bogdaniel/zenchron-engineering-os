@@ -1,7 +1,8 @@
 # Control plane roadmap
 
-See [Architecture checkpoint](architecture-checkpoint.md) for discussion-confirmed direction, prototype contracts, and
-agent/control-plane decisions that remain open. The current implementation is not the approved target architecture.
+See [Architecture checkpoint](architecture-checkpoint.md) for discussion-confirmed direction and decisions that remain
+open, and [Backend architecture and decisions](backend-architecture.md) for the implemented control-plane and worker
+boundary, component decisions, and what is not implemented.
 
 ## Confirmed product direction
 
@@ -44,7 +45,10 @@ and waits for API, worker, and dashboard readiness.
 GitHub OAuth sign-in, username allowlisting, signed sessions, separate worker bearer authentication, and browser-origin
 checks for session-authenticated mutations are implemented. Persistent workspace state exists for selected JSON
 snapshots, but database-backed storage, organization roles, per-worker identity, secrets management, and audit events
-remain outstanding.
+remain outstanding. Per-worker credentials bound to an enrolled worker id and per-repository access for users and
+workers are implemented through an operator-edited access file, which a non-loopback listener now requires; see
+[Worker enrollment and project access](../features/worker-enrollment-and-project-access.md). Verified by focused Go
+tests; not yet exercised on a deployed non-loopback control plane.
 
 ### 2. Project connections — GitHub read sync and PR review submission partially implemented
 
@@ -53,15 +57,17 @@ issues and pull requests from GitHub.com and can submit PR comments or request c
 or personal-token fallback has Pull requests: write permission. It can comment on, close, and reopen issues with Issues:
 write or Pull requests: write. Dashboard-submitted
 feedback on Zenchron run branches is matched to the originating run; eligible
-change requests queue a follow-up pass. GitHub Enterprise host mapping, other providers, historical sync, and importing
-feedback submitted directly on GitHub remain outstanding. Accept with provider-backed fixtures and a live read/write
+change requests queue a follow-up pass. The control plane can also create issues, snapshot an issue and its trusted comments
+into a run, read check runs and reviews for a run's pull request, and import change requests made on GitHub on demand.
+GitHub Enterprise host mapping, other providers, historical sync, and webhook-driven import remain outstanding. Accept with provider-backed fixtures and a live read/write
 review round-trip; never use fabricated PR data.
 
 ### 3. Worker control channel — partially implemented
 
 Outbound worker registration, leased worktree and agent-run commands, acknowledgements, cancellation, and retry fencing
-are implemented in the local prototype. Generic command types, actor-bound policy decisions, and production worker
-reconciliation remain open. Focused tests cover duplicate and stale claims, lease recovery, and cancellation.
+are implemented. A single progress call renews the run lease, carries bounded events, and returns the cancellation
+flag; the wire contract lives in `internal/workerapi`. Generic command types and production worker reconciliation
+remain open. Focused tests cover duplicate and stale claims, lease recovery, and cancellation.
 
 ### 4. Agent harness — partially implemented
 
@@ -69,16 +75,20 @@ Agent profiles, durable run lifecycle, isolated worktrees, OpenAI-compatible Cha
 optional `code.write` are implemented. Successful non-empty GitHub runs can publish their branch and create or reuse a
 pull request. `cd dashboard && npm run test:e2e:agent-runtime` builds and runs the real control plane and worker with a
 loopback model stub, verifies the isolated commit and captured diff, and confirms the source checkout stays unchanged.
-Test execution, evidence capture, provider spend reporting, and production credential management remain outstanding;
-a real provider run is not verified.
+Installed Codex CLI and Claude Code CLI providers run behind the same lifecycle with wall-clock, inactivity,
+tool-activity, and verification limits, worker-operator verification commands, redacted run events, and reported
+usage. Real runs of both CLIs produced verified pull requests on 2026-11-11; see
+[Issue to pull request](../features/issue-to-pull-request.md). Budget enforcement beyond time and attempt limits and
+production credential management remain outstanding.
 
 ### 5. Review loop — partially implemented
 
 The dashboard shows GitHub issues and pull requests, local run diffs, and review feedback. It can submit top-level PR
 comments and requests for changes; feedback on a Zenchron run branch is attached to its run, and an eligible request
-queues a bounded follow-up pass on the same branch. Reviews made directly on GitHub, inline comments, approval, and
-merge remain outstanding. Accept when provider-submitted feedback is imported and authorized decisions reach the
-correct run and pull request.
+queues a bounded follow-up pass on the same branch. Change requests made directly on GitHub by repository owners,
+members, or collaborators are imported on request and reach the run that published the pull request. A live follow-up
+pass added a second commit to a run's pull request. Inline comments, approval, merge, and automatic import remain
+outstanding.
 
 ### 6. Operational dashboard
 
@@ -113,13 +123,15 @@ policy enforcement.
   the OpenAI-compatible Chat Completions loop executes bounded read tools and optional `code.write` in per-run Git
   worktrees; successful, reviewable changes are committed locally on the isolated branch. A successful non-empty run
   can push only that branch and create or reuse a pull request when control-plane GitHub authentication and a GitHub.com origin are
-  configured. Test execution, provider spend, and evidence capture remain unavailable.
+  configured. Profiles with provider `codex-cli` or `claude-code` run the installed CLI in the same per-run worktree,
+  followed by the worker operator's verification commands; run events and reported usage are stored as evidence.
 - Agent run prompts can be durably queued for an active profile and online project, claimed by its assigned worker,
   and completed with a fenced result. A worker without a configured model endpoint leaves runs queued; see
   [Agent run queue](../features/agent-run-queue.md). A focused cross-process E2E now proves the real API and worker can call a
   loopback OpenAI-compatible stub, perform an allowed tool write in a per-run worktree, and return the captured diff.
 - Queued and active agent runs can be cancelled from Reviews. The control plane persists cancellation state, the
-  assigned worker polls while a model call runs, and cancellation keeps the partial isolated diff. A run whose lease
+  assigned worker learns of it from its progress reports and stops the provider, and cancellation keeps the partial
+  isolated diff. A run whose lease
   expires after cancellation is completed as cancelled instead of retried. Generic command types and actor-bound policy
   decisions remain unimplemented.
 - The local worker can prepare a durable, leased isolated Git worktree request for an online project. Completion is
@@ -130,8 +142,9 @@ policy enforcement.
   policy binding remain unimplemented.
 - Reviews provides GitHub issue and PR queues plus captured local run diffs. Reviewers can leave local comments and
   request another bounded pass on the same run and branch. Dashboard-submitted top-level GitHub comments and change
-  requests on Zenchron run branches are attached to their runs; an eligible change request queues another pass. Reviews
-  made directly on GitHub are not imported. Checks, approval, and merge actions remain unavailable.
+  requests on Zenchron run branches are attached to their runs; an eligible change request queues another pass. Change
+  requests made directly on GitHub are imported on request through the API. Check runs are readable per run through
+  the API; approval and merge actions remain unavailable.
 - Settings and Integrations routes show live API, worker, and checkout status while clearly marking external providers,
   organization roles, authorization policy, and audit history unavailable. GitHub OAuth username-allowlisted sign-in is
   implemented for remote API access and has been verified against the test app on the loopback preview.
@@ -142,7 +155,7 @@ policy enforcement.
 - Product Workspace persists products and links them to live worker-reported repositories. Objectives can link to a
   product by ID; workflow and agent definitions remain reusable workspace-wide, while files, decisions, stakeholders,
   and release streams remain unavailable.
-- Organization users and roles, database-backed storage, direct GitHub review import, GitHub merge and approval actions,
+- Organization users and roles, database-backed storage, webhook-driven GitHub review import, GitHub merge and approval actions,
   other Git provider write actions, and production model credential management are not yet implemented.
 
 ## UI and data rules

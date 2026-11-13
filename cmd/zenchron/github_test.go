@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 func TestGitHubIssuesAndPullRequestsUseRemoteAndKeepDistinct(t *testing.T) {
@@ -350,7 +352,7 @@ func TestGitHubCreatesPullRequestFromPublishedBranch(t *testing.T) {
 func TestGitHubReviewFeedbackReturnsToAgentRun(t *testing.T) {
 	t.Setenv("ZENCHRON_GITHUB_TOKEN", "test-token")
 	runID := "fedcbafedcbafedcbafedcbafedcbafe"
-	providerBranch := agentRunBranch(runID)
+	providerBranch := workerapi.AgentRunBranch(runID)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			t.Errorf("GitHub authorization was not set")
@@ -379,7 +381,9 @@ func TestGitHubReviewFeedbackReturnsToAgentRun(t *testing.T) {
 		Status: "active", SystemPrompt: "Review", Version: 1, UpdatedAt: time.Now(), Tools: []string{"code.write"}}
 	store := newAgentRunStore(registry, newAgentProfileStore())
 	store.items[runID] = agentRun{ID: runID, AgentID: profile.ID, AgentName: profile.Name, ProjectID: testProjectID,
-		ProjectName: "platform", WorkerID: testWorkerID, WorkerName: "worker", Branch: agentRunBranch(runID),
+		Repository: "github.com/acme/platform", PullRequestNumber: 23,
+		PullRequestURL: "https://github.com/acme/platform/pull/23",
+		ProjectName:    "platform", WorkerID: testWorkerID, WorkerName: "worker", Branch: workerapi.AgentRunBranch(runID),
 		BaseBranch: "main", Prompt: "Add a feature", Status: "succeeded", Attempts: 1, DiffAvailable: true,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(), Profile: &profile}
 	registry.runs = store
@@ -416,9 +420,13 @@ func TestGitHubReviewFeedbackReturnsToAgentRun(t *testing.T) {
 	waitingRunID := "abcdefabcdefabcdefabcdefabcdef12"
 	store.items[waitingRunID] = agentRun{ID: waitingRunID, AgentID: profile.ID, AgentName: profile.Name,
 		ProjectID: testProjectID, ProjectName: "platform", WorkerID: testWorkerID, WorkerName: "worker",
-		Branch: agentRunBranch(waitingRunID), BaseBranch: "main", Prompt: "Add another feature", Status: "succeeded",
-		Attempts: 1, DiffAvailable: true, CreatedAt: time.Now(), UpdatedAt: time.Now(), Profile: &profile}
-	providerBranch = agentRunBranch(waitingRunID)
+		Branch: workerapi.AgentRunBranch(waitingRunID), BaseBranch: "main", Prompt: "Add another feature", Status: "succeeded",
+		Attempts: 1, DiffAvailable: true, CreatedAt: time.Now(), UpdatedAt: time.Now(), Profile: &profile,
+		Repository: "github.com/acme/platform", PullRequestNumber: 23}
+	// The provider stub serves one pull request, so hand its identity to the second run.
+	item.PullRequestNumber = 0
+	store.items[runID] = item
+	providerBranch = workerapi.AgentRunBranch(waitingRunID)
 	worker := registry.workers[testWorkerID]
 	worker.LastSeen = time.Now().Add(-2 * workerOnlineWindow)
 	registry.workers[testWorkerID] = worker

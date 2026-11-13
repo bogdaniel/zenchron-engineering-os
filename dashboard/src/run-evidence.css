@@ -1,0 +1,102 @@
+.run-evidence {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+.run-evidence-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 6px 14px;
+  margin: 0;
+}
+.run-evidence-facts div { min-width: 0; }
+.run-evidence dt,
+.run-evidence h4 {
+  margin: 0;
+  color: #8f899f;
+  font-size: 11px;
+  font-weight: 600;
+}
+.run-evidence dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #ded8e8;
+  font-size: 12px;
+}
+.run-evidence a { color: #bc91ff; }
+.run-evidence a:focus-visible { outline: 2px solid #bc91ff; outline-offset: 2px; }
+.run-evidence p {
+  margin: 4px 0 0;
+  color: #8f899f;
+  font-size: 12px;
+}
+.run-evidence ul,
+.run-evidence ol {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.run-evidence li {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  color: #ded8e8;
+  font-size: 12px;
+}
+.run-evidence li span,
+.run-evidence li time {
+  max-width: none;
+  color: #8f899f;
+  font-size: 11px;
+}
+.run-evidence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.run-evidence .run-evidence-actions span {
+  max-width: none;
+  color: #ded8e8;
+  font-size: 11px;
+}
+.run-evidence-events {
+  max-height: 260px;
+  overflow-y: auto;
+  padding-top: 2px;
+  border-top: 1px solid #302d42;
+}
+.run-evidence-events code {
+  min-width: 0;
+  flex: 1 1 220px;
+  overflow-wrap: anywhere;
+  color: #ded8e8;
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+.run-evidence li .run-evidence-kind {
+  flex: 0 0 76px;
+  color: #bc91ff;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.reviews-change-empty:has(.run-evidence) {
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow-y: auto;
+}
+@media (max-width: 760px) {
+  .run-evidence-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* The stacked workspace has a fixed inline height that leaves the detail panel about two rows of evidence.
+     Lengthen it only while Evidence is open so the summary is readable without resizing the panes. */
+  .reviews-workspace.is-stacked:has(.run-evidence) { height: 1640px !important; }
+}

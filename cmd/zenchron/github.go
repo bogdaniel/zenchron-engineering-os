@@ -55,7 +55,9 @@ type gitHubIssue struct {
 	Body        string         `json:"body,omitempty"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	PullRequest map[string]any `json:"pull_request,omitempty"`
-	User        struct {
+	// AuthorAssociation is GitHub's statement of the author's relationship to the repository.
+	AuthorAssociation string `json:"author_association,omitempty"`
+	User              struct {
 		Login string `json:"login"`
 	} `json:"user"`
 	Labels []struct {
@@ -200,6 +202,19 @@ func (client gitHubClient) createPullRequest(ctx context.Context, owner, reposit
 	return pull, nil
 }
 
+// localOrAuthorizedClient gates GitHub writes made with the control plane's own credentials. A remote
+// client qualifies only through an enforced access policy, which projectRepository then applies.
+func localOrAuthorizedClient(r *http.Request) bool {
+	if accessFor(r).enforced {
+		return true
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	remoteIP := net.ParseIP(host)
+	return err == nil && remoteIP != nil && remoteIP.IsLoopback()
+}
+
+// projectRepository resolves the GitHub repository behind a project the caller is allowed to touch.
+// A project outside the caller's access is reported exactly like one that does not exist.
 func (registry *workerRegistry) projectRepository(w http.ResponseWriter, r *http.Request) (string, string, bool) {
 	projectID := r.PathValue("id")
 	registry.mu.RLock()
@@ -212,7 +227,7 @@ func (registry *workerRegistry) projectRepository(w http.ResponseWriter, r *http
 	}
 	registry.mu.RUnlock()
 	owner, repository, ok := githubRepositoryParts(remote)
-	if !ok {
+	if !ok || !accessFor(r).allows(remote) {
 		http.Error(w, "project is not connected to a GitHub repository", http.StatusNotFound)
 		return "", "", false
 	}
@@ -279,9 +294,7 @@ func (registry *workerRegistry) listGitHubIssues(w http.ResponseWriter, r *http.
 }
 
 func (registry *workerRegistry) commentGitHubIssue(w http.ResponseWriter, r *http.Request) {
-	host, _, remoteErr := net.SplitHostPort(r.RemoteAddr)
-	remoteIP := net.ParseIP(host)
-	if remoteErr != nil || remoteIP == nil || !remoteIP.IsLoopback() {
+	if !localOrAuthorizedClient(r) {
 		http.Error(w, "GitHub issue comments are available only from a local client", http.StatusForbidden)
 		return
 	}
@@ -331,9 +344,7 @@ func (registry *workerRegistry) commentGitHubIssue(w http.ResponseWriter, r *htt
 }
 
 func (registry *workerRegistry) updateGitHubIssue(w http.ResponseWriter, r *http.Request) {
-	host, _, remoteErr := net.SplitHostPort(r.RemoteAddr)
-	remoteIP := net.ParseIP(host)
-	if remoteErr != nil || remoteIP == nil || !remoteIP.IsLoopback() {
+	if !localOrAuthorizedClient(r) {
 		http.Error(w, "GitHub issue updates are available only from a local client", http.StatusForbidden)
 		return
 	}
@@ -382,9 +393,7 @@ func (registry *workerRegistry) updateGitHubIssue(w http.ResponseWriter, r *http
 }
 
 func (registry *workerRegistry) reviewGitHubPullRequest(w http.ResponseWriter, r *http.Request) {
-	host, _, remoteErr := net.SplitHostPort(r.RemoteAddr)
-	remoteIP := net.ParseIP(host)
-	if remoteErr != nil || remoteIP == nil || !remoteIP.IsLoopback() {
+	if !localOrAuthorizedClient(r) {
 		http.Error(w, "GitHub reviews are available only from a local client", http.StatusForbidden)
 		return
 	}
@@ -437,9 +446,13 @@ func (registry *workerRegistry) reviewGitHubPullRequest(w http.ResponseWriter, r
 		AgentRunQueued    bool   `json:"agent_run_queued"`
 		FeedbackSyncError string `json:"feedback_sync_error,omitempty"`
 	}{Status: "submitted"}
-	if runID, ok := strings.CutPrefix(pull.Head.Ref, agentRunBranchPrefix); ok && validHexID(runID) && registry.runs != nil {
+	if registry.runs == nil {
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
+	if runID, found := registry.runs.findByPullRequest("github.com/"+owner+"/"+repository, pull.Number); found {
 		run, status, message := registry.runs.recordReview(
-			runID, r.PathValue("id"), input.Body, input.Event == "REQUEST_CHANGES", false,
+			accessFor(r), runID, r.PathValue("id"), input.Body, input.Event == "REQUEST_CHANGES", false,
 		)
 		if status == 0 {
 			result.AgentRunLinked = true

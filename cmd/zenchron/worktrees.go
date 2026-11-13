@@ -126,7 +126,24 @@ func validWorktreeStatus(status string) bool {
 	}
 }
 
-func (store *worktreeStore) list(w http.ResponseWriter, _ *http.Request) {
+// allows reports whether the caller may touch the project behind a worktree request. A project the
+// control plane no longer knows is hidden under an access policy.
+func (store *worktreeStore) allows(r *http.Request, projectID string) bool {
+	access := accessFor(r)
+	if !access.enforced {
+		return true
+	}
+	store.registry.mu.RLock()
+	defer store.registry.mu.RUnlock()
+	for _, project := range store.registry.projects {
+		if project.ID == projectID {
+			return access.allows(project.GitRemote)
+		}
+	}
+	return false
+}
+
+func (store *worktreeStore) list(w http.ResponseWriter, r *http.Request) {
 	store.mu.Lock()
 	if store.requeueExpiredLocked(time.Now().UTC()) {
 		if err := store.persistLocked(); err != nil {
@@ -137,6 +154,9 @@ func (store *worktreeStore) list(w http.ResponseWriter, _ *http.Request) {
 	}
 	items := make([]worktreeRequest, 0, len(store.items))
 	for _, item := range store.items {
+		if !store.allows(r, item.ProjectID) {
+			continue
+		}
 		item.LeaseUntil = time.Time{}
 		items = append(items, item)
 	}
@@ -170,7 +190,7 @@ func (store *worktreeStore) create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	store.registry.mu.RUnlock()
-	if !found {
+	if !found || !accessFor(r).allows(project.GitRemote) || !accessFor(r).mayDispatchTo(project.WorkerID) {
 		http.Error(w, "project has no online worker", http.StatusConflict)
 		return
 	}
@@ -310,7 +330,7 @@ func (store *worktreeStore) cancel(w http.ResponseWriter, r *http.Request) {
 	}
 	store.mu.Lock()
 	item, exists := store.items[requestID]
-	if !exists {
+	if !exists || !store.allows(r, item.ProjectID) {
 		store.mu.Unlock()
 		http.NotFound(w, r)
 		return

@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"testing"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 func TestLongCommandKeepsWorkerPresenceAlive(t *testing.T) {
@@ -25,7 +27,7 @@ func TestLongCommandKeepsWorkerPresenceAlive(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), workerHeartbeatInterval+3*time.Second)
 	defer cancel()
-	_, stop := keepWorkerHeartbeat(ctx, server.Client(), baseURL, workerTestID, "worker", nil, true)
+	_, stop := keepWorkerHeartbeat(ctx, server.Client(), baseURL, workerTestID, workerapi.Heartbeat{Name: "worker"})
 	select {
 	case <-received:
 		stop()

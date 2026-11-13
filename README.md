@@ -28,7 +28,9 @@ export ZENCHRON_LLM_API_KEY="<worker-local key>"
 The first runtime can read repository data and, when `code.write` is enabled in a profile, write files on a per-run
 isolated branch. Successful reviewable changes are committed locally; when a GitHub origin and control-plane GitHub
 authentication are configured, the worker can push only that run branch and the control plane can create or reuse its
-pull request. Test execution remains unavailable. Public GitHub repositories can be read without credentials. For
+pull request. Agent profiles with provider `codex-cli` or `claude-code` run the installed, signed-in CLI instead and
+can start from a GitHub issue, run the worker operator's verification commands, and open a linked pull request; see
+[Issue to pull request](docs/features/issue-to-pull-request.md). Public GitHub repositories can be read without credentials. For
 authenticated access, prefer a GitHub App installed only on the repositories Zenchron should control. Set
 `ZENCHRON_GITHUB_APP_ID`, `ZENCHRON_GITHUB_INSTALLATION_ID`, and `ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH` on the control
 plane; installation tokens are minted and cached there. Keep the PEM key outside the repository with owner-only file
@@ -50,7 +52,7 @@ On first run, install dashboard dependencies with `cd dashboard && npm ci`. The 
 displays worker heartbeats and locally discovered Git checkouts. Set `ZENCHRON_PROJECTS_ROOT` before starting the worker
 to scan a folder (default `.`).
 
-The API listens on loopback by default; a remote listener requires the GitHub OAuth, allowlist, session, worker-token,
+The API listens on loopback by default; a remote listener requires the GitHub OAuth, allowlist, session, access-file,
 and HTTPS public-origin configuration described in
 [GitHub sign-in and remote worker authentication](docs/features/github-login-and-remote-worker-auth.md). Objective,
 product, workflow, and agent profile data persist under
@@ -67,6 +69,8 @@ Feature docs:
 - [Review workspace](docs/features/review-workspace.md)
 - [Agent profiles](docs/features/agent-profiles.md)
 - [Agent run queue](docs/features/agent-run-queue.md)
+- [Issue to pull request with Codex and Claude Code](docs/features/issue-to-pull-request.md)
+- [Worker enrollment and project access](docs/features/worker-enrollment-and-project-access.md)
 - [Isolated worktrees](docs/features/isolated-worktrees.md)
 - [Settings and integrations](docs/features/system-settings-and-integrations.md)
 - [Engineering reports](docs/features/engineering-reports.md)
@@ -74,8 +78,9 @@ Feature docs:
 - [One-command local preview](docs/features/local-preview.md)
 - [GitHub issue sync and pull-request reviews](docs/features/github-review-sync.md)
 
-See [Control plane roadmap](docs/architecture/roadmap.md) for the system boundary, delivery phases, and acceptance
-evidence.
+See [Backend architecture and decisions](docs/architecture/backend-architecture.md) for component ownership, the
+control-plane and worker boundary, and what is not implemented, and the
+[Control plane roadmap](docs/architecture/roadmap.md) for delivery phases and acceptance evidence.
 
 ## Focused checks
 

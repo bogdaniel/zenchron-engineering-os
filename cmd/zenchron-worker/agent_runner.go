@@ -1,0 +1,346 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"path/filepath"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
+)
+
+// runExecutor performs one agent attempt inside a prepared worktree. It has two kinds of
+// implementation today: the chat-completions runtime and the installed coding CLIs.
+type runExecutor interface {
+	execute(
+		ctx context.Context, command workerapi.AgentRunCommand, workspace runWorkspace, limits runLimits,
+		emit func(kind, message string),
+	) (executionResult, error)
+	versionLabel() string
+}
+
+func (provider *cliProvider) versionLabel() string { return provider.version }
+
+func (runtime *agentRuntime) versionLabel() string { return "" }
+
+func (runtime *agentRuntime) execute(
+	ctx context.Context, command workerapi.AgentRunCommand, workspace runWorkspace, _ runLimits,
+	_ func(kind, message string),
+) (executionResult, error) {
+	output, err := runtime.complete(ctx, command, workspace.path)
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		return executionResult{reason: workerapi.TerminationWallClock}, ctx.Err()
+	case ctx.Err() != nil:
+		return executionResult{reason: workerapi.TerminationCancelled}, ctx.Err()
+	case err != nil:
+		return executionResult{reason: workerapi.TerminationProviderExit}, err
+	}
+	return executionResult{output: output, reason: workerapi.TerminationCompleted}, nil
+}
+
+// agentRunner owns the local half of a run: worktree, provider process, verification, commit and push.
+type agentRunner struct {
+	client    *http.Client
+	baseURL   *url.URL
+	workerID  string
+	token     string
+	chat      *agentRuntime
+	providers map[string]*cliProvider
+	limits    runLimits
+	config    *workerConfig
+	// push publishes the run branch; nil uses pushAgentBranch. Tests replace this network boundary.
+	push func(ctx context.Context, worktree, remote, branch string) error
+	// finishRetryDelay overrides the pause between result deliveries; zero uses the default.
+	finishRetryDelay time.Duration
+}
+
+func (runner *agentRunner) providerStatuses() []workerapi.ProviderStatus {
+	statuses := make([]workerapi.ProviderStatus, 0, len(runner.providers))
+	for _, provider := range runner.providers {
+		if provider.path != "" {
+			statuses = append(statuses, provider.status())
+		}
+	}
+	slices.SortFunc(statuses, func(a, b workerapi.ProviderStatus) int { return strings.Compare(a.ID, b.ID) })
+	return statuses
+}
+
+func (runner *agentRunner) canExecute() bool {
+	for _, provider := range runner.providers {
+		if provider.ready {
+			return true
+		}
+	}
+	return runner.chat != nil
+}
+
+func (runner *agentRunner) executorFor(provider string) runExecutor {
+	if cli := runner.providers[provider]; cli != nil && cli.ready {
+		return cli
+	}
+	if runner.chat == nil || workerapi.IsCLIProvider(provider) {
+		return nil
+	}
+	return runner.chat
+}
+
+func (runner *agentRunner) process(ctx context.Context, projects []discoveredProject) error {
+	if !runner.canExecute() {
+		return nil
+	}
+	command, found, err := claimAgentRun(ctx, runner.client, runner.baseURL, runner.workerID)
+	if err != nil || !found {
+		return err
+	}
+	result, report := runner.run(ctx, command, projects)
+	if !report {
+		return fmt.Errorf("agent run %s attempt %d was interrupted; its worktree is kept for the next attempt",
+			command.ID, command.Attempts)
+	}
+	result.Attempts = command.Attempts
+	return runner.finish(ctx, command.ID, result)
+}
+
+func failedRun(reason, message string) workerapi.AgentRunResult {
+	return failed(workerapi.AgentRunResult{}, reason, message)
+}
+
+// failed marks a result as failed while keeping the evidence already collected in it.
+func failed(result workerapi.AgentRunResult, reason, message string) workerapi.AgentRunResult {
+	result.Status, result.Error, result.TerminationReason = "failed", message, reason
+	return result
+}
+
+// run executes one claimed attempt. It reports false when the attempt must not be finished by this
+// worker: the worker is stopping or the control plane no longer recognizes the lease.
+func (runner *agentRunner) run(
+	ctx context.Context, command workerapi.AgentRunCommand, projects []discoveredProject,
+) (workerapi.AgentRunResult, bool) {
+	index := slices.IndexFunc(projects, func(project discoveredProject) bool { return project.ID == command.ProjectID })
+	if index < 0 {
+		return failedRun(workerapi.TerminationWorkerError, "Project checkout is unavailable."), true
+	}
+	project := projects[index]
+	if command.Branch != workerapi.AgentRunBranch(command.ID) {
+		return failedRun(workerapi.TerminationWorkerError, "Run branch is not the branch authorized for this run."), true
+	}
+	if workerapi.IsCLIProvider(command.Profile.Provider) && !modelPattern.MatchString(command.Profile.Model) {
+		return failedRun(workerapi.TerminationWorkerError, "The agent profile's model name is not valid for a CLI provider."), true
+	}
+	executor := runner.executorFor(command.Profile.Provider)
+	if executor == nil {
+		return failedRun(workerapi.TerminationWorkerError, "The agent provider is not ready on this worker."), true
+	}
+	root, err := worktreeRoot()
+	if err != nil {
+		return failedRun(workerapi.TerminationWorkerError, "Could not prepare an isolated branch."), true
+	}
+	worktree := filepath.Join(root, project.ID, command.ID)
+	activeCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	reporter := &progressReporter{
+		client: runner.client, attempts: command.Attempts, redactor: newRedactor(worktree, runner.token),
+		endpoint: agentRunEndpoint(runner.baseURL, runner.workerID, command.ID, "/progress"),
+	}
+	stopReporting := reporter.start(ctx, cancel)
+	result := runner.attempt(activeCtx, command, project, root, worktree, executor, reporter)
+	stopReporting()
+	if _, leaseLost := reporter.state(); leaseLost || ctx.Err() != nil {
+		return result, false
+	}
+	return result, true
+}
+
+func (runner *agentRunner) attempt(
+	ctx context.Context, command workerapi.AgentRunCommand, project discoveredProject, root, worktree string,
+	executor runExecutor, reporter *progressReporter,
+) workerapi.AgentRunResult {
+	result := workerapi.AgentRunResult{ProviderVersion: executor.versionLabel()}
+	err := prepareWorktree(ctx, root, project, worktreeCommand{
+		ID: command.ID, ProjectID: command.ProjectID, Branch: command.Branch, BaseBranch: command.BaseBranch,
+	})
+	if cancelled, _ := reporter.state(); cancelled && err != nil {
+		return cancelledRun(result)
+	}
+	if err != nil {
+		return failed(result, workerapi.TerminationWorkerError, "Could not prepare an isolated branch.")
+	}
+	unlock := lockWorktree(project.Path, worktree)
+	defer unlock()
+	if base, err := gitOutput(ctx, "-C", worktree, "merge-base", command.BaseBranch, "HEAD"); err == nil {
+		result.BaseCommit = strings.TrimSpace(base)
+	}
+	reporter.emit("status", fmt.Sprintf("Isolated worktree ready on %s from %s", command.Branch, command.BaseBranch))
+
+	runCtx, cancelRun := context.WithTimeout(ctx, runner.limits.wallClock)
+	workspace := runWorkspace{path: worktree, environment: runner.config.processEnvironment(project.Remote),
+		readPaths: runner.config.readPaths(project.Remote)}
+	// Git keeps a worktree's metadata in the source checkout; a sandboxed agent needs to read it.
+	if gitDir, err := gitOutput(ctx, "-C", worktree, "rev-parse", "--path-format=absolute", "--git-common-dir"); err == nil {
+		workspace.readPaths = append(workspace.readPaths, strings.TrimSpace(gitDir))
+	}
+	execution, runErr := executor.execute(runCtx, command, workspace, runner.limits, reporter.emit)
+	cancelRun()
+	result.Usage, result.TerminationReason = execution.usage, execution.reason
+
+	// Git bookkeeping must still run after cancellation or a timeout, so it gets its own deadline that
+	// starts only once the provider has stopped.
+	gitCtx, cancelGit := context.WithTimeout(context.WithoutCancel(ctx), runner.limits.gitStage)
+	defer cancelGit()
+	diff, truncated, diffErr := collectAgentRunDiff(gitCtx, worktree, command.BaseBranch)
+	if diffErr == nil {
+		result.Diff, result.DiffTruncated = &diff, truncated
+	}
+	if cancelled, _ := reporter.state(); cancelled {
+		return cancelledRun(result)
+	}
+	if diffErr != nil {
+		return failed(result, workerapi.TerminationWorkerError, "Could not collect the isolated branch diff.")
+	}
+	if runErr != nil {
+		log.Printf("agent run %s attempt %d: %v", command.ID, command.Attempts, reporter.redactor.clean(runErr.Error()))
+		reporter.emit("error", runErr.Error())
+		return failed(result, execution.reason, executionFailureMessage(execution.reason))
+	}
+	result.Output = truncateText(reporter.redactor.clean(execution.output), maxAgentRunOutputSize)
+	return runner.deliver(ctx, gitCtx, command, project, worktree, result, reporter)
+}
+
+// deliver turns a finished execution into a candidate: commit, verify, and push the run branch.
+// Verification that fails keeps the commit local; nothing unverified is published.
+func (runner *agentRunner) deliver(
+	ctx, gitCtx context.Context, command workerapi.AgentRunCommand, project discoveredProject, worktree string,
+	result workerapi.AgentRunResult, reporter *progressReporter,
+) workerapi.AgentRunResult {
+	var err error
+	result.CommitSHA, err = commitAgentRunChanges(gitCtx, worktree, command.BaseBranch, command.ID, command.Attempts)
+	if err != nil {
+		return failed(result, workerapi.TerminationWorkerError, "Could not commit isolated branch changes.")
+	}
+	if result.CommitSHA == "" {
+		reporter.emit("status", "The agent finished without changing any files.")
+		result.Status = "succeeded"
+		return result
+	}
+	reporter.emit("status", "Committed "+result.CommitSHA[:12]+" on the run branch.")
+	result.Verification = runVerification(ctx, worktree, runner.config.verificationCommands(project.Remote),
+		runner.config.processEnvironment(project.Remote), runner.limits.verification, reporter.emit)
+	if cancelled, _ := reporter.state(); cancelled {
+		return cancelledRun(result)
+	}
+	if result.Verification == workerapi.VerificationFailed {
+		return failed(result, workerapi.TerminationVerification, "Verification failed; the changes are committed on the isolated branch.")
+	}
+	if _, leaseLost := reporter.state(); leaseLost || ctx.Err() != nil {
+		// This attempt no longer owns the run; the commit stays local for the attempt that does.
+		return result
+	}
+	if command.PublishPullRequest {
+		push := runner.push
+		if push == nil {
+			push = pushAgentBranch
+		}
+		if err := push(gitCtx, worktree, project.Remote, command.Branch); err != nil {
+			result.BranchPushFailed = true
+			reporter.emit("error", "Git could not push the run branch.")
+		} else {
+			result.BranchPushed = true
+			reporter.emit("status", "Pushed the run branch to origin.")
+		}
+	}
+	result.Status = "succeeded"
+	return result
+}
+
+func cancelledRun(result workerapi.AgentRunResult) workerapi.AgentRunResult {
+	result.Status, result.Error, result.TerminationReason = "cancelled", "Cancelled from dashboard.", workerapi.TerminationCancelled
+	if result.Diff == nil {
+		result.Error = "Cancelled; partial diff could not be captured."
+	}
+	result.Output, result.BranchPushed, result.BranchPushFailed = "", false, false
+	return result
+}
+
+func executionFailureMessage(reason string) string {
+	switch reason {
+	case workerapi.TerminationWallClock:
+		return "The run exceeded its wall-clock limit; partial changes are kept in the worktree."
+	case workerapi.TerminationInactivity:
+		return "The agent produced no activity within the inactivity limit; partial changes are kept."
+	case workerapi.TerminationToolTimeout:
+		return "A tool started by the agent exceeded the tool-activity limit; partial changes are kept."
+	default:
+		return "Agent runtime failed; inspect the run events and worker logs."
+	}
+}
+
+const (
+	finishAttempts   = 4
+	finishRetryDelay = 3 * time.Second
+)
+
+// finish delivers the result. A dropped connection or a server error would otherwise discard hours of
+// work and repeat the whole run, so those are retried a few times. A conflict after an unanswered send
+// means the earlier send was applied.
+func (runner *agentRunner) finish(ctx context.Context, runID string, result workerapi.AgentRunResult) error {
+	body, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("encode agent run result: %w", err)
+	}
+	endpoint := agentRunEndpoint(runner.baseURL, runner.workerID, runID, "")
+	// The control plane may create the pull request while handling the result.
+	client := *runner.client
+	client.Timeout = time.Minute
+	var lastErr error
+	for attempt := 1; attempt <= finishAttempts; attempt++ {
+		status, err := putJSON(ctx, &client, endpoint, body)
+		switch {
+		case err == nil && status == http.StatusOK:
+			return nil
+		case err == nil && status == http.StatusConflict && lastErr != nil:
+			return nil
+		case err == nil && status < http.StatusInternalServerError:
+			return fmt.Errorf("agent run result returned HTTP %d", status)
+		case err != nil:
+			lastErr = err
+		default:
+			lastErr = fmt.Errorf("agent run result returned HTTP %d", status)
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("send agent run result: %w", lastErr)
+		case <-time.After(runner.finishDelay()):
+		}
+	}
+	return fmt.Errorf("send agent run result: %w", lastErr)
+}
+
+func (runner *agentRunner) finishDelay() time.Duration {
+	if runner.finishRetryDelay > 0 {
+		return runner.finishRetryDelay
+	}
+	return finishRetryDelay
+}
+
+func putJSON(ctx context.Context, client *http.Client, endpoint string, body []byte) (int, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := client.Do(request)
+	if err != nil {
+		return 0, err
+	}
+	defer response.Body.Close()
+	return response.StatusCode, nil
+}

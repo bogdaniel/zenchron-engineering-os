@@ -31,11 +31,12 @@ func validAgentRunComments(comments []agentRunComment) bool {
 }
 
 func agentRunPrompt(item agentRun) string {
-	if len(item.ReviewComments) == 0 {
-		return item.Prompt
-	}
 	var prompt strings.Builder
 	prompt.WriteString(item.Prompt)
+	prompt.WriteString(issuePromptSection(item))
+	if len(item.ReviewComments) == 0 {
+		return prompt.String()
+	}
 	prompt.WriteString("\n\nReviewer feedback:\n")
 	for _, comment := range item.ReviewComments {
 		prompt.WriteString("- ")
@@ -49,16 +50,12 @@ func agentRunPrompt(item agentRun) string {
 }
 
 func (store *agentRunStore) canRequestChanges(item agentRun) bool {
-	if !reviewableAgentRun(item) || item.Attempts >= 3 || item.Profile == nil ||
+	if !reviewableAgentRun(item) || item.Attempts >= maxAgentRunAttempts || item.Profile == nil ||
 		!slices.Contains(item.Profile.Tools, "code.write") {
 		return false
 	}
-	store.registry.mu.RLock()
-	worker, online := store.registry.workers[item.WorkerID]
-	online = online && time.Since(worker.LastSeen) <= workerOnlineWindow &&
-		worker.AgentRuntimeEnabled != nil && *worker.AgentRuntimeEnabled
-	store.registry.mu.RUnlock()
-	return online
+	worker, online := store.registry.onlineWorker(item.WorkerID)
+	return online && workerRunsProfile(worker, *item.Profile)
 }
 
 func reviewableAgentRun(item agentRun) bool {
@@ -90,17 +87,18 @@ func (store *agentRunStore) reviewRun(w http.ResponseWriter, r *http.Request, re
 		http.Error(w, "review comment is invalid", http.StatusBadRequest)
 		return
 	}
-	item, status, message := store.recordReview(runID, "", input.Comment, requestChanges, true)
+	item, status, message := store.recordReview(accessFor(r), runID, "", input.Comment, requestChanges, true)
 	if status != 0 {
 		http.Error(w, message, status)
 		return
 	}
-	item.Profile = nil
-	writeJSON(w, http.StatusOK, item)
+	writeJSON(w, http.StatusOK, publicAgentRun(item))
 }
 
+// recordReview stores feedback on a finished run. A change request queues another pass only when the
+// caller may dispatch work to the run's worker; feedback alone never starts work on someone's machine.
 func (store *agentRunStore) recordReview(
-	runID, projectID, comment string, requestChanges, requireQueue bool,
+	access requestAccess, runID, projectID, comment string, requestChanges, requireQueue bool,
 ) (agentRun, int, string) {
 	store.mu.Lock()
 	item, exists := store.items[runID]
@@ -120,7 +118,7 @@ func (store *agentRunStore) recordReview(
 		store.mu.Unlock()
 		return agentRun{}, http.StatusConflict, "agent run review history is full"
 	}
-	canQueue := requestChanges && store.canRequestChanges(item)
+	canQueue := requestChanges && store.canRequestChanges(item) && access.mayDispatchTo(item.WorkerID)
 	if requestChanges && !canQueue && requireQueue {
 		store.mu.Unlock()
 		return agentRun{}, http.StatusConflict, "agent run cannot accept another code-change pass"
@@ -132,6 +130,7 @@ func (store *agentRunStore) recordReview(
 	item.UpdatedAt = time.Now().UTC()
 	if canQueue {
 		item.Status, item.Output, item.Error, item.CancelRequested, item.LeaseUntil = "queued", "", "", false, time.Time{}
+		item.TerminationReason, item.Verification, item.Publication = "", "", ""
 	}
 	store.items[runID] = item
 	if err := store.persistLocked(); err != nil {

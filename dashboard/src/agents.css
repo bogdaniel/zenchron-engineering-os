@@ -364,7 +364,21 @@
   background: #183047;
   font-size: 10px;
 }
-.agents-queue-note {
+.agents-issue-draft {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border: 1px solid #302d42;
+  border-radius: 8px;
+}
+.agents-issue-draft legend {
+  padding: 0 4px;
+  color: #958ea2;
+  font-size: 11px;
+}
+.agents-queue-note,
+.agents-issue-note {
   color: #958ea2;
   font-size: 10px;
   line-height: 1.5;

@@ -27,6 +27,7 @@ import { OverviewPage } from './OverviewPage';
 import { Sidebar } from './Sidebar';
 import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
+import { workerProvidersSchema } from './agentRunQueue';
 import './style.css';
 import './overview.css';
 import './monaco.css';
@@ -55,6 +56,7 @@ const workersResponse = z.array(
     status: z.enum(['online', 'offline']),
     last_seen: z.string(),
     agent_runtime_enabled: z.boolean().optional(),
+    providers: workerProvidersSchema,
   }),
 );
 function App() {
@@ -93,7 +95,10 @@ function App() {
     retry: false,
   });
   const unauthorized = (auth.error as (Error & { status?: number }) | null)?.status === 401;
-  const mockPreview = localReviewHost && !loginRoute;
+  // On a local host the pages show design previews with sample data. `?live` in the address turns that
+  // off so a developer running everything locally sees the control plane's real data on every page.
+  const liveData = new URLSearchParams(window.location.search).has('live');
+  const mockPreview = localReviewHost && !loginRoute && !liveData;
   const designPreview = activePage === 'overview' && mockPreview;
   const objectivePreview = activePage === 'objectives' && mockPreview;
   const workspacePreview = activePage === 'workspace' && mockPreview;
@@ -278,6 +283,8 @@ function App() {
               modelRuntimeUnknownWorkerCount={onlineWorkers.filter((worker) => worker.agent_runtime_enabled === undefined).length}
               projectCount={projects.data?.length ?? 0}
               gitHubProjectCount={projects.data?.filter((project) => project.git_remote.startsWith('github.com/')).length ?? 0}
+              cliReadyWorkers={Object.fromEntries(['codex-cli', 'claude-code'].map((id) => [id,
+                onlineWorkers.filter((worker) => worker.providers?.some((item) => item.id === id && item.ready)).length]))}
             />
           ) : activePage === 'reports' ? (
             <ReportsPage designPreview={reportPreview}

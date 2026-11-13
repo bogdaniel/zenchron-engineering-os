@@ -13,12 +13,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 const (
 	workerOnlineWindow   = 15 * time.Second
 	maxJSONRequestBody   = 1 << 20
 	maxProjectsPerWorker = 1000
+	maxWorkerProviders   = 8
 )
 
 type workerRegistry struct {
@@ -36,6 +39,8 @@ type workerRecord struct {
 	Name                string    `json:"name"`
 	LastSeen            time.Time `json:"last_seen"`
 	AgentRuntimeEnabled *bool     `json:"agent_runtime_enabled,omitempty"`
+	// Providers are the installed coding CLIs the worker detected, with their version and sign-in state.
+	Providers []workerapi.ProviderStatus `json:"providers,omitempty"`
 }
 
 type projectRecord struct {
@@ -151,13 +156,18 @@ func newMuxWithStores(
 	mux.HandleFunc("POST /api/v1/workers/{id}/worktrees/claim", worktrees.claim)
 	mux.HandleFunc("PUT /api/v1/workers/{id}/worktrees/{requestID}", worktrees.finish)
 	mux.HandleFunc("GET /api/v1/agent-runs", runs.list)
-	mux.HandleFunc("GET /api/v1/agent-runs/{id}/diff", runs.diff)
-	mux.HandleFunc("POST /api/v1/agent-runs/{id}/cancel", runs.cancel)
-	mux.HandleFunc("POST /api/v1/agent-runs/{id}/comments", runs.addComment)
-	mux.HandleFunc("POST /api/v1/agent-runs/{id}/request-changes", runs.requestChanges)
+	mux.HandleFunc("GET /api/v1/agent-runs/{id}/diff", runs.authorized(runs.diff))
+	mux.HandleFunc("POST /api/v1/agent-runs/{id}/cancel", runs.authorized(runs.cancel))
+	mux.HandleFunc("POST /api/v1/agent-runs/{id}/comments", runs.authorized(runs.addComment))
+	mux.HandleFunc("POST /api/v1/agent-runs/{id}/request-changes", runs.authorized(runs.requestChanges))
 	mux.HandleFunc("POST /api/v1/agent-runs", runs.create)
 	mux.HandleFunc("POST /api/v1/workers/{id}/agent-runs/claim", runs.claim)
-	mux.HandleFunc("GET /api/v1/workers/{id}/agent-runs/{requestID}/cancellation", runs.cancellationStatus)
+	mux.HandleFunc("POST /api/v1/workers/{id}/agent-runs/{requestID}/progress", runs.progress)
+	mux.HandleFunc("GET /api/v1/agent-runs/{id}/events", runs.authorized(runs.listEvents))
+	mux.HandleFunc("GET /api/v1/agent-runs/{id}/pull-request", runs.authorized(runs.pullRequestStatus))
+	mux.HandleFunc("POST /api/v1/agent-runs/{id}/publish", runs.authorized(runs.publish))
+	mux.HandleFunc("POST /api/v1/agent-runs/{id}/sync-reviews", runs.authorized(runs.syncReviews))
+	mux.HandleFunc("POST /api/v1/projects/{id}/issues", registry.createGitHubIssue)
 	mux.HandleFunc("PUT /api/v1/workers/{id}/agent-runs/{requestID}", runs.finish)
 	return mux
 }
@@ -174,10 +184,19 @@ func (registry *workerRegistry) ready(w http.ResponseWriter, _ *http.Request) {
 	http.Error(w, "no workers online", http.StatusServiceUnavailable)
 }
 
-func (registry *workerRegistry) listWorkers(w http.ResponseWriter, _ *http.Request) {
+func (registry *workerRegistry) listWorkers(w http.ResponseWriter, r *http.Request) {
+	access := accessFor(r)
 	registry.mu.RLock()
+	visible := make(map[string]bool, len(registry.workers))
+	for _, project := range registry.projects {
+		visible[project.WorkerID] = visible[project.WorkerID] || access.allows(project.GitRemote)
+	}
 	workers := make([]workerStatus, 0, len(registry.workers))
 	for _, worker := range registry.workers {
+		// Under an access policy a user sees only workers serving a repository they may touch.
+		if access.enforced && !visible[worker.ID] {
+			continue
+		}
 		status := "offline"
 		if time.Since(worker.LastSeen) <= workerOnlineWindow {
 			status = "online"
@@ -191,10 +210,14 @@ func (registry *workerRegistry) listWorkers(w http.ResponseWriter, _ *http.Reque
 	writeJSON(w, http.StatusOK, workers)
 }
 
-func (registry *workerRegistry) listProjects(w http.ResponseWriter, _ *http.Request) {
+func (registry *workerRegistry) listProjects(w http.ResponseWriter, r *http.Request) {
+	access := accessFor(r)
 	registry.mu.RLock()
 	projects := make([]projectStatus, 0, len(registry.projects))
 	for _, project := range registry.projects {
+		if !access.allows(project.GitRemote) {
+			continue
+		}
 		status := "offline"
 		if time.Since(project.LastSeen) <= workerOnlineWindow {
 			status = "online"
@@ -219,16 +242,7 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var request struct {
-		Name                string `json:"name"`
-		AgentRuntimeEnabled *bool  `json:"agent_runtime_enabled"`
-		Projects            []struct {
-			ID     string `json:"id"`
-			Name   string `json:"name"`
-			Branch string `json:"branch"`
-			Remote string `json:"git_remote"`
-		} `json:"projects"`
-	}
+	var request workerapi.Heartbeat
 	r.Body = http.MaxBytesReader(w, r.Body, maxJSONRequestBody)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -247,6 +261,10 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 	}
 	if len(request.Projects) > maxProjectsPerWorker {
 		http.Error(w, "too many projects in heartbeat", http.StatusBadRequest)
+		return
+	}
+	if !validProviderStatuses(request.Providers) {
+		http.Error(w, "worker providers are invalid", http.StatusBadRequest)
 		return
 	}
 
@@ -286,6 +304,7 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 	now := time.Now().UTC()
 	worker := workerRecord{
 		ID: id, Name: request.Name, LastSeen: now, AgentRuntimeEnabled: request.AgentRuntimeEnabled,
+		Providers: request.Providers,
 	}
 	registry.mu.Lock()
 	registry.workers[id] = worker
@@ -294,7 +313,17 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 			delete(registry.projects, key)
 		}
 	}
+	access := accessFor(r)
+	claimed := make(map[string]bool, len(registry.projects))
+	for _, project := range registry.projects {
+		claimed[project.ID] = true
+	}
 	for _, project := range request.Projects {
+		// An enrolled worker registers only the repositories it was approved for, and never a project id
+		// another worker already registered: lookups by project id must name exactly one checkout.
+		if !access.allows(project.Remote) || claimed[project.ID] {
+			continue
+		}
 		key := id + ":" + project.ID
 		registry.projects[key] = projectRecord{
 			ID: project.ID, Name: project.Name, Branch: project.Branch, GitRemote: project.Remote,
@@ -303,6 +332,36 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 	}
 	registry.mu.Unlock()
 	writeJSON(w, http.StatusOK, worker)
+}
+
+func validProviderStatuses(providers []workerapi.ProviderStatus) bool {
+	if len(providers) > maxWorkerProviders {
+		return false
+	}
+	for _, provider := range providers {
+		if !workerapi.IsCLIProvider(provider.ID) || len(provider.Version) > 100 || strings.ContainsAny(provider.Version, "\r\n") {
+			return false
+		}
+	}
+	return true
+}
+
+func (registry *workerRegistry) onlineWorker(id string) (workerRecord, bool) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+	worker, exists := registry.workers[id]
+	return worker, exists && time.Since(worker.LastSeen) <= workerOnlineWindow
+}
+
+func (registry *workerRegistry) onlineProject(id string) (projectRecord, bool) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+	for _, project := range registry.projects {
+		if project.ID == id && time.Since(project.LastSeen) <= workerOnlineWindow {
+			return project, true
+		}
+	}
+	return projectRecord{}, false
 }
 
 func validGitRemote(remote string) bool {

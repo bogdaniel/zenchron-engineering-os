@@ -180,8 +180,10 @@ test('local Reviews mock uses its fixture without provider reads or review write
   await expect(page.getByRole('region', { name: 'Split diff view' })).toContainText('collectArtifacts');
   await diffControls.nth(1).click();
   await expect(diffControls.nth(1)).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByLabel('Pull request diff')).toBeVisible();
   await expect(page.locator('.reviews-code-editor .minimap')).toBeVisible();
+  // Monaco repeats the label on its inner edit surface once it has loaded, so the label alone matches one element
+  // before the editor loads and two after. Name the editor container, as github-reviews.spec.ts does.
+  await expect(page.locator('.reviews-code-editor[aria-label="Pull request diff"]')).toBeVisible();
   await expect.poll(() => page.locator('.reviews-code-editor .margin-view-overlays .line-numbers').allTextContents())
     .toEqual(['118\u00a0118', '119\u00a0\u00a0\u00a0\u00a0', '\u00a0\u00a0\u00a0\u00a0119',
       '\u00a0\u00a0\u00a0\u00a0120', '\u00a0\u00a0\u00a0\u00a0121',

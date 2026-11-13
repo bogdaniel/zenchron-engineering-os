@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -184,4 +185,47 @@ func gitOutput(ctx context.Context, args ...string) (string, error) {
 func validID(value string) bool {
 	decoded, err := hex.DecodeString(value)
 	return err == nil && len(decoded) == 16
+}
+
+// lockWorktree marks a worktree as in use with Git's own lock so cleanup never removes the worktree of a
+// running attempt. A worker that crashes leaves the lock in place, which keeps that worktree too.
+func lockWorktree(repository, worktree string) (unlock func()) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	// A crashed earlier attempt leaves the worktree locked; locking again fails harmlessly.
+	_, _ = gitOutput(ctx, "-C", repository, "worktree", "lock", "--reason", "zenchron run in progress", worktree)
+	return func() {
+		unlockCtx, cancelUnlock := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelUnlock()
+		if _, err := gitOutput(unlockCtx, "-C", repository, "worktree", "unlock", worktree); err != nil {
+			log.Printf("unlock worktree for %s: %v", filepath.Base(worktree), err)
+		}
+	}
+}
+
+// cleanupWorktrees removes run worktrees that Git considers safe to remove: not locked by a running or
+// crashed attempt and without modified or untracked files. Run branches and their commits are kept.
+func cleanupWorktrees(ctx context.Context, root string, projects []discoveredProject) (removed, kept []string, err error) {
+	for _, project := range projects {
+		entries, readErr := os.ReadDir(filepath.Join(root, project.ID))
+		if errors.Is(readErr, os.ErrNotExist) {
+			continue
+		}
+		if readErr != nil {
+			return removed, kept, fmt.Errorf("read worktrees for %s: %w", project.Name, readErr)
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() || !validID(entry.Name()) {
+				continue
+			}
+			label := project.Name + "/" + entry.Name()
+			path := filepath.Join(root, project.ID, entry.Name())
+			if _, removeErr := gitOutput(ctx, "-C", project.Path, "worktree", "remove", path); removeErr != nil {
+				kept = append(kept, label)
+				continue
+			}
+			removed = append(removed, label)
+		}
+	}
+	return removed, kept, nil
 }

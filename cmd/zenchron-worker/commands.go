@@ -6,25 +6,25 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 const workerHeartbeatInterval = 5 * time.Second
 
 func processWorkerCommands(
-	ctx context.Context, client *http.Client, baseURL *url.URL, workerID, workerName string,
-	projects []discoveredProject, runtime *agentRuntime,
+	ctx context.Context, runner *agentRunner, heartbeat workerapi.Heartbeat, projects []discoveredProject,
 ) error {
-	commandCtx, stopHeartbeat := keepWorkerHeartbeat(ctx, client, baseURL, workerID, workerName, projects, runtime != nil)
+	commandCtx, stopHeartbeat := keepWorkerHeartbeat(ctx, runner.client, runner.baseURL, runner.workerID, heartbeat)
 	defer stopHeartbeat()
-	if err := processWorktreeCommand(commandCtx, client, baseURL, workerID, projects); err != nil {
+	if err := processWorktreeCommand(commandCtx, runner.client, runner.baseURL, runner.workerID, projects); err != nil {
 		return err
 	}
-	return processAgentRunCommand(commandCtx, client, baseURL, workerID, projects, runtime)
+	return runner.process(commandCtx, projects)
 }
 
 func keepWorkerHeartbeat(
-	ctx context.Context, client *http.Client, baseURL *url.URL, workerID, workerName string,
-	projects []discoveredProject, runtimeEnabled bool,
+	ctx context.Context, client *http.Client, baseURL *url.URL, workerID string, heartbeat workerapi.Heartbeat,
 ) (context.Context, func()) {
 	heartbeatCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
@@ -37,7 +37,7 @@ func keepWorkerHeartbeat(
 			case <-heartbeatCtx.Done():
 				return
 			case <-ticker.C:
-				if err := sendHeartbeat(heartbeatCtx, client, baseURL, workerID, workerName, projects, runtimeEnabled); err != nil &&
+				if err := sendHeartbeat(heartbeatCtx, client, baseURL, workerID, heartbeat); err != nil &&
 					heartbeatCtx.Err() == nil {
 					log.Printf("worker heartbeat failed during command: %v", err)
 				}

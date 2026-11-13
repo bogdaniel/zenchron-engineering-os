@@ -22,6 +22,11 @@ again.
 The control plane and worker must use the same release: older workers do not echo the attempt number and their results
 are rejected.
 
+Agent runs lock their worktree with `git worktree lock` while an attempt is executing. `zenchron-worker
+cleanup-worktrees` removes worktrees under the worktree root that are neither locked nor contain modified or untracked
+files, and reports the ones it kept; branches and commits are never removed. With an access policy, worktree requests
+are visible and creatable only for repositories the user is granted, on their own or a shared worker.
+
 This dashboard operation prepares a worktree only; agent runs use separate per-run worktrees. It does not invoke an
 agent, modify source files, commit changes, or open a pull request. The control plane API defaults to loopback; remote
 listening requires the GitHub OAuth and worker authentication settings described in
@@ -54,5 +59,7 @@ sequenceDiagram
   rejection, duplicate claims, restart recovery after an expired lease, stale-attempt rejection, and cancellation.
   `go test ./cmd/zenchron-worker -run 'TestPrepareWorktree'`
   covers real Git worktree creation, retry idempotence, invalid-branch rejection, and base-branch preservation.
+- `go test ./cmd/zenchron-worker -run 'TestCleanupWorktreesKeepsLockedAndModifiedWorktrees|TestStaleLease' -count=1`
+  covers cleanup refusing locked and modified worktrees while keeping the run branch.
 - `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep "isolated Git branch"` uses a temporary Git checkout
   and confirms the worker completes the request through the dashboard.

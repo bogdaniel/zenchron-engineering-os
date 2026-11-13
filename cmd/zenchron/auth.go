@@ -25,6 +25,7 @@ type authConfig struct {
 	clientSecret string
 	sessionKey   []byte
 	workerToken  string
+	access       *accessPolicy
 	allowedUsers []string
 	publicURL    *url.URL
 	https        bool
@@ -40,18 +41,23 @@ type authUser struct {
 
 func loadAuthConfig() (*authConfig, bool, error) {
 	keys := []string{"ZENCHRON_GITHUB_CLIENT_ID", "ZENCHRON_GITHUB_CLIENT_SECRET", "ZENCHRON_SESSION_SECRET",
-		"ZENCHRON_WORKER_TOKEN", "ZENCHRON_GITHUB_ALLOWED_USERS", "ZENCHRON_PUBLIC_URL"}
-	provided := false
-	for _, key := range keys {
-		provided = provided || strings.TrimSpace(os.Getenv(key)) != ""
-	}
-	if !provided {
+		"ZENCHRON_GITHUB_ALLOWED_USERS", "ZENCHRON_PUBLIC_URL"}
+	workerKeys := []string{"ZENCHRON_WORKER_TOKEN", "ZENCHRON_ACCESS_FILE"}
+	isSet := func(key string) bool { return strings.TrimSpace(os.Getenv(key)) != "" }
+	if !slices.ContainsFunc(slices.Concat(keys, workerKeys), isSet) {
 		return nil, false, nil
 	}
 	for _, key := range keys {
-		if strings.TrimSpace(os.Getenv(key)) == "" {
+		if !isSet(key) {
 			return nil, true, fmt.Errorf("%s is required when authentication is configured", key)
 		}
+	}
+	if !slices.ContainsFunc(workerKeys, isSet) {
+		return nil, true, fmt.Errorf("ZENCHRON_ACCESS_FILE or ZENCHRON_WORKER_TOKEN is required when authentication is configured")
+	}
+	access, err := loadAccessPolicy()
+	if err != nil {
+		return nil, true, err
 	}
 	publicURL, err := url.Parse(strings.TrimRight(os.Getenv("ZENCHRON_PUBLIC_URL"), "/"))
 	if err != nil || (publicURL.Scheme != "https" && publicURL.Scheme != "http") || publicURL.Host == "" ||
@@ -59,7 +65,7 @@ func loadAuthConfig() (*authConfig, bool, error) {
 		return nil, true, fmt.Errorf("ZENCHRON_PUBLIC_URL must be an http(s) origin without a path")
 	}
 	workerToken := strings.TrimSpace(os.Getenv("ZENCHRON_WORKER_TOKEN"))
-	if len(workerToken) < 32 || strings.ContainsAny(workerToken, " \t\r\n") {
+	if access == nil && (len(workerToken) < 32 || strings.ContainsAny(workerToken, " \t\r\n")) {
 		return nil, true, fmt.Errorf("ZENCHRON_WORKER_TOKEN must contain at least 32 non-whitespace bytes")
 	}
 	allowedUsers := strings.FieldsFunc(os.Getenv("ZENCHRON_GITHUB_ALLOWED_USERS"), func(r rune) bool { return r == ',' || r == '\n' })
@@ -76,7 +82,7 @@ func loadAuthConfig() (*authConfig, bool, error) {
 	}
 	return &authConfig{
 		clientID: strings.TrimSpace(os.Getenv("ZENCHRON_GITHUB_CLIENT_ID")), clientSecret: strings.TrimSpace(os.Getenv("ZENCHRON_GITHUB_CLIENT_SECRET")),
-		sessionKey: secret, workerToken: workerToken, allowedUsers: allowedUsers,
+		sessionKey: secret, workerToken: workerToken, access: access, allowedUsers: allowedUsers,
 		publicURL: publicURL, https: publicURL.Scheme == "https", githubURL: "https://github.com", githubAPIURL: "https://api.github.com",
 	}, true, nil
 }
@@ -124,25 +130,64 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 			return
 		}
 		if config != nil && strings.HasPrefix(r.URL.Path, "/api/v1/") {
-			if isWorkerAPIRequest(r.Method, r.URL.Path) {
-				if !validBearer(r.Header.Get("Authorization"), config.workerToken) {
-					http.Error(w, "worker authentication required", http.StatusUnauthorized)
-					return
-				}
-			} else {
-				if _, ok := readSession(r, config); !ok {
-					http.Error(w, "authentication required", http.StatusUnauthorized)
-					return
-				}
-				if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions &&
-					!validRequestOrigin(r.Header.Get("Origin"), config) {
-					http.Error(w, "invalid request origin", http.StatusForbidden)
-					return
-				}
+			access, status, message := config.authorize(r)
+			if status != 0 {
+				http.Error(w, message, status)
+				return
 			}
+			r = withRequestAccess(r, access)
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// authorize authenticates one API request and returns what its caller may touch.
+func (config *authConfig) authorize(r *http.Request) (requestAccess, int, string) {
+	var policy *accessFile
+	if config.access != nil {
+		var err error
+		if policy, err = config.access.current(); err != nil {
+			log.Printf("access policy is unavailable; denying request: %v", err)
+			return requestAccess{}, http.StatusServiceUnavailable, "access policy is unavailable"
+		}
+	}
+	if isWorkerAPIRequest(r.Method, r.URL.Path) {
+		return config.authorizeWorker(r, policy)
+	}
+	user, ok := readSession(r, config)
+	if !ok {
+		return requestAccess{}, http.StatusUnauthorized, "authentication required"
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions &&
+		!validRequestOrigin(r.Header.Get("Origin"), config) {
+		return requestAccess{}, http.StatusForbidden, "invalid request origin"
+	}
+	if policy == nil {
+		return requestAccess{}, 0, ""
+	}
+	login := strings.ToLower(user.Login)
+	return requestAccess{enforced: true, user: login, repositories: policy.Users[login], policy: policy}, 0, ""
+}
+
+// authorizeWorker accepts the legacy shared token only when no access file is configured. With an
+// access file, a token is valid for exactly the worker id it was enrolled for.
+func (config *authConfig) authorizeWorker(r *http.Request, policy *accessFile) (requestAccess, int, string) {
+	authorization := r.Header.Get("Authorization")
+	if policy == nil {
+		if !validBearer(authorization, config.workerToken) {
+			return requestAccess{}, http.StatusUnauthorized, "worker authentication required"
+		}
+		return requestAccess{}, 0, ""
+	}
+	workerID := ""
+	if parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/"); len(parts) > 4 {
+		workerID = strings.ToLower(parts[3])
+	}
+	grant, ok := policy.authenticateWorker(workerID, authorization)
+	if !ok {
+		return requestAccess{}, http.StatusUnauthorized, "worker authentication required"
+	}
+	return requestAccess{enforced: true, repositories: grant.Repositories, policy: policy}, 0, ""
 }
 
 func validRequestOrigin(origin string, config *authConfig) bool {
@@ -185,7 +230,7 @@ func isWorkerAPIRequest(method, path string) bool {
 		return true
 	case len(parts) == 6 && parts[4] == "agent-runs" && parts[5] == "claim" && method == http.MethodPost:
 		return true
-	case len(parts) == 7 && parts[4] == "agent-runs" && parts[6] == "cancellation" && method == http.MethodGet:
+	case len(parts) == 7 && parts[4] == "agent-runs" && parts[6] == "progress" && method == http.MethodPost:
 		return true
 	case len(parts) == 6 && parts[4] == "agent-runs" && method == http.MethodPut:
 		return true

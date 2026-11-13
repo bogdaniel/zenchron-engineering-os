@@ -36,6 +36,9 @@ func run() error {
 	if !isLoopbackHost(host) && !configured {
 		return fmt.Errorf("non-loopback listen address requires GitHub authentication and worker credentials")
 	}
+	if !isLoopbackHost(host) && auth.access == nil {
+		return fmt.Errorf("non-loopback listen address requires ZENCHRON_ACCESS_FILE; the shared worker token is for loopback use only")
+	}
 	if !isLoopbackHost(host) && !auth.https {
 		return fmt.Errorf("ZENCHRON_PUBLIC_URL must use https for a non-loopback control plane")
 	}

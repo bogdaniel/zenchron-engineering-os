@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 const (
@@ -44,7 +46,7 @@ type chatTool struct {
 	} `json:"function"`
 }
 
-func (runtime *agentRuntime) execute(ctx context.Context, command agentRunCommand, repository string) (string, error) {
+func (runtime *agentRuntime) complete(ctx context.Context, command workerapi.AgentRunCommand, repository string) (string, error) {
 	if strings.TrimSpace(command.Profile.Model) == "" {
 		return "", errors.New("agent profile has no model identifier")
 	}
