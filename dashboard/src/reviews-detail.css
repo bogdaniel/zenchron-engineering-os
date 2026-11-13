@@ -12,6 +12,8 @@
   gap: 8px;
   min-width: 0;
 }
+/* A run's branch name is one long token; let it wrap instead of running under the status badge. */
+.reviews-detail-heading h3 { overflow-wrap: anywhere; }
 .reviews-pr-icon {
   display: grid;
   width: 29px;
