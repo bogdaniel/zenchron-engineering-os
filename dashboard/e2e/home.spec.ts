@@ -101,7 +101,7 @@ test('objectives can be created and updated from the dashboard', async ({ page }
     Object.assign(item, route.request().postDataJSON(), { updated_at: new Date().toISOString() });
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(item) });
   });
-  await page.goto('http://zenchron.test:4173/');
+  await page.goto('/');
   await page.getByRole('link', { name: 'Objectives' }).click();
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   await page.getByRole('button', { name: 'New Objective' }).click();
@@ -113,13 +113,15 @@ test('objectives can be created and updated from the dashboard', async ({ page }
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   await expect(page.locator('.objective-detail-head h3')).toHaveCSS('font-size', '18px');
   await expect(page.locator('.objective-detail-head h3')).toHaveCSS('font-weight', '650');
-  await expect(page.locator('.objective-overview-grid')).toContainText('Acceptance criteria');
+  await expect(page.locator('.objective-overview-grid')).toContainText('Acceptance Criteria');
   await expect(page.getByLabel('Progress')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Edit objective' }).click();
+  await page.getByRole('button', { name: 'More objective actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit objective' }).click();
   await page.getByLabel('Progress').fill('30');
   await page.getByRole('button', { name: 'Cancel edit' }).click();
   await expect(page.getByText('0% complete')).toBeVisible();
-  await page.getByRole('button', { name: 'Edit objective' }).click();
+  await page.getByRole('button', { name: 'More objective actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit objective' }).click();
   await page.getByLabel('Progress').fill('45');
   await page.getByRole('button', { name: 'Save updates' }).click();
   await expect(page.getByText('45% complete')).toBeVisible();
@@ -154,7 +156,7 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
     }]),
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('http://zenchron.test:4173/#objectives');
+  await page.goto('/#objectives');
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   const objectiveRows = page.locator('[role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(6);
@@ -164,22 +166,23 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   const linkedProductCell = objectiveRows.first().locator('.ag-cell[col-id="product"]');
   await expect(linkedProductCell).toHaveText('Core Product');
   expect(await linkedProductCell.evaluate((cell) => cell.scrollWidth <= cell.clientWidth)).toBe(true);
-  await expect(page.locator('.objective-detail-head h3')).toHaveText('Launch AI code review v2');
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Launch AI code review v211111111');
   await expect(page.locator('.detail-meta-grid')).toContainText('Alex Chen');
   await expect(page.locator('.detail-meta-grid')).toContainText('Core Product');
   expect(await page.locator('.detail-meta-grid').evaluate((grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').length)).toBe(4);
   await expect(page.locator('.detail-summary')).toContainText('78% complete');
-  await expect(page.locator('.objective-overview-grid')).toContainText('Related pull requests');
+  await expect(page.locator('.objective-overview-grid')).toContainText('Related PRs');
   await expect(page.getByLabel('Progress')).toHaveCount(0);
   const milestonesTab = page.getByRole('tab', { name: 'Milestones' });
   await milestonesTab.click();
   await expect(milestonesTab).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel')).toContainText('not included in the available objective data');
+  await expect(page.getByRole('tabpanel')).toContainText('Unavailable: the control plane does not record milestones for objectives.');
   await page.getByRole('tab', { name: 'Overview' }).click();
-  await expect(page.locator('.capacity-bars > div')).toHaveCount(6);
+  const capacityNote = page.locator('.objective-capacity .objective-unavailable-note');
+  await expect(capacityNote).toHaveText('Unavailable: the control plane does not record when objectives were planned or completed.');
   await expect(page.getByRole('region', { name: 'Objective metrics' }).locator('.objective-metric')).toHaveCount(6);
   const capacityBounds = await Promise.all([
-    page.locator('.capacity-bars > div').last().boundingBox(),
+    capacityNote.boundingBox(),
     page.locator('.objective-capacity').boundingBox(),
   ]);
   expect(capacityBounds[0]!.y + capacityBounds[0]!.height).toBeLessThanOrEqual(capacityBounds[1]!.y + capacityBounds[1]!.height - 6);
@@ -202,7 +205,7 @@ test('Objectives dashboard matches the planning mock at the reference viewport',
   expect(layout.content?.y).toBeCloseTo(251.5, 0);
   expect(layout.content?.height).toBe(615);
   await expect(page.locator('.objective-grid-wrap .ag-header-cell').last()).toBeVisible();
-  await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').last()).toHaveText('Workflows');
+  await expect(page.locator('.objective-grid-wrap .ag-header-cell[col-id="workflow_count"] .ag-header-cell-text')).toHaveText('Workflows');
   expect((layout.table?.width ?? 0) / (layout.detail?.width ?? 1)).toBeGreaterThan(0.94);
   expect((layout.table?.width ?? 0) / (layout.detail?.width ?? 1)).toBeLessThan(0.98);
   expect(layout.capacity?.bottom).toBeLessThanOrEqual(867);
@@ -229,7 +232,7 @@ test('Objectives grid keeps product names while the catalog loads', async ({ pag
     }]),
   }));
   await page.setViewportSize({ width: 1522, height: 856 });
-  await page.goto('http://zenchron.test:4173/#objectives');
+  await page.goto('/#objectives');
   const objectiveRows = page.locator('[role="row"]:has([role="gridcell"])');
   const productCell = objectiveRows.first().locator('.ag-cell[col-id="product"]');
   await expect(productCell).toHaveText('Nova Platform');
