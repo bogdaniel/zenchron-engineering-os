@@ -424,9 +424,7 @@ func TestAttemptThatLosesItsLeaseAfterCommittingDoesNotPush(t *testing.T) {
 	stale.command.PublishPullRequest, stale.runner.push = true, countPush
 	project := discoveredProject{ID: stale.command.ProjectID, Name: "repository", Path: stale.repository}
 	root := filepath.Dir(filepath.Dir(stale.worktree))
-	if err := prepareWorktree(context.Background(), root, project, worktreeCommand{
-		ID: stale.command.ID, ProjectID: stale.command.ProjectID, Branch: stale.command.Branch, BaseBranch: "main",
-	}); err != nil {
+	if err := prepareWorktree(context.Background(), root, project, stale.command.ID, stale.command.Branch, "main"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(stale.worktree, "README.md"), []byte("late change\n"), 0o600); err != nil {
@@ -500,8 +498,7 @@ func TestCleanupWorktreesKeepsLockedAndModifiedWorktrees(t *testing.T) {
 	projects := []discoveredProject{{ID: agentRunTestID, Name: "repository", Path: harness.repository}}
 	prepare := func(id string) string {
 		t.Helper()
-		command := worktreeCommand{ID: id, ProjectID: agentRunTestID, Branch: workerapi.AgentRunBranch(id), BaseBranch: "main"}
-		if err := prepareWorktree(context.Background(), root, projects[0], command); err != nil {
+		if err := prepareWorktree(context.Background(), root, projects[0], id, workerapi.AgentRunBranch(id), "main"); err != nil {
 			t.Fatal(err)
 		}
 		return filepath.Join(root, agentRunTestID, id)
@@ -640,5 +637,14 @@ func TestClaimedRunBodyIsBounded(t *testing.T) {
 	controlURL, _ := url.Parse(api.URL)
 	if _, _, err := claimAgentRun(context.Background(), api.Client(), controlURL, agentRunTestID); err == nil {
 		t.Fatal("oversized claim was accepted")
+	}
+	// A valid command followed by padding past the limit is still an oversized response.
+	padded := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"id":"`+agentRunTestID+`"}`+strings.Repeat(" ", maxClaimResponseSize))
+	}))
+	defer padded.Close()
+	paddedURL, _ := url.Parse(padded.URL)
+	if _, _, err := claimAgentRun(context.Background(), padded.Client(), paddedURL, agentRunTestID); err == nil {
+		t.Fatal("a valid claim padded past the limit was accepted")
 	}
 }

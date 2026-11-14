@@ -68,7 +68,7 @@ func newMux() http.Handler {
 	agents := newAgentProfileStore()
 	return newMuxWithStores(
 		newObjectiveStore(products), newWorkflowStore(), agents, products, registry,
-		newWorktreeStore(registry), newAgentRunStore(registry, agents),
+		newAgentRunStore(registry, agents),
 	)
 }
 
@@ -97,15 +97,11 @@ func newPersistentMux(dataDir string) (http.Handler, error) {
 		return nil, err
 	}
 	registry := newWorkerRegistry()
-	worktrees, err := openWorktreeStore(filepath.Join(absoluteDir, "worktrees.json"), registry)
-	if err != nil {
-		return nil, err
-	}
 	runs, err := openAgentRunStore(filepath.Join(absoluteDir, "agent-runs.json"), registry, agents)
 	if err != nil {
 		return nil, err
 	}
-	return newMuxWithStores(objectives, workflows, agents, products, registry, worktrees, runs), nil
+	return newMuxWithStores(objectives, workflows, agents, products, registry, runs), nil
 }
 
 func newWorkerRegistry() *workerRegistry {
@@ -118,7 +114,7 @@ func newWorkerRegistry() *workerRegistry {
 
 func newMuxWithStores(
 	objectives *objectiveStore, workflows *workflowStore, agents *agentProfileStore, products *productStore,
-	registry *workerRegistry, worktrees *worktreeStore, runs *agentRunStore,
+	registry *workerRegistry, runs *agentRunStore,
 ) http.Handler {
 	registry.runs = runs
 	mux := http.NewServeMux()
@@ -149,11 +145,6 @@ func newMuxWithStores(
 	mux.HandleFunc("GET /api/v1/products", products.list)
 	mux.HandleFunc("POST /api/v1/products", products.create)
 	mux.HandleFunc("PUT /api/v1/products/{id}", products.update)
-	mux.HandleFunc("GET /api/v1/worktrees", worktrees.list)
-	mux.HandleFunc("POST /api/v1/worktrees", worktrees.create)
-	mux.HandleFunc("POST /api/v1/worktrees/{id}/cancel", worktrees.cancel)
-	mux.HandleFunc("POST /api/v1/workers/{id}/worktrees/claim", worktrees.claim)
-	mux.HandleFunc("PUT /api/v1/workers/{id}/worktrees/{requestID}", worktrees.finish)
 	mux.HandleFunc("GET /api/v1/agent-runs", runs.list)
 	mux.HandleFunc("GET /api/v1/agent-runs/{id}/diff", runs.authorized(runs.diff))
 	mux.HandleFunc("POST /api/v1/agent-runs/{id}/cancel", runs.authorized(runs.cancel))

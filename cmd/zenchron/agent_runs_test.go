@@ -12,6 +12,11 @@ import (
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
+const (
+	testWorkerID  = "0123456789abcdef0123456789abcdef"
+	testProjectID = "abcdef0123456789abcdef0123456789"
+)
+
 func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 	registry := newWorkerRegistry()
 	agents := newAgentProfileStore()
@@ -23,7 +28,7 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := newMuxWithStores(newObjectiveStore(newProductStore()), newWorkflowStore(), agents,
-		newProductStore(), registry, newWorktreeStore(registry), store)
+		newProductStore(), registry, store)
 	call := func(method, path, body string) *httptest.ResponseRecorder {
 		response := httptest.NewRecorder()
 		server.ServeHTTP(response, httptest.NewRequest(method, path, strings.NewReader(body)))

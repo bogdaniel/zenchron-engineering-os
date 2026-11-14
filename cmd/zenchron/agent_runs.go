@@ -510,3 +510,8 @@ func (item *agentRun) expireLease(now time.Time) {
 		item.Status = "queued"
 	}
 }
+
+func validHexID(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == 16
+}

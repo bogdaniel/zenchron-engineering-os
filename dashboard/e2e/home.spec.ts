@@ -265,21 +265,66 @@ test('Projects page shows the live local worker inventory', async ({ page }) => 
   await expect(page.locator('.project-detail-note')).toContainText('remote credentials stay here');
 });
 
-test('worker prepares an isolated Git branch without moving the source checkout', async ({ page }) => {
-  const branch = `zenchron/e2e-${Date.now()}`;
-  await page.goto('/');
-  await page.getByRole('link', { name: 'Product Workspace' }).click();
-  await page.getByRole('button', { name: 'Product actions' }).click();
-  await page.getByRole('menuitem', { name: 'Open repository inventory' }).click();
-  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
-  await page.getByRole('button', { name: 'Prepare isolated branch' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Prepare isolated branch' });
-  await dialog.getByLabel('Branch name').fill(branch);
-  await dialog.getByRole('button', { name: 'Prepare branch' }).click();
-  const request = page.locator('.project-worktree-row').filter({ hasText: branch });
-  await expect(request.getByText('ready', { exact: true })).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.project-detail-fields > div').first().locator('b')).toHaveText('main');
-});
+for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: 'mobile', width: 390, height: 844 }]) {
+  test(`Projects page lists a checkout's agent run branches (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    let runs: object[] = [];
+    let status = 200;
+    await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
+      status, contentType: 'application/json', body: JSON.stringify(runs),
+    }));
+    await page.goto('/#projects');
+    const panel = page.locator('.project-worktrees');
+    await expect(panel.locator('.project-worktrees-heading')).toHaveText('Agent run branches0');
+    await expect(panel).toContainText('No agent runs for this project yet.');
+    // Worktrees are created only by runs, so the page offers no way to prepare one by hand.
+    await expect(page.getByRole('button', { name: 'Prepare isolated branch' })).toHaveCount(0);
+
+    const project = await page.evaluate(async () => {
+      const projects = await fetch('/api/v1/projects').then((response) => response.json());
+      return projects[0] as { id: string; worker_id: string };
+    });
+    const now = new Date().toISOString();
+    const run = (index: number, fields: object) => ({
+      id: String(index).repeat(32), agent_id: 'a'.repeat(32), agent_name: 'Engineer', project_id: project.id,
+      project_name: 'zenchron-engineering-os', worker_id: project.worker_id, worker_name: 'playwright-worker',
+      branch: `zenchron/agent-run/${String(index).repeat(32)}`, base_branch: 'main', prompt: 'Resolve the issue.',
+      status: 'succeeded', attempts: 1, created_at: now, updated_at: now, ...fields,
+    });
+    runs = [
+      run(1, {}), run(2, { status: 'running', agent_name: 'Reviewer with a very long agent profile name that must truncate' }),
+      run(3, { status: 'failed', error: 'Verification failed; the changes are committed on the isolated branch.' }),
+      run(4, { status: 'cancelled' }), run(5, { status: 'queued' }),
+      run(6, { project_id: 'f'.repeat(32), project_name: 'another-checkout' }),
+    ];
+    await page.reload();
+    const rows = panel.locator('.project-worktree-row');
+    await expect(panel.locator('.project-worktrees-heading')).toHaveText('Agent run branches5');
+    await expect(rows).toHaveCount(4);
+    await expect(rows.nth(0)).toContainText(`zenchron/agent-run/${'1'.repeat(32)}`);
+    await expect(rows.nth(0)).toContainText('Engineer · Base: main');
+    await expect(rows.nth(0).locator('.worktree-status')).toHaveText('succeeded');
+    await expect(rows.nth(1).locator('.worktree-status')).toHaveText('running');
+    await expect(rows.nth(2)).toContainText('Verification failed; the changes are committed on the isolated branch.');
+    await expect(rows.nth(2).locator('.worktree-status')).toHaveText('failed');
+    await expect(panel).not.toContainText('6'.repeat(32));
+    await expect(page.locator('.project-detail-fields > div').first().locator('b')).toHaveText('main');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      'no horizontal page scroll').toBe(true);
+    const panelBox = await panel.boundingBox();
+    for (const row of await rows.all()) {
+      const box = await row.boundingBox();
+      expect(box!.x + box!.width, 'rows stay inside the panel').toBeLessThanOrEqual(panelBox!.x + panelBox!.width);
+    }
+    await panel.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`projects-run-branches-${viewport.name}.png`) });
+
+    status = 500;
+    await page.reload();
+    await expect(panel.getByRole('alert')).toHaveText('Could not load agent runs.', { timeout: 15_000 });
+    await expect(panel.locator('.project-worktrees-heading')).toHaveText('Agent run branchesUnavailable');
+  });
+}
 
 test('Reviews page shows unavailable provider data without invented pull requests', async ({ page }) => {
   await page.goto('/');

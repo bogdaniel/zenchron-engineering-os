@@ -129,9 +129,7 @@ func (runner *agentRunner) attempt(
 ) workerapi.AgentRunResult {
 	result := workerapi.AgentRunResult{ProviderVersion: provider.version}
 	worktree := workspace.path
-	err := prepareWorktree(ctx, root, project, worktreeCommand{
-		ID: command.ID, ProjectID: command.ProjectID, Branch: command.Branch, BaseBranch: command.BaseBranch,
-	})
+	err := prepareWorktree(ctx, root, project, command.ID, command.Branch, command.BaseBranch)
 	if cancelled, _ := reporter.state(); cancelled && err != nil {
 		return cancelledRun(result)
 	}

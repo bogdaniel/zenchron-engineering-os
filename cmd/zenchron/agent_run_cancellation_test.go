@@ -21,7 +21,7 @@ func TestAgentRunCancellationFencesWorkerAndKeepsPartialDiff(t *testing.T) {
 	agents.items[profile.ID] = profile
 	runs := newAgentRunStore(registry, agents)
 	server := newMuxWithStores(newObjectiveStore(newProductStore()), newWorkflowStore(), agents,
-		newProductStore(), registry, newWorktreeStore(registry), runs)
+		newProductStore(), registry, runs)
 	call := func(method, path, body string) *httptest.ResponseRecorder {
 		response := httptest.NewRecorder()
 		server.ServeHTTP(response, httptest.NewRequest(method, path, strings.NewReader(body)))

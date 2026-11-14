@@ -615,4 +615,9 @@ test('a real worker run shows its control-plane and worker events as evidence', 
   await expect(events).toContainText('changed 1 file(s)');
   await expect(events).toContainText('Attempt finished: succeeded');
   await expect(page.getByRole('region', { name: 'Run attempts' })).toContainText('Attempt 1Succeeded');
+  // The run's worktree is the only kind there is: Projects lists it under its checkout.
+  await page.goto('/#projects');
+  const branch = page.locator('.project-worktree-row').filter({ hasText: `zenchron/agent-run/${runID}` });
+  await expect(branch).toContainText('Evidence Reviewer · Base: main');
+  await expect(branch.locator('.worktree-status')).toHaveText('succeeded');
 });
