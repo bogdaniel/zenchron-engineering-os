@@ -108,7 +108,10 @@ for (const viewport of viewports) {
   test(`Reviews shows run evidence, attempts, checks, and events (${viewport.name})`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await mockWorkspace(page, { providerReady: true });
-    await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([evidenceRun])));
+    // The webhook recorded that the maintainer's change request queued a follow-up attempt.
+    await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([{ ...evidenceRun, github_reviews: [
+      { id: 901, state: 'changes_requested', author: 'maintainer', commit_sha: 'a'.repeat(40), submitted_at: now, imported: true, queued: true },
+    ] }])));
     await page.route(`**/api/v1/agent-runs/${runID}/diff`, (route) => route.fulfill(json({
       run_id: runID, diff: 'diff --git a/a.go b/a.go\n+bound\n', truncated: false })));
     await page.route(`**/api/v1/agent-runs/${runID}/events`, (route) => route.fulfill(json([
@@ -120,7 +123,10 @@ for (const viewport of viewports) {
     await page.route(`**/api/v1/agent-runs/${runID}/pull-request`, (route) => route.fulfill(json({
       number: 23, url: 'https://github.com/acme/platform/pull/23', state: 'open', merged: false, head_sha: 'a'.repeat(40),
       checks: [{ name: 'go', status: 'completed', conclusion: 'success' }, { name: 'dashboard', status: 'in_progress', conclusion: '' }],
-      reviews: [],
+      reviews: [
+        { id: 900, state: 'COMMENTED', user: { login: 'colleague' }, body: '', submitted_at: now },
+        { id: 901, state: 'CHANGES_REQUESTED', user: { login: 'maintainer' }, body: 'Handle the empty body.', submitted_at: now },
+      ],
     })));
     await page.goto('/#reviews');
     await page.getByRole('button', { name: 'Local branches' }).click();
@@ -131,6 +137,7 @@ for (const viewport of viewports) {
       ['Base commit', 'bbbbbbbbbbbb'], ['Result commit', 'aaaaaaaaaaaa'], ['Execution', 'Completed'],
       ['Verification', 'Passed'], ['Publication', 'Pull request published'], ['Pull request', '#23 on GitHub'],
       ['Usage', '706,042 input · 6,570 output tokens'],
+      ['Review and CI', '1 check running · changes requested by maintainer'],
     ]) {
       await expect(summary.locator('div').filter({ has: page.getByText(name, { exact: true }) }).locator('dd')).toContainText(value);
     }
@@ -138,6 +145,8 @@ for (const viewport of viewports) {
       .toHaveAttribute('href', 'https://github.com/acme/platform/issues/7');
     const checks = page.getByRole('region', { name: 'Pull request checks' });
     await expect(checks.getByRole('listitem')).toHaveText(['gosuccess', 'dashboardin_progress']);
+    await expect(page.getByRole('region', { name: 'Pull request reviews' }).getByRole('listitem'))
+      .toHaveText(['colleagueCommented', 'maintainerChanges requested · follow-up attempt queued']);
     const attempts = page.getByRole('region', { name: 'Run attempts' });
     await expect(attempts.getByRole('listitem').first()).toContainText('Attempt 1Worker lease expired');
     await expect(attempts.getByRole('listitem').nth(1)).toContainText('Attempt 2Succeeded · commit aaaaaaaaaaaa');
