@@ -73,8 +73,15 @@ func validateGitBranch(ctx context.Context, repository, branch string) error {
 	return nil
 }
 
+// gitCommand is the only way the worker runs Git. Hooks are disabled: the worker's Git runs outside the
+// provider sandbox with the worker's own environment, and a hook can be a script in the worktree
+// (husky's core.hooksPath, a pre-commit configuration) that the agent just wrote.
+func gitCommand(ctx context.Context, args ...string) *exec.Cmd {
+	return exec.CommandContext(ctx, "git", append([]string{"-c", "core.hooksPath=" + os.DevNull}, args...)...)
+}
+
 func gitOutput(ctx context.Context, args ...string) (string, error) {
-	output, err := exec.CommandContext(ctx, "git", args...).Output()
+	output, err := gitCommand(ctx, args...).Output()
 	if err != nil {
 		return "", err
 	}
