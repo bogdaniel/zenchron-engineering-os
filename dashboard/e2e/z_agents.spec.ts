@@ -393,7 +393,7 @@ test('Agents queue dialog does not queue a profile whose provider cannot run', a
   await page.getByRole('button', { name: 'Run Agent' }).click();
   const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
   await expect(dialog.locator('.agents-queue-note')).toHaveText('Only Codex CLI (codex-cli) and Claude Code (claude-code) profiles can run.');
-  await expect(dialog.getByLabel('Project')).toHaveValue(/^zenchron-engineering-os · .+ · provider cannot run$/);
+  await expect(dialog.getByLabel('Project')).toHaveValue(/^zenchron-engineering-os · .+ · cannot run$/);
   await expect(dialog.getByRole('button', { name: 'Queue run', exact: true })).toBeDisabled();
 });
 

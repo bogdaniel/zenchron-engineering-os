@@ -17,7 +17,7 @@ export type RunWorker = { id: string; name: string; providers?: z.infer<typeof p
  */
 export function runReadiness(provider: string | undefined, worker: RunWorker | undefined) {
   if (!provider || !cliProviders.includes(provider)) {
-    return { ready: false, label: 'provider cannot run',
+    return { ready: false, label: 'cannot run',
       note: 'Only Codex CLI (codex-cli) and Claude Code (claude-code) profiles can run.' };
   }
   const status = worker?.providers?.find((item) => item.id === provider);
