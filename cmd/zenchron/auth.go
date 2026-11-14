@@ -130,6 +130,21 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		if config != nil && r.URL.Path == gitHubWebhookPath && r.Method == http.MethodPost {
+			// GitHub has no session. The handler authenticates the delivery by its signature, and gets the
+			// current policy so that it can decide on whose authority a delivery may queue work.
+			access := requestAccess{}
+			if config.access != nil {
+				policy, err := config.access.current()
+				if err != nil {
+					http.Error(w, "access policy is unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				access = requestAccess{enforced: true, policy: policy}
+			}
+			next.ServeHTTP(w, withRequestAccess(r, access))
+			return
+		}
 		if config != nil && strings.HasPrefix(r.URL.Path, "/api/v1/") {
 			access, status, message := config.authorize(r)
 			if status != 0 {

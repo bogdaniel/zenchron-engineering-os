@@ -168,6 +168,7 @@ func newMuxWithStores(
 	mux.HandleFunc("GET /api/v1/agent-runs/{id}/pull-request", runs.authorized(runs.pullRequestStatus))
 	mux.HandleFunc("POST /api/v1/agent-runs/{id}/publish", runs.authorized(runs.publish))
 	mux.HandleFunc("POST /api/v1/agent-runs/{id}/sync-reviews", runs.authorized(runs.syncReviews))
+	mux.HandleFunc("POST "+gitHubWebhookPath, runs.gitHubWebhook)
 	mux.HandleFunc("POST /api/v1/projects/{id}/issues", registry.createGitHubIssue)
 	mux.HandleFunc("PUT /api/v1/workers/{id}/agent-runs/{requestID}", runs.finish)
 	return mux

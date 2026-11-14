@@ -190,6 +190,17 @@ func (access requestAccess) owns(createdBy string) bool {
 	return !access.enforced || access.admin || (createdBy != "" && createdBy == access.user)
 }
 
+// forUser is what a named user may touch under this request's policy. The control plane uses it when
+// it acts later on a user's behalf, for example when a GitHub review asks for a follow-up of a run
+// that user started: the user's rights are those of today, not of the day the run was created.
+func (access requestAccess) forUser(login string) requestAccess {
+	if !access.enforced || access.policy == nil {
+		return access
+	}
+	return requestAccess{enforced: true, user: login, admin: login != "" && slices.Contains(access.policy.Admins, login),
+		repositories: access.policy.Users[login], policy: access.policy}
+}
+
 // creator is what a new definition records as its creator.
 func (access requestAccess) creator() string {
 	return access.user

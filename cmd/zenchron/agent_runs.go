@@ -65,19 +65,24 @@ type agentRun struct {
 	Usage              *workerapi.Usage  `json:"usage,omitempty"`
 	AttemptLog         []agentRunAttempt `json:"attempt_log,omitempty"`
 	ImportedReviewID   int64             `json:"imported_review_id,omitempty"`
-	WorkerID           string            `json:"worker_id"`
-	WorkerName         string            `json:"worker_name"`
-	Prompt             string            `json:"prompt"`
-	Output             string            `json:"output,omitempty"`
-	Error              string            `json:"error,omitempty"`
-	Status             string            `json:"status"`
-	CancelRequested    bool              `json:"cancel_requested,omitempty"`
-	Attempts           int               `json:"attempts"`
-	CreatedAt          time.Time         `json:"created_at"`
-	UpdatedAt          time.Time         `json:"updated_at"`
-	LeaseUntil         time.Time         `json:"-"`
-	Profile            *agentProfile     `json:"profile,omitempty"`
-	ReviewComments     []agentRunComment `json:"review_comments,omitempty"`
+	// CreatedBy is the GitHub login that started the run under an access policy.
+	CreatedBy string `json:"created_by,omitempty"`
+	// Checks and GitHubReviews are what GitHub webhooks reported for the published commit and pull request.
+	Checks          []runCheck        `json:"checks,omitempty"`
+	GitHubReviews   []runReview       `json:"github_reviews,omitempty"`
+	WorkerID        string            `json:"worker_id"`
+	WorkerName      string            `json:"worker_name"`
+	Prompt          string            `json:"prompt"`
+	Output          string            `json:"output,omitempty"`
+	Error           string            `json:"error,omitempty"`
+	Status          string            `json:"status"`
+	CancelRequested bool              `json:"cancel_requested,omitempty"`
+	Attempts        int               `json:"attempts"`
+	CreatedAt       time.Time         `json:"created_at"`
+	UpdatedAt       time.Time         `json:"updated_at"`
+	LeaseUntil      time.Time         `json:"-"`
+	Profile         *agentProfile     `json:"profile,omitempty"`
+	ReviewComments  []agentRunComment `json:"review_comments,omitempty"`
 }
 
 type agentRunStore struct {
@@ -90,6 +95,9 @@ type agentRunStore struct {
 	events   map[string][]agentRunEvent
 	registry *workerRegistry
 	agents   *agentProfileStore
+	// webhookSecret authenticates GitHub deliveries; empty disables the webhook endpoint.
+	webhookSecret []byte
+	deliveries    *webhookDeliveries
 }
 
 // agentRunAttempt records one claim of a run by a worker and how that attempt ended.
@@ -140,8 +148,11 @@ func (item *agentRun) closeAttempt(now time.Time, status, reason string) {
 }
 
 func newAgentRunStore(registry *workerRegistry, agents *agentProfileStore) *agentRunStore {
+	// An invalid secret is reported at startup; here it only leaves the endpoint disabled.
+	secret, _ := loadWebhookSecret()
 	return &agentRunStore{items: make(map[string]agentRun), diffs: make(map[string]string),
-		events: make(map[string][]agentRunEvent), registry: registry, agents: agents}
+		events: make(map[string][]agentRunEvent), registry: registry, agents: agents,
+		webhookSecret: secret, deliveries: &webhookDeliveries{}}
 }
 
 func openAgentRunStore(path string, registry *workerRegistry, agents *agentProfileStore) (*agentRunStore, error) {
@@ -149,6 +160,10 @@ func openAgentRunStore(path string, registry *workerRegistry, agents *agentProfi
 	store.path = path
 	store.diffDir = path + ".diffs"
 	store.eventDir = path + ".events"
+	var err error
+	if store.deliveries, err = openWebhookDeliveries(path + ".deliveries"); err != nil {
+		return nil, err
+	}
 	var state struct {
 		Version int                 `json:"version"`
 		Items   map[string]agentRun `json:"items"`
@@ -200,6 +215,7 @@ func validStoredAgentRun(item agentRun) bool {
 		item.IssueNumber >= 0 && len(item.IssueContext) <= maxIssueContextSize && len(item.IssueTitle) <= 300 &&
 		workerapi.ValidTerminationReason(item.TerminationReason) && workerapi.ValidVerification(item.Verification) &&
 		len(item.AttemptLog) <= maxAgentRunAttempts && validPublication(item.Publication) &&
+		validRunObservations(item.Checks, item.GitHubReviews) && len(item.CreatedBy) <= 100 &&
 		len(item.Provider) <= 100 && len(item.ProviderVersion) <= 100 && item.DiffAttempt >= 0 && item.DiffAttempt <= item.Attempts
 }
 
@@ -313,6 +329,7 @@ func (store *agentRunStore) create(w http.ResponseWriter, r *http.Request) {
 		ProjectName: project.Name, Repository: project.GitRemote, Branch: workerapi.AgentRunBranch(hex.EncodeToString(id)),
 		BaseBranch: project.Branch, WorkerID: project.WorkerID, WorkerName: project.WorkerName, Prompt: input.Prompt,
 		Provider: profile.Provider, Status: "queued", CreatedAt: now, UpdatedAt: now, Profile: &profile,
+		CreatedBy:          accessFor(r).creator(),
 		PullRequestEnabled: store.registry.github.authConfigured() && isGitHubProject(project.GitRemote)}
 	if input.IssueNumber > 0 {
 		if status, message := store.attachIssue(r.Context(), &item, input.IssueNumber); status != 0 {
