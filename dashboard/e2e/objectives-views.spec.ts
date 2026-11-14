@@ -539,6 +539,71 @@ test('objective create and edit submit the expected API payloads', async ({ page
   await expect(page.locator('.objective-action-notice')).toHaveText('Objective updated');
 });
 
+test('a late grid selection report does not replace the objective being edited', async ({ page }) => {
+  await useLocalSession(page);
+  const createdID = '5'.repeat(32);
+  const persisted: Record<string, unknown>[] = [{ ...objectives[0] }];
+  const updatedIDs: string[] = [];
+  await page.route('**/api/v1/objectives', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(persisted) });
+      return;
+    }
+    const created = { ...route.request().postDataJSON(), id: createdID, product: 'Unassigned', status: 'in_progress',
+      progress: 0, created_at: '2026-11-04T12:00:00Z', updated_at: '2026-11-04T12:00:00Z' };
+    persisted.push(created);
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(created) });
+  });
+  await page.route('**/api/v1/objectives/*', async (route) => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
+    updatedIDs.push(id);
+    const current = persisted.find((item) => item.id === id)!;
+    Object.assign(current, route.request().postDataJSON());
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(current) });
+  });
+  await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
+  // AG Grid reports events from window.setTimeout(flushAsyncQueue, 0). Queue those reports so the test decides
+  // when they arrive; in CI a slow timer once delivered the first one after an objective had been created.
+  await page.addInitScript(() => {
+    const queued: (() => void)[] = [];
+    Object.assign(window, { queuedGridReports: queued });
+    const setTimer = window.setTimeout;
+    window.setTimeout = ((callback: () => void, ...rest: [number?]) => {
+      if (callback.name !== 'bound flushAsyncQueue') return setTimer(callback, ...rest);
+      queued.push(callback);
+      return 0;
+    }) as typeof window.setTimeout;
+  });
+  const deliverGridReports = (count?: number) => page.evaluate((limit) => {
+    const queued = (window as unknown as { queuedGridReports: (() => void)[] }).queuedGridReports;
+    const due = queued.splice(0, limit ?? queued.length);
+    due.forEach((report) => report());
+    return due.length;
+  }, count);
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+
+  // Deliver reports one at a time until the grid has selected its first row; the report of that selection stays queued.
+  const selectedRow = page.locator('.objective-grid-wrap [role="row"].ag-row-selected');
+  await expect(async () => {
+    if (!await selectedRow.count()) expect(await deliverGridReports(1)).toBe(1);
+    await expect(selectedRow).toHaveCount(1, { timeout: 250 });
+  }).toPass();
+  // No due date keeps the new objective out of the "This Quarter" rows, so the grid cannot select it.
+  await page.getByRole('button', { name: 'New Objective' }).click();
+  await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability testing');
+  await page.getByRole('button', { name: 'Create objective' }).click();
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability testing55555555');
+  expect(await deliverGridReports()).toBeGreaterThan(0);
+
+  await page.getByRole('button', { name: 'More objective actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit objective' }).click();
+  await page.locator('.detail-edit-grid').getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability review');
+  await page.getByRole('button', { name: 'Save updates' }).click();
+  await expect(page.locator('.objective-action-notice')).toHaveText('Objective updated');
+  expect(updatedIDs).toEqual([createdID]);
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability review55555555');
+});
+
 test('Objectives in Live uses the approved layout with honest unavailable parts', async ({ page }) => {
   await useLocalSession(page);
   const writes: string[] = [];

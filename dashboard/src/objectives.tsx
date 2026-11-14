@@ -309,11 +309,14 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                   rowSelection={{ mode: 'multiRow', checkboxes: true, headerCheckbox: true, selectAll: 'filtered', enableClickSelection: 'enableSelection' }}
                   selectionColumnDef={{ width: 32, minWidth: 32, maxWidth: 32, pinned: 'left', resizable: false, sortable: false, suppressMovable: true }}
                   onRowDataUpdated={({ api }) => {
-                    if (!selectedIDRef.current && !api.getSelectedRows().length) {
-                      api.getDisplayedRowAtIndex(0)?.setSelected(true);
-                    }
+                    if (selectedIDRef.current || api.getSelectedRows().length) return;
+                    const first = api.getDisplayedRowAtIndex(0)?.data;
+                    if (first) selectObjective(first);
                   }}
-                  onSelectionChanged={({ api }) => {
+                  onSelectionChanged={({ api, source }) => {
+                    // The grid reports its own programmatic selections after a delay. Acting on that report would
+                    // replace an objective chosen in the meantime, so only a person's choice in the grid selects.
+                    if (source === 'api') return;
                     const item = api.getSelectedRows()[0];
                     if (item) selectObjective(item);
                   }}
