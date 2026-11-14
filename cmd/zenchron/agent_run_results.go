@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -118,6 +119,8 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 	default:
 		pull, err := store.createPullRequest(ctx, item)
 		if err != nil {
+			// The cause stays in the control plane's log; the run only says that creation failed.
+			log.Printf("agent run %s: create pull request: %v", runID, err)
 			publication, publishError = publicationPullRequestFailed, "The branch was pushed, but GitHub could not create the pull request."
 		} else {
 			publication, number, pullURL = publicationPublished, pull.Number, pull.HTMLURL
