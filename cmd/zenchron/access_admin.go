@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -16,10 +17,7 @@ import (
 	"time"
 )
 
-const (
-	maxAuditRecordsReturned = 500
-	maxAuditLineSize        = 64 << 10
-)
+const maxAuditRecordsReturned = 500
 
 // GitHub logins: letters, digits and single hyphens, at most 39 characters.
 var githubLoginPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9]|-[a-z0-9]){0,38}$`)
@@ -206,19 +204,24 @@ func (policy *accessPolicy) showAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 0, 4096), maxAuditLineSize)
-	for scanner.Scan() {
-		var record auditRecord
-		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
-			http.Error(w, "the audit log is damaged", http.StatusInternalServerError)
+	reader := bufio.NewReader(file)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if len(line) > 0 {
+			var record auditRecord
+			if err := json.Unmarshal(line, &record); err != nil {
+				http.Error(w, "the audit log is damaged", http.StatusInternalServerError)
+				return
+			}
+			records = append(records, record)
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			http.Error(w, "could not read the audit log", http.StatusInternalServerError)
 			return
 		}
-		records = append(records, record)
-	}
-	if err := scanner.Err(); err != nil {
-		http.Error(w, "could not read the audit log", http.StatusInternalServerError)
-		return
 	}
 	slices.Reverse(records)
 	writeJSON(w, http.StatusOK, records[:min(limit, len(records))])

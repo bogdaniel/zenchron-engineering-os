@@ -24,6 +24,10 @@ const (
 	maxRememberedDeliveries = 5000
 	maxRunChecks            = 50
 	maxRunReviews           = 20
+	maxObservationWord      = 40
+	// A delivery with this outcome is not remembered: the run may publish the commit it names a moment
+	// later, and GitHub or an operator can then deliver it again.
+	deferredOutcome = "deferred: not for the run's current commit"
 )
 
 // runCheck is one check run GitHub reported for a run's published commit.
@@ -53,12 +57,13 @@ func validRunObservations(checks []runCheck, reviews []runReview) bool {
 		return false
 	}
 	for _, check := range checks {
-		if check.Name == "" || len(check.Name) > 200 || len(check.URL) > 2048 || !validCommitSHA(check.CommitSHA) {
+		if check.Name == "" || len(check.Name) > 200 || len(check.URL) > 2048 || !validCommitSHA(check.CommitSHA) ||
+			len(check.Status) > maxObservationWord || len(check.Conclusion) > maxObservationWord {
 			return false
 		}
 	}
 	for _, review := range reviews {
-		if review.ID < 1 || len(review.Author) > 100 || !validCommitSHA(review.CommitSHA) {
+		if review.ID < 1 || len(review.Author) > 100 || !validCommitSHA(review.CommitSHA) || len(review.State) > maxObservationWord {
 			return false
 		}
 	}
@@ -220,6 +225,10 @@ func (store *agentRunStore) gitHubWebhook(w http.ResponseWriter, r *http.Request
 		http.Error(w, outcome, status)
 		return
 	}
+	if outcome == deferredOutcome {
+		writeJSON(w, http.StatusOK, map[string]string{"status": outcome})
+		return
+	}
 	if err := store.deliveries.remember(delivery); err != nil {
 		http.Error(w, "could not persist the webhook delivery", http.StatusInternalServerError)
 		return
@@ -245,8 +254,11 @@ func (store *agentRunStore) applyReviewEvent(access requestAccess, event gitHubW
 	store.mu.Lock()
 	item := store.items[runID]
 	store.mu.Unlock()
-	if event.PullRequest.Head.Ref != item.Branch || review.CommitID == "" || review.CommitID != item.CommitSHA {
-		return "ignored: the review is not for the run's current commit", 0
+	if event.PullRequest.Head.Ref != item.Branch || !validCommitSHA(review.CommitID) {
+		return "ignored: the review is not for the run's branch", 0
+	}
+	if review.CommitID == "" || review.CommitID != item.CommitSHA {
+		return deferredOutcome, 0
 	}
 	if !trustedGitHubAuthor(review.AuthorAssociation) {
 		return "ignored: the reviewer is not an owner, member, or collaborator", 0
@@ -255,15 +267,25 @@ func (store *agentRunStore) applyReviewEvent(access requestAccess, event gitHubW
 		review.ID <= item.ImportedReviewID {
 		return "ignored: the review is already recorded", 0
 	}
-	observation := runReview{ID: review.ID, State: strings.ToLower(review.State), Author: truncateUTF8(review.User.Login, 100),
+	observation := runReview{ID: review.ID, State: truncateUTF8(strings.ToLower(review.State), maxObservationWord), Author: truncateUTF8(review.User.Login, 100),
 		CommitSHA: review.CommitID, SubmittedAt: review.SubmittedAt}
 	requestsChanges := observation.State == "changes_requested" && strings.TrimSpace(review.Body) != ""
 	outcome := "recorded"
-	if requestsChanges && reviewableAgentRun(item) {
-		// The follow-up runs under the authority of whoever started the run, checked against today's policy:
-		// a creator who lost the repository or the worker can no longer have work queued in their name.
-		creator := access.forUser(item.CreatedBy)
-		queued, status, message := store.importReview(creator, item, review.gitHubReview, creator.allows(item.Repository))
+	// The follow-up runs under the authority of whoever started the run, checked against today's policy:
+	// a creator who lost the repository or the worker can no longer have work queued in their name. Such a
+	// request is not imported either, so an authorized user can still import and queue it with sync-reviews.
+	creator := access.forUser(item.CreatedBy)
+	switch {
+	case !requestsChanges || !reviewableAgentRun(item):
+	case !creator.allows(item.Repository) || !creator.mayDispatchTo(item.WorkerID):
+		outcome = "recorded; the run's creator may no longer queue work, import it with sync-reviews"
+	default:
+		queued, status, message := store.importReview(creator, item, review.gitHubReview, true)
+		if status == http.StatusConflict {
+			// A full feedback history is a normal end state, not a failure GitHub should see.
+			outcome = "recorded; " + message
+			break
+		}
 		if status != 0 {
 			return message, status
 		}
@@ -320,7 +342,7 @@ func (store *agentRunStore) applyCheckRunEvent(event gitHubWebhookEvent) (string
 	item := store.items[runID]
 	store.mu.Unlock()
 	if runID == "" {
-		return "ignored: no run published this commit", 0
+		return deferredOutcome, 0
 	}
 	// GitHub lists the pull requests of a check run except for forks; when it does, it must name the run's.
 	if len(check.PullRequests) > 0 && !slices.ContainsFunc(check.PullRequests, func(pull struct {
@@ -330,8 +352,9 @@ func (store *agentRunStore) applyCheckRunEvent(event gitHubWebhookEvent) (string
 	}) {
 		return "ignored: the check run belongs to another pull request", 0
 	}
-	observation := runCheck{Name: truncateUTF8(check.Name, 200), Status: check.Status, Conclusion: check.Conclusion,
-		URL: check.HTMLURL, CommitSHA: check.HeadSHA, CompletedAt: check.CompletedAt}
+	observation := runCheck{Name: truncateUTF8(check.Name, 200), Status: truncateUTF8(check.Status, maxObservationWord),
+		Conclusion: truncateUTF8(check.Conclusion, maxObservationWord),
+		URL:        check.HTMLURL, CommitSHA: check.HeadSHA, CompletedAt: check.CompletedAt}
 	if len(observation.URL) > 2048 || !strings.HasPrefix(observation.URL, "https://") {
 		observation.URL = ""
 	}
@@ -339,7 +362,7 @@ func (store *agentRunStore) applyCheckRunEvent(event gitHubWebhookEvent) (string
 	_, status, message := store.update(runID, func(item *agentRun) (int, string) {
 		// The commit may have moved on between the lookup and this update.
 		if item.CommitSHA != check.HeadSHA {
-			outcome = "ignored: the check run is not for the run's current commit"
+			outcome = deferredOutcome
 			return 0, ""
 		}
 		// Results for a commit the run has since replaced say nothing about its current candidate.

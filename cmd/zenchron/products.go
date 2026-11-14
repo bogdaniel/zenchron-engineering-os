@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -21,11 +20,11 @@ type product struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 	// CreatedBy is the GitHub login that created the product under an access policy.
 	CreatedBy string `json:"created_by,omitempty"`
-	// AccessRepositories are the repositories of the linked projects, recorded when the product is saved
-	// under an access policy. Whoever may touch one of them may see and edit the product. They are stored
-	// because a project id resolves to a repository only while its worker is registered, and they are
-	// never returned: a viewer may lack access to some of them.
-	AccessRepositories []string `json:"access_repositories,omitempty"`
+	// AccessRepositories maps each linked project id to its repository, recorded when the project is
+	// linked under an access policy. Whoever may touch one of them may see and edit the product. They are
+	// stored because a project id resolves to a repository only while its worker is registered, and they
+	// are never returned: a viewer may lack access to some of them.
+	AccessRepositories map[string]string `json:"access_repositories,omitempty"`
 }
 
 type productStore struct {
@@ -36,10 +35,22 @@ type productStore struct {
 	repositoryOf func(projectID string) (string, bool)
 }
 
-// visible reports whether the caller may see and edit a product: an administrator, its creator, or
-// anyone who may touch one of its repositories.
+// visible reports whether the caller may see and edit a product: an administrator, anyone who may touch
+// one of its repositories, and, for a product without repositories, its creator. A creator who lost
+// every repository of the product no longer sees it.
 func (item product) visible(access requestAccess) bool {
-	return access.owns(item.CreatedBy) || slices.ContainsFunc(item.AccessRepositories, access.allows)
+	if !access.enforced || access.admin {
+		return true
+	}
+	if len(item.AccessRepositories) == 0 {
+		return access.owns(item.CreatedBy)
+	}
+	for _, repository := range item.AccessRepositories {
+		if access.allows(repository) {
+			return true
+		}
+	}
+	return false
 }
 
 // public is the product as returned by the API.
@@ -48,14 +59,21 @@ func (item product) public() product {
 	return item
 }
 
-// accessRepositories resolves the linked projects to repositories the caller may touch. Under an access
-// policy a product may only link projects the caller can access.
-func (store *productStore) accessRepositories(access requestAccess, projectIDs []string) ([]string, bool) {
-	if !access.enforced {
-		return nil, true
-	}
-	repositories := []string{}
+// accessRepositories returns the repository of every linked project. Under an access policy a product
+// may only gain projects the caller can access; projects it already links keep their recorded
+// repository, so a product stays editable while a linked project's worker is not registered and by a
+// user who may touch only some of its repositories.
+func (store *productStore) accessRepositories(access requestAccess, projectIDs []string, linked map[string]string) (map[string]string, bool) {
+	repositories := make(map[string]string, len(projectIDs))
 	for _, projectID := range projectIDs {
+		if repository, kept := linked[projectID]; kept {
+			repositories[projectID] = repository
+			continue
+		}
+		if !access.enforced {
+			// Without a policy nothing is checked or recorded for a newly linked project.
+			continue
+		}
 		repository, known := "", false
 		if store.repositoryOf != nil {
 			repository, known = store.repositoryOf(projectID)
@@ -63,9 +81,7 @@ func (store *productStore) accessRepositories(access requestAccess, projectIDs [
 		if !known || !access.allows(repository) {
 			return nil, false
 		}
-		if !slices.Contains(repositories, repository) {
-			repositories = append(repositories, repository)
-		}
+		repositories[projectID] = repository
 	}
 	return repositories, true
 }
@@ -174,7 +190,7 @@ func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	access := accessFor(r)
-	accessRepositories, permitted := store.accessRepositories(access, repositoryIDs)
+	accessRepositories, permitted := store.accessRepositories(access, repositoryIDs, nil)
 	if !permitted {
 		http.Error(w, "repository_ids include a project you cannot access", http.StatusForbidden)
 		return
@@ -234,7 +250,6 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	access := accessFor(r)
-	accessRepositories, permitted := store.accessRepositories(access, repositoryIDs)
 	store.mu.Lock()
 	previous, exists := store.items[id]
 	// A product the caller may not see is reported exactly like one that does not exist.
@@ -243,6 +258,7 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	accessRepositories, permitted := store.accessRepositories(access, repositoryIDs, previous.AccessRepositories)
 	if !permitted {
 		store.mu.Unlock()
 		http.Error(w, "repository_ids include a project you cannot access", http.StatusForbidden)
@@ -255,9 +271,7 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 	}
 	item := previous
 	item.Name, item.Description, item.RepositoryIDs = input.Name, input.Description, repositoryIDs
-	if access.enforced {
-		item.AccessRepositories = accessRepositories
-	}
+	item.AccessRepositories = accessRepositories
 	item.UpdatedAt = time.Now().UTC()
 	store.items[id] = item
 	if err := store.persistLocked(); err != nil {

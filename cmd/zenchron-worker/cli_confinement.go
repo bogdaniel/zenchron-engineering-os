@@ -16,11 +16,23 @@ import (
 // denied as a whole; system directories such as /usr and /etc stay readable because tools need them.
 var sharedDataRoots = []string{"/Users", "/Volumes", "/home", "/root", "/mnt", "/media", "/srv"}
 
+// credentialDirectoryVariables name directories where the CLIs and other tools keep sign-ins and
+// configuration. They are passed to the provider, which needs them, and denied to its sandboxed commands.
+var credentialDirectoryVariables = []string{"CODEX_HOME", "CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
+	"XDG_STATE_HOME", "XDG_CACHE_HOME"}
+
 // confidentialRoots lists what no provider sandbox may read: every home directory and mounted volume,
-// every checkout this worker serves, and the directory holding all run worktrees. A run's own worktree
-// and its read paths are re-allowed by a more specific rule.
+// the CLIs' configuration directories, every checkout this worker serves, and the directory holding
+// all run worktrees. A run's own worktree and its read paths are re-allowed by a more specific rule.
 func confidentialRoots(worktreeRoot string, projects []discoveredProject) []string {
 	roots := []string{worktreeRoot}
+	// A checkout or configuration directory reached through a symbolic link is denied under both names.
+	addResolved := func(path string) {
+		roots = append(roots, path)
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			roots = append(roots, resolved)
+		}
+	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" && home != "/" {
 		roots = append(roots, home)
 	}
@@ -29,8 +41,13 @@ func confidentialRoots(worktreeRoot string, projects []discoveredProject) []stri
 			roots = append(roots, root)
 		}
 	}
+	for _, variable := range credentialDirectoryVariables {
+		if directory := os.Getenv(variable); filepath.IsAbs(directory) && filepath.Clean(directory) != "/" {
+			addResolved(filepath.Clean(directory))
+		}
+	}
 	for _, project := range projects {
-		roots = append(roots, project.Path)
+		addResolved(project.Path)
 	}
 	slices.Sort(roots)
 	return slices.Compact(roots)

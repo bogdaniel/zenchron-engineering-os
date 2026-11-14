@@ -164,7 +164,7 @@ func TestWebhookChangeRequestQueuesOneBoundedFollowUpAndIsIdempotent(t *testing.
 	}
 	// A late review of the first commit is stale and must not start the third attempt.
 	stale := reviewEvent{id: 502, commit: testCommit}.json(harness.run(run.ID))
-	if response := deliver(harness.server, webhookSecret, "pull_request_review", "d-3", stale); !strings.Contains(response.Body.String(), "not for the run's current commit") {
+	if response := deliver(harness.server, webhookSecret, "pull_request_review", "d-3", stale); !strings.Contains(response.Body.String(), deferredOutcome) {
 		t.Errorf("stale review: %s", response.Body.String())
 	}
 	current := harness.run(run.ID)
@@ -196,7 +196,7 @@ func TestWebhookIgnoresReviewsThatDoNotMatchTheRunOrComeFromOutsiders(t *testing
 		"a first-time contributor": {id: 606, association: "FIRST_TIME_CONTRIBUTOR"},
 	} {
 		response := deliver(harness.server, webhookSecret, "pull_request_review", "d-"+name, event.json(run))
-		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "ignored") {
+		if response.Code != http.StatusOK || !(strings.Contains(response.Body.String(), "ignored") || strings.Contains(response.Body.String(), deferredOutcome)) {
 			t.Errorf("review from %s: HTTP %d %s", name, response.Code, response.Body.String())
 		}
 	}
@@ -240,7 +240,7 @@ func TestWebhookStoresCheckRunsForTheHeadCommitWithoutStartingWork(t *testing.T)
 		"c-4 another commit":       checkRunEvent("go", "success", strings.Repeat("e", 40), "2026-11-14T10:09:00Z", 23),
 		"c-5 another pull request": checkRunEvent("go", "success", testCommit, "2026-11-14T10:09:00Z", 99),
 	} {
-		if outcome := send(delivery, body); !strings.Contains(outcome, "ignored") {
+		if outcome := send(delivery, body); !strings.Contains(outcome, "ignored") && !strings.Contains(outcome, deferredOutcome) {
 			t.Errorf("%s was not ignored: %s", delivery, outcome)
 		}
 	}
@@ -295,13 +295,14 @@ func TestWebhookFollowUpRunsOnlyWhileTheRunCreatorKeepsAccess(t *testing.T) {
 	// Alice no longer has the repository: her run takes the feedback but queues nothing.
 	harness.user("carol", http.MethodPut, "/api/v1/admin/users/alice", `{"repositories":[]}`)
 	response := deliver(harness.server, webhookSecret, "pull_request_review", "p-1", reviewEvent{id: 801, repository: "acme/project-a"}.json(published))
-	if after := state(); response.Code != http.StatusOK || after.Status != "succeeded" || len(after.ReviewComments) != 1 {
+	if after := state(); response.Code != http.StatusOK || after.Status != "succeeded" || len(after.ReviewComments) != 0 ||
+		after.ImportedReviewID != 0 || len(after.GitHubReviews) != 1 {
 		t.Fatalf("review after the creator lost access: HTTP %d %s, %#v", response.Code, response.Body.String(), after)
 	}
 	// With the grant restored the next change request queues the follow-up.
 	harness.user("carol", http.MethodPut, "/api/v1/admin/users/alice", fmt.Sprintf(`{"repositories":[%q]}`, repositoryA))
 	deliver(harness.server, webhookSecret, "pull_request_review", "p-2", reviewEvent{id: 802, repository: "acme/project-a"}.json(published))
-	if after := state(); after.Status != "queued" || len(after.ReviewComments) != 2 {
+	if after := state(); after.Status != "queued" || len(after.ReviewComments) != 1 {
 		t.Fatalf("review after access was restored: %#v", after)
 	}
 	// A webhook is not a session: it cannot be used to read the API.

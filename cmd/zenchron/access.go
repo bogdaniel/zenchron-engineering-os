@@ -17,6 +17,9 @@ import (
 // worker can be restarted with the new token without an outage.
 const tokenRotationOverlap = 24 * time.Hour
 
+// maxRepositoriesPerGrant bounds one user's or worker's grant, and with it the size of an audit record.
+const maxRepositoriesPerGrant = 500
+
 // accessFile is the record of who may do what. It is the single authority for administrators, worker
 // identity, and which repositories a user or worker may touch. An operator seeds it with the first
 // administrator; after that it is changed through the admin API, which audits every change.
@@ -109,6 +112,9 @@ func (file *accessFile) normalize() error {
 			return fmt.Errorf("administrator %d is blank", index)
 		}
 	}
+	// A login listed twice must not make "the last administrator" look like two.
+	slices.Sort(file.Admins)
+	file.Admins = slices.Compact(file.Admins)
 	return nil
 }
 
@@ -124,7 +130,7 @@ func (file *accessFile) knows(login string) bool {
 }
 
 func validRepositoryGrants(repositories []string) bool {
-	return !slices.ContainsFunc(repositories, func(repository string) bool {
+	return len(repositories) <= maxRepositoriesPerGrant && !slices.ContainsFunc(repositories, func(repository string) bool {
 		return repository == "" || !validGitRemote(repository)
 	})
 }

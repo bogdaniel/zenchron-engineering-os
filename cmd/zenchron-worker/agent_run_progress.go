@@ -28,6 +28,9 @@ var credentialPattern = regexp.MustCompile(
 	`(?i)\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})` +
 		`|(bearer\s+)[A-Za-z0-9._~+/=-]{16,}`)
 
+// urlCredentialPattern matches the user and password of a URL, as in a proxy setting or a Git remote.
+var urlCredentialPattern = regexp.MustCompile(`(://)[^/\s:@]+:[^/\s@]+@`)
+
 // redactor removes credentials and local absolute paths from text before it leaves the workstation.
 type redactor struct {
 	replacer *strings.Replacer
@@ -53,7 +56,8 @@ func newRedactor(worktree string, secrets ...string) redactor {
 }
 
 func (redactor redactor) clean(text string) string {
-	return credentialPattern.ReplaceAllString(redactor.replacer.Replace(text), "${2}[redacted]")
+	text = credentialPattern.ReplaceAllString(redactor.replacer.Replace(text), "${2}[redacted]")
+	return urlCredentialPattern.ReplaceAllString(text, "${1}[redacted]@")
 }
 
 // progressReporter is the one channel from a running attempt to the control plane: it renews the lease,

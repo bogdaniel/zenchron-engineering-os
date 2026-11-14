@@ -143,6 +143,17 @@ func TestConfidentialRootsCoverHomeWorktreesAndEveryCheckout(t *testing.T) {
 			t.Errorf("confidential roots %v lack %s", roots, want)
 		}
 	}
+	t.Setenv("CODEX_HOME", "/data/codex")
+	t.Setenv("XDG_CONFIG_HOME", "relative/config")
+	if withEnvironment := confidentialRoots("/var/worktrees", nil); !slices.Contains(withEnvironment, "/data/codex") ||
+		slices.Contains(withEnvironment, "relative/config") {
+		t.Errorf("confidential roots with CLI directories = %v", withEnvironment)
+	}
+	cleaned := newRedactor("/work/tree").clean("proxy https://user:s3cret@proxy.example:3128 and https://github.com/acme/api")
+	if strings.Contains(cleaned, "s3cret") || !strings.Contains(cleaned, "https://[redacted]@proxy.example:3128") ||
+		!strings.Contains(cleaned, "https://github.com/acme/api") {
+		t.Errorf("URL credentials were not redacted: %s", cleaned)
+	}
 	if !slices.IsSorted(roots) || len(slices.Compact(slices.Clone(roots))) != len(roots) {
 		t.Errorf("confidential roots are not sorted and unique: %v", roots)
 	}

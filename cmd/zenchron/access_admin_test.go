@@ -232,12 +232,29 @@ func TestProductsAndObjectivesFollowRepositoryAccess(t *testing.T) {
 	if strings.Count(listed("carol", "/api/v1/products"), `"name"`) != 2 || !strings.Contains(listed("carol", "/api/v1/objectives"), "Private note") {
 		t.Error("the administrator does not see every product and objective")
 	}
-	// Losing the repository grant hides the product and its objectives, but not a creator's own record.
+	// Losing the repository grant hides the product and its objectives even from their creator, but not
+	// the creator's own product-less record.
 	harness.user("carol", http.MethodPut, "/api/v1/admin/users/alice", `{"repositories":[]}`)
 	harness.user("carol", http.MethodPut, "/api/v1/admin/users/erin", fmt.Sprintf(`{"repositories":[%q]}`, repositoryA))
+	if strings.Contains(listed("alice", "/api/v1/products"), "Payments") || strings.Contains(listed("alice", "/api/v1/objectives"), "Ship refunds") ||
+		!strings.Contains(listed("alice", "/api/v1/objectives"), "Private note") {
+		t.Error("a creator who lost the repository still sees its product, or lost their own private objective")
+	}
 	if !strings.Contains(listed("erin", "/api/v1/products"), "Payments") || !strings.Contains(listed("erin", "/api/v1/objectives"), "Ship refunds") ||
 		strings.Contains(listed("erin", "/api/v1/objectives"), "Private note") {
 		t.Error("a user granted the repository does not see exactly its product and objectives")
+	}
+	// The product stays editable while its project's worker is not registered, because the repository
+	// was recorded when the project was linked; a project that is new to the product is still checked.
+	if harness.heartbeat(aliceWorkerID, aliceToken, "") != http.StatusOK {
+		t.Fatal("heartbeat without projects failed")
+	}
+	if response := harness.user("erin", http.MethodPut, "/api/v1/products/"+payments.ID, productBody("Payments v2", projectA)); response.Code != http.StatusOK {
+		t.Errorf("editing a product whose project is not registered returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+	both := fmt.Sprintf(`{"name":"Payments v2","description":"","repository_ids":[%q,%q]}`, projectA, projectC)
+	if response := harness.user("erin", http.MethodPut, "/api/v1/products/"+payments.ID, both); response.Code != http.StatusForbidden {
+		t.Errorf("adding a project the editor cannot access returned HTTP %d", response.Code)
 	}
 }
 
