@@ -117,6 +117,26 @@ func TestSkippedProjectIsLoggedOnceWhileTheSetIsUnchanged(t *testing.T) {
 	}
 }
 
+func TestUnknownSkippedProjectReasonIsLoggedOnceWithoutError(t *testing.T) {
+	var output bytes.Buffer
+	previousOutput := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previousOutput) })
+	runner := &agentRunner{}
+	reply := workerapi.HeartbeatResponse{SkippedProjects: []workerapi.SkippedProject{{
+		ID: "abcdef0123456789abcdef0123456789", Reason: "future_reason",
+	}}}
+	projects := []workerapi.Project{{ID: "abcdef0123456789abcdef0123456789", Name: "repo"}}
+	for range 2 {
+		if err := runner.logSkippedProjects(reply, projects); err != nil {
+			t.Fatalf("logSkippedProjects: %v", err)
+		}
+	}
+	if got := strings.Count(output.String(), `project "repo" was not registered: future_reason`); got != 1 {
+		t.Fatalf("log output = %q, want one matching line", output.String())
+	}
+}
+
 func TestWorkerHTTPClientAddsBearerCredential(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer worker-secret-for-auth-tests-1234567890" {

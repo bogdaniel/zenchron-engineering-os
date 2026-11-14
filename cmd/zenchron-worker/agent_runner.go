@@ -39,11 +39,10 @@ type agentRunner struct {
 func (runner *agentRunner) logSkippedProjects(response workerapi.HeartbeatResponse, projects []workerapi.Project) error {
 	current := make(map[string]string, len(response.SkippedProjects))
 	for _, skipped := range response.SkippedProjects {
-		if skipped.Reason != workerapi.SkippedProjectRepositoryNotGranted &&
-			skipped.Reason != workerapi.SkippedProjectIDRegisteredByAnotherWorker {
-			return fmt.Errorf("heartbeat returned unknown skipped project reason %q", skipped.Reason)
+		if skipped.ID == "" {
+			return fmt.Errorf("heartbeat returned an invalid or duplicate skipped project id")
 		}
-		if skipped.ID == "" || current[skipped.ID] != "" {
+		if _, exists := current[skipped.ID]; exists {
 			return fmt.Errorf("heartbeat returned an invalid or duplicate skipped project id")
 		}
 		current[skipped.ID] = skipped.Reason
