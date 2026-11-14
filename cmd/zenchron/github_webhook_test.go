@@ -269,7 +269,7 @@ func TestWebhookFollowUpRunsOnlyWhileTheRunCreatorKeepsAccess(t *testing.T) {
 	agents.items[harness.profile.ID] = harness.profile
 	runs := newAgentRunStore(registry, agents)
 	harness.server = authHandler(newMuxWithStores(newObjectiveStore(products), newWorkflowStore(), agents,
-		products, registry, newWorktreeStore(registry), runs), harness.config)
+		products, registry, runs), harness.config)
 	harness.heartbeat(aliceWorkerID, aliceToken, projectJSON(projectA, repositoryA))
 	runBody := fmt.Sprintf(`{"agent_id":%q,"project_id":%q,"prompt":"Do the work."}`, harness.profile.ID, projectA)
 	run := decodeBody[agentRun](t, harness.user("alice", http.MethodPost, "/api/v1/agent-runs", runBody), http.StatusAccepted)

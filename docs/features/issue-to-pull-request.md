@@ -165,8 +165,9 @@ in Live.
 | `POST /api/v1/agent-runs/{id}/sync-reviews` | Import change requests submitted on GitHub |
 | `POST /api/v1/agent-runs/{id}/publish` | Retry pull-request creation after a GitHub failure |
 
-Agent profiles select a CLI with `provider` set to `codex-cli` or `claude-code`. Any other provider value uses the
-OpenAI-compatible chat runtime described in [Agent run queue](agent-run-queue.md).
+Agent profiles select a CLI with `provider` set to `codex-cli` or `claude-code`. A profile with any other provider
+value can be saved but not run: `POST /api/v1/agent-runs` refuses it with `409`. The CLI process runner is the only
+execution implementation.
 
 ## Setup
 
@@ -237,8 +238,8 @@ Automated, deterministic:
 - `go test ./cmd/zenchron -run 'TestIssueRun|TestPullRequest|TestProgress|TestStaleAttempt|TestRunWaits|TestResult|TestVerificationFailure' -count=1`
   covers the issue snapshot and untrusted-comment filtering, identity linking, idempotent publication, lease renewal
   and fencing, provider gating, result validation, and review import against a fake GitHub API.
-- `cd dashboard && npm run test:e2e:agent-runtime` runs the real control plane and worker binaries end to end with
-  the chat runtime.
+- `cd dashboard && npm run test:e2e:agent-runtime` runs the real control plane and worker binaries end to end
+  through the fake Codex CLI in `dashboard/e2e/fake-cli` (see [Agent run queue](agent-run-queue.md)).
 
 - `cd dashboard && npm run test:e2e -- e2e/z_run_evidence.spec.ts` covers the queue dialog (issue selection and
   creation, the request body, a blocked unready provider, issues unavailable), the Mock/Live switch,

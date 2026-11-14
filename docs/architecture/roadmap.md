@@ -9,8 +9,8 @@ boundary, component decisions, and what is not implemented.
 Zenchron coordinates multiple Git projects through a dashboard for developers and non-developers. Proposed code changes
 should be reviewable as local branches and pull requests. People can review, comment, or request changes, then the
 control plane should continue from that feedback. Issues and review state should be visible in the dashboard, which is
-built alongside the backend and available for live review. The first model integration uses OpenAI-compatible Chat
-Completions; that selects a request protocol, not an agent design.
+built alongside the backend and available for live review. Agent runs execute through the installed Codex or Claude
+Code CLI; the earlier OpenAI-compatible Chat Completions integration was removed.
 
 ```mermaid
 flowchart LR
@@ -71,10 +71,10 @@ remain open. Focused tests cover duplicate and stale claims, lease recovery, and
 
 ### 4. Agent harness — partially implemented
 
-Agent profiles, durable run lifecycle, isolated worktrees, OpenAI-compatible Chat Completions, bounded read tools, and
+Agent profiles, durable run lifecycle, isolated worktrees, execution through the Codex and Claude Code CLIs, and
 optional `code.write` are implemented. Successful non-empty GitHub runs can publish their branch and create or reuse a
 pull request. `cd dashboard && npm run test:e2e:agent-runtime` builds and runs the real control plane and worker with a
-loopback model stub, verifies the isolated commit and captured diff, and confirms the source checkout stays unchanged.
+fake Codex CLI, verifies the isolated commit and captured diff, and confirms the source checkout stays unchanged.
 Installed Codex CLI and Claude Code CLI providers run behind the same lifecycle with wall-clock, inactivity,
 tool-activity, and verification limits, worker-operator verification commands, redacted run events, and reported
 usage. Real runs of both CLIs produced verified pull requests on 2026-11-11; see
@@ -119,24 +119,23 @@ policy enforcement.
   Objective, workflow, and agent profile definitions persist as versioned JSON snapshots; the overview and Agents route
   poll live agent-run history. Worker presence remains in process memory.
 - The workflow canvas can edit and validate a graph, but it does not execute that graph.
-- Agent profiles store prompt configuration and tool allowlists. With `ZENCHRON_LLM_BASE_URL` configured on a worker,
-  the OpenAI-compatible Chat Completions loop executes bounded read tools and optional `code.write` in per-run Git
-  worktrees; successful, reviewable changes are committed locally on the isolated branch. A successful non-empty run
-  can push only that branch and create or reuse a pull request when control-plane GitHub authentication and a GitHub.com origin are
-  configured. Profiles with provider `codex-cli` or `claude-code` run the installed CLI in the same per-run worktree,
-  followed by the worker operator's verification commands; run events and reported usage are stored as evidence.
+- Agent profiles store prompt configuration and tool allowlists. Profiles with provider `codex-cli` or `claude-code`
+  run the installed CLI in a per-run Git worktree, followed by the worker operator's verification commands; run events
+  and reported usage are stored as evidence, and successful, reviewable changes are committed locally on the isolated
+  branch. A successful non-empty run can push only that branch and create or reuse a pull request when control-plane
+  GitHub authentication and a GitHub.com origin are configured. A profile with any other provider cannot be run.
 - Agent run prompts can be durably queued for an active profile and online project, claimed by its assigned worker,
-  and completed with a fenced result. A worker without a configured model endpoint leaves runs queued; see
-  [Agent run queue](../features/agent-run-queue.md). A focused cross-process E2E now proves the real API and worker can call a
-  loopback OpenAI-compatible stub, perform an allowed tool write in a per-run worktree, and return the captured diff.
+  and completed with a fenced result. A worker whose CLI for the profile is not ready leaves runs queued; see
+  [Agent run queue](../features/agent-run-queue.md). A focused cross-process E2E proves the real API and worker can run
+  a fake Codex CLI, write in a per-run worktree, and return the captured diff.
 - Queued and active agent runs can be cancelled from Reviews. The control plane persists cancellation state, the
   assigned worker learns of it from its progress reports and stops the provider, and cancellation keeps the partial
   isolated diff. A run whose lease
   expires after cancellation is completed as cancelled instead of retried. Generic command types and actor-bound policy
   decisions remain unimplemented.
-- The local worker can prepare a durable, leased isolated Git worktree request for an online project. Completion is
-  fenced by claim attempt so stale workers cannot acknowledge a newer lease. Focused tests cover duplicate claims,
-  expired-lease recovery after control-plane restart, stale acknowledgements, cancellation, and idempotent worktree
+- The local worker creates one isolated Git worktree per agent run; the standalone worktree request queue was removed.
+  Run completion is fenced by claim attempt so stale workers cannot finish a newer lease. Focused tests cover
+  expired-lease recovery after control-plane restart, stale results, cancellation, and idempotent worktree
   preparation. Successful agent runs with reviewable diffs commit on isolated branches; conditional branch push and
   pull-request creation are implemented in the agent-run path. General worker command types and per-command actor and
   policy binding remain unimplemented.

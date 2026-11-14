@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,43 +16,12 @@ import (
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
-// runExecutor performs one agent attempt inside a prepared worktree. It has two kinds of
-// implementation today: the chat-completions runtime and the installed coding CLIs.
-type runExecutor interface {
-	execute(
-		ctx context.Context, command workerapi.AgentRunCommand, workspace runWorkspace, limits runLimits,
-		emit func(kind, message string),
-	) (executionResult, error)
-	versionLabel() string
-}
-
-func (provider *cliProvider) versionLabel() string { return provider.version }
-
-func (runtime *agentRuntime) versionLabel() string { return "" }
-
-func (runtime *agentRuntime) execute(
-	ctx context.Context, command workerapi.AgentRunCommand, workspace runWorkspace, _ runLimits,
-	_ func(kind, message string),
-) (executionResult, error) {
-	output, err := runtime.complete(ctx, command, workspace.path)
-	switch {
-	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		return executionResult{reason: workerapi.TerminationWallClock}, ctx.Err()
-	case ctx.Err() != nil:
-		return executionResult{reason: workerapi.TerminationCancelled}, ctx.Err()
-	case err != nil:
-		return executionResult{reason: workerapi.TerminationProviderExit}, err
-	}
-	return executionResult{output: output, reason: workerapi.TerminationCompleted}, nil
-}
-
 // agentRunner owns the local half of a run: worktree, provider process, verification, commit and push.
 type agentRunner struct {
 	client    *http.Client
 	baseURL   *url.URL
 	workerID  string
 	token     string
-	chat      *agentRuntime
 	providers map[string]*cliProvider
 	limits    runLimits
 	config    *workerConfig
@@ -83,17 +51,7 @@ func (runner *agentRunner) canExecute() bool {
 			return true
 		}
 	}
-	return runner.chat != nil
-}
-
-func (runner *agentRunner) executorFor(provider string) runExecutor {
-	if cli := runner.providers[provider]; cli != nil && cli.ready {
-		return cli
-	}
-	if runner.chat == nil || workerapi.IsCLIProvider(provider) {
-		return nil
-	}
-	return runner.chat
+	return false
 }
 
 func (runner *agentRunner) process(ctx context.Context, projects []discoveredProject) error {
@@ -136,11 +94,11 @@ func (runner *agentRunner) run(
 	if command.Branch != workerapi.AgentRunBranch(command.ID) {
 		return failedRun(workerapi.TerminationWorkerError, "Run branch is not the branch authorized for this run."), true
 	}
-	if workerapi.IsCLIProvider(command.Profile.Provider) && !modelPattern.MatchString(command.Profile.Model) {
+	if !modelPattern.MatchString(command.Profile.Model) {
 		return failedRun(workerapi.TerminationWorkerError, "The agent profile's model name is not valid for a CLI provider."), true
 	}
-	executor := runner.executorFor(command.Profile.Provider)
-	if executor == nil {
+	provider := runner.providers[command.Profile.Provider]
+	if provider == nil || !provider.ready {
 		return failedRun(workerapi.TerminationWorkerError, "The agent provider is not ready on this worker."), true
 	}
 	root, err := worktreeRoot()
@@ -157,7 +115,7 @@ func (runner *agentRunner) run(
 	stopReporting := reporter.start(ctx, cancel)
 	workspace := runWorkspace{path: worktree, environment: runner.config.processEnvironment(project.Remote),
 		readPaths: runner.config.readPaths(project.Remote), denyPaths: confidentialRoots(root, projects)}
-	result := runner.attempt(activeCtx, command, project, root, workspace, executor, reporter)
+	result := runner.attempt(activeCtx, command, project, root, workspace, provider, reporter)
 	stopReporting()
 	if _, leaseLost := reporter.state(); leaseLost || ctx.Err() != nil {
 		return result, false
@@ -167,13 +125,11 @@ func (runner *agentRunner) run(
 
 func (runner *agentRunner) attempt(
 	ctx context.Context, command workerapi.AgentRunCommand, project discoveredProject, root string,
-	workspace runWorkspace, executor runExecutor, reporter *progressReporter,
+	workspace runWorkspace, provider *cliProvider, reporter *progressReporter,
 ) workerapi.AgentRunResult {
-	result := workerapi.AgentRunResult{ProviderVersion: executor.versionLabel()}
+	result := workerapi.AgentRunResult{ProviderVersion: provider.version}
 	worktree := workspace.path
-	err := prepareWorktree(ctx, root, project, worktreeCommand{
-		ID: command.ID, ProjectID: command.ProjectID, Branch: command.Branch, BaseBranch: command.BaseBranch,
-	})
+	err := prepareWorktree(ctx, root, project, command.ID, command.Branch, command.BaseBranch)
 	if cancelled, _ := reporter.state(); cancelled && err != nil {
 		return cancelledRun(result)
 	}
@@ -206,7 +162,7 @@ func (runner *agentRunner) attempt(
 	if gitDir, err := gitOutput(ctx, "-C", worktree, "rev-parse", "--path-format=absolute", "--git-common-dir"); err == nil {
 		workspace.readPaths = append(workspace.readPaths, strings.TrimSpace(gitDir))
 	}
-	execution, runErr := executor.execute(runCtx, command, workspace, runner.limits, reporter.emit)
+	execution, runErr := provider.execute(runCtx, command, workspace, runner.limits, reporter.emit)
 	cancelRun()
 	result.Usage, result.TerminationReason = execution.usage, execution.reason
 

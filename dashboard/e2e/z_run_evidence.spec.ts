@@ -16,7 +16,7 @@ async function mockWorkspace(page: Page, options: { providerReady: boolean; issu
     status: 'active', system_prompt: 'Follow AGENTS.md.', goal_prompt: '', tools: ['code.write'], version: 1, updated_at: now,
   }])));
   await page.route('**/api/v1/workers', (route) => route.fulfill(json([{
-    id: workerID, name: 'dev-laptop', status: 'online', last_seen: now, agent_runtime_enabled: false,
+    id: workerID, name: 'dev-laptop', status: 'online', last_seen: now,
     providers: [{ id: 'codex-cli', version: 'codex-cli 0.167.0', ready: options.providerReady }],
   }])));
   await page.route('**/api/v1/projects', (route) => route.fulfill(json([{

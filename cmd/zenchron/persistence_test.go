@@ -61,22 +61,17 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut,
 		"/api/v1/workers/"+testWorkerID+"/heartbeat", strings.NewReader(workerHeartbeat)))
 	if response.Code != http.StatusOK {
-		t.Fatalf("register worktree worker returned HTTP %d: %s", response.Code, response.Body.String())
+		t.Fatalf("register worker returned HTTP %d: %s", response.Code, response.Body.String())
 	}
-	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/worktrees", strings.NewReader(
-		`{"project_id":"`+testProjectID+`","branch":"feature/persisted"}`,
-	)))
-	var createdWorktree worktreeRequest
-	if err := json.NewDecoder(response.Body).Decode(&createdWorktree); err != nil || response.Code != http.StatusAccepted {
-		t.Fatalf("queue worktree = %#v, decode error = %v, HTTP %d", createdWorktree, err, response.Code)
+	// A state file left by a version that still had standalone worktree requests is ignored, not read.
+	if err := os.WriteFile(filepath.Join(dataDir, "worktrees.json"), []byte("not a state file"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 	for path, wantMode := range map[string]os.FileMode{
 		dataDir: os.FileMode(0o700), filepath.Join(dataDir, "objectives.json"): os.FileMode(0o600),
 		filepath.Join(dataDir, "workflows.json"): os.FileMode(0o600),
 		filepath.Join(dataDir, "agents.json"):    os.FileMode(0o600),
 		filepath.Join(dataDir, "products.json"):  os.FileMode(0o600),
-		filepath.Join(dataDir, "worktrees.json"): os.FileMode(0o600),
 	} {
 		info, err := os.Stat(path)
 		if err != nil {
@@ -161,10 +156,8 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 	}
 	response = httptest.NewRecorder()
 	restarted.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/worktrees", nil))
-	var worktrees []worktreeRequest
-	if err := json.NewDecoder(response.Body).Decode(&worktrees); err != nil || response.Code != http.StatusOK ||
-		len(worktrees) != 1 || worktrees[0].ID != createdWorktree.ID || worktrees[0].Status != "queued" {
-		t.Fatalf("restored worktree requests = %#v, decode error = %v, HTTP %d", worktrees, err, response.Code)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("removed worktree request API returned HTTP %d", response.Code)
 	}
 	response = httptest.NewRecorder()
 	restarted.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workers", nil))

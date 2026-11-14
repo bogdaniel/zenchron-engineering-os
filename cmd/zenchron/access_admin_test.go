@@ -27,7 +27,7 @@ func newAdminHarness(t *testing.T) *accessHarness {
 	registry, agents, products := newWorkerRegistry(), newAgentProfileStore(), newProductStore()
 	agents.items[harness.profile.ID] = harness.profile
 	harness.server = authHandler(newMuxWithStores(newObjectiveStore(products), newWorkflowStore(), agents,
-		products, registry, newWorktreeStore(registry), newAgentRunStore(registry, agents)), harness.config)
+		products, registry, newAgentRunStore(registry, agents)), harness.config)
 	if harness.heartbeat(aliceWorkerID, aliceToken, projectJSON(projectA, repositoryA)) != http.StatusOK ||
 		harness.heartbeat(bobWorkerID, bobToken, projectJSON(projectC, repositoryC)) != http.StatusOK {
 		t.Fatal("workers could not register their projects")

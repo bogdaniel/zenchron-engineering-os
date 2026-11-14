@@ -268,10 +268,6 @@ func isWorkerAPIRequest(method, path string) bool {
 	switch {
 	case len(parts) == 5 && parts[4] == "heartbeat" && method == http.MethodPut:
 		return true
-	case len(parts) == 6 && parts[4] == "worktrees" && parts[5] == "claim" && method == http.MethodPost:
-		return true
-	case len(parts) == 6 && parts[4] == "worktrees" && method == http.MethodPut:
-		return true
 	case len(parts) == 6 && parts[4] == "agent-runs" && parts[5] == "claim" && method == http.MethodPost:
 		return true
 	case len(parts) == 7 && parts[4] == "agent-runs" && parts[6] == "progress" && method == http.MethodPost:

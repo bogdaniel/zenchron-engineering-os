@@ -310,6 +310,11 @@ func (store *agentRunStore) create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "agent profile is disabled", http.StatusConflict)
 		return
 	}
+	// Only the coding CLIs execute runs; any other profile would wait in the queue for ever.
+	if !workerapi.IsCLIProvider(profile.Provider) {
+		http.Error(w, "this agent profile's provider has no execution adapter; use codex-cli or claude-code", http.StatusConflict)
+		return
+	}
 	project, online := store.registry.onlineProject(input.ProjectID)
 	if !online || !accessFor(r).allows(project.GitRemote) {
 		http.Error(w, "project has no online worker", http.StatusConflict)
@@ -356,12 +361,9 @@ func (store *agentRunStore) create(w http.ResponseWriter, r *http.Request) {
 
 // workerRunsProfile reports whether a worker has the execution provider an agent profile names.
 func workerRunsProfile(worker workerRecord, profile agentProfile) bool {
-	if workerapi.IsCLIProvider(profile.Provider) {
-		return slices.ContainsFunc(worker.Providers, func(status workerapi.ProviderStatus) bool {
-			return status.ID == profile.Provider && status.Ready
-		})
-	}
-	return worker.AgentRuntimeEnabled != nil && *worker.AgentRuntimeEnabled
+	return slices.ContainsFunc(worker.Providers, func(status workerapi.ProviderStatus) bool {
+		return status.ID == profile.Provider && status.Ready
+	})
 }
 
 func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
@@ -524,4 +526,9 @@ func (item *agentRun) expireLease(now time.Time) {
 	default:
 		item.Status = "queued"
 	}
+}
+
+func validHexID(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == 16
 }
