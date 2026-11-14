@@ -104,6 +104,45 @@ test('Settings reports which coding CLIs are ready on online workers', async ({ 
   await expect(workers).toContainText('1 of 1 workers reporting a recent heartbeat. Coding CLIs ready: codex-cli on 1.');
 });
 
+test('Settings lists each worker\'s CLIs and the queue dialog explains a failed sandbox or a missing command sandbox', async ({ page }) => {
+  await mockWorkspace(page, { providerReady: true });
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([])));
+  await page.route('**/api/v1/agents', (route) => route.fulfill(json([{
+    id: profileID, name: 'Claude engineer', description: '', provider: 'claude-code', model: 'default',
+    status: 'active', system_prompt: '', goal_prompt: '', tools: ['code.write', 'tests.run'], version: 1, updated_at: now,
+  }])));
+  const providers = [
+    { id: 'codex-cli', version: 'codex-cli 0.167.0', ready: false, reason: 'sandbox self-test failed', sandboxed_commands: false },
+    { id: 'claude-code', version: '2.1.322 (Claude Code)', ready: true, sandboxed_commands: false },
+  ];
+  await page.route('**/api/v1/workers', (route) => route.fulfill(json([{
+    id: workerID, name: 'dev-laptop', status: 'online', last_seen: now, providers,
+  }])));
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    await page.goto('/#settings');
+    const row = page.locator('.system-preview-controller-values').filter({ hasText: 'CLIs on dev-laptop' });
+    await expect(row).toContainText(
+      'codex-cli 0.167.0 not ready (sandbox self-test failed) · 2.1.322 (Claude Code) ready, cannot run commands');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/settings-worker-clis-${viewport.name}.png`, fullPage: true });
+  }
+  await page.goto('/#agents');
+  await page.getByRole('button', { name: 'Run Agent' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
+  await expect(dialog.locator('.agents-queue-note')).toHaveText('dev-laptop reports 2.1.322 (Claude Code) installed and signed in.'
+    + ' It can edit files but cannot run commands or tests there: its command sandbox is not available on that worker.');
+  await page.route('**/api/v1/agents', (route) => route.fulfill(json([{
+    id: profileID, name: 'Codex engineer', description: '', provider: 'codex-cli', model: 'default',
+    status: 'active', system_prompt: '', goal_prompt: '', tools: ['code.write'], version: 1, updated_at: now,
+  }])));
+  await page.reload();
+  await page.getByRole('button', { name: 'Run Agent' }).click();
+  await expect(dialog.locator('.agents-queue-note')).toHaveText(
+    'dev-laptop has codex-cli signed in, but its sandbox did not confine a test command on that machine, so agents cannot run there.');
+  await expect(dialog.getByRole('button', { name: 'Queue run', exact: true })).toBeDisabled();
+});
+
 for (const viewport of viewports) {
   test(`Reviews shows run evidence, attempts, checks, and events (${viewport.name})`, async ({ page }) => {
     await page.setViewportSize(viewport);

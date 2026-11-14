@@ -28,7 +28,7 @@ import { OverviewPage } from './OverviewPage';
 import { Sidebar } from './Sidebar';
 import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
-import { workerProvidersSchema } from './agentRunQueue';
+import { describeProvider, workerProvidersSchema } from './agentRunQueue';
 import './style.css';
 import './overview.css';
 import './monaco.css';
@@ -299,6 +299,8 @@ function App() {
               gitHubProjectCount={projects.data?.filter((project) => project.git_remote.startsWith('github.com/')).length ?? 0}
               cliReadyWorkers={Object.fromEntries(['codex-cli', 'claude-code'].map((id) => [id,
                 onlineWorkers.filter((worker) => worker.providers?.some((item) => item.id === id && item.ready)).length]))}
+              workerCLIs={onlineWorkers.map((worker): [string, string] => [worker.name,
+                worker.providers?.map(describeProvider).join(' · ') || 'None installed'])}
             />
           ) : activePage === 'reports' ? (
             <ReportsPage designPreview={previewPage}

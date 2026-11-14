@@ -89,6 +89,8 @@ export interface SystemFacts {
   gitHubProjectCount: number;
   /** Online workers per coding CLI that report it installed and signed in. */
   cliReadyWorkers?: Record<string, number>;
+  /** Each online worker's name with a description of the coding CLIs it reports. */
+  workerCLIs?: [string, string][];
 }
 
 const unavailable = 'Unavailable';
@@ -192,6 +194,7 @@ export function liveSystemSource(facts: SystemFacts): SystemSource {
       ['Local checkouts', String(projectCount)],
       ['Coding CLIs ready', Object.entries(facts.cliReadyWorkers ?? {}).filter(([, count]) => count > 0)
         .map(([id, count]) => `${id} on ${count}`).join(' · ') || 'None'],
+      ...(facts.workerCLIs ?? []).map(([name, clis]): [string, string] => [`CLIs on ${name}`, clis]),
     ],
     switches: { 'Auto-scale Runners': false, 'Capture Evidence by Default': false },
     notificationRules: [],
