@@ -148,6 +148,20 @@ for (const viewport of viewports) {
     const panel = await page.locator('.reviews-change-empty:has(.run-evidence)').boundingBox();
     expect(panel?.height).toBeGreaterThanOrEqual(220);
     await page.screenshot({ path: `test-results/run-evidence-${viewport.name}.png`, fullPage: true });
+    if (viewport.name !== 'mobile') return;
+    // On a phone the evidence is laid out at its full length and the whole detail pane scrolls, not a strip inside it.
+    expect(await page.locator('.reviews-change-empty:has(.run-evidence)')
+      .evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
+    const pane = await page.locator('.reviews-detail')
+      .evaluate((element) => ({ visible: element.clientHeight, scrolls: element.scrollHeight > element.clientHeight }));
+    expect(pane.visible).toBeGreaterThanOrEqual(viewport.height / 2);
+    expect(pane.scrolls).toBe(true);
+    await events.last().scrollIntoViewIfNeeded();
+    await expect(events.last()).toBeInViewport();
+    const addComment = page.getByRole('button', { name: 'Add comment' });
+    await addComment.scrollIntoViewIfNeeded();
+    await expect(addComment).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }
 
