@@ -122,6 +122,7 @@ func newMuxWithStores(
 	registry *workerRegistry, worktrees *worktreeStore, runs *agentRunStore,
 ) http.Handler {
 	registry.runs = runs
+	products.repositoryOf = registry.repositoryOf
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})

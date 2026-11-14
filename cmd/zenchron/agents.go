@@ -23,6 +23,9 @@ type agentProfile struct {
 	Tools        []string  `json:"tools"`
 	Version      int       `json:"version"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	// CreatedBy is the GitHub login that created the profile under an access policy. Every signed-in
+	// user may read and run a profile; only its creator or an administrator may change it.
+	CreatedBy string `json:"created_by,omitempty"`
 }
 
 type agentProfileInput struct {
@@ -154,6 +157,7 @@ func (store *agentProfileStore) create(w http.ResponseWriter, r *http.Request) {
 	}
 	profile.ID = hex.EncodeToString(idBytes)
 	profile.Version = 1
+	profile.CreatedBy = accessFor(r).creator()
 	profile.UpdatedAt = time.Now().UTC()
 	store.mu.Lock()
 	store.items[profile.ID] = profile
@@ -189,7 +193,12 @@ func (store *agentProfileStore) update(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	profile.ID = id
+	if !accessFor(r).owns(previous.CreatedBy) {
+		store.mu.Unlock()
+		http.Error(w, "only the profile's creator or an administrator can change it", http.StatusForbidden)
+		return
+	}
+	profile.ID, profile.CreatedBy = id, previous.CreatedBy
 	profile.Version = previous.Version + 1
 	profile.UpdatedAt = time.Now().UTC()
 	store.items[id] = profile

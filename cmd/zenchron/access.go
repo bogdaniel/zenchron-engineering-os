@@ -9,11 +9,20 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 )
 
-// accessFile is the operator-maintained record of who may do what. It is the single authority for
-// worker identity and for which repositories a user or worker may touch.
+// tokenRotationOverlap is how long a worker's previous token stays valid after a new one is set, so the
+// worker can be restarted with the new token without an outage.
+const tokenRotationOverlap = 24 * time.Hour
+
+// accessFile is the record of who may do what. It is the single authority for administrators, worker
+// identity, and which repositories a user or worker may touch. An operator seeds it with the first
+// administrator; after that it is changed through the admin API, which audits every change.
 type accessFile struct {
+	// Admins may change this policy and may read and change everything it protects.
+	Admins  []string            `json:"admins,omitempty"`
 	Workers []workerGrant       `json:"workers"`
 	Users   map[string][]string `json:"users"`
 }
@@ -25,13 +34,21 @@ type workerGrant struct {
 	TokenSHA256  string   `json:"token_sha256"`
 	Owner        string   `json:"owner"`
 	Repositories []string `json:"repositories"`
+	// The token replaced by the last rotation is accepted until it expires.
+	PreviousTokenSHA256    string     `json:"previous_token_sha256,omitempty"`
+	PreviousTokenExpiresAt *time.Time `json:"previous_token_expires_at,omitempty"`
 }
 
 // accessPolicy reads the access file on every request, so removing a grant revokes it without a
 // restart. An unreadable or invalid file denies everything until it is fixed.
-// ponytail: one small file read per request; replace with a database table when grants are edited through an API.
+// ponytail: one small file read per request and one writer at a time; move grants to a database table
+// together with the rest of the state when the control plane gets more than one instance.
 type accessPolicy struct {
 	path string
+	// auditPath is the append-only record of changes made through the admin API.
+	auditPath string
+	// mu serializes changes: each one reads, edits, and replaces the whole file.
+	mu sync.Mutex
 }
 
 func loadAccessPolicy() (*accessPolicy, error) {
@@ -39,7 +56,7 @@ func loadAccessPolicy() (*accessPolicy, error) {
 	if path == "" {
 		return nil, nil
 	}
-	policy := &accessPolicy{path: path}
+	policy := &accessPolicy{path: path, auditPath: path + ".audit.jsonl"}
 	if _, err := policy.current(); err != nil {
 		return nil, err
 	}
@@ -67,8 +84,9 @@ func (file *accessFile) normalize() error {
 		grant := &file.Workers[index]
 		grant.ID, grant.TokenSHA256 = strings.ToLower(grant.ID), strings.ToLower(grant.TokenSHA256)
 		grant.Owner = strings.ToLower(strings.TrimSpace(grant.Owner))
-		digest, err := hex.DecodeString(grant.TokenSHA256)
-		if !validHexID(grant.ID) || err != nil || len(digest) != sha256.Size || seen[grant.ID] {
+		grant.PreviousTokenSHA256 = strings.ToLower(grant.PreviousTokenSHA256)
+		if !validHexID(grant.ID) || !validTokenHash(grant.TokenSHA256) || seen[grant.ID] ||
+			(grant.PreviousTokenSHA256 != "" && (!validTokenHash(grant.PreviousTokenSHA256) || grant.PreviousTokenExpiresAt == nil)) {
 			return fmt.Errorf("worker %d needs a unique 32-hex id and a SHA-256 token hash", index)
 		}
 		seen[grant.ID] = true
@@ -85,7 +103,24 @@ func (file *accessFile) normalize() error {
 		users[login] = repositories
 	}
 	file.Users = users
+	for index, login := range file.Admins {
+		file.Admins[index] = strings.ToLower(strings.TrimSpace(login))
+		if file.Admins[index] == "" {
+			return fmt.Errorf("administrator %d is blank", index)
+		}
+	}
 	return nil
+}
+
+func validTokenHash(value string) bool {
+	digest, err := hex.DecodeString(value)
+	return err == nil && len(digest) == sha256.Size
+}
+
+// knows reports whether a GitHub login appears in the policy at all, which is what lets it keep a session.
+func (file *accessFile) knows(login string) bool {
+	_, granted := file.Users[login]
+	return granted || slices.Contains(file.Admins, login)
 }
 
 func validRepositoryGrants(repositories []string) bool {
@@ -112,7 +147,12 @@ func (file *accessFile) authenticateWorker(id, authorization string) (workerGran
 	digest := sha256.Sum256([]byte(parts[1]))
 	presented := hex.EncodeToString(digest[:])
 	for _, grant := range file.Workers {
-		if (id == "" || grant.ID == id) && secureEqual(grant.TokenSHA256, presented) {
+		if id != "" && grant.ID != id {
+			continue
+		}
+		previousValid := grant.PreviousTokenSHA256 != "" && grant.PreviousTokenExpiresAt != nil &&
+			time.Now().Before(*grant.PreviousTokenExpiresAt)
+		if secureEqual(grant.TokenSHA256, presented) || (previousValid && secureEqual(grant.PreviousTokenSHA256, presented)) {
 			return grant, true
 		}
 	}
@@ -124,6 +164,7 @@ func (file *accessFile) authenticateWorker(id, authorization string) (workerGran
 type requestAccess struct {
 	enforced     bool
 	user         string
+	admin        bool
 	repositories []string
 	policy       *accessFile
 }
@@ -140,7 +181,18 @@ func accessFor(r *http.Request) requestAccess {
 }
 
 func (access requestAccess) allows(repository string) bool {
-	return !access.enforced || (repository != "" && slices.Contains(access.repositories, repository))
+	return !access.enforced || access.admin || (repository != "" && slices.Contains(access.repositories, repository))
+}
+
+// owns reports whether the caller may change a definition created by createdBy: its creator or an
+// administrator. A definition without a recorded creator predates the policy and is left to administrators.
+func (access requestAccess) owns(createdBy string) bool {
+	return !access.enforced || access.admin || (createdBy != "" && createdBy == access.user)
+}
+
+// creator is what a new definition records as its creator.
+func (access requestAccess) creator() string {
+	return access.user
 }
 
 // mayDispatchTo reports whether the user may start work on a worker: their own, or a shared one.

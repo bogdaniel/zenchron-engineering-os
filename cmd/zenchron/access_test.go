@@ -364,7 +364,10 @@ func TestAccessFileRejectsMalformedGrants(t *testing.T) {
 		"repository traversal":        `{"workers":[],"users":{"alice":["github.com/acme/../secret"]}}`,
 		"repository with credentials": `{"workers":[],"users":{"alice":["user@github.com/acme/repo"]}}`,
 		"blank user":                  `{"workers":[],"users":{" ":["github.com/acme/repo"]}}`,
-		"unknown field":               `{"workers":[],"users":{},"admins":["alice"]}`,
+		"unknown field":               `{"workers":[],"users":{},"roles":{"alice":"owner"}}`,
+		"blank administrator":         `{"workers":[],"users":{},"admins":[" "]}`,
+		"previous token without expiry": `{"workers":[{"id":"` + aliceWorkerID + `","token_sha256":"` + tokenHash(aliceToken) +
+			`","previous_token_sha256":"` + tokenHash(bobToken) + `"}]}`,
 	} {
 		t.Setenv("ZENCHRON_ACCESS_FILE", writeAccessFile(t, content))
 		if _, err := loadAccessPolicy(); err == nil {

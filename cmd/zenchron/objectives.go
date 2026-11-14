@@ -23,6 +23,17 @@ type objective struct {
 	DueDate     string    `json:"due_date"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	// CreatedBy is the GitHub login that created the objective under an access policy.
+	CreatedBy string `json:"created_by,omitempty"`
+}
+
+// visible reports whether the caller may see and edit an objective. An objective follows its product;
+// one without a product belongs to its creator and to administrators.
+func (store *objectiveStore) visible(access requestAccess, item objective) bool {
+	if product, exists := store.products.get(item.ProductID); item.ProductID != "" && exists {
+		return product.visible(access)
+	}
+	return access.owns(item.CreatedBy)
 }
 
 type objectiveStore struct {
@@ -95,11 +106,14 @@ func validStoredObjective(item objective) bool {
 	return true
 }
 
-func (store *objectiveStore) list(w http.ResponseWriter, _ *http.Request) {
+func (store *objectiveStore) list(w http.ResponseWriter, r *http.Request) {
+	access := accessFor(r)
 	store.mu.RLock()
 	items := make([]objective, 0, len(store.items))
 	for _, item := range store.items {
-		items = append(items, item)
+		if store.visible(access, item) {
+			items = append(items, item)
+		}
 	}
 	store.mu.RUnlock()
 	for i := range items {
@@ -148,7 +162,7 @@ func (store *objectiveStore) create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		product, exists := store.products.get(input.ProductID)
-		if !exists {
+		if !exists || !product.visible(accessFor(r)) {
 			http.Error(w, "product_id does not identify a saved product", http.StatusBadRequest)
 			return
 		}
@@ -164,7 +178,7 @@ func (store *objectiveStore) create(w http.ResponseWriter, r *http.Request) {
 		ID: hex.EncodeToString(idBytes), Title: input.Title, Description: input.Description,
 		Owner: input.Owner, Product: input.Product, ProductID: input.ProductID,
 		Status: "in_progress", DueDate: input.DueDate,
-		CreatedAt: now, UpdatedAt: now,
+		CreatedAt: now, UpdatedAt: now, CreatedBy: accessFor(r).creator(),
 	}
 	store.mu.Lock()
 	store.items[item.ID] = item
@@ -242,7 +256,7 @@ func (store *objectiveStore) update(w http.ResponseWriter, r *http.Request) {
 		}
 		var exists bool
 		linkedProduct, exists = store.products.get(*input.ProductID)
-		if !exists {
+		if !exists || !linkedProduct.visible(accessFor(r)) {
 			http.Error(w, "product_id does not identify a saved product", http.StatusBadRequest)
 			return
 		}
@@ -254,7 +268,8 @@ func (store *objectiveStore) update(w http.ResponseWriter, r *http.Request) {
 	}
 	store.mu.Lock()
 	item, exists := store.items[id]
-	if !exists {
+	// An objective the caller may not see is reported exactly like one that does not exist.
+	if !exists || !store.visible(accessFor(r), item) {
 		store.mu.Unlock()
 		http.NotFound(w, r)
 		return

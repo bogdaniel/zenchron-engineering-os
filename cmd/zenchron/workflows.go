@@ -53,6 +53,9 @@ type workflow struct {
 	Nodes       []workflowNode `json:"nodes"`
 	Edges       []workflowEdge `json:"edges"`
 	UpdatedAt   time.Time      `json:"updated_at"`
+	// CreatedBy is the GitHub login that created the workflow under an access policy. Every signed-in
+	// user may read a workflow; only its creator or an administrator may change it.
+	CreatedBy string `json:"created_by,omitempty"`
 }
 
 type workflowStore struct {
@@ -191,7 +194,7 @@ func (store *workflowStore) create(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	item := workflow{
 		ID: hex.EncodeToString(idBytes), Name: input.Name, Description: input.Description,
-		Status: "draft", Version: 1, UpdatedAt: now,
+		Status: "draft", Version: 1, UpdatedAt: now, CreatedBy: accessFor(r).creator(),
 		Nodes: []workflowNode{
 			{ID: "trigger", Type: "trigger", Data: workflowNodeData{Label: "Trigger", Description: "Start this workflow"}},
 			{ID: "planner", Type: "planner", Data: workflowNodeData{Label: "Planner", Description: "Plan the work"}},
@@ -241,6 +244,11 @@ func (store *workflowStore) save(w http.ResponseWriter, r *http.Request) {
 	if !exists {
 		store.mu.Unlock()
 		http.NotFound(w, r)
+		return
+	}
+	if !accessFor(r).owns(item.CreatedBy) {
+		store.mu.Unlock()
+		http.Error(w, "only the workflow's creator or an administrator can change it", http.StatusForbidden)
 		return
 	}
 	previous := item

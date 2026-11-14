@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -18,12 +19,55 @@ type product struct {
 	RepositoryIDs []string  `json:"repository_ids"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+	// CreatedBy is the GitHub login that created the product under an access policy.
+	CreatedBy string `json:"created_by,omitempty"`
+	// AccessRepositories are the repositories of the linked projects, recorded when the product is saved
+	// under an access policy. Whoever may touch one of them may see and edit the product. They are stored
+	// because a project id resolves to a repository only while its worker is registered, and they are
+	// never returned: a viewer may lack access to some of them.
+	AccessRepositories []string `json:"access_repositories,omitempty"`
 }
 
 type productStore struct {
 	mu    sync.RWMutex
 	items map[string]product
 	path  string
+	// repositoryOf resolves a project id to its repository; set when the store is wired to the registry.
+	repositoryOf func(projectID string) (string, bool)
+}
+
+// visible reports whether the caller may see and edit a product: an administrator, its creator, or
+// anyone who may touch one of its repositories.
+func (item product) visible(access requestAccess) bool {
+	return access.owns(item.CreatedBy) || slices.ContainsFunc(item.AccessRepositories, access.allows)
+}
+
+// public is the product as returned by the API.
+func (item product) public() product {
+	item.AccessRepositories = nil
+	return item
+}
+
+// accessRepositories resolves the linked projects to repositories the caller may touch. Under an access
+// policy a product may only link projects the caller can access.
+func (store *productStore) accessRepositories(access requestAccess, projectIDs []string) ([]string, bool) {
+	if !access.enforced {
+		return nil, true
+	}
+	repositories := []string{}
+	for _, projectID := range projectIDs {
+		repository, known := "", false
+		if store.repositoryOf != nil {
+			repository, known = store.repositoryOf(projectID)
+		}
+		if !known || !access.allows(repository) {
+			return nil, false
+		}
+		if !slices.Contains(repositories, repository) {
+			repositories = append(repositories, repository)
+		}
+	}
+	return repositories, true
 }
 
 func newProductStore() *productStore {
@@ -88,11 +132,14 @@ func validStoredProduct(item product) bool {
 	return true
 }
 
-func (store *productStore) list(w http.ResponseWriter, _ *http.Request) {
+func (store *productStore) list(w http.ResponseWriter, r *http.Request) {
+	access := accessFor(r)
 	store.mu.RLock()
 	items := make([]product, 0, len(store.items))
 	for _, item := range store.items {
-		items = append(items, item)
+		if item.visible(access) {
+			items = append(items, item.public())
+		}
 	}
 	store.mu.RUnlock()
 	sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
@@ -126,6 +173,12 @@ func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "repository_ids must contain unique 32-character hexadecimal ids", http.StatusBadRequest)
 		return
 	}
+	access := accessFor(r)
+	accessRepositories, permitted := store.accessRepositories(access, repositoryIDs)
+	if !permitted {
+		http.Error(w, "repository_ids include a project you cannot access", http.StatusForbidden)
+		return
+	}
 	idBytes := make([]byte, 16)
 	if _, err := rand.Read(idBytes); err != nil {
 		http.Error(w, "could not create product id", http.StatusInternalServerError)
@@ -135,9 +188,10 @@ func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 	item := product{
 		ID: hex.EncodeToString(idBytes), Name: input.Name, Description: input.Description,
 		RepositoryIDs: repositoryIDs, CreatedAt: now, UpdatedAt: now,
+		CreatedBy: access.creator(), AccessRepositories: accessRepositories,
 	}
 	store.mu.Lock()
-	if store.nameExists(item.Name, "") {
+	if store.nameExists(access, item.Name, "") {
 		store.mu.Unlock()
 		http.Error(w, "product name already exists", http.StatusConflict)
 		return
@@ -150,7 +204,7 @@ func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	store.mu.Unlock()
-	writeJSON(w, http.StatusCreated, item)
+	writeJSON(w, http.StatusCreated, item.public())
 }
 
 func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
@@ -179,20 +233,31 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "repository_ids must contain unique 32-character hexadecimal ids", http.StatusBadRequest)
 		return
 	}
+	access := accessFor(r)
+	accessRepositories, permitted := store.accessRepositories(access, repositoryIDs)
 	store.mu.Lock()
 	previous, exists := store.items[id]
-	if !exists {
+	// A product the caller may not see is reported exactly like one that does not exist.
+	if !exists || !previous.visible(access) {
 		store.mu.Unlock()
 		http.NotFound(w, r)
 		return
 	}
-	if store.nameExists(input.Name, id) {
+	if !permitted {
+		store.mu.Unlock()
+		http.Error(w, "repository_ids include a project you cannot access", http.StatusForbidden)
+		return
+	}
+	if store.nameExists(access, input.Name, id) {
 		store.mu.Unlock()
 		http.Error(w, "product name already exists", http.StatusConflict)
 		return
 	}
 	item := previous
 	item.Name, item.Description, item.RepositoryIDs = input.Name, input.Description, repositoryIDs
+	if access.enforced {
+		item.AccessRepositories = accessRepositories
+	}
 	item.UpdatedAt = time.Now().UTC()
 	store.items[id] = item
 	if err := store.persistLocked(); err != nil {
@@ -202,13 +267,15 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	store.mu.Unlock()
-	writeJSON(w, http.StatusOK, item)
+	writeJSON(w, http.StatusOK, item.public())
 }
 
-func (store *productStore) nameExists(name, exceptID string) bool {
+// nameExists compares only with products the caller can see, so the answer does not reveal the name of
+// a product in a project the caller has no access to.
+func (store *productStore) nameExists(access requestAccess, name, exceptID string) bool {
 	// ponytail: linear scan fits small product catalogs; index normalized names if the catalog grows.
 	for id, item := range store.items {
-		if id != exceptID && strings.EqualFold(item.Name, name) {
+		if id != exceptID && item.visible(access) && strings.EqualFold(item.Name, name) {
 			return true
 		}
 	}

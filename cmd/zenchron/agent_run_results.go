@@ -38,7 +38,12 @@ func (store *agentRunStore) finish(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "agent run result is invalid", http.StatusBadRequest)
 		return
 	}
+	access := accessFor(r)
 	item, status, message := store.update(runID, func(item *agentRun) (int, string) {
+		// A result from a worker whose grant for the repository was removed is not accepted or published.
+		if item.WorkerID == workerID && !access.allows(item.Repository) {
+			return http.StatusForbidden, "this worker is no longer approved for the run's repository"
+		}
 		return store.applyResult(item, workerID, input)
 	})
 	if status != 0 {
