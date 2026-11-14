@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -32,6 +33,37 @@ type agentRunner struct {
 	push func(ctx context.Context, worktree, remote, branch string) error
 	// finishRetryDelay overrides the pause between result deliveries; zero uses the default.
 	finishRetryDelay time.Duration
+	skippedProjects  map[string]string
+}
+
+func (runner *agentRunner) logSkippedProjects(response workerapi.HeartbeatResponse, projects []workerapi.Project) error {
+	current := make(map[string]string, len(response.SkippedProjects))
+	for _, skipped := range response.SkippedProjects {
+		if skipped.Reason != workerapi.SkippedProjectRepositoryNotGranted &&
+			skipped.Reason != workerapi.SkippedProjectIDRegisteredByAnotherWorker {
+			return fmt.Errorf("heartbeat returned unknown skipped project reason %q", skipped.Reason)
+		}
+		if skipped.ID == "" || current[skipped.ID] != "" {
+			return fmt.Errorf("heartbeat returned an invalid or duplicate skipped project id")
+		}
+		current[skipped.ID] = skipped.Reason
+	}
+	if maps.Equal(current, runner.skippedProjects) {
+		return nil
+	}
+	names := make(map[string]string, len(projects))
+	for _, project := range projects {
+		names[project.ID] = project.Name
+	}
+	for id, reason := range current {
+		name := names[id]
+		if name == "" {
+			return fmt.Errorf("heartbeat returned an unknown skipped project id")
+		}
+		log.Printf("project %q was not registered: %s", name, reason)
+	}
+	runner.skippedProjects = current
+	return nil
 }
 
 func (runner *agentRunner) providerStatuses() []workerapi.ProviderStatus {
