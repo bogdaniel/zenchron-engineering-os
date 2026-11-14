@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -14,14 +15,23 @@ import (
 
 const (
 	processTreeInterval = 500 * time.Millisecond
-	processListTimeout  = 5 * time.Second
+	processListTimeout  = 3 * time.Second
+	// processStartTolerance absorbs the one-second jitter some ps versions show when they derive a start
+	// time from the system uptime. A pid cannot be reused by a process started that close to the old one.
+	processStartTolerance = 2 * time.Second
+	processStartLayout    = "Mon Jan _2 15:04:05 2006"
 )
 
 // processIdentity names one process. A pid alone can be reused by an unrelated process; together
 // with the start time it cannot.
 type processIdentity struct {
 	pid     int
-	started string
+	started time.Time
+}
+
+func (identity processIdentity) matches(entry processEntry) bool {
+	difference := identity.started.Sub(entry.started)
+	return difference >= -processStartTolerance && difference <= processStartTolerance
 }
 
 // processTree remembers every process descended from a root, including those that leave the root's
@@ -34,24 +44,27 @@ type processTree struct {
 	root int
 
 	mu      sync.Mutex
-	members map[int]string
+	members map[int]time.Time
 }
 
 func newProcessTree(root int) *processTree {
-	return &processTree{root: root, members: map[int]string{}}
+	return &processTree{root: root, members: map[int]time.Time{}}
 }
 
 type processEntry struct {
 	parent  int
-	started string
+	started time.Time
 }
 
-// listProcesses reads the process table with ps, which prints the same columns on macOS and Linux.
+// listProcesses reads the process table with ps, which prints these columns on macOS and Linux. The
+// locale and time zone are fixed so that two listings made in different environments agree on a start
+// time. Zombies are left out: they hold no files and run no code.
 func listProcesses() (map[int]processEntry, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), processListTimeout)
 	defer cancel()
 	var output bytes.Buffer
-	list := exec.CommandContext(ctx, "ps", "-axo", "pid=,ppid=,lstart=")
+	list := exec.CommandContext(ctx, "ps", "-axo", "pid=,ppid=,stat=,lstart=")
+	list.Env = append(os.Environ(), "LC_ALL=C", "TZ=UTC")
 	list.Stdout = &output
 	if err := list.Start(); err != nil {
 		return nil, fmt.Errorf("list processes: %w", err)
@@ -63,16 +76,20 @@ func listProcesses() (map[int]processEntry, error) {
 	processes := map[int]processEntry{}
 	for _, line := range strings.Split(output.String(), "\n") {
 		fields := strings.Fields(line)
-		if len(fields) < 3 {
+		if len(fields) < 8 {
 			continue
 		}
 		pid, pidErr := strconv.Atoi(fields[0])
 		parent, parentErr := strconv.Atoi(fields[1])
+		started, startErr := time.Parse(processStartLayout, strings.Join(fields[3:8], " "))
 		// The listing command is itself a child of the caller and is gone by now.
-		if pidErr != nil || parentErr != nil || pid == self {
+		if pidErr != nil || parentErr != nil || startErr != nil || pid == self || strings.HasPrefix(fields[2], "Z") {
 			continue
 		}
-		processes[pid] = processEntry{parent: parent, started: strings.Join(fields[2:], " ")}
+		processes[pid] = processEntry{parent: parent, started: started}
+	}
+	if len(processes) == 0 {
+		return nil, fmt.Errorf("list processes: ps printed no process in the expected format")
 	}
 	return processes, nil
 }
@@ -88,7 +105,7 @@ func (tree *processTree) refresh() (bool, error) {
 	defer tree.mu.Unlock()
 	changed := false
 	for pid, started := range tree.members {
-		if entry, alive := processes[pid]; !alive || entry.started != started {
+		if entry, alive := processes[pid]; !alive || !(processIdentity{pid, started}).matches(entry) {
 			delete(tree.members, pid)
 			changed = true
 		}
@@ -119,29 +136,32 @@ func (tree *processTree) identities() []processIdentity {
 	return identities
 }
 
-// stop kills every remembered descendant that is still the same process.
-func (tree *processTree) stop() {
-	_, _ = tree.refresh()
-	killProcesses(tree.identities())
+// stop kills every remembered descendant that is still the same process. If the process table cannot
+// be read now, the members seen earlier are still signalled.
+func (tree *processTree) stop() error {
+	_, refreshErr := tree.refresh()
+	if _, err := killProcesses(tree.identities()); err != nil {
+		return err
+	}
+	return refreshErr
 }
 
 // killProcesses sends SIGKILL to each listed process that still exists with the recorded start time,
-// and reports how many it signalled.
-func killProcesses(identities []processIdentity) int {
+// and reports how many were still alive. An unreadable process table is an error, never "none alive".
+func killProcesses(identities []processIdentity) (int, error) {
 	if len(identities) == 0 {
-		return 0
+		return 0, nil
 	}
 	processes, err := listProcesses()
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	killed := 0
+	alive := 0
 	for _, identity := range identities {
-		if entry, alive := processes[identity.pid]; alive && entry.started == identity.started {
-			if syscall.Kill(identity.pid, syscall.SIGKILL) == nil {
-				killed++
-			}
+		if entry, exists := processes[identity.pid]; exists && identity.matches(entry) {
+			alive++
+			_ = syscall.Kill(identity.pid, syscall.SIGKILL)
 		}
 	}
-	return killed
+	return alive, nil
 }

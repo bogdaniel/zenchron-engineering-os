@@ -102,7 +102,11 @@ func recordedOwner(t *testing.T, worktree string) ownerRecord {
 		t.Fatal(err)
 	}
 	defer file.Close()
-	return readOwnerRecord(file)
+	record, err := readOwnerRecord(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record
 }
 
 // waitUntilRecorded waits for the guard to have seen a process, as it does within one polling interval.
@@ -164,9 +168,47 @@ func TestRecordedProcessIsNotKilledOnceItsPidBelongsToAnotherProcess(t *testing.
 		_ = bystander.Wait()
 	}()
 	// The record names the bystander's pid with the start time of a process that no longer exists.
-	if killed := killProcesses([]processIdentity{{pid: bystander.Process.Pid, started: "Thu Jan  1 00:00:00 1970"}}); killed != 0 ||
-		!processExists(bystander.Process.Pid) {
-		t.Fatalf("killed %d process(es); bystander alive = %v", killed, processExists(bystander.Process.Pid))
+	stale := []processIdentity{{pid: bystander.Process.Pid, started: time.Now().Add(-time.Hour)}}
+	if alive, err := killProcesses(stale); err != nil || alive != 0 || !processExists(bystander.Process.Pid) {
+		t.Fatalf("%d recorded process(es) matched, %v; bystander alive = %v", alive, err, processExists(bystander.Process.Pid))
+	}
+	// With its real start time the same pid is recognised, whatever locale and time zone the listing ran in.
+	t.Setenv("TZ", "Asia/Tokyo")
+	t.Setenv("LC_ALL", "de_DE.UTF-8")
+	processes, err := listProcesses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TZ", "UTC")
+	t.Setenv("LC_ALL", "C")
+	current := []processIdentity{{pid: bystander.Process.Pid, started: processes[bystander.Process.Pid].started}}
+	if alive, err := killProcesses(current); err != nil || alive != 1 {
+		t.Fatalf("a live recorded process was not recognised: %d, %v", alive, err)
+	}
+}
+
+func TestAttemptFailsWhenTheProcessTableCannotBeRead(t *testing.T) {
+	worktree := filepath.Join(t.TempDir(), "worktree")
+	first, err := acquireWorktree(context.Background(), worktree, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeOwnerRecord(first.record, ownerRecord{group: 2, members: []processIdentity{{pid: 999999, started: time.Now()}}}); err != nil {
+		t.Fatal(err)
+	}
+	first.release()
+	// Without ps nobody can tell whether the recorded process still runs; that must not read as "gone".
+	t.Setenv("PATH", t.TempDir())
+	if owner, err := acquireWorktree(context.Background(), worktree, nil); err == nil {
+		owner.release()
+		t.Fatal("an attempt claimed the worktree although the earlier attempt's processes could not be checked")
+	}
+	if err := os.WriteFile(worktree+".owner.processes", []byte("not a record\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if owner, err := acquireWorktree(context.Background(), worktree, nil); err == nil {
+		owner.release()
+		t.Fatal("an attempt claimed the worktree although its process record is damaged")
 	}
 }
 
@@ -189,7 +231,7 @@ func TestGuardStopsProviderProcessesWhenTheWorkerIsKilled(t *testing.T) {
 
 func TestNextAttemptStopsProviderThatOutlivedBothWorkerAndGuard(t *testing.T) {
 	worker, worktree, grandchild := startWorkerStandIn(t, groupProvider)
-	guard := recordedOwner(t, worktree).group
+	guard := waitUntilRecorded(t, worktree, grandchild).group
 	// Killing the guard first removes the only process that would have stopped the provider.
 	if err := syscall.Kill(guard, syscall.SIGKILL); err != nil {
 		t.Fatal(err)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -52,26 +53,39 @@ type ownerRecord struct {
 	members []processIdentity
 }
 
-func readOwnerRecord(file *os.File) ownerRecord {
+// readOwnerRecord reads the record. An empty file is an empty record; a file that cannot be read or
+// parsed is an error, because treating it as empty would let survivors go unnoticed.
+func readOwnerRecord(file *os.File) (ownerRecord, error) {
 	data := make([]byte, maxOwnerRecord)
-	count, _ := file.ReadAt(data, 0)
-	lines := strings.Split(string(data[:count]), "\n")
+	count, err := file.ReadAt(data, 0)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return ownerRecord{}, fmt.Errorf("read worktree process record: %w", err)
+	}
 	var record ownerRecord
-	record.group, _ = strconv.Atoi(strings.TrimSpace(lines[0]))
+	if count == 0 {
+		return record, nil
+	}
+	lines := strings.Split(strings.TrimRight(string(data[:count]), "\n"), "\n")
+	if record.group, err = strconv.Atoi(lines[0]); err != nil {
+		return ownerRecord{}, errors.New("worktree process record is damaged")
+	}
 	for _, line := range lines[1:] {
 		pid, started, found := strings.Cut(line, "\t")
-		if number, err := strconv.Atoi(pid); found && err == nil && number > 1 {
-			record.members = append(record.members, processIdentity{pid: number, started: started})
+		number, pidErr := strconv.Atoi(pid)
+		seconds, startErr := strconv.ParseInt(started, 10, 64)
+		if !found || pidErr != nil || startErr != nil || number <= 1 {
+			return ownerRecord{}, errors.New("worktree process record is damaged")
 		}
+		record.members = append(record.members, processIdentity{pid: number, started: time.Unix(seconds, 0).UTC()})
 	}
-	return record
+	return record, nil
 }
 
 func writeOwnerRecord(file *os.File, record ownerRecord) error {
 	var content strings.Builder
 	content.WriteString(strconv.Itoa(record.group) + "\n")
 	for _, member := range record.members {
-		content.WriteString(strconv.Itoa(member.pid) + "\t" + member.started + "\n")
+		content.WriteString(strconv.Itoa(member.pid) + "\t" + strconv.FormatInt(member.started.Unix(), 10) + "\n")
 	}
 	if content.Len() > maxOwnerRecord {
 		return errors.New("worktree ownership record is too large")
@@ -97,7 +111,11 @@ func acquireWorktree(ctx context.Context, worktree string, guard []string) (*wor
 		return nil, fmt.Errorf("open worktree process record: %w", err)
 	}
 	owner := &worktreeOwner{lock: lock, record: recordFile, guard: guard}
-	record := readOwnerRecord(recordFile)
+	record, err := readOwnerRecord(recordFile)
+	if err != nil {
+		owner.release()
+		return nil, err
+	}
 	locked := owner.tryLock()
 	if !locked && record.group > 1 {
 		// ponytail: the lock proves a descendant lives, not that the group id is still its group; if every
@@ -105,7 +123,12 @@ func acquireWorktree(ctx context.Context, worktree string, guard []string) (*wor
 		// been reused. Replace with cgroups or a job object if that ever shows up.
 		_ = syscall.Kill(-record.group, syscall.SIGKILL)
 	}
-	survivors := killProcesses(record.members)
+	survivors, err := killProcesses(record.members)
+	if err != nil {
+		// Without the process table it cannot be shown that the earlier attempt's processes are gone.
+		owner.release()
+		return nil, err
+	}
 	owner.tookOver = !locked || survivors > 0
 	deadline := time.NewTimer(ownerTakeoverWait)
 	defer deadline.Stop()
@@ -121,7 +144,10 @@ func acquireWorktree(ctx context.Context, worktree string, guard []string) (*wor
 			return nil, errWorktreeStillOwned
 		case <-ticker.C:
 			locked = locked || owner.tryLock()
-			survivors = killProcesses(record.members)
+			if survivors, err = killProcesses(record.members); err != nil {
+				owner.release()
+				return nil, err
+			}
 		}
 	}
 	if err := writeOwnerRecord(recordFile, ownerRecord{}); err != nil {
@@ -178,15 +204,25 @@ func (owner *worktreeOwner) start(process *exec.Cmd) (stop func(), err error) {
 		closeAll()
 		return nil, err
 	}
-	// The process is the leader of its own group, so its pid is the group id.
-	if err := writeOwnerRecord(owner.record, ownerRecord{group: process.Process.Pid}); err != nil {
-		_ = syscall.Kill(-process.Process.Pid, syscall.SIGKILL)
-		_ = process.Wait()
-		closeAll()
-		return nil, fmt.Errorf("record worktree owner: %w", err)
+	// The process is the leader of its own group, so its pid is the group id. Under a guard the guard
+	// writes the record, with the descendants it sees; two writers would overwrite each other.
+	if len(owner.guard) == 0 {
+		if err := writeOwnerRecord(owner.record, ownerRecord{group: process.Process.Pid}); err != nil {
+			_ = syscall.Kill(-process.Process.Pid, syscall.SIGKILL)
+			_ = process.Wait()
+			closeAll()
+			return nil, fmt.Errorf("record worktree owner: %w", err)
+		}
 	}
 	return func() {
 		_ = syscall.Kill(-process.Process.Pid, syscall.SIGKILL)
+		// The guard normally stops every descendant itself. If it was killed first, the record is all
+		// that still names the ones outside the group; a later attempt may never come to read it.
+		if record, err := readOwnerRecord(owner.record); err != nil {
+			log.Printf("worktree process record is unreadable; processes may be left running: %v", err)
+		} else if _, err := killProcesses(record.members); err != nil {
+			log.Printf("could not stop recorded processes: %v", err)
+		}
 		closeAll()
 	}, nil
 }
@@ -232,6 +268,7 @@ func runGuard(arguments []string) int {
 	select {
 	case <-exited:
 	case <-stopRequested:
+		// A failed look at the process table is reported by tree.stop below.
 		_, _ = tree.refresh()
 		_ = syscall.Kill(0, syscall.SIGTERM)
 		waitUpTo(exited, guardStopGrace)
@@ -240,7 +277,9 @@ func runGuard(arguments []string) int {
 		_ = syscall.Kill(0, syscall.SIGTERM)
 		waitUpTo(exited, cliTerminationGrace)
 	}
-	tree.stop()
+	if err := tree.stop(); err != nil {
+		fmt.Fprintln(os.Stderr, "guard could not stop every process it started:", err)
+	}
 	select {
 	case <-exited:
 	default:
@@ -258,13 +297,21 @@ func runGuard(arguments []string) int {
 	}
 }
 
-// recordProcessTree keeps the recorded list of descendants current until the command exits.
+// recordProcessTree keeps the recorded list of descendants current until the command exits. A failure
+// is reported once on the guard's standard error, which the worker keeps with the provider's.
 func recordProcessTree(tree *processTree, recordFile *os.File, exited <-chan struct{}) {
 	ticker := time.NewTicker(processTreeInterval)
 	defer ticker.Stop()
+	written, reported := false, false
 	for {
-		if changed, err := tree.refresh(); err == nil && changed {
-			_ = writeOwnerRecord(recordFile, ownerRecord{group: os.Getpid(), members: tree.identities()})
+		changed, err := tree.refresh()
+		if err == nil && (changed || !written) {
+			err = writeOwnerRecord(recordFile, ownerRecord{group: os.Getpid(), members: tree.identities()})
+			written = err == nil
+		}
+		if err != nil && !reported {
+			fmt.Fprintln(os.Stderr, "guard cannot track the processes of this run:", err)
+			reported = true
 		}
 		select {
 		case <-exited:
