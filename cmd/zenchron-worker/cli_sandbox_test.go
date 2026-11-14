@@ -1,117 +1,157 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
-	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
-// TestMain lets the test binary stand in for the worker binary: as the `guard` command, and as a worker
-// that starts a guarded child and then waits to be killed.
-func TestMain(m *testing.M) {
-	switch os.Getenv("WORKER_GUARD_TEST_ROLE") {
-	case "guard":
-		os.Exit(runGuard(os.Args[1:]))
-	case "worker":
-		reader, writer, err := os.Pipe()
-		if err != nil {
-			os.Exit(3)
-		}
-		child := exec.Command(os.Args[0], "sh", "-c", "sleep 60 & echo $! ; wait")
-		child.Env = append(os.Environ(), "WORKER_GUARD_TEST_ROLE=guard")
-		child.Stdout, child.ExtraFiles = os.Stdout, []*os.File{reader}
-		// Same process-group arrangement the worker uses for a provider.
-		child.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-		if err := child.Start(); err != nil {
-			os.Exit(4)
-		}
-		_ = writer // Held open until this process dies, exactly like the real worker.
-		time.Sleep(time.Minute)
-		os.Exit(0)
+// fakeSandboxCLI installs a stand-in for `codex sandbox ... -- command` and returns its path.
+func fakeSandboxCLI(t *testing.T, script string) string {
+	t.Helper()
+	binary := filepath.Join(t.TempDir(), "fake-codex")
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\n"+script), 0o700); err != nil {
+		t.Fatal(err)
 	}
-	os.Exit(m.Run())
+	return binary
 }
 
-func processExists(pid int) bool {
-	return syscall.Kill(pid, 0) == nil
+func TestConfinementSelfTestRejectsASandboxThatDoesNotConfine(t *testing.T) {
+	// Runs the command with no sandbox at all: the denied file is read and the outside write succeeds.
+	unconfined := fakeSandboxCLI(t, `while [ "$1" != "--" ]; do shift; done; shift; exec "$@"`)
+	if err := verifyCodexConfinement(context.Background(), unconfined); err == nil ||
+		!strings.Contains(err.Error(), "read a denied file") {
+		t.Errorf("an unconfined sandbox passed the self-test: %v", err)
+	}
+	// Confines reads but not writes.
+	writesAnywhere := fakeSandboxCLI(t, `while [ "$1" != "--" ]; do shift; done; echo x > "$7"; echo x > "$8"`)
+	if err := verifyCodexConfinement(context.Background(), writesAnywhere); err == nil ||
+		!strings.Contains(err.Error(), "write outside the workspace") {
+		t.Errorf("a sandbox that allows outside writes passed the self-test: %v", err)
+	}
+	// A sandbox subcommand that does not run the command proves nothing.
+	if err := verifyCodexConfinement(context.Background(), fakeSandboxCLI(t, "exit 0")); err == nil ||
+		!strings.Contains(err.Error(), "could not write inside the workspace") {
+		t.Errorf("a sandbox that ran nothing passed the self-test: %v", err)
+	}
+	// Only the workspace write happens: this is what a confining sandbox looks like.
+	confined := fakeSandboxCLI(t, `while [ "$1" != "--" ]; do shift; done; echo x > "$8"`)
+	if err := verifyCodexConfinement(context.Background(), confined); err != nil {
+		t.Errorf("a confining sandbox failed the self-test: %v", err)
+	}
 }
 
-func TestGuardStopsProviderProcessesWhenTheWorkerIsKilled(t *testing.T) {
-	worker := exec.Command(os.Args[0])
-	worker.Env = append(os.Environ(), "WORKER_GUARD_TEST_ROLE=worker")
-	output, err := worker.StdoutPipe()
+func TestProviderIsNotReadyWhenItsSandboxSelfTestFails(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "codex"), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	provider := newCLIProviders()[workerapi.ProviderCodex]
+	provider.detect(context.Background())
+	if status := provider.status(); status.Ready || status.SandboxedCommands || status.Reason != "sandbox self-test failed" {
+		t.Fatalf("status of a signed-in provider with a failing sandbox = %#v", status)
+	}
+}
+
+// The remaining tests in this group run the installed Codex CLI's real sandbox. They need no model
+// call and no sign-in, and are skipped where the CLI is not installed, as in CI.
+func installedCodex(t *testing.T) string {
+	t.Helper()
+	path, err := exec.LookPath("codex")
+	if err != nil {
+		t.Skip("the Codex CLI is not installed")
+	}
+	return path
+}
+
+func TestInstalledCodexSandboxPassesTheConfinementSelfTest(t *testing.T) {
+	if err := verifyCodexConfinement(context.Background(), installedCodex(t)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestInstalledCodexSandboxCannotReadOtherCheckoutsOrTheHomeDirectory(t *testing.T) {
+	codex := installedCodex(t)
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		t.Skip("no user cache directory")
+	}
+	// A file under the real home directory, which a run must never read.
+	homeSecret, err := os.CreateTemp(cache, "zenchron-confinement-home-*")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := worker.Start(); err != nil {
-		t.Fatal(err)
-	}
-	var grandchild int
-	if _, err := fmt.Fscan(output, &grandchild); err != nil || grandchild <= 0 {
-		_ = worker.Process.Kill()
-		t.Fatalf("read provider child pid: %d, %v", grandchild, err)
-	}
-	if !processExists(grandchild) {
-		t.Fatal("provider child was not running before the worker was killed")
-	}
-	// SIGKILL gives the worker no chance to clean up; only the guard can stop what it started.
-	if err := worker.Process.Kill(); err != nil {
-		t.Fatal(err)
-	}
-	_ = worker.Wait()
-	deadline := time.Now().Add(cliTerminationGrace + 5*time.Second)
-	for processExists(grandchild) && time.Now().Before(deadline) {
-		time.Sleep(50 * time.Millisecond)
-	}
-	if processExists(grandchild) {
-		_ = syscall.Kill(grandchild, syscall.SIGKILL)
-		t.Fatal("provider child survived the death of the worker")
-	}
-}
-
-func TestGuardReturnsTheProviderExitCode(t *testing.T) {
-	for _, want := range []int{0, 7} {
-		guarded := exec.Command(os.Args[0], "sh", "-c", "exit "+strconv.Itoa(want))
-		guarded.Env = append(os.Environ(), "WORKER_GUARD_TEST_ROLE=guard")
-		reader, writer, err := os.Pipe()
-		if err != nil {
+	t.Cleanup(func() { os.Remove(homeSecret.Name()) })
+	_, _ = homeSecret.WriteString("canary-home")
+	homeSecret.Close()
+	// An unrelated project checkout and another run's worktree, both outside the home directory.
+	base := t.TempDir()
+	otherProject, worktreeRoot := filepath.Join(base, "projects", "other"), filepath.Join(base, "worktrees")
+	worktree, otherRun := filepath.Join(worktreeRoot, "project", "run"), filepath.Join(worktreeRoot, "project", "other-run")
+	for path, content := range map[string]string{
+		filepath.Join(otherProject, ".env"): "canary-project", filepath.Join(otherRun, "notes.txt"): "canary-run",
+		filepath.Join(worktree, "README.md"): "canary-own-worktree",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)
 		}
-		guarded.ExtraFiles = []*os.File{reader}
-		err = guarded.Run()
-		writer.Close()
-		reader.Close()
-		if got := guarded.ProcessState.ExitCode(); got != want {
-			t.Fatalf("guard exit code = %d (%v), want %d", got, err, want)
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
 		}
+	}
+	workspace := runWorkspace{path: worktree,
+		denyPaths: confidentialRoots(worktreeRoot, []discoveredProject{{Path: otherProject}})}
+	script := `cat "$1" "$2" "$3" "$4"; echo x > "$5"; echo x > "$6"; echo x > written.txt`
+	probe := exec.Command(codex, "sandbox", "-c", `default_permissions="zenchron"`, "-c",
+		"permissions.zenchron.filesystem="+codexFilesystemProfile(workspace, true), "--", "/bin/sh", "-c", script, "sh",
+		homeSecret.Name(), filepath.Join(otherProject, ".env"), filepath.Join(otherRun, "notes.txt"),
+		filepath.Join(worktree, "README.md"), filepath.Join(otherProject, "written.txt"), filepath.Join(otherRun, "written.txt"))
+	probe.Dir = worktree
+	output, _ := probe.CombinedOutput()
+	if !strings.Contains(string(output), "canary-own-worktree") {
+		t.Fatalf("the sandboxed command could not read its own worktree: %s", output)
+	}
+	for _, canary := range []string{"canary-home", "canary-project", "canary-run"} {
+		if strings.Contains(string(output), canary) {
+			t.Errorf("the sandbox exposed %s", canary)
+		}
+	}
+	for _, path := range []string{filepath.Join(otherProject, "written.txt"), filepath.Join(otherRun, "written.txt")} {
+		if _, err := os.Stat(path); err == nil {
+			t.Errorf("the sandbox allowed a write to %s", path)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(worktree, "written.txt")); err != nil {
+		t.Errorf("the sandbox refused a write inside the worktree: %v", err)
 	}
 }
 
-func TestCLIRunThroughTheGuardStillDeliversItsResult(t *testing.T) {
-	harness := newRunHarness(t, fakeChangeScript, nil)
-	t.Setenv("WORKER_GUARD_TEST_ROLE", "guard")
-	harness.runner.providers[workerapi.ProviderCodex].guard = []string{os.Args[0]}
-	if err := harness.process(); err != nil {
-		t.Fatalf("process run: %v", err)
+func TestConfidentialRootsCoverHomeWorktreesAndEveryCheckout(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	roots := confidentialRoots("/var/worktrees", []discoveredProject{{Path: "/srv-other/api"}, {Path: "/srv-other/web"}})
+	for _, want := range []string{home, "/var/worktrees", "/srv-other/api", "/srv-other/web"} {
+		if !slices.Contains(roots, want) {
+			t.Errorf("confidential roots %v lack %s", roots, want)
+		}
 	}
-	if result := harness.result(); result.Status != "succeeded" || len(result.CommitSHA) != 40 {
-		t.Fatalf("guarded run result = %#v", result)
+	if !slices.IsSorted(roots) || len(slices.Compact(slices.Clone(roots))) != len(roots) {
+		t.Errorf("confidential roots are not sorted and unique: %v", roots)
 	}
 }
 
 func TestProviderArgumentsBoundAgentPermissions(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	workspace := runWorkspace{path: "/work/tree", readPaths: []string{"/repo/.git", home + "/go/pkg/mod"}}
+	workspace := runWorkspace{path: "/work/tree", readPaths: []string{"/repo/.git", home + "/go/pkg/mod"},
+		denyPaths: []string{home, "/Volumes"}, commandSandbox: true}
 	write := workerapi.AgentRunCommand{Profile: workerapi.AgentProfile{Model: "gpt-test", Tools: []string{"code.write"}}}
 	read := workerapi.AgentRunCommand{Profile: workerapi.AgentProfile{Model: defaultModel}}
 
@@ -131,7 +171,7 @@ func TestProviderArgumentsBoundAgentPermissions(t *testing.T) {
 		}
 		return strings.TrimPrefix(arguments[index], "permissions.zenchron.filesystem=")
 	}
-	for _, entry := range []string{`"/"="read"`, strconv.Quote(home) + `="none"`, `"/work/tree"="write"`,
+	for _, entry := range []string{`"/"="read"`, strconv.Quote(home) + `="none"`, `"/Volumes"="none"`, `"/work/tree"="write"`,
 		strconv.Quote(os.TempDir()) + `="write"`, `"/repo/.git"="read"`, strconv.Quote(home+"/go/pkg/mod") + `="read"`} {
 		if !strings.Contains(profile(codexWrite), entry) {
 			t.Errorf("codex write profile %s lacks %s", profile(codexWrite), entry)
@@ -160,26 +200,50 @@ func TestProviderArgumentsBoundAgentPermissions(t *testing.T) {
 	if settingsIndex < 0 || !slices.Contains(arguments, "Read,Edit,Write,Glob,Grep,Bash") {
 		t.Fatalf("claude test-running arguments = %v", arguments)
 	}
-	var settings struct {
+	type sandboxSettings struct {
 		DisableAllHooks bool `json:"disableAllHooks"`
 		Sandbox         struct {
 			Enabled                  bool  `json:"enabled"`
+			FailIfUnavailable        bool  `json:"failIfUnavailable"`
 			AllowUnsandboxedCommands *bool `json:"allowUnsandboxedCommands"`
 			Filesystem               struct {
-				DenyRead, AllowRead, AllowWrite []string
+				DenyRead, AllowRead, AllowWrite, DenyWrite []string
 			} `json:"filesystem"`
 		} `json:"sandbox"`
 	}
+	var settings sandboxSettings
 	if err := json.Unmarshal([]byte(arguments[settingsIndex+1]), &settings); err != nil || !settings.Sandbox.Enabled || !settings.DisableAllHooks ||
+		!settings.Sandbox.FailIfUnavailable ||
 		settings.Sandbox.AllowUnsandboxedCommands == nil || *settings.Sandbox.AllowUnsandboxedCommands ||
-		!slices.Equal(settings.Sandbox.Filesystem.DenyRead, []string{home}) ||
+		!slices.Equal(settings.Sandbox.Filesystem.DenyRead, []string{home, "/Volumes"}) ||
 		!slices.Equal(settings.Sandbox.Filesystem.AllowRead, []string{"/work/tree", "/repo/.git", home + "/go/pkg/mod"}) ||
 		!slices.Equal(settings.Sandbox.Filesystem.AllowWrite, []string{os.TempDir()}) {
 		t.Fatalf("claude sandbox settings = %s, %v", arguments[settingsIndex+1], err)
 	}
+	// Writes are denied in every confidential location except those that contain the worktree itself.
+	nested := workspace
+	nested.denyPaths = []string{"/Volumes", "/work", "/work/tree-other"}
+	arguments = claudeArguments(tests, nested)
+	var nestedSettings sandboxSettings
+	if err := json.Unmarshal([]byte(arguments[slices.Index(arguments, "--settings")+1]), &nestedSettings); err != nil ||
+		!slices.Equal(settings.Sandbox.Filesystem.DenyWrite, []string{home, "/Volumes"}) ||
+		!slices.Equal(nestedSettings.Sandbox.Filesystem.DenyWrite, []string{"/Volumes", "/work/tree-other"}) {
+		t.Errorf("claude write denials = %v and %v, %v", settings.Sandbox.Filesystem.DenyWrite, nestedSettings.Sandbox.Filesystem.DenyWrite, err)
+	}
+	var fallback sandboxSettings
+	if err := json.Unmarshal([]byte(claudeSandboxFallback), &fallback); err != nil || !fallback.Sandbox.Enabled ||
+		!fallback.Sandbox.FailIfUnavailable || fallback.Sandbox.AllowUnsandboxedCommands == nil || *fallback.Sandbox.AllowUnsandboxedCommands {
+		t.Errorf("the fallback settings would allow an unconfined shell: %s, %v", claudeSandboxFallback, err)
+	}
 	readOnlyTests := workerapi.AgentRunCommand{Profile: workerapi.AgentProfile{Model: defaultModel, Tools: []string{"tests.run"}}}
 	if strings.Contains(strings.Join(claudeArguments(readOnlyTests, workspace), " "), "Bash") {
 		t.Error("a profile without code.write was offered a shell")
+	}
+	// Where the sandbox backend is missing, no shell is offered and no sandbox settings are needed.
+	workspace.commandSandbox = false
+	if unsandboxed := strings.Join(claudeArguments(tests, workspace), " "); strings.Contains(unsandboxed, "Bash") ||
+		!strings.Contains(unsandboxed, `--settings {"disableAllHooks":true}`) {
+		t.Errorf("a worker without the sandbox backend offered a shell: %s", unsandboxed)
 	}
 }
 

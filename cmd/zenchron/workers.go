@@ -339,7 +339,8 @@ func validProviderStatuses(providers []workerapi.ProviderStatus) bool {
 		return false
 	}
 	for _, provider := range providers {
-		if !workerapi.IsCLIProvider(provider.ID) || len(provider.Version) > 100 || strings.ContainsAny(provider.Version, "\r\n") {
+		if !workerapi.IsCLIProvider(provider.ID) || len(provider.Version) > 100 || len(provider.Reason) > 100 ||
+			strings.ContainsAny(provider.Version+provider.Reason, "\r\n") {
 			return false
 		}
 	}

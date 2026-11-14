@@ -433,8 +433,13 @@ func TestAttemptThatLosesItsLeaseAfterCommittingDoesNotPush(t *testing.T) {
 		t.Fatal(err)
 	}
 	reporter := &progressReporter{leaseLost: true, redactor: newRedactor(stale.worktree)}
-	result := stale.runner.deliver(context.Background(), context.Background(), stale.command, project, stale.worktree,
-		workerapi.AgentRunResult{}, reporter)
+	owner, err := acquireWorktree(context.Background(), stale.worktree, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.release()
+	result := stale.runner.deliver(context.Background(), context.Background(), stale.command, project,
+		runWorkspace{path: stale.worktree, owner: owner}, workerapi.AgentRunResult{}, reporter)
 	if pushes != 0 || result.BranchPushed || result.Status == "succeeded" || len(result.CommitSHA) != 40 {
 		t.Fatalf("stale attempt pushed %d times: %#v", pushes, result)
 	}

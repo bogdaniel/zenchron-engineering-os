@@ -70,6 +70,11 @@ type ProviderStatus struct {
 	ID      string `json:"id"`
 	Version string `json:"version,omitempty"`
 	Ready   bool   `json:"ready"`
+	// Reason says why an installed provider is not ready, for example a failed sandbox self-test.
+	Reason string `json:"reason,omitempty"`
+	// SandboxedCommands reports that the provider can run repository commands, such as tests, inside
+	// its sandbox on this worker. Without it the provider edits files but cannot execute anything.
+	SandboxedCommands bool `json:"sandboxed_commands"`
 }
 
 type Project struct {

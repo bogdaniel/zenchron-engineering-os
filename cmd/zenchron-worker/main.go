@@ -94,10 +94,10 @@ func run() error {
 	// ponytail: providers are detected once at startup; restart the worker after installing or signing in to a CLI.
 	self, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("locate the worker binary for the provider guard: %w", err)
+		return fmt.Errorf("locate the worker binary for the process guard: %w", err)
 	}
+	runner.guard = []string{self, "guard"}
 	for _, provider := range runner.providers {
-		provider.guard = []string{self, "guard"}
 		provider.detect(ctx)
 	}
 	runtimeEnabled := runner.chat != nil
