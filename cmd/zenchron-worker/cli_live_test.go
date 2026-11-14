@@ -201,7 +201,7 @@ func assertStopsOnCancellation(t *testing.T, provider *cliProvider) {
 	// The kill has been sent by now; give the kernel a moment to remove the process.
 	deadline := time.Now().Add(2 * time.Second)
 	for {
-		output, err := exec.Command("pgrep", "-f", "sleep "+liveSleepSeconds).Output()
+		output, err := exec.Command("pgrep", "-f", "^sleep "+liveSleepSeconds+"$").Output()
 		if err != nil {
 			return
 		}
