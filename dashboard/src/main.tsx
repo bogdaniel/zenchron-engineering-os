@@ -66,7 +66,6 @@ const workersResponse = z.array(
     name: z.string(),
     status: z.enum(['online', 'offline']),
     last_seen: z.string(),
-    agent_runtime_enabled: z.boolean().optional(),
     providers: workerProvidersSchema,
   }),
 );
@@ -296,8 +295,6 @@ function App() {
               githubLogin={auth.data?.local === false}
               workerCount={workers.data?.length ?? 0}
               onlineWorkerCount={onlineWorkers.length}
-              modelRuntimeWorkerCount={onlineWorkers.filter((worker) => worker.agent_runtime_enabled).length}
-              modelRuntimeUnknownWorkerCount={onlineWorkers.filter((worker) => worker.agent_runtime_enabled === undefined).length}
               projectCount={projects.data?.length ?? 0}
               gitHubProjectCount={projects.data?.filter((project) => project.git_remote.startsWith('github.com/')).length ?? 0}
               cliReadyWorkers={Object.fromEntries(['codex-cli', 'claude-code'].map((id) => [id,

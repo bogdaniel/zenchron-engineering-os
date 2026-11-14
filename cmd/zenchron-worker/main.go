@@ -85,9 +85,6 @@ func run() error {
 	}
 	runner := &agentRunner{client: newWorkerHTTPClient(workerToken), baseURL: baseURL, workerID: workerID,
 		token: workerToken, providers: newCLIProviders(), config: config}
-	if runner.chat, err = loadAgentRuntime(); err != nil {
-		return err
-	}
 	if runner.limits, err = loadRunLimits(); err != nil {
 		return err
 	}
@@ -100,7 +97,6 @@ func run() error {
 	for _, provider := range runner.providers {
 		provider.detect(ctx)
 	}
-	runtimeEnabled := runner.chat != nil
 	ticker := time.NewTicker(workerHeartbeatInterval)
 	defer ticker.Stop()
 	for {
@@ -108,8 +104,7 @@ func run() error {
 		if err != nil {
 			log.Printf("project discovery failed: %v", err)
 		} else {
-			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects),
-				AgentRuntimeEnabled: &runtimeEnabled, Providers: runner.providerStatuses()}
+			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects), Providers: runner.providerStatuses()}
 			if err := sendHeartbeat(ctx, runner.client, baseURL, workerID, heartbeat); err != nil {
 				log.Printf("worker heartbeat failed: %v", err)
 			} else if err := processWorkerCommands(ctx, runner, heartbeat, projects); err != nil {

@@ -1,6 +1,6 @@
 import {
   IconActivity, IconBrandDocker, IconBrandGithub, IconBrandGitlab, IconBrandGoogle, IconBrandJira, IconBrandOpenai,
-  IconBrandSlack, IconCloud, IconDatabase, IconRobot,
+  IconBrandSlack, IconDatabase, IconRobot,
 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 
@@ -85,8 +85,6 @@ export interface SystemFacts {
   githubLogin: boolean;
   workerCount: number;
   onlineWorkerCount: number;
-  modelRuntimeWorkerCount: number;
-  modelRuntimeUnknownWorkerCount: number;
   projectCount: number;
   gitHubProjectCount: number;
   /** Online workers per coding CLI that report it installed and signed in. */
@@ -103,26 +101,12 @@ function notIntegrated(name: string, detail: string, color: string, category: st
   return { name, detail, color, category, icon, link: 'Not integrated with the control plane.', status: 'Not connected', healthy: false };
 }
 
-function modelEndpoint({ modelRuntimeWorkerCount: configured, modelRuntimeUnknownWorkerCount: unknown, onlineWorkerCount }: SystemFacts) {
-  if (configured) {
-    return { status: 'Configured', detail: `OpenAI-compatible endpoint configured on ${onlineWorkers(configured)}.`
-      + (unknown ? ` Status is unreported by ${unknown} other online worker${unknown === 1 ? '' : 's'}.` : '') };
-  }
-  if (unknown) {
-    return { status: 'Update worker', detail: `${onlineWorkers(unknown)} ${unknown === 1 ? 'has' : 'have'} not reported endpoint status; `
-      + `restart ${unknown === 1 ? 'it' : 'them'} to refresh.` };
-  }
-  if (onlineWorkerCount) return { status: 'Not configured', detail: 'Configure an OpenAI-compatible endpoint on a worker to execute queued runs.' };
-  return { status: unavailable, detail: 'No online worker is available to execute queued runs.' };
-}
-
 function liveProviders(facts: SystemFacts): SystemProvider[] {
   const { apiOnline, githubLogin, workerCount, onlineWorkerCount, projectCount, gitHubProjectCount, cliReadyWorkers = {} } = facts;
   const readyCLIs = Object.entries(cliReadyWorkers).filter(([, count]) => count > 0);
   const cliDetail = readyCLIs.length
     ? ` Coding CLIs ready: ${readyCLIs.map(([id, count]) => `${id} on ${count}`).join(', ')}.`
     : onlineWorkerCount ? ' No online worker reports a signed-in Codex or Claude Code CLI.' : '';
-  const endpoint = modelEndpoint(facts);
   const codingCLI = (name: string, label: string, color: string, icon: ReactNode, id: string): SystemProvider => {
     const ready = cliReadyWorkers[id] ?? 0;
     return { name, detail: `${label} on workers`, color, category: 'Models', icon, healthy: ready > 0,
@@ -143,8 +127,6 @@ function liveProviders(facts: SystemFacts): SystemProvider[] {
           + 'request-changes use the control-plane token and are submitted as its owner. Merge actions are not available.'
         : `${projectCount} local checkout${projectCount === 1 ? '' : 's'} visible; connect a github.com origin to sync issues and pull requests.`,
       status: gitHubProjectCount ? 'Read-only sync' : 'No GitHub repo', healthy: gitHubProjectCount > 0 },
-    { name: 'Model endpoint', detail: 'Worker model runtime', color: 'storage', category: 'Models', icon: <IconCloud />,
-      link: endpoint.detail, status: endpoint.status, healthy: facts.modelRuntimeWorkerCount > 0 },
     codingCLI('OpenAI', 'Codex CLI', 'openai', <IconBrandOpenai />, 'codex-cli'),
     codingCLI('Anthropic', 'Claude Code CLI', 'anthropic', <span>AI</span>, 'claude-code'),
     { name: 'Storage / Evidence', detail: 'Artifacts, logs, evidence', color: 'storage', category: 'Storage', icon: <IconDatabase />,
@@ -208,8 +190,8 @@ export function liveSystemSource(facts: SystemFacts): SystemSource {
       ['State storage', 'Versioned JSON snapshots'],
       ['Online workers', `${onlineWorkerCount} of ${workerCount}`],
       ['Local checkouts', String(projectCount)],
-      ['Model endpoints', `${facts.modelRuntimeWorkerCount} configured`
-        + (facts.modelRuntimeUnknownWorkerCount ? ` · ${facts.modelRuntimeUnknownWorkerCount} unknown` : '')],
+      ['Coding CLIs ready', Object.entries(facts.cliReadyWorkers ?? {}).filter(([, count]) => count > 0)
+        .map(([id, count]) => `${id} on ${count}`).join(' · ') || 'None'],
     ],
     switches: { 'Auto-scale Runners': false, 'Capture Evidence by Default': false },
     notificationRules: [],

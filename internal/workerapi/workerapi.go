@@ -85,10 +85,9 @@ type Project struct {
 }
 
 type Heartbeat struct {
-	Name                string           `json:"name"`
-	Projects            []Project        `json:"projects"`
-	AgentRuntimeEnabled *bool            `json:"agent_runtime_enabled,omitempty"`
-	Providers           []ProviderStatus `json:"providers,omitempty"`
+	Name      string           `json:"name"`
+	Projects  []Project        `json:"projects"`
+	Providers []ProviderStatus `json:"providers,omitempty"`
 }
 
 type AgentProfile struct {

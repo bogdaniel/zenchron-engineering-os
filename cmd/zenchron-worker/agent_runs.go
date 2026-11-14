@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -22,34 +20,6 @@ const (
 	maxAgentRunDiffSize   = 128 << 10
 	maxClaimResponseSize  = 1 << 20
 )
-
-type agentRuntime struct {
-	endpoint *url.URL
-	apiKey   string
-	client   *http.Client
-}
-
-func loadAgentRuntime() (*agentRuntime, error) {
-	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("ZENCHRON_LLM_BASE_URL")), "/")
-	apiKey := strings.TrimSpace(os.Getenv("ZENCHRON_LLM_API_KEY"))
-	if baseURL == "" {
-		if apiKey != "" {
-			return nil, errors.New("ZENCHRON_LLM_API_KEY requires ZENCHRON_LLM_BASE_URL")
-		}
-		return nil, nil
-	}
-	endpoint, err := url.ParseRequestURI(baseURL)
-	if err != nil || endpoint.Host == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" ||
-		(endpoint.Scheme != "https" && !(endpoint.Scheme == "http" && isLoopbackModelHost(endpoint.Hostname()))) {
-		return nil, errors.New("ZENCHRON_LLM_BASE_URL must be HTTPS or loopback HTTP without credentials or query data")
-	}
-	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/chat/completions"
-	return &agentRuntime{endpoint: endpoint, apiKey: apiKey, client: &http.Client{Timeout: 45 * time.Second}}, nil
-}
-
-func isLoopbackModelHost(host string) bool {
-	return strings.EqualFold(host, "localhost") || (net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback())
-}
 
 func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch string) error {
 	parts := strings.Split(expectedRemote, "/")

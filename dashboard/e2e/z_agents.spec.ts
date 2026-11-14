@@ -370,31 +370,31 @@ test('Agents empty state uses the primary create action', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: 'Create agent profile' })).toBeVisible();
 });
 
-test('Agents queue dialog explains when a worker has no model runtime', async ({ page }) => {
+test('Agents queue dialog does not queue a profile whose provider cannot run', async ({ page }) => {
   await authenticateLocalSession(page);
-  await page.route('**/api/v1/workers', async (route) => {
-    const url = new URL(route.request().url());
-    url.hostname = '127.0.0.1';
-    const response = await route.fetch({ url: url.toString() });
-    const workers = await response.json() as { agent_runtime_enabled?: boolean }[];
-    await route.fulfill({ status: response.status(), headers: response.headers(), body: JSON.stringify(workers.map((worker) => ({
-      ...worker, agent_runtime_enabled: false,
-    }))) });
-  });
   await page.goto('/#agents');
   const created = await page.evaluate(async () => {
     const response = await fetch('/api/v1/agents', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Runtime status check', provider: 'custom', model: 'review-v1', tools: [] }),
+      body: JSON.stringify({ name: 'Provider without adapter', provider: 'custom', model: 'review-v1', tools: [] }),
     });
-    return { ok: response.ok, status: response.status, body: await response.text() };
+    const profile = await response.json();
+    const projects = await fetch('/api/v1/projects').then((result) => result.json());
+    // The control plane refuses the run too, so nothing can queue work that no worker will ever claim.
+    const run = await fetch('/api/v1/agent-runs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: profile.id, project_id: projects[0].id, prompt: 'Review the changes.' }),
+    });
+    return { status: response.status, runStatus: run.status, runError: (await run.text()).trim() };
   });
-  expect(created).toEqual({ ok: true, status: 201, body: expect.any(String) });
+  expect(created).toEqual({ status: 201, runStatus: 409,
+    runError: "this agent profile's provider has no execution adapter; use codex-cli or claude-code" });
   await page.reload();
   await page.getByRole('button', { name: 'Run Agent' }).click();
   const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
-  await expect(dialog.locator('.agents-queue-note')).toContainText('has no OpenAI-compatible endpoint configured');
-  await expect(dialog.getByLabel('Project')).toHaveValue(/^zenchron-engineering-os · .+ · runtime not configured$/);
+  await expect(dialog.locator('.agents-queue-note')).toHaveText('Only Codex CLI (codex-cli) and Claude Code (claude-code) profiles can run.');
+  await expect(dialog.getByLabel('Project')).toHaveValue(/^zenchron-engineering-os · .+ · provider cannot run$/);
+  await expect(dialog.getByRole('button', { name: 'Queue run', exact: true })).toBeDisabled();
 });
 
 test('agent profiles can be saved and disabled from the dashboard', async ({ page }) => {

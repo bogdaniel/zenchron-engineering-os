@@ -15,7 +15,7 @@ import (
 func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 	registry := newWorkerRegistry()
 	agents := newAgentProfileStore()
-	profile := agentProfile{ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Review", Provider: "openai-compatible", Model: "example",
+	profile := agentProfile{ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Review", Provider: workerapi.ProviderCodex, Model: "default",
 		Status: "active", SystemPrompt: "Review changes", Version: 1, UpdatedAt: time.Now().UTC(), Tools: []string{"code.write"}}
 	agents.items[profile.ID] = profile
 	store, err := openAgentRunStore(filepath.Join(t.TempDir(), "agent-runs.json"), registry, agents)
@@ -43,11 +43,11 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 	}
 	response = call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", "")
 	if response.Code != http.StatusNoContent {
-		t.Fatalf("legacy worker claimed a code-writing run: HTTP %d", response.Code)
+		t.Fatalf("a worker without the provider claimed a run: HTTP %d", response.Code)
 	}
-	heartbeat = `{"name":"worker","agent_runtime_enabled":true,"projects":[{"id":"` + testProjectID + `","name":"repo","branch":"main"}]}`
+	heartbeat = `{"name":"worker","providers":[{"id":"codex-cli","version":"1","ready":true}],"projects":[{"id":"` + testProjectID + `","name":"repo","branch":"main"}]}`
 	if response := call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/heartbeat", heartbeat); response.Code != http.StatusOK {
-		t.Fatalf("runtime-enabled heartbeat returned HTTP %d: %s", response.Code, response.Body.String())
+		t.Fatalf("provider-ready heartbeat returned HTTP %d: %s", response.Code, response.Body.String())
 	}
 	response = call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", "")
 	var first workerapi.AgentRunCommand
@@ -113,12 +113,12 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 		len(listed) != 1 || !listed[0].CanRequestChanges {
 		t.Fatalf("request-changes capability = %#v, decode error = %v, HTTP %d", listed, err, response.Code)
 	}
-	heartbeat = `{"name":"worker","agent_runtime_enabled":false,"projects":[{"id":"` + testProjectID + `","name":"repo","branch":"main"}]}`
+	heartbeat = `{"name":"worker","providers":[{"id":"codex-cli","version":"1","ready":false}],"projects":[{"id":"` + testProjectID + `","name":"repo","branch":"main"}]}`
 	response = call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/heartbeat", heartbeat)
 	var worker workerRecord
 	if err := json.NewDecoder(response.Body).Decode(&worker); err != nil || response.Code != http.StatusOK ||
-		worker.AgentRuntimeEnabled == nil || *worker.AgentRuntimeEnabled {
-		t.Fatalf("disabled-runtime heartbeat = %#v, decode error = %v, HTTP %d", worker, err, response.Code)
+		len(worker.Providers) != 1 || worker.Providers[0].Ready {
+		t.Fatalf("signed-out provider heartbeat = %#v, decode error = %v, HTTP %d", worker, err, response.Code)
 	}
 	listed = nil
 	response = call(http.MethodGet, "/api/v1/agent-runs", "")
@@ -128,11 +128,11 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 	}
 	response = call(http.MethodPost, "/api/v1/agent-runs/"+first.ID+"/request-changes", `{"comment":"Update the response to address the review."}`)
 	if response.Code != http.StatusConflict {
-		t.Fatalf("request changes without runtime returned HTTP %d", response.Code)
+		t.Fatalf("request changes without a ready provider returned HTTP %d", response.Code)
 	}
-	heartbeat = `{"name":"worker","agent_runtime_enabled":true,"projects":[{"id":"` + testProjectID + `","name":"repo","branch":"main"}]}`
+	heartbeat = `{"name":"worker","providers":[{"id":"codex-cli","version":"1","ready":true}],"projects":[{"id":"` + testProjectID + `","name":"repo","branch":"main"}]}`
 	if response := call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/heartbeat", heartbeat); response.Code != http.StatusOK {
-		t.Fatalf("reenabled-runtime heartbeat returned HTTP %d: %s", response.Code, response.Body.String())
+		t.Fatalf("provider-ready-again heartbeat returned HTTP %d: %s", response.Code, response.Body.String())
 	}
 	response = call(http.MethodPost, "/api/v1/agent-runs/"+first.ID+"/request-changes", `{"comment":"Update the response to address the review."}`)
 	var queuedForChanges agentRun
@@ -205,7 +205,7 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 	registry := newWorkerRegistry()
 	registry.github.apiURL = provider.URL
 	registry.projects["worker:project"] = projectRecord{ID: testProjectID, GitRemote: "github.com/acme/platform"}
-	profile := agentProfile{ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Reviewer", Provider: "custom", Model: "review-v1",
+	profile := agentProfile{ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Reviewer", Provider: workerapi.ProviderCodex, Model: "default",
 		Status: "active", SystemPrompt: "Review", Version: 1, UpdatedAt: time.Now().UTC()}
 	store := newAgentRunStore(registry, newAgentProfileStore())
 	item := agentRun{ID: runID, AgentID: profile.ID, AgentName: profile.Name, ProjectID: testProjectID,
@@ -232,11 +232,11 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 func TestAgentRunClaimEnablesPullRequestForGitHubProjectWithToken(t *testing.T) {
 	t.Setenv("ZENCHRON_GITHUB_TOKEN", "test-token")
 	registry := newWorkerRegistry()
-	runtimeEnabled := true
-	registry.workers[testWorkerID] = workerRecord{ID: testWorkerID, Name: "worker", LastSeen: time.Now().UTC(), AgentRuntimeEnabled: &runtimeEnabled}
+	registry.workers[testWorkerID] = workerRecord{ID: testWorkerID, Name: "worker", LastSeen: time.Now().UTC(),
+		Providers: []workerapi.ProviderStatus{{ID: workerapi.ProviderCodex, Ready: true}}}
 	registry.projects["worker:project"] = projectRecord{ID: testProjectID, Name: "platform", Branch: "main",
 		GitRemote: "github.com/acme/platform", WorkerID: testWorkerID, WorkerName: "worker", LastSeen: time.Now().UTC()}
-	profile := agentProfile{ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Reviewer", Provider: "custom", Model: "review-v1",
+	profile := agentProfile{ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Reviewer", Provider: workerapi.ProviderCodex, Model: "default",
 		Status: "active", SystemPrompt: "Review", Version: 1, UpdatedAt: time.Now().UTC(), Tools: []string{"code.write"}}
 	agents := newAgentProfileStore()
 	agents.items[profile.ID] = profile
@@ -256,5 +256,24 @@ func TestAgentRunClaimEnablesPullRequestForGitHubProjectWithToken(t *testing.T) 
 	var command workerapi.AgentRunCommand
 	if err := json.NewDecoder(response.Body).Decode(&command); err != nil || response.Code != http.StatusOK || !command.PublishPullRequest {
 		t.Fatalf("claimed run = %#v, decode error = %v, HTTP %d", command, err, response.Code)
+	}
+}
+
+func TestAgentRunRefusesProfilesWithoutAnExecutionAdapter(t *testing.T) {
+	registry := newWorkerRegistry()
+	registry.workers[testWorkerID] = workerRecord{ID: testWorkerID, Name: "worker", LastSeen: time.Now().UTC(),
+		Providers: []workerapi.ProviderStatus{{ID: workerapi.ProviderCodex, Ready: true}}}
+	registry.projects["worker:project"] = projectRecord{ID: testProjectID, Name: "platform", Branch: "main",
+		WorkerID: testWorkerID, WorkerName: "worker", LastSeen: time.Now().UTC()}
+	profile := agentProfile{ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Reviewer", Provider: "custom", Model: "review-v1",
+		Status: "active", Version: 1, UpdatedAt: time.Now().UTC()}
+	agents := newAgentProfileStore()
+	agents.items[profile.ID] = profile
+	store := newAgentRunStore(registry, agents)
+	response := httptest.NewRecorder()
+	store.create(response, httptest.NewRequest(http.MethodPost, "/api/v1/agent-runs",
+		strings.NewReader(`{"agent_id":"`+profile.ID+`","project_id":"`+testProjectID+`","prompt":"Add a feature"}`)))
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "no execution adapter") || len(store.items) != 0 {
+		t.Fatalf("run for a provider without an adapter: HTTP %d %q, %d queued", response.Code, response.Body.String(), len(store.items))
 	}
 }

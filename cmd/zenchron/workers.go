@@ -35,10 +35,9 @@ type workerRegistry struct {
 // ponytail: worker presence resets on restart; persist it only if offline history becomes a requirement.
 
 type workerRecord struct {
-	ID                  string    `json:"id"`
-	Name                string    `json:"name"`
-	LastSeen            time.Time `json:"last_seen"`
-	AgentRuntimeEnabled *bool     `json:"agent_runtime_enabled,omitempty"`
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	LastSeen time.Time `json:"last_seen"`
 	// Providers are the installed coding CLIs the worker detected, with their version and sign-in state.
 	Providers []workerapi.ProviderStatus `json:"providers,omitempty"`
 }
@@ -303,8 +302,7 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 
 	now := time.Now().UTC()
 	worker := workerRecord{
-		ID: id, Name: request.Name, LastSeen: now, AgentRuntimeEnabled: request.AgentRuntimeEnabled,
-		Providers: request.Providers,
+		ID: id, Name: request.Name, LastSeen: now, Providers: request.Providers,
 	}
 	registry.mu.Lock()
 	registry.workers[id] = worker
