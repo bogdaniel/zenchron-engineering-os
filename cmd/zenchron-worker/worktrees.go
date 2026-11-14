@@ -111,8 +111,9 @@ func lockWorktree(repository, worktree string) (unlock func()) {
 
 // cleanupWorktrees removes run worktrees that Git considers safe to remove: not locked by a running or
 // crashed attempt and without modified or untracked files, together with their ownership files. A
-// worktree whose ownership lock is held by a live process is kept. Run branches and their commits are
-// kept. A failure on one worktree is reported in the returned error and does not stop the others.
+// worktree is kept while a live process holds its ownership lock or a process named in its process
+// record still runs, and when that cannot be determined. Run branches and their commits are kept. A
+// failure on one worktree is reported in the returned error and does not stop the others.
 func cleanupWorktrees(ctx context.Context, root string, projects []discoveredProject) (removed, kept []string, err error) {
 	var failures []error
 	for _, project := range projects {
@@ -145,7 +146,8 @@ func cleanupWorktrees(ctx context.Context, root string, projects []discoveredPro
 
 // removeWorktree removes one worktree and its ownership files while holding the ownership lock, so an
 // attempt cannot claim the worktree halfway. It reports whether the worktree itself was removed; an
-// error alongside true means an ownership file was left behind.
+// error alongside true means an ownership file was left behind, and an error alongside false means the
+// worktree was kept because its ownership lock or recorded processes could not be checked.
 func removeWorktree(ctx context.Context, repository, path string) (bool, error) {
 	release, err := claimWorktreeForRemoval(path)
 	if errors.Is(err, errWorktreeStillOwned) {
@@ -155,6 +157,10 @@ func removeWorktree(ctx context.Context, repository, path string) (bool, error) 
 		return false, err
 	}
 	defer release()
+	stillRunning, err := recordedProcessesAlive(path)
+	if err != nil || stillRunning {
+		return false, err
+	}
 	if _, err := gitOutput(ctx, "-C", repository, "worktree", "remove", path); err != nil {
 		// Git refuses locked and modified worktrees; keeping those is the expected outcome, not a failure.
 		return false, nil

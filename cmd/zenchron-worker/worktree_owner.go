@@ -191,6 +191,28 @@ func claimWorktreeForRemoval(worktree string) (release func(), err error) {
 	return func() { _ = lock.Close() }, nil
 }
 
+// recordedProcessesAlive reports whether a process named in the worktree's process record still runs.
+// A tool command a provider started in its own session holds no ownership lock; the record is all that
+// names it. Nothing is stopped here: cleanup only decides whether to keep the worktree. A record that
+// cannot be read is an error, as is an unreadable process table. A worktree no attempt ever claimed has
+// no record.
+func recordedProcessesAlive(worktree string) (bool, error) {
+	file, err := os.Open(worktree + ownerRecordSuffix)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("open worktree process record: %w", err)
+	}
+	defer file.Close()
+	record, err := readOwnerRecord(file)
+	if err != nil {
+		return false, err
+	}
+	live, err := liveProcesses(record.members)
+	return len(live) > 0, err
+}
+
 // removeOwnerFiles deletes the ownership lock and the process record of a removed worktree.
 func removeOwnerFiles(worktree string) error {
 	var failures []error

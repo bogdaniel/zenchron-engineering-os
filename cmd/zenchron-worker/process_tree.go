@@ -146,22 +146,33 @@ func (tree *processTree) stop() error {
 	return refreshErr
 }
 
-// killProcesses sends SIGKILL to each listed process that still exists with the recorded start time,
-// and reports how many were still alive. An unreadable process table is an error, never "none alive".
-func killProcesses(identities []processIdentity) (int, error) {
+// liveProcesses returns the listed processes that still exist with the recorded start time. An
+// unreadable process table is an error, never "none alive".
+func liveProcesses(identities []processIdentity) ([]processIdentity, error) {
 	if len(identities) == 0 {
-		return 0, nil
+		return nil, nil
 	}
 	processes, err := listProcesses()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	alive := 0
+	var live []processIdentity
 	for _, identity := range identities {
 		if entry, exists := processes[identity.pid]; exists && identity.matches(entry) {
-			alive++
-			_ = syscall.Kill(identity.pid, syscall.SIGKILL)
+			live = append(live, identity)
 		}
 	}
-	return alive, nil
+	return live, nil
+}
+
+// killProcesses sends SIGKILL to each listed process that is still alive, and reports how many were.
+func killProcesses(identities []processIdentity) (int, error) {
+	live, err := liveProcesses(identities)
+	if err != nil {
+		return 0, err
+	}
+	for _, identity := range live {
+		_ = syscall.Kill(identity.pid, syscall.SIGKILL)
+	}
+	return len(live), nil
 }

@@ -172,12 +172,12 @@ func TestCleanupWorktreesRemovesOwnershipFilesOnlyOfRemovedWorktrees(t *testing.
 
 func TestCleanupWorktreesReportsOwnershipFileItCannotRemove(t *testing.T) {
 	root, projects, worktrees := cleanupFixture(t, "11111111111111111111111111111111")
-	// A non-empty directory in place of the process record cannot be removed like a file.
-	record := worktrees[0] + ownerRecordSuffix
-	if err := os.Remove(record); err != nil {
+	// A non-empty directory in place of the ownership lock cannot be removed like a file.
+	lock := worktrees[0] + ownerLockSuffix
+	if err := os.Remove(lock); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(record, "blocker"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(lock, "blocker"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	removed, kept, err := cleanupWorktrees(context.Background(), root, projects)
@@ -187,8 +187,105 @@ func TestCleanupWorktreesReportsOwnershipFileItCannotRemove(t *testing.T) {
 	if len(removed) != 1 || len(kept) != 0 {
 		t.Fatalf("cleanup removed %v, kept %v", removed, kept)
 	}
-	if _, err := os.Lstat(worktrees[0] + ownerLockSuffix); !os.IsNotExist(err) {
-		t.Fatalf("cleanup left the ownership lock behind: %v", err)
+	if _, err := os.Lstat(worktrees[0] + ownerRecordSuffix); !os.IsNotExist(err) {
+		t.Fatalf("cleanup left the process record behind: %v", err)
+	}
+}
+
+// recordProcesses writes the process record an attempt leaves beside a worktree.
+func recordProcesses(t *testing.T, worktree string, members ...processIdentity) {
+	t.Helper()
+	file, err := os.OpenFile(worktree+ownerRecordSuffix, os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := writeOwnerRecord(file, ownerRecord{members: members}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCleanupWorktreesKeepsWorktreeOfLiveRecordedProcess(t *testing.T) {
+	root, projects, worktrees := cleanupFixture(t, "11111111111111111111111111111111")
+	// Like a tool command a provider started in its own session: it holds no ownership lock.
+	process := exec.Command("sleep", "60")
+	if err := process.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = process.Process.Kill()
+		_ = process.Wait()
+	})
+	processes, err := listProcesses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, listed := processes[process.Process.Pid]
+	if !listed {
+		t.Fatal("the started process is not in the process table")
+	}
+	recordProcesses(t, worktrees[0], processIdentity{pid: process.Process.Pid, started: entry.started})
+	removed, kept, err := cleanupWorktrees(context.Background(), root, projects)
+	if err != nil || len(removed) != 0 || !slices.Equal(kept, []string{"repository/" + filepath.Base(worktrees[0])}) {
+		t.Fatalf("cleanup removed %v, kept %v, error %v", removed, kept, err)
+	}
+	for _, protected := range []string{worktrees[0], worktrees[0] + ownerLockSuffix, worktrees[0] + ownerRecordSuffix} {
+		if _, err := os.Lstat(protected); err != nil {
+			t.Fatalf("cleanup removed protected %s: %v", protected, err)
+		}
+	}
+	if processes, err = listProcesses(); err != nil {
+		t.Fatal(err)
+	}
+	if _, alive := processes[process.Process.Pid]; !alive {
+		t.Fatal("cleanup stopped the recorded process")
+	}
+}
+
+func TestCleanupWorktreesRemovesWorktreeWithStaleProcessRecord(t *testing.T) {
+	root, projects, worktrees := cleanupFixture(t, "11111111111111111111111111111111")
+	exited := exec.Command("true")
+	if err := exited.Run(); err != nil {
+		t.Fatal(err)
+	}
+	// One recorded process is gone; the other pid is alive but belongs to a process started at another time.
+	recordProcesses(t, worktrees[0],
+		processIdentity{pid: exited.Process.Pid, started: time.Now()},
+		processIdentity{pid: os.Getpid(), started: time.Unix(1, 0)})
+	removed, kept, err := cleanupWorktrees(context.Background(), root, projects)
+	if err != nil || len(kept) != 0 || !slices.Equal(removed, []string{"repository/" + filepath.Base(worktrees[0])}) {
+		t.Fatalf("cleanup removed %v, kept %v, error %v", removed, kept, err)
+	}
+	for _, gone := range []string{worktrees[0], worktrees[0] + ownerLockSuffix, worktrees[0] + ownerRecordSuffix} {
+		if _, err := os.Lstat(gone); !os.IsNotExist(err) {
+			t.Fatalf("cleanup left %s behind: %v", gone, err)
+		}
+	}
+}
+
+func TestCleanupWorktreesKeepsWorktreeWhenRecordedProcessesCannotBeChecked(t *testing.T) {
+	root, projects, worktrees := cleanupFixture(t, "11111111111111111111111111111111", "22222222222222222222222222222222")
+	damaged, unlisted := worktrees[0], worktrees[1]
+	if err := os.WriteFile(damaged+ownerRecordSuffix, []byte("not a record\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	recordProcesses(t, unlisted, processIdentity{pid: os.Getpid(), started: time.Unix(1, 0)})
+	// Without ps on the PATH the process table cannot be read.
+	t.Setenv("PATH", t.TempDir())
+	removed, kept, err := cleanupWorktrees(context.Background(), root, projects)
+	wantKept := []string{"repository/" + filepath.Base(damaged), "repository/" + filepath.Base(unlisted)}
+	if len(removed) != 0 || !slices.Equal(kept, wantKept) {
+		t.Fatalf("cleanup removed %v, kept %v", removed, kept)
+	}
+	for _, worktree := range worktrees {
+		if err == nil || !strings.Contains(err.Error(), "repository/"+filepath.Base(worktree)) {
+			t.Fatalf("cleanup error = %v, want a failure for %s", err, filepath.Base(worktree))
+		}
+		for _, protected := range []string{worktree, worktree + ownerLockSuffix, worktree + ownerRecordSuffix} {
+			if _, statErr := os.Lstat(protected); statErr != nil {
+				t.Fatalf("cleanup removed protected %s: %v", protected, statErr)
+			}
+		}
 	}
 }
 
