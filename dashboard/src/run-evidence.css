@@ -96,7 +96,14 @@
 }
 @media (max-width: 760px) {
   .run-evidence-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  /* The stacked workspace has a fixed inline height that leaves the detail panel about two rows of evidence.
-     Lengthen it only while Evidence is open so the summary is readable without resizing the panes. */
+  /* The stacked workspace has a fixed inline height that leaves the detail pane too short for evidence.
+     Lengthen it only while Evidence is open, and scroll the whole detail pane instead of a strip inside it, so
+     the evidence is read at the pane's full height and at its natural length. The panes stay resizable. */
   .reviews-workspace.is-stacked:has(.run-evidence) { height: 1640px !important; }
+  .reviews-detail:has(.run-evidence) { overflow-y: auto; }
+  .reviews-detail:has(.run-evidence) > * { flex-shrink: 0; }
+  .reviews-change-empty:has(.run-evidence) {
+    flex: none;
+    overflow: visible;
+  }
 }
