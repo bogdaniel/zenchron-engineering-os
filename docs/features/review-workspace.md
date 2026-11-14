@@ -91,7 +91,7 @@ Live only:
 - **Local branch.** Agent runs in an AG Grid. The detail shows the run's diff in read-only Monaco with its commit, the
   128 KiB truncation notice, and the pull-request link or publication state; counts come from the loaded diff and are
   lower bounds when it is truncated. Each run stores up to ten comments of 1,000 bytes. Comments and request-changes
-  are available on terminal runs with diffs; the latter requires an online worker with model runtime and `code.write`
+  are available on terminal runs with diffs; the latter requires an online worker with the profile's coding CLI ready, `code.write`
   permission and a remaining attempt. "Cancel run" is enabled while the run is queued or running. The Evidence tab
   shows `RunEvidence` ([Issue to pull request](issue-to-pull-request.md)).
 - **Disabled with the reason.** New PR, Approve, Merge to protected branch, Export evidence, the bookmark, the date

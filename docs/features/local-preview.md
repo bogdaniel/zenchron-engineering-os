@@ -64,7 +64,8 @@ The launcher reads optional root `.env.local` before starting services; `.env.*`
 The API can bind to a remote interface only when the GitHub OAuth and worker authentication settings described in
 [GitHub sign-in and remote worker authentication](github-login-and-remote-worker-auth.md) are configured.
 `ZENCHRON_LISTEN_ADDR` and `ZENCHRON_DASHBOARD_PORT` select local ports; `ZENCHRON_PROJECTS_ROOT` selects
-the folder scanned by the worker. `ZENCHRON_LLM_BASE_URL` and `ZENCHRON_LLM_API_KEY` are forwarded only to the worker.
+the folder scanned by the worker. Agent runs use the Codex or Claude Code CLI installed and signed in for the user who
+starts the launcher; there is no model endpoint setting.
 The launcher exits with a clear message if either fixed URL is already responding, rather than mistaking an existing
 preview for the child process it just started. If the Go control plane or worker fails after startup, the dashboard
 continues serving the latest successful frontend build so layout work remains reviewable. An HTTP 401 shows GitHub sign-in;

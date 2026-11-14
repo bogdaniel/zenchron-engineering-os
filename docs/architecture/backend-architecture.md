@@ -60,9 +60,9 @@ credentials and the provider sign-ins. Neither side receives the other's secrets
 | Run orchestration, leases, attempts, persistence | Control plane | `agent_runs.go`, `agent_run_results.go`, `agent_run_progress.go` |
 | Issue snapshot, pull-request status, review import | Control plane | `agent_run_issues.go`, `agent_reviews.go` |
 | Checkout discovery and repository allowlist | Worker | `projects.go`, `verification.go` (`workerConfig`) |
-| Worktree creation, locking, cleanup | Worker | `worktrees.go` |
+| Worktree creation (only by the run pipeline), locking, cleanup | Worker | `worktrees.go`, `worktree_owner.go` |
 | Run execution pipeline | Worker | `agent_runner.go` |
-| CLI execution adapters | Worker | `cli_provider.go`, `cli_adapters.go` |
+| Agent execution: the CLI process runner and its two adapters, the only implementation | Worker | `cli_provider.go`, `cli_adapters.go` |
 | Verification and evidence | Worker | `verification.go`, `agent_run_progress.go` |
 
 ## Identities and relationships
@@ -102,13 +102,13 @@ erDiagram
 |---|---|---|---|
 | Run queue, leases, attempt fencing (`agent_runs.go`) | KEEP, extend | Fencing by worker id and attempt already rejected stale and duplicate completions and had tests. | Extended with an attempt log, a single lease-expiry rule, and lease renewal on progress. |
 | Duplicate lease-expiry logic at startup and at claim | REFACTOR | The same rule was written twice. | One `expireLease`; both paths use it. |
-| Wire types defined separately in both binaries | REPLACE | `agentRunCommand` and the result body existed twice and could drift silently. | `internal/workerapi` is the single contract. Old and new binaries are not wire-compatible. |
+| Wire types defined separately in both binaries | REPLACE | `agentRunCommand` and the result body existed twice and could drift silently. | `internal/workerapi` is the single contract. Old and new binaries are not wire-compatible: the control plane rejects a heartbeat that still carries `agent_runtime_enabled`, so workers are upgraded together with it. |
 | Cancellation polling endpoint and worker poller | REMOVE | A second channel that only carried one boolean, while long runs had no way to renew a three-minute lease. | One `progress` call renews the lease, carries events, and returns the cancel flag. `GET .../cancellation` is gone. |
 | Two-minute run deadline | REPLACE | A real coding task cannot finish in two minutes; the first live runs took three to four. | Operator-configurable wall-clock, inactivity, tool-activity, and verification limits with named termination reasons. |
 | Worker run function with ten positional result arguments | REFACTOR | The result could not grow to carry verification, usage, or reasons. | `agentRunner` with one `workerapi.AgentRunResult`. |
-| Chat-completions tool loop (`openai.go`, `agent_tools.go`) | KEEP as one executor | It is how the dashboard E2E suite exercises the lifecycle without a real provider. It must not grow: Codex and Claude own their own reasoning and tool loops. | It sits behind the same `runExecutor` interface as the CLIs. Removing it needs a fake-CLI replacement in the dashboard E2E setup; deferred. |
+| Chat-completions tool loop (`openai.go`, `agent_tools.go`) | REMOVE | Codex and Claude own their reasoning and tool loops, so this was a second, weaker agent implementation kept only for the dashboard E2E suite. No product requirement needs direct-API execution. | Deleted with `ZENCHRON_LLM_BASE_URL`, `ZENCHRON_LLM_API_KEY`, the heartbeat's `agent_runtime_enabled`, and the `runExecutor` interface. The CLI process runner is the only execution path; E2E drives it through a fake `codex` in `dashboard/e2e/fake-cli`. A run for a profile whose provider is not `codex-cli` or `claude-code` is refused with 409. |
 | Worktree manager (`worktrees.go`, worker) | KEEP, strengthen | Idempotent preparation and ref validation were sound. | Active worktrees are locked with `git worktree lock`; `cleanup-worktrees` removes only clean, unlocked ones. |
-| Standalone worktree request queue (`worktrees.go`, control plane) | DEFER | It duplicates the lease mechanics of runs, but the Projects page and its E2E flow depend on it and the dashboard is being reworked concurrently. | Access rules were added to it; folding it into runs is tracked as follow-up. |
+| Standalone worktree request queue (`worktrees.go`, control plane) | REMOVE | It was a second durable queue with its own claim, lease, fencing, expiry and cancel, and a worktree prepared through it could be used by nothing: every run creates its own. | The `/api/v1/worktrees` and `/api/v1/workers/{id}/worktrees` routes are gone and `worktrees.json` in a data directory is no longer read. The agent-run store is the only lease and fencing implementation; the worker's run pipeline is the only caller of `prepareWorktree`. Projects lists a checkout's run branches instead. |
 | GitHub client and App authentication | KEEP, extend | Token minting, bounded responses, and create-or-reuse pull requests were correct. | Added issue comments, issue creation, check runs, and reviews in `github_delivery.go`. |
 | Matching review feedback to a run by parsing the branch name | REPLACE | The checkpoint itself warned against relationships built on guessed branch names. | Runs are found by stored repository and pull-request number. |
 | Three copies of the "local client only" guard on GitHub writes | REFACTOR | Copy-pasted guard; it also made GitHub writes impossible from a hosted dashboard. | One check that admits a loopback client or a caller authorized by an enforced access policy. |
@@ -138,6 +138,5 @@ instance. None of them is claimed as working.
 - Server-side revocable user sessions and worker token rotation without editing the file.
 - Per-repository GitHub App installations (one installation per control plane today).
 - Webhook-driven import of GitHub reviews and CI results; both are read on request.
-- Worker auto-update, Windows process isolation, and Gemini or other providers.
-- Folding the standalone worktree request queue into runs, and replacing the chat-completions executor in dashboard
-  E2E with a fake CLI.
+- Worker auto-update, Windows process isolation, and Gemini or other providers. A provider needs a CLI adapter;
+  there is no direct-API execution path.
