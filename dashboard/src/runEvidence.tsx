@@ -15,6 +15,14 @@ export const runEvidenceFields = {
     attempt: z.number(), worker_id: z.string(), started_at: z.string(), finished_at: z.string().optional(),
     status: z.string().optional(), termination_reason: z.string().optional(), commit_sha: z.string().optional(),
   })).optional(),
+  // Reported by GitHub webhooks for the run's published commit and pull request.
+  checks: z.array(z.object({
+    name: z.string(), status: z.string(), conclusion: z.string().optional(), commit_sha: z.string(),
+  })).optional(),
+  github_reviews: z.array(z.object({
+    id: z.number(), state: z.string(), author: z.string(), commit_sha: z.string(),
+    imported: z.boolean().optional(), queued: z.boolean().optional(),
+  })).optional(),
 };
 const evidenceRunSchema = z.object({
   id: z.string(), status: z.string(), worker_name: z.string(), branch: z.string(), commit_sha: z.string().optional(),
@@ -28,7 +36,33 @@ const eventsSchema = z.array(z.object({
 const pullRequestSchema = z.object({
   state: z.string(), merged: z.boolean(),
   checks: z.array(z.object({ name: z.string(), status: z.string(), conclusion: z.string().nullable().optional() })).nullable(),
+  reviews: z.array(z.object({
+    id: z.number(), state: z.string(), user: z.object({ login: z.string() }),
+  })).nullable().optional(),
 });
+
+const passingConclusions = ['success', 'neutral', 'skipped'];
+const reviewStates: Record<string, string> = {
+  approved: 'Approved', changes_requested: 'Changes requested', commented: 'Commented', dismissed: 'Dismissed',
+};
+
+type Check = { name: string; status: string; conclusion?: string | null };
+type Review = { id: number; state: string; author: string };
+
+/** What still stands between the run's pull request and a merge decision, from its checks and reviews. */
+function outstanding(checks: Check[], reviews: Review[]) {
+  const failing = checks.filter((check) => check.status === 'completed' && !passingConclusions.includes(check.conclusion ?? '')).length;
+  const pending = checks.filter((check) => check.status !== 'completed').length;
+  // The newest review of each reviewer is the one that counts.
+  const latest = new Map(reviews.map((review) => [review.author, review.state.toLowerCase()]));
+  const requesters = [...latest].filter(([, state]) => state === 'changes_requested').map(([author]) => author);
+  const parts = [
+    failing ? `${failing} failing check${failing === 1 ? '' : 's'}` : '',
+    pending ? `${pending} check${pending === 1 ? '' : 's'} running` : '',
+    requesters.length ? `changes requested by ${requesters.join(', ')}` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : checks.length || reviews.length ? 'Nothing outstanding' : 'No checks or reviews reported';
+}
 
 async function loadJSON<T>(path: string, schema: z.ZodType<T>, label: string) {
   const response = await fetch(path);
@@ -78,6 +112,13 @@ export function RunEvidence({ run }: { run: EvidenceRun }) {
       ? <a href={run.pull_request_url} target="_blank" rel="noreferrer">#{run.pull_request_number} on GitHub ↗</a> : 'None'],
     ['Usage', usage],
   ];
+  // GitHub's live answer when it has loaded; otherwise what webhooks stored for the published commit.
+  const checks: Check[] = pullRequest.data?.checks
+    ?? (run.checks ?? []).filter((check) => check.commit_sha === run.commit_sha);
+  const reviews: Review[] = pullRequest.data?.reviews?.map((review) => ({ id: review.id, state: review.state, author: review.user.login }))
+    ?? run.github_reviews ?? [];
+  const received = new Map((run.github_reviews ?? []).map((review) => [review.id, review]));
+  if (run.pull_request_number !== undefined) facts.push(['Review and CI', outstanding(checks, reviews)]);
   const queryClient = useQueryClient();
   const followUp = useMutation({
     mutationFn: async (action: 'sync-reviews' | 'publish') => {
@@ -90,7 +131,6 @@ export function RunEvidence({ run }: { run: EvidenceRun }) {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent-runs'] }),
   });
-  const checks = pullRequest.data?.checks ?? [];
   const attempts = run.attempt_log ?? [];
   return <div className="run-evidence">
     <dl className="run-evidence-facts" aria-label="Run evidence summary">
@@ -113,6 +153,16 @@ export function RunEvidence({ run }: { run: EvidenceRun }) {
           : checks.length === 0 ? <p>No check runs reported for this commit yet.</p>
             : <ul>{checks.map((check, index) => <li key={`${check.name}-${index}`}>
               <b>{check.name}</b><span>{check.conclusion || check.status}</span></li>)}</ul>}
+    </section>}
+    {run.pull_request_number !== undefined && !pullRequest.isLoading && <section aria-label="Pull request reviews">
+      <h4>Pull request reviews</h4>
+      {reviews.length === 0 ? <p>No reviews submitted on this pull request yet.</p>
+        : <ul>{reviews.map((review) => <li key={review.id}>
+          <b>{review.author}</b>
+          <span>{reviewStates[review.state.toLowerCase()] ?? review.state}
+            {received.get(review.id)?.queued ? ' · follow-up attempt queued'
+              : received.get(review.id)?.imported ? ' · feedback imported' : ''}</span>
+        </li>)}</ul>}
     </section>}
     {attempts.length > 0 && <section aria-label="Run attempts">
       <h4>Attempts</h4>

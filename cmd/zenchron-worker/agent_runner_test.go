@@ -424,17 +424,20 @@ func TestAttemptThatLosesItsLeaseAfterCommittingDoesNotPush(t *testing.T) {
 	stale.command.PublishPullRequest, stale.runner.push = true, countPush
 	project := discoveredProject{ID: stale.command.ProjectID, Name: "repository", Path: stale.repository}
 	root := filepath.Dir(filepath.Dir(stale.worktree))
-	if err := prepareWorktree(context.Background(), root, project, worktreeCommand{
-		ID: stale.command.ID, ProjectID: stale.command.ProjectID, Branch: stale.command.Branch, BaseBranch: "main",
-	}); err != nil {
+	if err := prepareWorktree(context.Background(), root, project, stale.command.ID, stale.command.Branch, "main"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(stale.worktree, "README.md"), []byte("late change\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	reporter := &progressReporter{leaseLost: true, redactor: newRedactor(stale.worktree)}
-	result := stale.runner.deliver(context.Background(), context.Background(), stale.command, project, stale.worktree,
-		workerapi.AgentRunResult{}, reporter)
+	owner, err := acquireWorktree(context.Background(), stale.worktree, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.release()
+	result := stale.runner.deliver(context.Background(), context.Background(), stale.command, project,
+		runWorkspace{path: stale.worktree, owner: owner}, workerapi.AgentRunResult{}, reporter)
 	if pushes != 0 || result.BranchPushed || result.Status == "succeeded" || len(result.CommitSHA) != 40 {
 		t.Fatalf("stale attempt pushed %d times: %#v", pushes, result)
 	}
@@ -495,8 +498,7 @@ func TestCleanupWorktreesKeepsLockedAndModifiedWorktrees(t *testing.T) {
 	projects := []discoveredProject{{ID: agentRunTestID, Name: "repository", Path: harness.repository}}
 	prepare := func(id string) string {
 		t.Helper()
-		command := worktreeCommand{ID: id, ProjectID: agentRunTestID, Branch: workerapi.AgentRunBranch(id), BaseBranch: "main"}
-		if err := prepareWorktree(context.Background(), root, projects[0], command); err != nil {
+		if err := prepareWorktree(context.Background(), root, projects[0], id, workerapi.AgentRunBranch(id), "main"); err != nil {
 			t.Fatal(err)
 		}
 		return filepath.Join(root, agentRunTestID, id)
@@ -524,13 +526,16 @@ func TestCleanupWorktreesKeepsLockedAndModifiedWorktrees(t *testing.T) {
 	}
 }
 
-func TestProviderEnvironmentRemovesWorkerAndBillingCredentials(t *testing.T) {
+func TestProviderEnvironmentInheritsOnlyNamedVariables(t *testing.T) {
 	environment := providerEnvironment([]string{"PATH=/bin", "HOME=/home/dev", "ZENCHRON_WORKER_TOKEN=secret",
-		"ZENCHRON_LLM_API_KEY=secret", "GH_TOKEN=secret", "GITHUB_TOKEN=secret", "ANTHROPIC_API_KEY=secret",
+		"GH_TOKEN=secret", "GITHUB_TOKEN=secret", "ANTHROPIC_API_KEY=secret",
 		"OPENAI_API_KEY=secret", "CODEX_API_KEY=secret", "SSH_AUTH_SOCK=/tmp/agent.sock", "GH_ENTERPRISE_TOKEN=secret",
 		"GITHUB_ENTERPRISE_TOKEN=secret", "AWS_ACCESS_KEY_ID=id", "AWS_SECRET_ACCESS_KEY=secret", "AWS_SESSION_TOKEN=secret",
-		"GOOGLE_APPLICATION_CREDENTIALS=/home/dev/key.json"})
-	if strings.Join(environment, " ") != "PATH=/bin HOME=/home/dev" {
+		"GOOGLE_APPLICATION_CREDENTIALS=/home/dev/key.json",
+		// Secrets under names no denylist could anticipate must not be inherited either.
+		"NPM_TOKEN=secret", "DATABASE_URL=postgres://user:secret@db/app", "MY_COMPANY_DEPLOY_KEY=secret",
+		"LC_ALL=en_US.UTF-8", "HTTPS_PROXY=http://proxy:3128"})
+	if strings.Join(environment, " ") != "PATH=/bin HOME=/home/dev LC_ALL=en_US.UTF-8 HTTPS_PROXY=http://proxy:3128" {
 		t.Fatalf("provider environment = %v", environment)
 	}
 }
@@ -632,5 +637,14 @@ func TestClaimedRunBodyIsBounded(t *testing.T) {
 	controlURL, _ := url.Parse(api.URL)
 	if _, _, err := claimAgentRun(context.Background(), api.Client(), controlURL, agentRunTestID); err == nil {
 		t.Fatal("oversized claim was accepted")
+	}
+	// A valid command followed by padding past the limit is still an oversized response.
+	padded := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"id":"`+agentRunTestID+`"}`+strings.Repeat(" ", maxClaimResponseSize))
+	}))
+	defer padded.Close()
+	paddedURL, _ := url.Parse(padded.URL)
+	if _, _, err := claimAgentRun(context.Background(), padded.Client(), paddedURL, agentRunTestID); err == nil {
+		t.Fatal("a valid claim padded past the limit was accepted")
 	}
 }

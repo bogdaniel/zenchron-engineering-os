@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,46 +16,18 @@ import (
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
-// runExecutor performs one agent attempt inside a prepared worktree. It has two kinds of
-// implementation today: the chat-completions runtime and the installed coding CLIs.
-type runExecutor interface {
-	execute(
-		ctx context.Context, command workerapi.AgentRunCommand, workspace runWorkspace, limits runLimits,
-		emit func(kind, message string),
-	) (executionResult, error)
-	versionLabel() string
-}
-
-func (provider *cliProvider) versionLabel() string { return provider.version }
-
-func (runtime *agentRuntime) versionLabel() string { return "" }
-
-func (runtime *agentRuntime) execute(
-	ctx context.Context, command workerapi.AgentRunCommand, workspace runWorkspace, _ runLimits,
-	_ func(kind, message string),
-) (executionResult, error) {
-	output, err := runtime.complete(ctx, command, workspace.path)
-	switch {
-	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		return executionResult{reason: workerapi.TerminationWallClock}, ctx.Err()
-	case ctx.Err() != nil:
-		return executionResult{reason: workerapi.TerminationCancelled}, ctx.Err()
-	case err != nil:
-		return executionResult{reason: workerapi.TerminationProviderExit}, err
-	}
-	return executionResult{output: output, reason: workerapi.TerminationCompleted}, nil
-}
-
 // agentRunner owns the local half of a run: worktree, provider process, verification, commit and push.
 type agentRunner struct {
 	client    *http.Client
 	baseURL   *url.URL
 	workerID  string
 	token     string
-	chat      *agentRuntime
 	providers map[string]*cliProvider
 	limits    runLimits
 	config    *workerConfig
+	// guard is the command prefix that stops provider and verification processes when this worker dies:
+	// this binary's own `guard` command. Empty runs them unguarded.
+	guard []string
 	// push publishes the run branch; nil uses pushAgentBranch. Tests replace this network boundary.
 	push func(ctx context.Context, worktree, remote, branch string) error
 	// finishRetryDelay overrides the pause between result deliveries; zero uses the default.
@@ -80,17 +51,7 @@ func (runner *agentRunner) canExecute() bool {
 			return true
 		}
 	}
-	return runner.chat != nil
-}
-
-func (runner *agentRunner) executorFor(provider string) runExecutor {
-	if cli := runner.providers[provider]; cli != nil && cli.ready {
-		return cli
-	}
-	if runner.chat == nil || workerapi.IsCLIProvider(provider) {
-		return nil
-	}
-	return runner.chat
+	return false
 }
 
 func (runner *agentRunner) process(ctx context.Context, projects []discoveredProject) error {
@@ -133,11 +94,11 @@ func (runner *agentRunner) run(
 	if command.Branch != workerapi.AgentRunBranch(command.ID) {
 		return failedRun(workerapi.TerminationWorkerError, "Run branch is not the branch authorized for this run."), true
 	}
-	if workerapi.IsCLIProvider(command.Profile.Provider) && !modelPattern.MatchString(command.Profile.Model) {
+	if !modelPattern.MatchString(command.Profile.Model) {
 		return failedRun(workerapi.TerminationWorkerError, "The agent profile's model name is not valid for a CLI provider."), true
 	}
-	executor := runner.executorFor(command.Profile.Provider)
-	if executor == nil {
+	provider := runner.providers[command.Profile.Provider]
+	if provider == nil || !provider.ready {
 		return failedRun(workerapi.TerminationWorkerError, "The agent provider is not ready on this worker."), true
 	}
 	root, err := worktreeRoot()
@@ -152,7 +113,9 @@ func (runner *agentRunner) run(
 		endpoint: agentRunEndpoint(runner.baseURL, runner.workerID, command.ID, "/progress"),
 	}
 	stopReporting := reporter.start(ctx, cancel)
-	result := runner.attempt(activeCtx, command, project, root, worktree, executor, reporter)
+	workspace := runWorkspace{path: worktree, environment: runner.config.processEnvironment(project.Remote),
+		readPaths: runner.config.readPaths(project.Remote), denyPaths: confidentialRoots(root, projects)}
+	result := runner.attempt(activeCtx, command, project, root, workspace, provider, reporter)
 	stopReporting()
 	if _, leaseLost := reporter.state(); leaseLost || ctx.Err() != nil {
 		return result, false
@@ -161,18 +124,31 @@ func (runner *agentRunner) run(
 }
 
 func (runner *agentRunner) attempt(
-	ctx context.Context, command workerapi.AgentRunCommand, project discoveredProject, root, worktree string,
-	executor runExecutor, reporter *progressReporter,
+	ctx context.Context, command workerapi.AgentRunCommand, project discoveredProject, root string,
+	workspace runWorkspace, provider *cliProvider, reporter *progressReporter,
 ) workerapi.AgentRunResult {
-	result := workerapi.AgentRunResult{ProviderVersion: executor.versionLabel()}
-	err := prepareWorktree(ctx, root, project, worktreeCommand{
-		ID: command.ID, ProjectID: command.ProjectID, Branch: command.Branch, BaseBranch: command.BaseBranch,
-	})
+	result := workerapi.AgentRunResult{ProviderVersion: provider.version}
+	worktree := workspace.path
+	err := prepareWorktree(ctx, root, project, command.ID, command.Branch, command.BaseBranch)
 	if cancelled, _ := reporter.state(); cancelled && err != nil {
 		return cancelledRun(result)
 	}
 	if err != nil {
 		return failed(result, workerapi.TerminationWorkerError, "Could not prepare an isolated branch.")
+	}
+	// No process of this attempt starts before every process of an earlier attempt is gone.
+	owner, err := acquireWorktree(ctx, worktree, runner.guard)
+	if cancelled, _ := reporter.state(); cancelled && err != nil {
+		return cancelledRun(result)
+	}
+	if err != nil {
+		log.Printf("agent run %s attempt %d: %v", command.ID, command.Attempts, err)
+		return failed(result, workerapi.TerminationWorkerError, "The run worktree is still in use by an earlier attempt's processes.")
+	}
+	defer owner.release()
+	workspace.owner = owner
+	if owner.tookOver {
+		reporter.emit("status", "Stopped processes left in the worktree by an earlier attempt.")
 	}
 	unlock := lockWorktree(project.Path, worktree)
 	defer unlock()
@@ -182,13 +158,11 @@ func (runner *agentRunner) attempt(
 	reporter.emit("status", fmt.Sprintf("Isolated worktree ready on %s from %s", command.Branch, command.BaseBranch))
 
 	runCtx, cancelRun := context.WithTimeout(ctx, runner.limits.wallClock)
-	workspace := runWorkspace{path: worktree, environment: runner.config.processEnvironment(project.Remote),
-		readPaths: runner.config.readPaths(project.Remote)}
 	// Git keeps a worktree's metadata in the source checkout; a sandboxed agent needs to read it.
 	if gitDir, err := gitOutput(ctx, "-C", worktree, "rev-parse", "--path-format=absolute", "--git-common-dir"); err == nil {
 		workspace.readPaths = append(workspace.readPaths, strings.TrimSpace(gitDir))
 	}
-	execution, runErr := executor.execute(runCtx, command, workspace, runner.limits, reporter.emit)
+	execution, runErr := provider.execute(runCtx, command, workspace, runner.limits, reporter.emit)
 	cancelRun()
 	result.Usage, result.TerminationReason = execution.usage, execution.reason
 
@@ -212,16 +186,17 @@ func (runner *agentRunner) attempt(
 		return failed(result, execution.reason, executionFailureMessage(execution.reason))
 	}
 	result.Output = truncateText(reporter.redactor.clean(execution.output), maxAgentRunOutputSize)
-	return runner.deliver(ctx, gitCtx, command, project, worktree, result, reporter)
+	return runner.deliver(ctx, gitCtx, command, project, workspace, result, reporter)
 }
 
 // deliver turns a finished execution into a candidate: commit, verify, and push the run branch.
 // Verification that fails keeps the commit local; nothing unverified is published.
 func (runner *agentRunner) deliver(
-	ctx, gitCtx context.Context, command workerapi.AgentRunCommand, project discoveredProject, worktree string,
+	ctx, gitCtx context.Context, command workerapi.AgentRunCommand, project discoveredProject, workspace runWorkspace,
 	result workerapi.AgentRunResult, reporter *progressReporter,
 ) workerapi.AgentRunResult {
 	var err error
+	worktree := workspace.path
 	result.CommitSHA, err = commitAgentRunChanges(gitCtx, worktree, command.BaseBranch, command.ID, command.Attempts)
 	if err != nil {
 		return failed(result, workerapi.TerminationWorkerError, "Could not commit isolated branch changes.")
@@ -232,8 +207,8 @@ func (runner *agentRunner) deliver(
 		return result
 	}
 	reporter.emit("status", "Committed "+result.CommitSHA[:12]+" on the run branch.")
-	result.Verification = runVerification(ctx, worktree, runner.config.verificationCommands(project.Remote),
-		runner.config.processEnvironment(project.Remote), runner.limits.verification, reporter.emit)
+	result.Verification = runVerification(ctx, workspace, runner.config.verificationCommands(project.Remote),
+		runner.limits.verification, reporter.emit)
 	if cancelled, _ := reporter.state(); cancelled {
 		return cancelledRun(result)
 	}

@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
-import { useForm } from '@mantine/form';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry, colorSchemeDark, themeQuartz } from 'ag-grid-community';
 import type { ColDef, ICellRendererParams } from 'ag-grid-community';
-import { Badge, Button, Modal, Text, TextInput } from '@mantine/core';
+import { Badge, TextInput } from '@mantine/core';
 import { IconCode, IconCpu, IconFolders, IconGitBranch, IconSearch } from '@tabler/icons-react';
 import { z } from 'zod';
+import { loadAgentRuns } from './agentsData';
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
@@ -27,18 +27,6 @@ const projectSchema = z.object({
 });
 export const projectsSchema = z.array(projectSchema);
 export type Project = z.infer<typeof projectSchema>;
-const worktreeSchema = z.object({
-  id: z.string(), project_id: z.string(), project_name: z.string(), worker_id: z.string(), worker_name: z.string(),
-  branch: z.string(), base_branch: z.string(), status: z.enum(['queued', 'preparing', 'ready', 'failed', 'cancelled']),
-  error: z.string().optional(), attempts: z.number(), created_at: z.string(), updated_at: z.string(),
-});
-const worktreesSchema = z.array(worktreeSchema);
-const worktreeInputSchema = z.object({
-  project_id: z.string(), branch: z.string().trim().min(1, 'Enter a branch name').max(255), base_branch: z.string(),
-});
-type WorktreeRequest = z.infer<typeof worktreeSchema>;
-type WorktreeInput = z.infer<typeof worktreeInputSchema>;
-
 const projectTheme = themeQuartz.withPart(colorSchemeDark).withParams({
   accentColor: '#a36bff',
   backgroundColor: '#11121b',
@@ -55,49 +43,15 @@ const projectTheme = themeQuartz.withPart(colorSchemeDark).withParams({
 type Props = { items: Project[]; isLoading: boolean; isError: boolean; sampleData?: boolean };
 
 export function ProjectsPage({ items, isLoading, isError, sampleData = false }: Props) {
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [selectedID, setSelectedID] = useState<string | null>(null);
-  const [prepareOpen, setPrepareOpen] = useState(false);
-  const [prepareError, setPrepareError] = useState('');
-  const prepareForm = useForm<WorktreeInput>({
-    initialValues: { project_id: '', branch: '', base_branch: '' },
-    validate: (values) => {
-      const result = worktreeInputSchema.safeParse(values);
-      return result.success
-        ? {}
-        : Object.fromEntries(result.error.issues.map((issue) => [String(issue.path[0]), issue.message]));
-    },
-  });
-  const worktrees = useQuery({
-    queryKey: ['worktrees'],
-    queryFn: async () => {
-      const response = await fetch('/api/v1/worktrees');
-      if (!response.ok) throw new Error(`Could not load worktree requests (${response.status})`);
-      return worktreesSchema.parse(await response.json());
-    },
-    refetchInterval: 1_500,
-  });
-  const prepareMutation = useMutation({
-    mutationFn: async (input: WorktreeInput) => {
-      const response = await fetch('/api/v1/worktrees', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
-      });
-      if (!response.ok) throw new Error(await response.text());
-      return worktreeSchema.parse(await response.json());
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['worktrees'] });
-      setPrepareOpen(false);
-      setPrepareError('');
-    },
-    onError: (error) => setPrepareError(error.message),
-  });
+  // Every run owns one isolated worktree on its own branch, so a project's runs are its worktrees.
+  const runs = useQuery({ queryKey: ['agent-runs'], queryFn: loadAgentRuns, refetchInterval: 3_000, enabled: !sampleData });
   const selected = items.find((project) => project.id === selectedID) ?? items[0];
   const online = items.filter((project) => project.worker_status === 'online').length;
   const offline = items.length - online;
   const workers = new Set(items.map((project) => project.worker_id)).size;
-  const selectedWorktrees = worktrees.data?.filter((request) => request.project_id === selected?.id) ?? [];
+  const selectedRuns = runs.data?.filter((run) => run.project_id === selected?.id) ?? [];
   const filteredItems = items.filter((project) =>
     `${project.name} ${project.worker_name}`.toLowerCase().includes(search.toLowerCase()),
   );
@@ -185,35 +139,19 @@ export function ProjectsPage({ items, isLoading, isError, sampleData = false }: 
           <p className="project-detail-note">
             Only the sanitized origin host and repository path leave the worker; local paths and remote credentials stay here.
           </p>
-          <Button
-            className="prepare-worktree-button"
-            leftSection={<IconGitBranch size={15} />}
-            disabled={selected.worker_status !== 'online' || !selected.branch || selected.branch === 'Unknown' ||
-              selected.branch === 'Detached HEAD'}
-            onClick={() => {
-              setPrepareError('');
-              prepareForm.setValues({
-                project_id: selected.id,
-                branch: `zenchron/${selected.name.toLowerCase().replace(/[^a-z0-9-]+/g, '-')}-${Date.now()}`,
-                base_branch: selected.branch,
-              });
-              setPrepareOpen(true);
-            }}
-          >Prepare isolated branch</Button>
           <div className="project-worktrees">
-            <div className="project-worktrees-heading"><b>Prepared workspaces</b>
-              <span>{worktrees.isError ? 'Unavailable' : selectedWorktrees.length}</span></div>
-            {worktrees.isError ? <p role="alert">Could not load worktree requests.</p> : selectedWorktrees.length ? (
-              selectedWorktrees.slice(0, 4).map((request: WorktreeRequest) => (
-                <div className="project-worktree-row" key={request.id}>
-                  <IconGitBranch size={14} />
-                  <span><b>{request.branch}</b><small>Base: {request.base_branch}</small>
-                    {request.error && <small>{request.error}</small>}</span>
-                  <Badge className={`worktree-status ${request.status}`} variant="light">{request.status}</Badge>
+            <div className="project-worktrees-heading"><b>Agent run branches</b>
+              <span>{runs.isError ? 'Unavailable' : selectedRuns.length}</span></div>
+            {runs.isError ? <p role="alert">Could not load agent runs.</p> : selectedRuns.length ? (
+              selectedRuns.slice(0, 4).map((run) => (
+                <div className="project-worktree-row" key={run.id}>
+                  <IconGitBranch size={14} aria-hidden />
+                  <span><b>{run.branch}</b><small>{run.agent_name}{run.base_branch ? ` · Base: ${run.base_branch}` : ''}</small>
+                    {run.error && <small>{run.error}</small>}</span>
+                  <Badge className={`worktree-status ${run.status}`} variant="light">{run.status}</Badge>
                 </div>
               ))
-            ) : <p>{worktrees.isLoading ? 'Loading workspaces…'
-              : 'No isolated branches prepared for this checkout.'}</p>}
+            ) : <p>{runs.isLoading ? 'Loading agent runs…' : 'No agent runs for this project yet.'}</p>}
           </div>
         </> : <div className="projects-empty-detail">
           <IconFolders size={23} />
@@ -224,23 +162,5 @@ export function ProjectsPage({ items, isLoading, isError, sampleData = false }: 
         </div>}
       </PanelCard>
     </div>
-    <Modal opened={prepareOpen} onClose={() => setPrepareOpen(false)} title="Prepare isolated branch" centered>
-      <form onSubmit={prepareForm.onSubmit((values) => {
-        prepareMutation.mutate(worktreeInputSchema.parse(values));
-      })}>
-        <TextInput label="Branch name" required {...prepareForm.getInputProps('branch')} />
-        <TextInput label="Base branch" readOnly {...prepareForm.getInputProps('base_branch')} />
-        <p className="prepare-worktree-note">
-          The worker will create a separate Git worktree. Your current checkout and branch will stay unchanged.
-        </p>
-        {prepareError && <Text className="form-error" role="alert">{prepareError}</Text>}
-        <div className="prepare-worktree-actions">
-          <Button variant="subtle" type="button" onClick={() => setPrepareOpen(false)}>Cancel</Button>
-          <Button className="prepare-worktree-button" type="submit" loading={prepareMutation.isPending}>
-            Prepare branch
-          </Button>
-        </div>
-      </form>
-    </Modal>
   </div>;
 }

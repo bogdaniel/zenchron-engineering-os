@@ -75,7 +75,7 @@ func newAccessHarness(t *testing.T) *accessHarness {
 		Status: "active", Version: 1, UpdatedAt: time.Now().UTC(), Tools: []string{"code.write"}}
 	agents.items[harness.profile.ID] = harness.profile
 	harness.server = authHandler(newMuxWithStores(newObjectiveStore(newProductStore()), newWorkflowStore(), agents,
-		newProductStore(), registry, newWorktreeStore(registry), newAgentRunStore(registry, agents)), harness.config)
+		newProductStore(), registry, newAgentRunStore(registry, agents)), harness.config)
 	return harness
 }
 
@@ -139,10 +139,8 @@ func TestWorkerTokenIsBoundToItsEnrolledIdentity(t *testing.T) {
 			t.Errorf("%s: heartbeat returned HTTP %d, want %d", name, status, test.status)
 		}
 	}
-	for _, path := range []string{"/agent-runs/claim", "/worktrees/claim"} {
-		if response := harness.worker(http.MethodPost, "/api/v1/workers/"+bobWorkerID+path, aliceToken, ""); response.Code != http.StatusUnauthorized {
-			t.Errorf("Alice's worker claimed Bob's %s: HTTP %d", path, response.Code)
-		}
+	if response := harness.worker(http.MethodPost, "/api/v1/workers/"+bobWorkerID+"/agent-runs/claim", aliceToken, ""); response.Code != http.StatusUnauthorized {
+		t.Errorf("Alice's worker claimed Bob's runs: HTTP %d", response.Code)
 	}
 	if response := harness.worker(http.MethodGet, "/api/v1/workers/healthz", bobToken, ""); response.Code == http.StatusUnauthorized {
 		t.Errorf("enrolled worker readiness probe was rejected")
@@ -323,10 +321,6 @@ func TestUsersDispatchOnlyToTheirOwnOrSharedWorkers(t *testing.T) {
 	if status := create(sharedProject); status != http.StatusAccepted {
 		t.Errorf("Bob could not dispatch to the shared worker: HTTP %d", status)
 	}
-	worktree := harness.user("bob", http.MethodPost, "/api/v1/worktrees", `{"project_id":"`+projectA+`","branch":"feature/x"}`)
-	if worktree.Code != http.StatusConflict {
-		t.Errorf("Bob requested a worktree on Alice's personal worker: HTTP %d", worktree.Code)
-	}
 }
 
 func TestRevokingAGrantTakesEffectWithoutRestartAndInvalidPolicyDeniesAll(t *testing.T) {
@@ -364,7 +358,10 @@ func TestAccessFileRejectsMalformedGrants(t *testing.T) {
 		"repository traversal":        `{"workers":[],"users":{"alice":["github.com/acme/../secret"]}}`,
 		"repository with credentials": `{"workers":[],"users":{"alice":["user@github.com/acme/repo"]}}`,
 		"blank user":                  `{"workers":[],"users":{" ":["github.com/acme/repo"]}}`,
-		"unknown field":               `{"workers":[],"users":{},"admins":["alice"]}`,
+		"unknown field":               `{"workers":[],"users":{},"roles":{"alice":"owner"}}`,
+		"blank administrator":         `{"workers":[],"users":{},"admins":[" "]}`,
+		"previous token without expiry": `{"workers":[{"id":"` + aliceWorkerID + `","token_sha256":"` + tokenHash(aliceToken) +
+			`","previous_token_sha256":"` + tokenHash(bobToken) + `"}]}`,
 	} {
 		t.Setenv("ZENCHRON_ACCESS_FILE", writeAccessFile(t, content))
 		if _, err := loadAccessPolicy(); err == nil {

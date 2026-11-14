@@ -135,7 +135,10 @@ in Live.
 - **Reviews > Local branches > Evidence.** For the selected run: issue link, provider and version, worker, branch,
   base and result commits, execution result, verification, publication, pull-request link, reported usage, the pull
   request's check runs, every attempt, and the event log, which refreshes every two seconds while the run is active.
-  Loading, failure, and empty states are shown per section.
+  Loading, failure, and empty states are shown per section. At desktop width the evidence scrolls inside the detail
+  pane's tab area. On a phone-sized screen (760px wide or less) the evidence is laid out at its full length and the
+  whole detail pane scrolls instead, so the pane's full height (about 630px at 390×844) shows evidence; the event log
+  keeps its own scroll area of at most 260px, as on desktop.
 - **Reviews > Local branches > Code changes / Conversations** are unchanged: the stored diff, comments, request
   changes, and cancel. The Local branches queue exists in Live only; the Mock fixtures hold no agent runs.
 
@@ -162,8 +165,9 @@ in Live.
 | `POST /api/v1/agent-runs/{id}/sync-reviews` | Import change requests submitted on GitHub |
 | `POST /api/v1/agent-runs/{id}/publish` | Retry pull-request creation after a GitHub failure |
 
-Agent profiles select a CLI with `provider` set to `codex-cli` or `claude-code`. Any other provider value uses the
-OpenAI-compatible chat runtime described in [Agent run queue](agent-run-queue.md).
+Agent profiles select a CLI with `provider` set to `codex-cli` or `claude-code`. A profile with any other provider
+value can be saved but not run: `POST /api/v1/agent-runs` refuses it with `409`. The CLI process runner is the only
+execution implementation.
 
 ## Setup
 
@@ -234,13 +238,15 @@ Automated, deterministic:
 - `go test ./cmd/zenchron -run 'TestIssueRun|TestPullRequest|TestProgress|TestStaleAttempt|TestRunWaits|TestResult|TestVerificationFailure' -count=1`
   covers the issue snapshot and untrusted-comment filtering, identity linking, idempotent publication, lease renewal
   and fencing, provider gating, result validation, and review import against a fake GitHub API.
-- `cd dashboard && npm run test:e2e:agent-runtime` runs the real control plane and worker binaries end to end with
-  the chat runtime.
+- `cd dashboard && npm run test:e2e:agent-runtime` runs the real control plane and worker binaries end to end
+  through the fake Codex CLI in `dashboard/e2e/fake-cli` (see [Agent run queue](agent-run-queue.md)).
 
 - `cd dashboard && npm run test:e2e -- e2e/z_run_evidence.spec.ts` covers the queue dialog (issue selection and
   creation, the request body, a blocked unready provider, issues unavailable), the Mock/Live switch,
   Settings readiness, the Evidence actions, and the Evidence panel (summary, checks, attempts,
   events, failure and empty states, no horizontal overflow) at 1672×941 and 390×844 against mocked API responses.
+  At 390×844 it also checks that the evidence is not clipped inside the detail pane, that the pane shows at least
+  half the screen height and scrolls, and that the last event and "Add comment" can be scrolled into view.
   `npm run test:e2e -- e2e/z_agents.spec.ts --grep 'real worker run'` checks the panel against a run executed by the
   real control plane and worker.
 
@@ -290,9 +296,10 @@ panel. The other dashboard rows in the table above were driven by a script actin
 
 ## Outstanding
 
-- On a phone-sized screen the Reviews workspace is lengthened while Evidence is open, so the panel is about 240px
-  tall at 390px wide (roughly four summary rows) instead of 120px. The checks, attempts, and event log still scroll
-  inside the panel, because the page's stacked, resizable panes are kept as they are.
+- On a phone-sized screen the Evidence detail pane is still a scroll area inside the page (about 630px tall at
+  390×844), because the page's stacked, resizable panes are kept as they are; the evidence does not extend the page
+  itself. The comment box and "Cancel run" sit below the evidence in that pane, so a long run needs scrolling to
+  reach them.
 - A sandboxed agent cannot open network connections, including local test servers: a Codex run could not run Go
   tests that bind a loopback port. The worker's verification runs outside the sandbox and covers them.
 - A build that needs a dependency cache in the home directory runs inside the agent only if the operator lists that

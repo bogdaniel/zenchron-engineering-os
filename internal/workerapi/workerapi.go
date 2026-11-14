@@ -70,6 +70,11 @@ type ProviderStatus struct {
 	ID      string `json:"id"`
 	Version string `json:"version,omitempty"`
 	Ready   bool   `json:"ready"`
+	// Reason says why an installed provider is not ready, for example a failed sandbox self-test.
+	Reason string `json:"reason,omitempty"`
+	// SandboxedCommands reports that the provider can run repository commands, such as tests, inside
+	// its sandbox on this worker. Without it the provider edits files but cannot execute anything.
+	SandboxedCommands bool `json:"sandboxed_commands"`
 }
 
 type Project struct {
@@ -80,10 +85,9 @@ type Project struct {
 }
 
 type Heartbeat struct {
-	Name                string           `json:"name"`
-	Projects            []Project        `json:"projects"`
-	AgentRuntimeEnabled *bool            `json:"agent_runtime_enabled,omitempty"`
-	Providers           []ProviderStatus `json:"providers,omitempty"`
+	Name      string           `json:"name"`
+	Projects  []Project        `json:"projects"`
+	Providers []ProviderStatus `json:"providers,omitempty"`
 }
 
 type AgentProfile struct {

@@ -52,9 +52,8 @@ func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
 			t.Errorf("request = %s %s, want worker heartbeat PUT", r.Method, r.URL.Path)
 		}
 		var body struct {
-			Name                string `json:"name"`
-			AgentRuntimeEnabled bool   `json:"agent_runtime_enabled"`
-			Projects            []struct {
+			Name     string `json:"name"`
+			Projects []struct {
 				ID     string `json:"id"`
 				Name   string `json:"name"`
 				Branch string `json:"branch"`
@@ -63,7 +62,6 @@ func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
 			} `json:"projects"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name != "dev-machine" ||
-			!body.AgentRuntimeEnabled ||
 			len(body.Projects) != 1 || body.Projects[0].ID != project.ID ||
 			body.Projects[0].Name != "repo" || body.Projects[0].Branch != project.Branch ||
 			body.Projects[0].Remote != project.Remote || body.Projects[0].Path != "" {
@@ -76,10 +74,9 @@ func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtimeEnabled := true
 	if err := sendHeartbeat(context.Background(), server.Client(), baseURL,
 		"0123456789abcdef0123456789abcdef", workerapi.Heartbeat{Name: "dev-machine",
-			Projects: wireProjects([]discoveredProject{project}), AgentRuntimeEnabled: &runtimeEnabled}); err != nil {
+			Projects: wireProjects([]discoveredProject{project})}); err != nil {
 		t.Fatalf("sendHeartbeat: %v", err)
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -77,9 +76,7 @@ func loadWorkerConfig() (*workerConfig, error) {
 			return nil, fmt.Errorf("ZENCHRON_WORKER_CONFIG repository %q is invalid", repository)
 		}
 		for name, value := range settings.Environment {
-			// Operator-set variables must not reintroduce what providerEnvironment removes.
-			if !environmentNamePattern.MatchString(name) || strings.ContainsRune(value, 0) ||
-				len(providerEnvironment([]string{name + "=" + value})) == 0 {
+			if !environmentNamePattern.MatchString(name) || strings.ContainsRune(value, 0) || reservedEnvironmentName(name) {
 				return nil, fmt.Errorf("ZENCHRON_WORKER_CONFIG repository %q sets an invalid or reserved variable %q", repository, name)
 			}
 		}
@@ -152,9 +149,10 @@ func loadRunLimits() (runLimits, error) {
 	return limits, nil
 }
 
-// runVerification executes the operator's commands in the worktree. Every command must exit zero.
+// runVerification executes the operator's commands in the worktree, under the attempt's ownership so
+// they stop with the worker like the provider does. Every command must exit zero.
 func runVerification(
-	ctx context.Context, worktree string, commands [][]string, environment []string, timeout time.Duration,
+	ctx context.Context, workspace runWorkspace, commands [][]string, timeout time.Duration,
 	emit func(kind, message string),
 ) string {
 	if len(commands) == 0 {
@@ -166,11 +164,14 @@ func runVerification(
 	for _, arguments := range commands {
 		label := strings.Join(arguments, " ")
 		output := &tailBuffer{limit: verificationOutputTail}
-		command := exec.CommandContext(verifyCtx, arguments[0], arguments[1:]...)
-		command.Dir, command.Env = worktree, environment
+		command := workspace.owner.command(verifyCtx, arguments)
+		command.Dir, command.Env = workspace.path, workspace.environment
 		command.Stdout, command.Stderr = output, output
-		ownProcessGroup(command)
-		err := command.Run()
+		sweep, err := workspace.owner.start(command)
+		if err == nil {
+			err = command.Wait()
+			sweep()
+		}
 		if errors.Is(verifyCtx.Err(), context.DeadlineExceeded) {
 			emit("verification", fmt.Sprintf("timed out after %s: %s", timeout, label))
 			return workerapi.VerificationFailed

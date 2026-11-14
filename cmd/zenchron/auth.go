@@ -112,7 +112,8 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 				http.Error(w, "authentication required", http.StatusUnauthorized)
 				return
 			}
-			writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "local": false, "login": user.Login, "avatar_url": user.AvatarURL})
+			writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "local": false, "login": user.Login,
+				"avatar_url": user.AvatarURL, "admin": config.isAdmin(user.Login)})
 			return
 		}
 		if r.URL.Path == "/api/v1/auth/logout" && r.Method == http.MethodPost {
@@ -129,6 +130,21 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		if config != nil && r.URL.Path == gitHubWebhookPath && r.Method == http.MethodPost {
+			// GitHub has no session. The handler authenticates the delivery by its signature, and gets the
+			// current policy so that it can decide on whose authority a delivery may queue work.
+			access := requestAccess{}
+			if config.access != nil {
+				policy, err := config.access.current()
+				if err != nil {
+					http.Error(w, "access policy is unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				access = requestAccess{enforced: true, policy: policy}
+			}
+			next.ServeHTTP(w, withRequestAccess(r, access))
+			return
+		}
 		if config != nil && strings.HasPrefix(r.URL.Path, "/api/v1/") {
 			access, status, message := config.authorize(r)
 			if status != 0 {
@@ -136,6 +152,10 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 				return
 			}
 			r = withRequestAccess(r, access)
+			if strings.HasPrefix(r.URL.Path, "/api/v1/admin/") && config.access != nil {
+				config.access.serveAdmin(w, r)
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -166,7 +186,31 @@ func (config *authConfig) authorize(r *http.Request) (requestAccess, int, string
 		return requestAccess{}, 0, ""
 	}
 	login := strings.ToLower(user.Login)
-	return requestAccess{enforced: true, user: login, repositories: policy.Users[login], policy: policy}, 0, ""
+	return requestAccess{enforced: true, user: login, admin: slices.Contains(policy.Admins, login),
+		repositories: policy.Users[login], policy: policy}, 0, ""
+}
+
+// maySignIn reports whether a GitHub login may hold a session: the operator allowlisted it, or the
+// access policy names it. Removing a user from the policy therefore ends their sessions at the next
+// request unless the operator also allowlisted them.
+func (config *authConfig) maySignIn(login string) bool {
+	login = strings.ToLower(login)
+	if slices.Contains(config.allowedUsers, login) {
+		return true
+	}
+	if config.access == nil {
+		return false
+	}
+	policy, err := config.access.current()
+	return err == nil && policy.knows(login)
+}
+
+func (config *authConfig) isAdmin(login string) bool {
+	if config.access == nil {
+		return false
+	}
+	policy, err := config.access.current()
+	return err == nil && slices.Contains(policy.Admins, strings.ToLower(login))
 }
 
 // authorizeWorker accepts the legacy shared token only when no access file is configured. With an
@@ -224,10 +268,6 @@ func isWorkerAPIRequest(method, path string) bool {
 	switch {
 	case len(parts) == 5 && parts[4] == "heartbeat" && method == http.MethodPut:
 		return true
-	case len(parts) == 6 && parts[4] == "worktrees" && parts[5] == "claim" && method == http.MethodPost:
-		return true
-	case len(parts) == 6 && parts[4] == "worktrees" && method == http.MethodPut:
-		return true
 	case len(parts) == 6 && parts[4] == "agent-runs" && parts[5] == "claim" && method == http.MethodPost:
 		return true
 	case len(parts) == 7 && parts[4] == "agent-runs" && parts[6] == "progress" && method == http.MethodPost:
@@ -272,7 +312,7 @@ func completeGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authCon
 		http.Error(w, "GitHub sign-in could not verify your account; check the OAuth app credentials and retry", http.StatusBadGateway)
 		return
 	}
-	if !slices.Contains(config.allowedUsers, strings.ToLower(user.Login)) {
+	if !config.maySignIn(user.Login) {
 		http.Error(w, "GitHub account is not authorized", http.StatusForbidden)
 		return
 	}
@@ -381,7 +421,7 @@ func readSession(r *http.Request, config *authConfig) (authUser, bool) {
 	}
 	var user authUser
 	if json.Unmarshal(data, &user) != nil || user.Login == "" || user.ExpiresAt <= time.Now().Unix() ||
-		!slices.Contains(config.allowedUsers, strings.ToLower(user.Login)) {
+		!config.maySignIn(user.Login) {
 		return authUser{}, false
 	}
 	return user, true

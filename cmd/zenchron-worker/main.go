@@ -85,22 +85,18 @@ func run() error {
 	}
 	runner := &agentRunner{client: newWorkerHTTPClient(workerToken), baseURL: baseURL, workerID: workerID,
 		token: workerToken, providers: newCLIProviders(), config: config}
-	if runner.chat, err = loadAgentRuntime(); err != nil {
-		return err
-	}
 	if runner.limits, err = loadRunLimits(); err != nil {
 		return err
 	}
 	// ponytail: providers are detected once at startup; restart the worker after installing or signing in to a CLI.
 	self, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("locate the worker binary for the provider guard: %w", err)
+		return fmt.Errorf("locate the worker binary for the process guard: %w", err)
 	}
+	runner.guard = []string{self, "guard"}
 	for _, provider := range runner.providers {
-		provider.guard = []string{self, "guard"}
 		provider.detect(ctx)
 	}
-	runtimeEnabled := runner.chat != nil
 	ticker := time.NewTicker(workerHeartbeatInterval)
 	defer ticker.Stop()
 	for {
@@ -108,8 +104,7 @@ func run() error {
 		if err != nil {
 			log.Printf("project discovery failed: %v", err)
 		} else {
-			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects),
-				AgentRuntimeEnabled: &runtimeEnabled, Providers: runner.providerStatuses()}
+			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects), Providers: runner.providerStatuses()}
 			if err := sendHeartbeat(ctx, runner.client, baseURL, workerID, heartbeat); err != nil {
 				log.Printf("worker heartbeat failed: %v", err)
 			} else if err := processWorkerCommands(ctx, runner, heartbeat, projects); err != nil {
