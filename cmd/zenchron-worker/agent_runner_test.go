@@ -529,13 +529,16 @@ func TestCleanupWorktreesKeepsLockedAndModifiedWorktrees(t *testing.T) {
 	}
 }
 
-func TestProviderEnvironmentRemovesWorkerAndBillingCredentials(t *testing.T) {
+func TestProviderEnvironmentInheritsOnlyNamedVariables(t *testing.T) {
 	environment := providerEnvironment([]string{"PATH=/bin", "HOME=/home/dev", "ZENCHRON_WORKER_TOKEN=secret",
-		"ZENCHRON_LLM_API_KEY=secret", "GH_TOKEN=secret", "GITHUB_TOKEN=secret", "ANTHROPIC_API_KEY=secret",
+		"GH_TOKEN=secret", "GITHUB_TOKEN=secret", "ANTHROPIC_API_KEY=secret",
 		"OPENAI_API_KEY=secret", "CODEX_API_KEY=secret", "SSH_AUTH_SOCK=/tmp/agent.sock", "GH_ENTERPRISE_TOKEN=secret",
 		"GITHUB_ENTERPRISE_TOKEN=secret", "AWS_ACCESS_KEY_ID=id", "AWS_SECRET_ACCESS_KEY=secret", "AWS_SESSION_TOKEN=secret",
-		"GOOGLE_APPLICATION_CREDENTIALS=/home/dev/key.json"})
-	if strings.Join(environment, " ") != "PATH=/bin HOME=/home/dev" {
+		"GOOGLE_APPLICATION_CREDENTIALS=/home/dev/key.json",
+		// Secrets under names no denylist could anticipate must not be inherited either.
+		"NPM_TOKEN=secret", "DATABASE_URL=postgres://user:secret@db/app", "MY_COMPANY_DEPLOY_KEY=secret",
+		"LC_ALL=en_US.UTF-8", "HTTPS_PROXY=http://proxy:3128"})
+	if strings.Join(environment, " ") != "PATH=/bin HOME=/home/dev LC_ALL=en_US.UTF-8 HTTPS_PROXY=http://proxy:3128" {
 		t.Fatalf("provider environment = %v", environment)
 	}
 }

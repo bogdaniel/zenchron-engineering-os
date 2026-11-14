@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -18,6 +19,13 @@ import (
 const (
 	guardTestRole     = "WORKER_GUARD_TEST_ROLE"
 	guardTestWorktree = "WORKER_GUARD_TEST_WORKTREE"
+	guardTestProvider = "WORKER_GUARD_TEST_PROVIDER"
+
+	// groupProvider keeps a child in the provider's process group. sessionProvider starts its child the
+	// way Codex starts a tool command: as a session of its own, without the inherited ownership lock, so
+	// neither a signal to the group nor the lock reaches it.
+	groupProvider   = `sleep 60 & echo $! ; wait`
+	sessionProvider = `perl -MPOSIX -e 'POSIX::setsid(); exec "sleep", "61"' 3>&- & echo $! ; wait`
 )
 
 // TestMain lets the test binary stand in for the worker binary: as the `guard` command, and as a worker
@@ -37,7 +45,7 @@ func runWorkerStandIn() int {
 	if err != nil {
 		return 3
 	}
-	provider := owner.command(context.Background(), []string{"sh", "-c", "sleep 60 & echo $! ; wait"})
+	provider := owner.command(context.Background(), []string{"sh", "-c", os.Getenv(guardTestProvider)})
 	provider.Env = append(os.Environ(), guardTestRole+"=guard")
 	provider.Stdout = os.Stdout
 	if _, err := owner.start(provider); err != nil {
@@ -61,11 +69,11 @@ func waitUntilGone(pid int, limit time.Duration) bool {
 
 // startWorkerStandIn returns the stand-in worker, the worktree it claimed, and the pid of a process its
 // provider started in the background.
-func startWorkerStandIn(t *testing.T) (worker *exec.Cmd, worktree string, grandchild int) {
+func startWorkerStandIn(t *testing.T, provider string) (worker *exec.Cmd, worktree string, grandchild int) {
 	t.Helper()
 	worktree = filepath.Join(t.TempDir(), "worktree")
 	worker = exec.Command(os.Args[0])
-	worker.Env = append(os.Environ(), guardTestRole+"=worker", guardTestWorktree+"="+worktree)
+	worker.Env = append(os.Environ(), guardTestRole+"=worker", guardTestWorktree+"="+worktree, guardTestProvider+"="+provider)
 	output, err := worker.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -87,18 +95,83 @@ func startWorkerStandIn(t *testing.T) (worker *exec.Cmd, worktree string, grandc
 	return worker, worktree, grandchild
 }
 
-func recordedOwnerGroup(t *testing.T, worktree string) int {
+func recordedOwner(t *testing.T, worktree string) ownerRecord {
 	t.Helper()
-	data, err := os.ReadFile(worktree + ".owner")
-	group, convertErr := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil || convertErr != nil || group <= 1 {
-		t.Fatalf("recorded owner group = %q, %v, %v", data, err, convertErr)
+	file, err := os.Open(worktree + ".owner.processes")
+	if err != nil {
+		t.Fatal(err)
 	}
-	return group
+	defer file.Close()
+	return readOwnerRecord(file)
+}
+
+// waitUntilRecorded waits for the guard to have seen a process, as it does within one polling interval.
+func waitUntilRecorded(t *testing.T, worktree string, pid int) ownerRecord {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		record := recordedOwner(t, worktree)
+		if record.group > 1 && slices.ContainsFunc(record.members, func(member processIdentity) bool { return member.pid == pid }) {
+			return record
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("the guard never recorded process %d: %#v", pid, recordedOwner(t, worktree))
+	return ownerRecord{}
+}
+
+func TestGuardStopsProcessThatLeftTheProviderGroupWhenTheWorkerIsKilled(t *testing.T) {
+	worker, worktree, escaped := startWorkerStandIn(t, sessionProvider)
+	waitUntilRecorded(t, worktree, escaped)
+	if err := worker.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	if !waitUntilGone(escaped, cliTerminationGrace+5*time.Second) {
+		t.Fatal("a process that left the provider's group survived the death of the worker")
+	}
+}
+
+func TestNextAttemptStopsProcessThatLeftTheGroupAfterWorkerAndGuardDied(t *testing.T) {
+	worker, worktree, escaped := startWorkerStandIn(t, sessionProvider)
+	guard := waitUntilRecorded(t, worktree, escaped).group
+	if err := syscall.Kill(guard, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	_ = worker.Wait()
+	if !waitUntilGone(guard, 5*time.Second) || !processExists(escaped) {
+		t.Fatalf("setup: guard gone = %v, escaped process alive = %v", !processExists(guard), processExists(escaped))
+	}
+	owner, err := acquireWorktree(context.Background(), worktree, nil)
+	if err != nil {
+		t.Fatalf("a new attempt could not claim the worktree: %v", err)
+	}
+	defer owner.release()
+	if !owner.tookOver || !waitUntilGone(escaped, 2*time.Second) {
+		t.Fatalf("took over = %v, escaped process alive = %v", owner.tookOver, processExists(escaped))
+	}
+}
+
+func TestRecordedProcessIsNotKilledOnceItsPidBelongsToAnotherProcess(t *testing.T) {
+	bystander := exec.Command("sleep", "60")
+	if err := bystander.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = bystander.Process.Kill()
+		_ = bystander.Wait()
+	}()
+	// The record names the bystander's pid with the start time of a process that no longer exists.
+	if killed := killProcesses([]processIdentity{{pid: bystander.Process.Pid, started: "Thu Jan  1 00:00:00 1970"}}); killed != 0 ||
+		!processExists(bystander.Process.Pid) {
+		t.Fatalf("killed %d process(es); bystander alive = %v", killed, processExists(bystander.Process.Pid))
+	}
 }
 
 func TestGuardStopsProviderProcessesWhenTheWorkerIsKilled(t *testing.T) {
-	worker, worktree, grandchild := startWorkerStandIn(t)
+	worker, worktree, grandchild := startWorkerStandIn(t, groupProvider)
 	// SIGKILL gives the worker no chance to clean up; only the guard can stop what it started.
 	if err := worker.Process.Kill(); err != nil {
 		t.Fatal(err)
@@ -115,8 +188,8 @@ func TestGuardStopsProviderProcessesWhenTheWorkerIsKilled(t *testing.T) {
 }
 
 func TestNextAttemptStopsProviderThatOutlivedBothWorkerAndGuard(t *testing.T) {
-	worker, worktree, grandchild := startWorkerStandIn(t)
-	guard := recordedOwnerGroup(t, worktree)
+	worker, worktree, grandchild := startWorkerStandIn(t, groupProvider)
+	guard := recordedOwner(t, worktree).group
 	// Killing the guard first removes the only process that would have stopped the provider.
 	if err := syscall.Kill(guard, syscall.SIGKILL); err != nil {
 		t.Fatal(err)
@@ -157,7 +230,7 @@ func TestAttemptFailsClosedWhileALeftoverProcessCannotBeStopped(t *testing.T) {
 		_ = leftover.Wait()
 	}()
 	// A process that left the recorded group still holds the claim but cannot be signalled through it.
-	if err := first.record(0); err != nil {
+	if err := writeOwnerRecord(first.record, ownerRecord{}); err != nil {
 		t.Fatal(err)
 	}
 	first.release()
@@ -195,7 +268,8 @@ func TestGuardReturnsTheProviderExitCode(t *testing.T) {
 
 func TestCLIRunThroughTheGuardVerifiesAndDeliversItsResult(t *testing.T) {
 	harness := newRunHarness(t, fakeChangeScript, [][]string{{"grep", "-q", "changed by agent", "README.md"}})
-	t.Setenv(guardTestRole, "guard")
+	// The role reaches the stand-in guard the way an operator variable reaches a real process.
+	harness.runner.config.Repositories[""].Environment[guardTestRole] = "guard"
 	harness.runner.guard = []string{os.Args[0]}
 	if err := harness.process(); err != nil {
 		t.Fatalf("process run: %v", err)
@@ -210,6 +284,36 @@ const strayWriterScript = `cat > /dev/null
 (while :; do echo stray >> stray.log; sleep 0.05; done) &
 echo '{"type":"item.completed","item":{"id":"m1","type":"agent_message","text":"done"}}'
 `
+
+// sessionToolScript starts a tool command as its own session, as Codex does, and finishes while that
+// command is still running.
+const sessionToolScript = `cat > /dev/null
+perl -MPOSIX -e 'POSIX::setsid(); exec "sleep", "62"' 3>&- </dev/null >/dev/null 2>&1 &
+echo $! > tool.pid
+sleep 2
+echo '{"type":"item.completed","item":{"id":"m1","type":"agent_message","text":"done"}}'
+`
+
+func TestGuardedRunStopsAToolCommandThatOutlivesTheProvider(t *testing.T) {
+	harness := newRunHarness(t, sessionToolScript, nil)
+	harness.runner.config.Repositories[""].Environment[guardTestRole] = "guard"
+	harness.runner.guard = []string{os.Args[0]}
+	if err := harness.process(); err != nil {
+		t.Fatalf("process run: %v", err)
+	}
+	if result := harness.result(); result.Status != "succeeded" {
+		t.Fatalf("result = %#v", result)
+	}
+	data, err := os.ReadFile(filepath.Join(harness.worktree, "tool.pid"))
+	tool, convertErr := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || convertErr != nil {
+		t.Fatalf("tool pid = %q, %v, %v", data, err, convertErr)
+	}
+	t.Cleanup(func() { _ = syscall.Kill(tool, syscall.SIGKILL) })
+	if !waitUntilGone(tool, 2*time.Second) {
+		t.Fatal("a tool command started in its own session kept running after the provider finished")
+	}
+}
 
 func TestRunLeavesNoProviderProcessWritingInTheWorktree(t *testing.T) {
 	harness := newRunHarness(t, strayWriterScript, nil)

@@ -129,17 +129,35 @@ func (provider *cliProvider) sandboxesCommands() bool {
 	return provider.commandSandbox == nil || provider.commandSandbox()
 }
 
-// providerEnvironment keeps worker, GitHub, SSH-agent, and cloud credentials away from the agent and from
-// verification commands, and removes provider API keys so a subscription-authenticated CLI is never
-// silently switched to paid API billing. The worker's own Git push does not use this environment.
-// ponytail: a denylist of well-known names; switch to an allowlist if operators need a stricter boundary.
+// inheritedEnvironment names the only worker variables that provider and verification processes
+// inherit: what a CLI and a build tool need to find programs, the user's directories, certificates and
+// proxies. Everything else in the worker's environment, such as tokens and connection strings of the
+// developer's shell, never reaches an agent, so it cannot end up in an event or a pull request.
+// Operators add what a repository needs under `environment` in the worker configuration.
+var inheritedEnvironment = []string{
+	"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "TMPDIR", "TZ", "LANG", "LANGUAGE", "__CF_USER_TEXT_ENCODING",
+	"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+	"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS",
+	"XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR",
+	"CODEX_HOME", "CLAUDE_CONFIG_DIR",
+}
+
+// providerEnvironment reduces the worker's environment to the inherited names. The worker's own Git
+// push does not use this environment.
 func providerEnvironment(environment []string) []string {
-	blocked := []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
-		"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "SSH_AUTH_SOCK", "GOOGLE_APPLICATION_CREDENTIALS"}
 	return slices.DeleteFunc(slices.Clone(environment), func(entry string) bool {
 		name, _, _ := strings.Cut(entry, "=")
-		return strings.HasPrefix(name, "ZENCHRON_") || strings.HasPrefix(name, "AWS_") || slices.Contains(blocked, name)
+		return !slices.Contains(inheritedEnvironment, name) && !strings.HasPrefix(name, "LC_")
 	})
+}
+
+// reservedEnvironmentName reports names an operator may not set for a repository: worker and GitHub
+// credentials, and provider API keys, which would silently switch a subscription-authenticated CLI to
+// paid API billing.
+func reservedEnvironmentName(name string) bool {
+	reserved := []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
+		"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "SSH_AUTH_SOCK"}
+	return strings.HasPrefix(name, "ZENCHRON_") || slices.Contains(reserved, name)
 }
 
 func cliPrompt(command workerapi.AgentRunCommand) string {

@@ -76,9 +76,7 @@ func loadWorkerConfig() (*workerConfig, error) {
 			return nil, fmt.Errorf("ZENCHRON_WORKER_CONFIG repository %q is invalid", repository)
 		}
 		for name, value := range settings.Environment {
-			// Operator-set variables must not reintroduce what providerEnvironment removes.
-			if !environmentNamePattern.MatchString(name) || strings.ContainsRune(value, 0) ||
-				len(providerEnvironment([]string{name + "=" + value})) == 0 {
+			if !environmentNamePattern.MatchString(name) || strings.ContainsRune(value, 0) || reservedEnvironmentName(name) {
 				return nil, fmt.Errorf("ZENCHRON_WORKER_CONFIG repository %q sets an invalid or reserved variable %q", repository, name)
 			}
 		}
