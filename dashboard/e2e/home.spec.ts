@@ -404,7 +404,7 @@ test('Reports summarizes live objectives and run records without inventing deliv
   const run = await page.evaluate(async () => {
     const agentResponse = await fetch('/api/v1/agents', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Report agent', provider: 'custom', model: 'review-v1', tools: [] }),
+      body: JSON.stringify({ name: 'Report agent', provider: 'codex-cli', model: 'default', tools: [] }),
     });
     const agent = await agentResponse.json();
     const projects = await fetch('/api/v1/projects').then((response) => response.json());

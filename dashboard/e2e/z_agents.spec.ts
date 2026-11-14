@@ -407,8 +407,8 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Profile name').fill(name);
   await dialog.getByLabel('Description').fill('Review a bounded change set.');
-  await dialog.getByLabel('Provider identifier').fill('custom');
-  await dialog.getByLabel('Model identifier').fill('review-v1');
+  await dialog.getByLabel('Provider identifier').fill('codex-cli');
+  await dialog.getByLabel('Model identifier').fill('default');
   await dialog.getByLabel('System prompt').fill('Review safely and report evidence.');
   await dialog.getByLabel('Goal prompt').fill('Find defects in the change.');
   await dialog.getByLabel('Read repository files').check();
@@ -419,16 +419,16 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
   await expect(page.locator('.agents-detail-heading h3')).toHaveCSS('font-weight', '650');
   const profileSearch = page.getByRole('textbox', { name: 'Search agents' });
   await profileSearch.fill(name);
-  await expect(page.locator('.agent-row').filter({ hasText: name }).getByText('review-v1 · custom')).toBeVisible();
+  await expect(page.locator('.agent-row').filter({ hasText: name }).getByText('default · codex-cli')).toBeVisible();
   await profileSearch.fill('no matching profile');
   await expect(page.getByText('No profiles match this search.')).toBeVisible();
   await profileSearch.fill('');
   await page.getByRole('button', { name: 'Run Agent' }).click();
   const runDialog = page.getByRole('dialog', { name: 'Queue agent run' });
-  await expect(runDialog.locator('.agents-queue-note')).toContainText('reports an OpenAI-compatible endpoint configured');
+  await expect(runDialog.locator('.agents-queue-note')).toContainText('reports codex-cli 0.0.0-e2e installed and signed in.');
   await runDialog.getByLabel('Project').click();
   await page.getByRole('option', { name: 'zenchron-engineering-os' }).click();
-  await expect(runDialog.getByLabel('Project')).toHaveValue(/^zenchron-engineering-os · .+ · runtime configured$/);
+  await expect(runDialog.getByLabel('Project')).toHaveValue(/^zenchron-engineering-os · .+ · codex-cli ready$/);
   await runDialog.getByLabel('Task prompt').fill('Review the current changes.');
   await runDialog.getByRole('button', { name: 'Queue run', exact: true }).click();
   await expect(runDialog).toBeHidden();
@@ -441,7 +441,7 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
   await expect(page.getByRole('button', { name: 'Save profile' })).toHaveCount(0);
   await page.getByRole('button', { name: 'More agent actions' }).click();
   await page.getByRole('menuitem', { name: 'Edit profile' }).click();
-  await detail.getByLabel('Model', { exact: true }).fill('review-v2');
+  await detail.getByLabel('Model', { exact: true }).fill('gpt-e2e');
   await detail.getByRole('tab', { name: 'Prompts' }).click();
   const systemPrompt = detail.locator('.agent-prompt-editor').first();
   await expect(systemPrompt.locator('.monaco-editor')).toBeVisible();
@@ -450,7 +450,7 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
   await page.keyboard.insertText('Review safely and cite changed files.');
   await page.getByRole('button', { name: 'Save profile' }).click();
   await expect(page.getByRole('button', { name: 'Save profile' })).toHaveCount(0);
-  await expect(page.locator('.agent-row').filter({ hasText: name }).getByText('review-v2 · custom')).toBeVisible();
+  await expect(page.locator('.agent-row').filter({ hasText: name }).getByText('gpt-e2e · codex-cli')).toBeVisible();
   await page.getByRole('button', { name: 'Disable', exact: true }).click();
   await expect(page.getByText('disabled', { exact: true }).first()).toBeVisible();
 });
@@ -462,7 +462,7 @@ test('Agents dashboard completes a run and resumes requested review changes on t
   const profile = await page.evaluate(async () => {
     const profileResponse = await fetch('/api/v1/agents', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'E2E Reviewer', provider: 'custom', model: 'review-v1', tools: ['code.write'] }),
+      body: JSON.stringify({ name: 'E2E Reviewer', provider: 'codex-cli', model: 'default', tools: ['code.write'] }),
     });
     if (!profileResponse.ok) throw new Error(`E2E profile setup failed: ${await profileResponse.text()}`);
     return profileResponse.json();
@@ -471,7 +471,7 @@ test('Agents dashboard completes a run and resumes requested review changes on t
   await page.locator('.agent-row').filter({ hasText: 'E2E Reviewer' }).click();
   await page.getByRole('button', { name: 'Run Agent' }).click();
   const queueDialog = page.getByRole('dialog', { name: 'Queue agent run' });
-  await expect(queueDialog.locator('.agents-queue-note')).toContainText('reports an OpenAI-compatible endpoint configured');
+  await expect(queueDialog.locator('.agents-queue-note')).toContainText('reports codex-cli 0.0.0-e2e installed and signed in.');
   await queueDialog.getByLabel('Task prompt').fill('Summarize the project structure.');
   await queueDialog.getByRole('button', { name: 'Queue run', exact: true }).click();
   const row = page.locator('.agents-detail-panel .agents-run-row')
@@ -542,7 +542,7 @@ test('Reviews can cancel an active worker run and retain its partial branch diff
   const run = await page.evaluate(async () => {
     const profileResponse = await fetch('/api/v1/agents', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Cancellation E2E', provider: 'custom', model: 'review-v1', tools: ['code.write'] }),
+      body: JSON.stringify({ name: 'Cancellation E2E', provider: 'codex-cli', model: 'default', tools: ['code.write'] }),
     });
     const profile = await profileResponse.json();
     const projects = await fetch('/api/v1/projects').then((response) => response.json());
@@ -558,10 +558,11 @@ test('Reviews can cancel an active worker run and retain its partial branch diff
     return { status: response.status, run: await response.json() };
   });
   expect(run.status).toBe(202);
-  await expect.poll(async () => {
-    const response = await page.request.get('http://127.0.0.1:8082/test-state');
-    return (await response.json()).waitingForCancellation;
-  }, { timeout: 15_000 }).toBe(true);
+  // The fake CLI writes the partial file and then starts a tool that never returns; its start event is the cue.
+  await expect.poll(() => page.evaluate(async (runID) => {
+    const events = await fetch(`/api/v1/agent-runs/${runID}/events`).then((response) => response.json());
+    return events.some((event: { kind: string; message: string }) => event.kind === 'tool' && event.message === '$ sleep 600');
+  }, run.run.id), { timeout: 15_000 }).toBe(true);
 
   await page.goto('/#reviews');
   await page.getByRole('button', { name: 'Local branches' }).click();
@@ -585,7 +586,7 @@ test('a real worker run shows its control-plane and worker events as evidence', 
   const runID = await page.evaluate(async (taskPrompt) => {
     const profile = await fetch('/api/v1/agents', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Evidence Reviewer', provider: 'custom', model: 'review-v1', tools: ['code.write'] }),
+      body: JSON.stringify({ name: 'Evidence Reviewer', provider: 'codex-cli', model: 'default', tools: ['code.write'] }),
     }).then((response) => response.json());
     const projects = await fetch('/api/v1/projects').then((response) => response.json());
     const run = await fetch('/api/v1/agent-runs', {
@@ -609,6 +610,9 @@ test('a real worker run shows its control-plane and worker events as evidence', 
   const events = page.getByRole('region', { name: 'Run events' });
   await expect(events).toContainText('Attempt 1 claimed by worker playwright-worker');
   await expect(events).toContainText('Isolated worktree ready on zenchron/agent-run/');
+  await expect(events).toContainText('codex-cli codex-cli 0.0.0-e2e started');
+  await expect(events).toContainText('$ cat README.md');
+  await expect(events).toContainText('changed 1 file(s)');
   await expect(events).toContainText('Attempt finished: succeeded');
   await expect(page.getByRole('region', { name: 'Run attempts' })).toContainText('Attempt 1Succeeded');
 });

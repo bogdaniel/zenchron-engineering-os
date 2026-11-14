@@ -69,9 +69,8 @@ async function request(base, path, options) {
 }
 
 try {
-  const [apiPort, modelPort] = await Promise.all([freePort(), freePort()]);
+  const apiPort = await freePort();
   const apiURL = `http://127.0.0.1:${apiPort}`;
-  const modelURL = `http://127.0.0.1:${modelPort}`;
   const workerToken = randomBytes(32).toString('hex');
   const sessionSecret = randomBytes(32).toString('hex');
   const session = Buffer.from(JSON.stringify({
@@ -98,10 +97,6 @@ try {
   const baseEnv = { ...process.env };
   for (const name of ['ZENCHRON_GITHUB_TOKEN', 'ZENCHRON_GITHUB_APP_ID', 'ZENCHRON_GITHUB_INSTALLATION_ID',
     'ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH']) delete baseEnv[name];
-  const model = start('model', 'node', ['dashboard/e2e/mock-llm.mjs'], {
-    ...baseEnv, MOCK_LLM_PORT: String(modelPort),
-  });
-  await waitFor(`${modelURL}/healthz`, model);
   const api = start('control plane', apiBinary, [], {
     ...baseEnv, ZENCHRON_LISTEN_ADDR: `127.0.0.1:${apiPort}`,
     ZENCHRON_DATA_DIR: join(temporary, 'state'),
@@ -125,7 +120,8 @@ try {
     ...baseEnv, ZENCHRON_CONTROL_PLANE_URL: apiURL, ZENCHRON_WORKER_NAME: 'process-e2e-worker',
     ZENCHRON_PROJECTS_ROOT: join(temporary, 'projects'), ZENCHRON_WORKTREES_ROOT: worktrees,
     ZENCHRON_WORKER_TOKEN: workerToken,
-    ZENCHRON_LLM_BASE_URL: `${modelURL}/v1`, ZENCHRON_LLM_API_KEY: 'e2e-test-key',
+    // The worker finds `codex` here first: a deterministic fake CLI, so the run uses the real CLI process path.
+    PATH: `${join(repository, 'dashboard/e2e/fake-cli')}:${process.env.PATH ?? ''}`,
   });
 
   const deadline = Date.now() + 15_000;
@@ -139,27 +135,47 @@ try {
   const checkout = projects.find((item) => item.name === 'sample');
   if (!checkout) throw new Error(`worker did not report the fixture checkout: ${worker.output}`);
 
-  const profile = await request(apiURL, '/api/v1/agents', {
+  const createProfile = (name, tools) => request(apiURL, '/api/v1/agents', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'Process E2E agent', description: 'Exercise the worker boundary.',
-      provider: 'custom', model: 'mock-model', system_prompt: 'Use only allowed tools.',
-      goal_prompt: 'Create agent-output.md.', tools: ['code.write'] }),
+    body: JSON.stringify({ name, description: 'Exercise the worker boundary.',
+      provider: 'codex-cli', model: 'default', system_prompt: 'Use only allowed tools.',
+      goal_prompt: 'Create agent-output.md.', tools }),
   });
-  const run = await request(apiURL, '/api/v1/agent-runs', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agent_id: profile.id, project_id: checkout.id, prompt: 'Create agent-output.md.' }),
-  });
-
-  let completed;
-  const runDeadline = Date.now() + 30_000;
-  while (Date.now() < runDeadline) {
-    const runs = await request(apiURL, '/api/v1/agent-runs');
-    completed = runs.find((item) => item.id === run.id);
-    if (completed?.status === 'succeeded' || completed?.status === 'failed') break;
-    if (worker.exitCode !== null) throw new Error(`worker exited during run: ${worker.output}`);
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+  // Queues a run and waits for the worker to finish it through the fake Codex CLI.
+  const finishRun = async (agent, prompt) => {
+    const queued = await request(apiURL, '/api/v1/agent-runs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_id: agent.id, project_id: checkout.id, prompt }),
+    });
+    const runDeadline = Date.now() + 30_000;
+    while (Date.now() < runDeadline) {
+      const runs = await request(apiURL, '/api/v1/agent-runs');
+      const current = runs.find((item) => item.id === queued.id);
+      if (current?.status === 'succeeded' || current?.status === 'failed') return current;
+      if (worker.exitCode !== null) throw new Error(`worker exited during run: ${worker.output}`);
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+    }
+    throw new Error(`agent run ${queued.id} did not finish`);
+  };
+  const profile = await createProfile('Process E2E agent', ['code.write']);
+  const completed = await finishRun(profile, 'Create agent-output.md.');
+  const run = completed;
+  if (completed.status !== 'succeeded') throw new Error(`agent run did not succeed: ${JSON.stringify(completed)}`);
+  const events = await request(apiURL, `/api/v1/agent-runs/${run.id}/events`);
+  for (const expected of ['codex-cli codex-cli 0.0.0-e2e started', '$ cat README.md', 'changed 1 file(s)',
+    'E2E model completed the requested task.', '120 input tokens, 30 output tokens']) {
+    if (!events.some((event) => event.message === expected)) {
+      throw new Error(`run events lack "${expected}": ${JSON.stringify(events)}`);
+    }
   }
-  if (completed?.status !== 'succeeded') throw new Error(`agent run did not succeed: ${JSON.stringify(completed)}`);
+  const failed = await finishRun(profile, 'Fail this run.');
+  if (failed.status !== 'failed' || failed.termination_reason !== 'provider_exit' || failed.commit_sha) {
+    throw new Error(`a failing provider did not fail the run: ${JSON.stringify(failed)}`);
+  }
+  const readOnly = await finishRun(await createProfile('Process E2E reader', []), 'Create agent-output.md.');
+  if (readOnly.status !== 'succeeded' || readOnly.commit_sha) {
+    throw new Error(`a profile without code.write changed the branch: ${JSON.stringify(readOnly)}`);
+  }
   const diff = await request(apiURL, `/api/v1/agent-runs/${run.id}/diff`);
   if (!diff.diff.includes('agent-output.md') || !diff.diff.includes('Created by the E2E model.')) {
     throw new Error(`completed run did not return the model-written diff: ${diff.diff}`);
@@ -176,7 +192,7 @@ try {
       writtenFile !== 'Created by the E2E model.\n') {
     throw new Error('agent output escaped its isolated branch or was not committed');
   }
-  console.log(`PASS: allowlisted dashboard session and authenticated worker ran ${profile.model} on ${checkout.name}, committed ${completed.branch}, and returned its diff.`);
+  console.log(`PASS: allowlisted dashboard session and authenticated worker ran ${profile.provider} on ${checkout.name}, committed ${completed.branch}, returned its diff and events, failed a failing provider, and kept a read-only profile from writing.`);
 } catch (error) {
   console.error(error);
   for (const { name, child } of children) if (child.output) console.error(`${name} log:\n${child.output}`);
