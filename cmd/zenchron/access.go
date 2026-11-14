@@ -207,11 +207,6 @@ func (access requestAccess) forUser(login string) requestAccess {
 		repositories: access.policy.Users[login], policy: access.policy}
 }
 
-// creator is what a new definition records as its creator.
-func (access requestAccess) creator() string {
-	return access.user
-}
-
 // mayDispatchTo reports whether the user may start work on a worker: their own, or a shared one.
 func (access requestAccess) mayDispatchTo(workerID string) bool {
 	if !access.enforced {

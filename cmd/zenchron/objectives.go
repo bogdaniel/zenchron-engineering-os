@@ -178,7 +178,7 @@ func (store *objectiveStore) create(w http.ResponseWriter, r *http.Request) {
 		ID: hex.EncodeToString(idBytes), Title: input.Title, Description: input.Description,
 		Owner: input.Owner, Product: input.Product, ProductID: input.ProductID,
 		Status: "in_progress", DueDate: input.DueDate,
-		CreatedAt: now, UpdatedAt: now, CreatedBy: accessFor(r).creator(),
+		CreatedAt: now, UpdatedAt: now, CreatedBy: accessFor(r).user,
 	}
 	store.mu.Lock()
 	store.items[item.ID] = item

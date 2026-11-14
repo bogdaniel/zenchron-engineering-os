@@ -157,7 +157,7 @@ func (store *agentProfileStore) create(w http.ResponseWriter, r *http.Request) {
 	}
 	profile.ID = hex.EncodeToString(idBytes)
 	profile.Version = 1
-	profile.CreatedBy = accessFor(r).creator()
+	profile.CreatedBy = accessFor(r).user
 	profile.UpdatedAt = time.Now().UTC()
 	store.mu.Lock()
 	store.items[profile.ID] = profile

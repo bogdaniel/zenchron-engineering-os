@@ -204,7 +204,7 @@ func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 	item := product{
 		ID: hex.EncodeToString(idBytes), Name: input.Name, Description: input.Description,
 		RepositoryIDs: repositoryIDs, CreatedAt: now, UpdatedAt: now,
-		CreatedBy: access.creator(), AccessRepositories: accessRepositories,
+		CreatedBy: access.user, AccessRepositories: accessRepositories,
 	}
 	store.mu.Lock()
 	if store.nameExists(access, item.Name, "") {

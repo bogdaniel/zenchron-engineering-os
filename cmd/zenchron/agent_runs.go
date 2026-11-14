@@ -334,7 +334,7 @@ func (store *agentRunStore) create(w http.ResponseWriter, r *http.Request) {
 		ProjectName: project.Name, Repository: project.GitRemote, Branch: workerapi.AgentRunBranch(hex.EncodeToString(id)),
 		BaseBranch: project.Branch, WorkerID: project.WorkerID, WorkerName: project.WorkerName, Prompt: input.Prompt,
 		Provider: profile.Provider, Status: "queued", CreatedAt: now, UpdatedAt: now, Profile: &profile,
-		CreatedBy:          accessFor(r).creator(),
+		CreatedBy:          accessFor(r).user,
 		PullRequestEnabled: store.registry.github.authConfigured() && isGitHubProject(project.GitRemote)}
 	if input.IssueNumber > 0 {
 		if status, message := store.attachIssue(r.Context(), &item, input.IssueNumber); status != 0 {
