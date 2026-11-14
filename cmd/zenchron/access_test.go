@@ -9,9 +9,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 const (
@@ -179,6 +182,66 @@ func TestWorkerRegistersOnlyApprovedRepositoriesAndUsersSeeOnlyTheirProjects(t *
 	}
 	if response := harness.user("bob", http.MethodPost, "/api/v1/projects/"+projectA+"/issues", `{"title":"x"}`); response.Code != http.StatusNotFound {
 		t.Errorf("Bob created an issue in project A: HTTP %d", response.Code)
+	}
+}
+
+func TestWorkerHeartbeatReportsSkippedProjectsWithoutDetails(t *testing.T) {
+	harness := newAccessHarness(t)
+	unrestricted := newMux()
+	unrestrictedResponse := httptest.NewRecorder()
+	unrestricted.ServeHTTP(unrestrictedResponse, httptest.NewRequest(http.MethodPut,
+		"/api/v1/workers/"+aliceWorkerID+"/heartbeat", strings.NewReader(
+			`{"name":"worker","projects":[`+projectJSON(projectA, repositoryC)+`]}`)))
+	if unrestrictedResponse.Code != http.StatusOK {
+		t.Fatalf("unrestricted heartbeat returned HTTP %d", unrestrictedResponse.Code)
+	}
+	var unrestrictedBody map[string]json.RawMessage
+	if err := json.Unmarshal(unrestrictedResponse.Body.Bytes(), &unrestrictedBody); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := unrestrictedBody["skipped_projects"]; exists {
+		t.Fatalf("unrestricted heartbeat included skipped_projects: %s", unrestrictedResponse.Body.String())
+	}
+
+	requestHeartbeat := func(workerID, token, projects string) *httptest.ResponseRecorder {
+		body := `{"name":"worker","projects":[` + projects + `]}`
+		return harness.worker(http.MethodPut, "/api/v1/workers/"+workerID+"/heartbeat", token, body)
+	}
+	if response := requestHeartbeat(bobWorkerID, bobToken, projectJSON(projectA, repositoryC)); response.Code != http.StatusOK {
+		t.Fatalf("Bob heartbeat returned HTTP %d", response.Code)
+	}
+	response := requestHeartbeat(aliceWorkerID, aliceToken,
+		projectJSON(strings.Repeat("d1", 16), repositoryA))
+	if response.Code != http.StatusOK {
+		t.Fatalf("approved heartbeat returned HTTP %d", response.Code)
+	}
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := body["skipped_projects"]; exists {
+		t.Fatalf("heartbeat with no skipped projects included skipped_projects: %s", response.Body.String())
+	}
+
+	response = requestHeartbeat(aliceWorkerID, aliceToken,
+		projectJSON(projectA, repositoryA)+","+projectJSON(strings.Repeat("e1", 16), repositoryC))
+	if response.Code != http.StatusOK {
+		t.Fatalf("heartbeat with skipped projects returned HTTP %d", response.Code)
+	}
+	var reply workerapi.HeartbeatResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &reply); err != nil {
+		t.Fatal(err)
+	}
+	want := []workerapi.SkippedProject{
+		{ID: projectA, Reason: workerapi.SkippedProjectIDRegisteredByAnotherWorker},
+		{ID: strings.Repeat("e1", 16), Reason: workerapi.SkippedProjectRepositoryNotGranted},
+	}
+	if !slices.Equal(reply.SkippedProjects, want) {
+		t.Fatalf("skipped projects = %#v, want %#v", reply.SkippedProjects, want)
+	}
+	if strings.Contains(response.Body.String(), repositoryA) || strings.Contains(response.Body.String(), repositoryC) ||
+		strings.Contains(response.Body.String(), bobWorkerID) {
+		t.Fatalf("heartbeat response disclosed repository or another worker: %s", response.Body.String())
 	}
 }
 

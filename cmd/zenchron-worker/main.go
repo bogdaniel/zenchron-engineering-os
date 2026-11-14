@@ -105,7 +105,10 @@ func run() error {
 			log.Printf("project discovery failed: %v", err)
 		} else {
 			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects), Providers: runner.providerStatuses()}
-			if err := sendHeartbeat(ctx, runner.client, baseURL, workerID, heartbeat); err != nil {
+			response, err := sendHeartbeat(ctx, runner.client, baseURL, workerID, heartbeat)
+			if err != nil {
+				log.Printf("worker heartbeat failed: %v", err)
+			} else if err := runner.logSkippedProjects(response, heartbeat.Projects); err != nil {
 				log.Printf("worker heartbeat failed: %v", err)
 			} else if err := processWorkerCommands(ctx, runner, heartbeat, projects); err != nil {
 				log.Printf("worker command failed: %v", err)
@@ -188,26 +191,30 @@ func newWorkerHTTPClient(token string) *http.Client {
 
 func sendHeartbeat(
 	ctx context.Context, client *http.Client, baseURL *url.URL, id string, heartbeat workerapi.Heartbeat,
-) error {
+) (workerapi.HeartbeatResponse, error) {
 	endpoint := *baseURL
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/api/v1/workers/" + id + "/heartbeat"
 	body, err := json.Marshal(heartbeat)
 	if err != nil {
-		return fmt.Errorf("encode heartbeat: %w", err)
+		return workerapi.HeartbeatResponse{}, fmt.Errorf("encode heartbeat: %w", err)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint.String(), bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create heartbeat request: %w", err)
+		return workerapi.HeartbeatResponse{}, fmt.Errorf("create heartbeat request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
-		return fmt.Errorf("send heartbeat: %w", err)
+		return workerapi.HeartbeatResponse{}, fmt.Errorf("send heartbeat: %w", err)
 	}
 	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("heartbeat returned HTTP %d", response.StatusCode)
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		return workerapi.HeartbeatResponse{}, fmt.Errorf("heartbeat returned HTTP %d", response.StatusCode)
 	}
-	return nil
+	var reply workerapi.HeartbeatResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, 4096)).Decode(&reply); err != nil {
+		return workerapi.HeartbeatResponse{}, fmt.Errorf("decode heartbeat response: %w", err)
+	}
+	return reply, nil
 }

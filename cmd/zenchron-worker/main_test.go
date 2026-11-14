@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,6 +15,12 @@ import (
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (roundTrip roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return roundTrip(request)
+}
 
 func TestValidateWorkerName(t *testing.T) {
 	tests := []struct {
@@ -47,7 +56,7 @@ func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
 		ID: "abcdef0123456789abcdef0123456789", Name: "repo", Branch: "feature/test",
 		Remote: "github.com/acme/repo", Path: "/private/repo",
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		if r.Method != http.MethodPut || r.URL.Path != "/api/v1/workers/0123456789abcdef0123456789abcdef/heartbeat" {
 			t.Errorf("request = %s %s, want worker heartbeat PUT", r.Method, r.URL.Path)
 		}
@@ -67,17 +76,44 @@ func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
 			body.Projects[0].Remote != project.Remote || body.Projects[0].Path != "" {
 			t.Errorf("heartbeat body = %#v, decode error = %v", body, err)
 		}
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-	baseURL, err := url.Parse(server.URL)
+		return &http.Response{
+			StatusCode: http.StatusOK, Header: make(http.Header),
+			Body: io.NopCloser(strings.NewReader(`{"id":"0123456789abcdef0123456789abcdef","skipped_projects":[{"id":"abcdef0123456789abcdef0123456789","reason":"repository_not_granted"}]}`)),
+		}, nil
+	})}
+	baseURL, err := url.Parse("http://control-plane.test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sendHeartbeat(context.Background(), server.Client(), baseURL,
+	reply, err := sendHeartbeat(context.Background(), client, baseURL,
 		"0123456789abcdef0123456789abcdef", workerapi.Heartbeat{Name: "dev-machine",
-			Projects: wireProjects([]discoveredProject{project})}); err != nil {
+			Projects: wireProjects([]discoveredProject{project})})
+	if err != nil {
 		t.Fatalf("sendHeartbeat: %v", err)
+	}
+	if reply.ID != "0123456789abcdef0123456789abcdef" || len(reply.SkippedProjects) != 1 ||
+		reply.SkippedProjects[0].ID != project.ID || reply.SkippedProjects[0].Reason != workerapi.SkippedProjectRepositoryNotGranted {
+		t.Fatalf("heartbeat response = %#v", reply)
+	}
+}
+
+func TestSkippedProjectIsLoggedOnceWhileTheSetIsUnchanged(t *testing.T) {
+	var output bytes.Buffer
+	previousOutput := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(previousOutput) })
+	runner := &agentRunner{}
+	reply := workerapi.HeartbeatResponse{SkippedProjects: []workerapi.SkippedProject{{
+		ID: "abcdef0123456789abcdef0123456789", Reason: workerapi.SkippedProjectRepositoryNotGranted,
+	}}}
+	projects := []workerapi.Project{{ID: "abcdef0123456789abcdef0123456789", Name: "repo"}}
+	for range 2 {
+		if err := runner.logSkippedProjects(reply, projects); err != nil {
+			t.Fatalf("logSkippedProjects: %v", err)
+		}
+	}
+	if got := strings.Count(output.String(), `project "repo" was not registered: repository_not_granted`); got != 1 {
+		t.Fatalf("log output = %q, want one matching line", output.String())
 	}
 }
 

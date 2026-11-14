@@ -1,6 +1,8 @@
 // Package workerapi is the single home of the wire contract between the control plane and local workers.
 package workerapi
 
+import "time"
+
 const (
 	ProviderCodex  = "codex-cli"
 	ProviderClaude = "claude-code"
@@ -88,6 +90,24 @@ type Heartbeat struct {
 	Name      string           `json:"name"`
 	Projects  []Project        `json:"projects"`
 	Providers []ProviderStatus `json:"providers,omitempty"`
+}
+
+const (
+	SkippedProjectRepositoryNotGranted        = "repository_not_granted"
+	SkippedProjectIDRegisteredByAnotherWorker = "project_id_registered_by_another_worker"
+)
+
+type SkippedProject struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+type HeartbeatResponse struct {
+	ID              string           `json:"id"`
+	Name            string           `json:"name"`
+	LastSeen        time.Time        `json:"last_seen"`
+	Providers       []ProviderStatus `json:"providers,omitempty"`
+	SkippedProjects []SkippedProject `json:"skipped_projects,omitempty"`
 }
 
 type AgentProfile struct {

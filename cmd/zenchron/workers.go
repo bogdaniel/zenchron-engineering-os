@@ -309,10 +309,20 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 	for _, project := range registry.projects {
 		claimed[project.ID] = true
 	}
+	skippedProjects := make([]workerapi.SkippedProject, 0)
 	for _, project := range request.Projects {
 		// An enrolled worker registers only the repositories it was approved for, and never a project id
 		// another worker already registered: lookups by project id must name exactly one checkout.
-		if !access.allows(project.Remote) || claimed[project.ID] {
+		if access.enforced && !access.allows(project.Remote) {
+			skippedProjects = append(skippedProjects, workerapi.SkippedProject{
+				ID: project.ID, Reason: workerapi.SkippedProjectRepositoryNotGranted,
+			})
+			continue
+		}
+		if claimed[project.ID] {
+			skippedProjects = append(skippedProjects, workerapi.SkippedProject{
+				ID: project.ID, Reason: workerapi.SkippedProjectIDRegisteredByAnotherWorker,
+			})
 			continue
 		}
 		key := id + ":" + project.ID
@@ -322,7 +332,10 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 		}
 	}
 	registry.mu.Unlock()
-	writeJSON(w, http.StatusOK, worker)
+	writeJSON(w, http.StatusOK, workerapi.HeartbeatResponse{
+		ID: worker.ID, Name: worker.Name, LastSeen: worker.LastSeen, Providers: worker.Providers,
+		SkippedProjects: skippedProjects,
+	})
 }
 
 func validProviderStatuses(providers []workerapi.ProviderStatus) bool {
