@@ -43,6 +43,9 @@ flowchart LR
   refetch the canonical list so a stale request cannot overwrite the selected details.
 - The table reselects the active objective after row data refreshes, keeping the highlighted row and detail panel in
   sync after creates and edits.
+- Only a person's choice in the table (a row click, checkbox, or keyboard selection) changes the selected objective.
+  The table's delayed report of a selection the page made itself is ignored, so it cannot replace an objective that
+  was created or chosen in the meantime and send a later edit to a different objective.
 - The dashboard searches title, description, owner, and product, and filters by product, owner, status, and due-date
   quarter. The default is This Quarter; All due dates includes unscheduled objectives.
 - The table uses a numbered footer pager that stays in sync with AG Grid, six rows to a page, in both modes.
@@ -86,7 +89,8 @@ flowchart LR
 `go test ./cmd/zenchron` covers objective API updates, product linking, validation, and persistence. The focused E2E
 suite covers the Mock frame with its KPI icons, overview shortcuts, row menus, and local-only create and edit; the Live frame with
 honest unavailable parts, validation, and failed loads and saves; empty states, search and filters,
-table/cards/Kanban/planning/roadmap views, full objective create/edit payloads, and responsive layouts. The mobile layout check asserts that every
+table/cards/Kanban/planning/roadmap views, full objective create/edit payloads, an edit that still reaches the
+created objective when the table reports its first selection late, and responsive layouts. The mobile layout check asserts that every
 milestone row remains inside the preview card:
 `cd dashboard && npm run test:e2e -- e2e/objectives-views.spec.ts`.
 
