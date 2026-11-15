@@ -17,9 +17,6 @@ func processWorkerCommands(
 ) error {
 	commandCtx, stopHeartbeat := keepWorkerHeartbeat(ctx, runner.client, runner.baseURL, runner.workerID, heartbeat)
 	defer stopHeartbeat()
-	if err := processWorktreeCommand(commandCtx, runner.client, runner.baseURL, runner.workerID, projects); err != nil {
-		return err
-	}
 	return runner.process(commandCtx, projects)
 }
 

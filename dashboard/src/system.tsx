@@ -51,6 +51,9 @@ function AuditTable({ events, className }: { events: string[][]; className?: str
     <tbody>{events.map(([time, actor, action, detail]) => <tr key={time}><td>{time}</td><td>{actor}</td><td>{action}</td><td>{detail}</td></tr>)}</tbody></table></div>;
 }
 
+// A controller value longer than this does not fit beside its label and is laid out below it.
+const longControllerValue = 40;
+
 export function SystemPage({ section, designPreview = false, ...facts }: SystemPageProps) {
   const mock = useMockSystem();
   const source = designPreview ? mock : liveSystemSource(facts);
@@ -284,7 +287,8 @@ function SystemWorkspace({ section, source, onShowAudit }: { section: SystemSect
               disabled={!actions} title={locked} onChange={(event) => actions?.setController({ maxRuns: Number(event.currentTarget.value) })} /></div>
           <div className="system-preview-controller-values"><span>Default Run Timeout</span><Select aria-label="Default Run Timeout" value={controller.timeout}
             disabled={!actions} onChange={(timeout) => { if (timeout) actions?.setController({ timeout }); }} data={source.controllerOptions.timeout} /></div>
-          {source.controllerFacts.map(([label, value]) => <div className="system-preview-controller-values" key={label}><span>{label}</span><b>{value}</b></div>)}
+          {source.controllerFacts.map(([label, value]) => <div key={label}
+            className={`system-preview-controller-values${value.length > longControllerValue ? ' is-long' : ''}`}><span>{label}</span><b>{value}</b></div>)}
           <div className="system-preview-toggles">{['Auto-scale Runners', 'Capture Evidence by Default'].map((name) => <span key={name}>
             <Toggle label={name} checked={source.switches[name]} onChange={actions && ((value) => actions.setSwitch(name, value))} />{name}</span>)}</div>
           {note('controller')}

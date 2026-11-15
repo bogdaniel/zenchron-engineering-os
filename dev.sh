@@ -71,7 +71,6 @@ ensure_free "${control_plane_url}/healthz" "Control plane"
 ensure_free "$dashboard_url" "Dashboard"
 
 (
-  unset ZENCHRON_LLM_BASE_URL ZENCHRON_LLM_API_KEY
   exec go run ./cmd/zenchron
 ) &
 api_pid=$!
@@ -99,7 +98,6 @@ fi
 (cd dashboard && unset ZENCHRON_GITHUB_TOKEN ZENCHRON_GITHUB_APP_ID ZENCHRON_GITHUB_INSTALLATION_ID
   unset ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH ZENCHRON_GITHUB_CLIENT_ID ZENCHRON_GITHUB_CLIENT_SECRET
   unset ZENCHRON_SESSION_SECRET ZENCHRON_WORKER_TOKEN ZENCHRON_GITHUB_ALLOWED_USERS ZENCHRON_PUBLIC_URL
-  unset ZENCHRON_LLM_BASE_URL ZENCHRON_LLM_API_KEY
   exec sh ./dev.sh) &
 dashboard_pid=$!
 if ! wait_for "$dashboard_url" "$dashboard_pid" "Dashboard"; then exit 1; fi

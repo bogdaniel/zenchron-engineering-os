@@ -4,40 +4,46 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 const cliProviders = ['codex-cli', 'claude-code'];
-const providerSchema = z.object({ id: z.string(), version: z.string().optional(), ready: z.boolean() });
+const providerSchema = z.object({
+  id: z.string(), version: z.string().optional(), ready: z.boolean(),
+  // Why an installed CLI is not ready, and whether it can run commands such as tests inside its sandbox.
+  reason: z.string().optional(), sandboxed_commands: z.boolean().optional(),
+});
+
+/** One worker's coding CLI as Settings lists it: version, readiness, and what limits it. */
+export function describeProvider(provider: z.infer<typeof providerSchema>) {
+  const name = provider.version || provider.id;
+  if (!provider.ready) return `${name} not ready${provider.reason ? ` (${provider.reason})` : ''}`;
+  return provider.sandboxed_commands === false ? `${name} ready, cannot run commands` : `${name} ready`;
+}
 export const workerProvidersSchema = z.array(providerSchema).optional();
 const issueOptionSchema = z.object({ number: z.number(), title: z.string() });
 const issueOptionsSchema = z.array(issueOptionSchema);
 
-export type RunWorker = {
-  id: string; name: string; agent_runtime_enabled?: boolean; providers?: z.infer<typeof providerSchema>[];
-};
+export type RunWorker = { id: string; name: string; providers?: z.infer<typeof providerSchema>[] };
 
-/** A CLI profile cannot start until its worker reports the CLI ready, so queueing it is blocked until then. */
-export const blocksQueueing = (provider: string | undefined, ready: boolean) =>
-  Boolean(provider && cliProviders.includes(provider)) && !ready;
-
-/** Says whether the worker behind a project can execute the selected agent profile's provider. */
+/**
+ * Says whether the worker behind a project can execute the selected agent profile's provider. Only the coding
+ * CLIs execute runs, and a run cannot start until its worker reports the CLI ready, so queueing needs `ready`.
+ */
 export function runReadiness(provider: string | undefined, worker: RunWorker | undefined) {
-  if (provider && cliProviders.includes(provider)) {
-    const status = worker?.providers?.find((item) => item.id === provider);
-    if (status?.ready) {
-      return { ready: true, label: `${provider} ready`,
-        note: `${worker?.name} reports ${status.version || provider} installed and signed in.` };
-    }
+  if (!provider || !cliProviders.includes(provider)) {
+    return { ready: false, label: 'cannot run',
+      note: 'Only Codex CLI (codex-cli) and Claude Code (claude-code) profiles can run.' };
+  }
+  const status = worker?.providers?.find((item) => item.id === provider);
+  if (status?.ready) {
+    return { ready: true, label: `${provider} ready`,
+      note: `${worker?.name} reports ${status.version || provider} installed and signed in.`
+        + (status.sandboxed_commands === false
+          ? ' It can edit files but cannot run commands or tests there: its command sandbox is not available on that worker.' : '') };
+  }
+  if (status?.reason === 'sandbox self-test failed') {
     return { ready: false, label: `${provider} not ready`,
-      note: `${worker?.name ?? 'This worker'} does not report ${provider} installed and signed in; sign in on the worker and restart it.` };
+      note: `${worker?.name} has ${provider} signed in, but its sandbox did not confine a test command on that machine, so agents cannot run there.` };
   }
-  if (worker?.agent_runtime_enabled === true) {
-    return { ready: true, label: 'runtime configured',
-      note: `${worker.name} reports an OpenAI-compatible endpoint configured. Queueing saves the run for the worker.` };
-  }
-  if (worker?.agent_runtime_enabled === false) {
-    return { ready: false, label: 'runtime not configured',
-      note: `${worker.name} has no OpenAI-compatible endpoint configured; the run will stay queued.` };
-  }
-  return { ready: false, label: 'runtime status unknown',
-    note: 'Worker runtime status is unknown; the run may stay queued until runtime availability is reported.' };
+  return { ready: false, label: `${provider} not ready`,
+    note: `${worker?.name ?? 'This worker'} does not report ${provider} installed and signed in; sign in on the worker and restart it.` };
 }
 
 async function loadIssueOptions(projectID: string) {

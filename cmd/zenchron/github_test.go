@@ -375,9 +375,9 @@ func TestGitHubReviewFeedbackReturnsToAgentRun(t *testing.T) {
 	registry := newWorkerRegistry()
 	registry.github.apiURL = provider.URL
 	registry.projects["worker:project"] = projectRecord{ID: testProjectID, GitRemote: "github.com/acme/platform"}
-	runtimeEnabled := true
-	registry.workers[testWorkerID] = workerRecord{ID: testWorkerID, Name: "worker", LastSeen: time.Now(), AgentRuntimeEnabled: &runtimeEnabled}
-	profile := agentProfile{ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Reviewer", Provider: "custom", Model: "review-v1",
+	registry.workers[testWorkerID] = workerRecord{ID: testWorkerID, Name: "worker", LastSeen: time.Now(),
+		Providers: []workerapi.ProviderStatus{{ID: workerapi.ProviderCodex, Ready: true}}}
+	profile := agentProfile{ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Reviewer", Provider: workerapi.ProviderCodex, Model: "default",
 		Status: "active", SystemPrompt: "Review", Version: 1, UpdatedAt: time.Now(), Tools: []string{"code.write"}}
 	store := newAgentRunStore(registry, newAgentProfileStore())
 	store.items[runID] = agentRun{ID: runID, AgentID: profile.ID, AgentName: profile.Name, ProjectID: testProjectID,

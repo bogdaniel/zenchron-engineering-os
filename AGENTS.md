@@ -352,7 +352,7 @@ done; the full test suite runs only in GitHub CI.
 
 - **Focused dashboard E2E (required for changed dashboard behavior):** name the spec file and, where possible, the
   test title. Playwright starts the dashboard on `127.0.0.1:4173` (reusing one already running from `./dev.sh`), a
-  mock LLM on `8082`, and an isolated control plane and worker on `8083`:
+  fake Codex CLI on the worker's `PATH`, and an isolated control plane and worker on `8083`:
 
   ```sh
   cd dashboard && npm run test:e2e -- e2e/objectives-views.spec.ts --grep 'objectives can be created'

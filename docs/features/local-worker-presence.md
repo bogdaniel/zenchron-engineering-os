@@ -4,9 +4,9 @@ The worker-presence and project-discovery slice is the bootstrap milestone. Agen
 
 The first integrated slice proves that the dashboard, Go control plane, and a separate local worker process can
 communicate. It reports service and worker presence, discovers Git checkouts at the configured root or one directory
-below it, and can execute queued agent runs when the worker has a model endpoint configured. Each run gets its own
-branch and worktree; file writes require the profile's `code.write` permission. The separate
-[isolated worktree flow](isolated-worktrees.md) prepares branches on request.
+below it, and can execute queued agent runs when the worker has a signed-in Codex or Claude Code CLI. Each run gets
+its own branch and [isolated worktree](isolated-worktrees.md); file writes require the profile's `code.write`
+permission.
 
 ## Feature diagram
 
@@ -14,7 +14,7 @@ branch and worktree; file writes require the profile's `code.write` permission. 
 flowchart LR
     Browser[React dashboard<br/>Mantine + Tabler] -->|GET /healthz<br/>GET /api/v1/workers<br/>GET /api/v1/projects| UI[Dashboard dev server<br/>127.0.0.1:4173]
     UI -->|proxy API requests| API[Go control plane<br/>127.0.0.1:8080]
-    Worker[Go local worker] -->|scan local root<br/>PUT names, branch, IDs + sanitized origin locator + model endpoint availability| API
+    Worker[Go local worker] -->|scan local root<br/>PUT names, branch, IDs + sanitized origin locator + coding CLI status| API
     Worker -->|absolute paths stay local| LocalRepos[Git checkouts]
     API --> Registry[(In-memory worker registry)]
 ```
@@ -60,7 +60,7 @@ Open <http://127.0.0.1:4173>. The dashboard dev server rebuilds the React app on
 - `GET /api/v1/projects` returns each discovered checkout, its worker, and online/offline status. A worker is online when its last heartbeat is within 15 seconds.
 - `GET /api/v1/workers/healthz` returns `200` while any worker is online and `503` otherwise; it is used by the focused browser check.
 
-The worker sends an immediate heartbeat and repeats every five seconds. Worker and project IDs are stable opaque hashes derived from machine/user identity and local checkout path; local paths and remote credentials are excluded from heartbeat JSON. A sanitized origin host/repository locator is sent so the control plane can map supported GitHub.com checkouts to issue and pull-request queries, plus top-level pull-request review submission. The worker also reports a boolean indicating whether its OpenAI-compatible endpoint is configured; endpoint URLs and credentials stay local. `ZENCHRON_PROJECTS_ROOT` selects a scan root (default `.`). A Git root is included directly; otherwise only immediate child folders are scanned. The registry is in memory, so restarting the control plane clears the list; a running worker registers again on its next heartbeat.
+The worker sends an immediate heartbeat and repeats every five seconds. Worker and project IDs are stable opaque hashes derived from machine/user identity and local checkout path; local paths and remote credentials are excluded from heartbeat JSON. A sanitized origin host/repository locator is sent so the control plane can map supported GitHub.com checkouts to issue and pull-request queries, plus top-level pull-request review submission. The worker also reports each installed coding CLI with its version, whether it is ready, and why not; CLI sign-ins and credentials stay local. `ZENCHRON_PROJECTS_ROOT` selects a scan root (default `.`). A Git root is included directly; otherwise only immediate child folders are scanned. The registry is in memory, so restarting the control plane clears the list; a running worker registers again on its next heartbeat.
 
 ## Security and scope
 
@@ -70,8 +70,8 @@ remote worker authentication](github-login-and-remote-worker-auth.md). The worke
 `http://127.0.0.1:8080` for local development and accepts `ZENCHRON_CONTROL_PLANE_URL` and `ZENCHRON_WORKER_NAME`
 overrides. Remote workers require HTTPS and the configured bearer token.
 
-The worker prepares isolated worktrees through the leased command channel and can execute agent runs when
-`ZENCHRON_LLM_BASE_URL` is configured. Optional `code.write` changes stay on a per-run branch. Successful non-empty
+The worker executes agent runs through the Codex or Claude Code CLI it reports ready, each in a worktree it creates
+for that run. Optional `code.write` changes stay on a per-run branch. Successful non-empty
 runs can push that branch and create or reuse a GitHub pull request when the control plane has GitHub App auth or the
 personal-token fallback and the
 project has a supported GitHub.com origin. Dashboard-submitted comments and change requests on those pull requests link

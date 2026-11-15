@@ -4,6 +4,8 @@ const environment = (
   globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } }
 ).process?.env ?? {};
 const dashboardPort = Number(environment.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+// The worker finds `codex` here first: a deterministic fake CLI, so runs use the real CLI process path.
+const fakeCLIDirectory = decodeURIComponent(new URL('./e2e/fake-cli', import.meta.url).pathname);
 
 export default defineConfig({
   testDir: './e2e',
@@ -23,13 +25,6 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: 'node ./dashboard/e2e/mock-llm.mjs',
-      cwd: '..',
-      url: 'http://127.0.0.1:8082/healthz',
-      reuseExistingServer: false,
-      timeout: 120_000,
-    },
-    {
       command: 'sh ./dashboard/e2e/control-plane.sh',
       cwd: '..',
       url: 'http://127.0.0.1:8083/healthz',
@@ -46,8 +41,7 @@ export default defineConfig({
         ZENCHRON_WORKER_NAME: 'playwright-worker',
         ZENCHRON_PROJECTS_ROOT: '.playwright-state/projects',
         ZENCHRON_WORKTREES_ROOT: '.playwright-state/worktrees',
-        ZENCHRON_LLM_BASE_URL: 'http://127.0.0.1:8082/v1',
-        ZENCHRON_LLM_API_KEY: 'e2e-test-key',
+        PATH: `${fakeCLIDirectory}:${environment.PATH ?? ''}`,
       },
       reuseExistingServer: false,
       timeout: 120_000,

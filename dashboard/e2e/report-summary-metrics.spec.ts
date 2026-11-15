@@ -21,7 +21,7 @@ test('product and workspace summaries use scoped GitHub PR and Actions evidence'
     project(secondProject, 'beta', 'github.com/acme/beta'),
   ])));
   await page.route('**/api/v1/workers', (route) => route.fulfill(json([{
-    id: worker, name: 'Mac', status: 'online', last_seen: new Date(now).toISOString(), agent_runtime_enabled: false,
+    id: worker, name: 'Mac', status: 'online', last_seen: new Date(now).toISOString(),
   }])));
   await page.route('**/api/v1/workflows', (route) => route.fulfill(json([])));
   await page.route('**/api/v1/agents', (route) => route.fulfill(json([])));

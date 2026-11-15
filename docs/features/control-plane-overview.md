@@ -78,10 +78,10 @@ flowchart LR
   the approved stage positions. Its subtitle names the workflow and its status, its badge reads "Execution
   unavailable" while no workflow runner is connected, and the Workflow options menu states the component and
   connection counts. Stage completion marks appear only for the fixture run. The live worker and project remain
-  visible in recent activity; the Projects page can prepare an isolated worktree separately.
-- Agent runs execute through an OpenAI-compatible Chat Completions endpoint when the worker has
-  `ZENCHRON_LLM_BASE_URL` configured. The worker edits only an isolated worktree, captures a bounded diff, and reports
-  the result. A queued record alone does not mean a model ran; the configured runtime state is visible in Settings.
+  visible in recent activity; the Projects page lists each checkout's agent run branches.
+- Agent runs execute through the Codex or Claude Code CLI that the worker reports installed and signed in. The CLI
+  edits only an isolated worktree; the worker captures a bounded diff and reports the result. A queued record alone
+  does not mean a model ran; which coding CLIs are ready on online workers is visible in Settings.
 - Reviews can inspect actual diffs from completed or partially completed agent runs, read open GitHub issues and pull
   requests, and load a bounded diff for a selected pull request. It can submit top-level PR comments and request changes
   using the configured control-plane token; provider approvals, checks, and merge remain unavailable.

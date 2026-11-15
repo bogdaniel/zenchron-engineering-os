@@ -6,12 +6,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 func TestWorkerHeartbeatAppearsInWorkerList(t *testing.T) {
 	server := newMux()
 	id := "0123456789abcdef0123456789abcdef"
-	body := `{"name":"dev-machine","agent_runtime_enabled":true,"projects":[{"id":"abcdef0123456789abcdef0123456789","name":"repo","branch":"feature/work","git_remote":"github.com/acme/repo"}]}`
+	body := `{"name":"dev-machine","providers":[{"id":"codex-cli","version":"1.2.3","ready":true}],"projects":[{"id":"abcdef0123456789abcdef0123456789","name":"repo","branch":"feature/work","git_remote":"github.com/acme/repo"}]}`
 	request := httptest.NewRequest(http.MethodPut, "/api/v1/workers/"+id+"/heartbeat", strings.NewReader(body))
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
@@ -22,16 +24,17 @@ func TestWorkerHeartbeatAppearsInWorkerList(t *testing.T) {
 	response = httptest.NewRecorder()
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workers", nil))
 	var workers []struct {
-		ID                  string `json:"id"`
-		Name                string `json:"name"`
-		Status              string `json:"status"`
-		AgentRuntimeEnabled bool   `json:"agent_runtime_enabled"`
+		ID        string                     `json:"id"`
+		Name      string                     `json:"name"`
+		Status    string                     `json:"status"`
+		Providers []workerapi.ProviderStatus `json:"providers"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&workers); err != nil {
 		t.Fatalf("decode workers: %v", err)
 	}
 	if response.Code != http.StatusOK || len(workers) != 1 || workers[0].ID != id ||
-		workers[0].Name != "dev-machine" || workers[0].Status != "online" || !workers[0].AgentRuntimeEnabled {
+		workers[0].Name != "dev-machine" || workers[0].Status != "online" ||
+		len(workers[0].Providers) != 1 || !workers[0].Providers[0].Ready || workers[0].Providers[0].Version != "1.2.3" {
 		t.Fatalf("worker list = %#v (HTTP %d), want registered online dev-machine", workers, response.Code)
 	}
 	response = httptest.NewRecorder()
@@ -70,29 +73,6 @@ func TestWorkerHeartbeatRejectsInvalidIdentityAndName(t *testing.T) {
 		if response.Code != http.StatusBadRequest {
 			t.Errorf("heartbeat %s returned HTTP %d, want %d", testCase.path, response.Code, http.StatusBadRequest)
 		}
-	}
-}
-
-func TestWorkerHeartbeatKeepsLegacyRuntimeAvailabilityUnknown(t *testing.T) {
-	server := newMux()
-	id := "0123456789abcdef0123456789abcdef"
-	request := httptest.NewRequest(http.MethodPut, "/api/v1/workers/"+id+"/heartbeat", strings.NewReader(`{"name":"legacy-worker"}`))
-	response := httptest.NewRecorder()
-	server.ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatalf("legacy heartbeat status = %d, want %d", response.Code, http.StatusOK)
-	}
-
-	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workers", nil))
-	var workers []struct {
-		AgentRuntimeEnabled *bool `json:"agent_runtime_enabled"`
-	}
-	if err := json.NewDecoder(response.Body).Decode(&workers); err != nil {
-		t.Fatalf("decode workers: %v", err)
-	}
-	if len(workers) != 1 || workers[0].AgentRuntimeEnabled != nil {
-		t.Fatalf("legacy worker runtime status = %#v, want unknown", workers)
 	}
 }
 

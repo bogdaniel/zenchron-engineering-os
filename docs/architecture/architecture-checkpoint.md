@@ -15,7 +15,8 @@ and review lineage questions below now have an implemented answer recorded in
 - Build the dashboard alongside backend capabilities and keep the dashboard available for live review during
   development.
 - Use OpenAI-compatible Chat Completions for the first model-call integration. This selects a request protocol only; it
-  does not settle the agent, tool, or workflow model.
+  does not settle the agent, tool, or workflow model. (Superseded: that integration was removed; runs execute only
+  through the Codex or Claude Code CLI. See [Backend architecture and decisions](backend-architecture.md).)
 - Use GitHub OAuth for dashboard user sign-in. User OAuth identity stays separate from GitHub App credentials used by
   the control plane for repository operations.
 
@@ -47,7 +48,6 @@ flowchart LR
     API --> Runs[Agent run snapshot]
     API -->|one assigned worker per run| Worker[Local worker]
     Worker -->|per-run worktree, commit, optional run-branch push| Repo[Local Git checkout]
-    Worker -->|OpenAI-compatible Chat Completions| Model[Configured endpoint]
     Worker -->|non-interactive process in the run worktree| CLI[Codex CLI or Claude Code CLI]
     Worker -->|Git credentials; supported GitHub remotes only| GitHubRepo[GitHub repository]
     API -->|Issue and PR reads/writes; PR creation and reviews| GitHub[GitHub API]
@@ -56,8 +56,7 @@ flowchart LR
 
 - An **agent profile** currently stores prompts, model/provider labels, tool allowlists, enabled state, and a version.
 - An **agent run** snapshots a profile and binds a prompt or a GitHub issue to one project and one worker. It receives
-  a generated local branch and runs in a per-run worktree, through the chat runtime or an installed Codex or Claude Code
-  CLI. Dashboard feedback can be recorded on the run and an eligible request for
+  a generated local branch and runs in a per-run worktree, through an installed Codex or Claude Code CLI. Dashboard feedback can be recorded on the run and an eligible request for
   changes can requeue that same run.
 - The worker owns model calls, repository access, local commits, and optional run-branch publication. When publication
   is requested for a successful non-empty run on a supported GitHub checkout, it verifies the push remote and pushes

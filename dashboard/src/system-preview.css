@@ -179,6 +179,8 @@ button.system-preview-card-action:disabled, .system-preview-add-integration:disa
 .system-preview-secrets .system-preview-add-policy { margin-top: 6px; }
 .system-preview-controller-values { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 5px; margin-top: 5px; color: #aaa4ba; font-size: 9px; }
 .system-preview-controller-values b { padding: 4px 7px; border: 1px solid #373149; border-radius: 5px; color: #e4deed; background: #1b1a28; font-size: 9px; font-weight: 500; }
+.system-preview-controller-values.is-long { grid-template-columns: minmax(0, 1fr); }
+.system-preview-controller-values.is-long b { overflow-wrap: anywhere; }
 .system-preview-controller-values .mantine-Select-root { width: 125px; }
 .system-preview-controller-values .mantine-Select-input { height: 22px; min-height: 22px; padding: 0 6px; border-color: #373149; color: #e4deed; background: #1b1a28; font-size: 9px; }
 .system-preview-controller-values .system-preview-status { min-height: 15px; }

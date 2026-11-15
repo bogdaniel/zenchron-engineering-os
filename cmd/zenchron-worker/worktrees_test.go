@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,20 +26,18 @@ func TestPrepareWorktreeCreatesIsolatedBranchAndIsIdempotent(t *testing.T) {
 	runGit(t, repository, "add", "README.md")
 	runGit(t, repository, "commit", "-m", "initial commit")
 	project := projectAt(repository, workerTestID)
-	command := worktreeCommand{
-		ID: workerTestID, ProjectID: project.ID, Branch: "zenchron/review-fix", BaseBranch: "main",
-	}
+	const branch = "zenchron/review-fix"
 	root := filepath.Join(t.TempDir(), "worker-checkouts")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := prepareWorktree(ctx, root, project, command); err != nil {
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main"); err != nil {
 		t.Fatalf("prepareWorktree() error = %v", err)
 	}
-	worktree := filepath.Join(root, project.ID, command.ID)
-	if branch := strings.TrimSpace(runGit(t, worktree, "branch", "--show-current")); branch != command.Branch {
-		t.Fatalf("worktree branch = %q, want %q", branch, command.Branch)
+	worktree := filepath.Join(root, project.ID, workerTestID)
+	if current := strings.TrimSpace(runGit(t, worktree, "branch", "--show-current")); current != branch {
+		t.Fatalf("worktree branch = %q, want %q", current, branch)
 	}
-	if err := prepareWorktree(ctx, root, project, command); err != nil {
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main"); err != nil {
 		t.Fatalf("repeated prepareWorktree() error = %v, want idempotent success", err)
 	}
 	if branch := strings.TrimSpace(runGit(t, repository, "branch", "--show-current")); branch != "main" {
@@ -50,35 +45,6 @@ func TestPrepareWorktreeCreatesIsolatedBranchAndIsIdempotent(t *testing.T) {
 	}
 	if status := strings.TrimSpace(runGit(t, repository, "status", "--porcelain")); status != "" {
 		t.Fatalf("base checkout has changes after worktree preparation: %s", status)
-	}
-}
-
-func TestClaimWorktreeCommandRejectsOversizedResponse(t *testing.T) {
-	client := &http.Client{Transport: workerRoundTripper(func(request *http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"id":"` + strings.Repeat("a", maxClaimResponseSize) + `"}`)),
-			Header:     make(http.Header),
-			Request:    request,
-		}, nil
-	})}
-	baseURL := &url.URL{Scheme: "https", Host: "control-plane.invalid"}
-
-	if _, _, err := claimWorktreeCommand(context.Background(), client, baseURL, workerTestID); err == nil {
-		t.Fatal("claimWorktreeCommand() accepted a response larger than 1 MiB")
-	}
-
-	// A valid command followed by padding past the limit is still an oversized response.
-	padded := &http.Client{Transport: workerRoundTripper(func(request *http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"id":"` + workerTestID + `"}` + strings.Repeat(" ", maxClaimResponseSize))),
-			Header:     make(http.Header),
-			Request:    request,
-		}, nil
-	})}
-	if _, _, err := claimWorktreeCommand(context.Background(), padded, baseURL, workerTestID); err == nil {
-		t.Fatal("claimWorktreeCommand() accepted a valid command padded past 1 MiB")
 	}
 }
 
@@ -130,10 +96,7 @@ func TestPrepareWorktreeRejectsInvalidBranchWithoutChangingRepository(t *testing
 	}
 	runGit(t, repository, "init", "-b", "main")
 	project := projectAt(repository, workerTestID)
-	command := worktreeCommand{
-		ID: workerTestID, ProjectID: project.ID, Branch: "../../outside", BaseBranch: "main",
-	}
-	err := prepareWorktree(context.Background(), filepath.Join(t.TempDir(), "worktrees"), project, command)
+	err := prepareWorktree(context.Background(), filepath.Join(t.TempDir(), "worktrees"), project, workerTestID, "../../outside", "main")
 	if err == nil {
 		t.Fatal("prepareWorktree() accepted a traversal branch name")
 	}
@@ -150,10 +113,4 @@ func runGit(t *testing.T, directory string, args ...string) string {
 		t.Fatalf("git %v failed: %v: %s", args, err, output)
 	}
 	return string(output)
-}
-
-type workerRoundTripper func(*http.Request) (*http.Response, error)
-
-func (roundTrip workerRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	return roundTrip(request)
 }

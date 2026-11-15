@@ -5,14 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"log"
 	"os"
 	"os/exec"
-	"os/signal"
 	"slices"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
@@ -40,14 +38,19 @@ type cliProvider struct {
 	readyArgs   []string
 	isReady     func(output []byte, err error) bool
 	args        func(command workerapi.AgentRunCommand, workspace runWorkspace) []string
-	// guard, when set, is a command prefix that runs the provider under a process that stops it if the
-	// worker dies. It is this worker binary's own `guard` command.
-	guard []string
-	parse func(line []byte) []cliEvent
+	parse       func(line []byte) []cliEvent
+	// confinement, when set, proves at detection time that the CLI's sandbox enforces the worker's
+	// filesystem rules on this machine. A provider that fails it is not ready.
+	confinement func(ctx context.Context, binary string) error
+	// commandSandbox reports whether the provider's sandbox for repository commands exists on this
+	// machine. Nil means the provider sandboxes every command and is ready only when that is proven.
+	commandSandbox func() bool
 
 	path    string
 	version string
 	ready   bool
+	// reason says why an installed provider is not ready.
+	reason string
 }
 
 // cliEvent is one provider output line normalized to what the run lifecycle understands.
@@ -68,6 +71,13 @@ type runWorkspace struct {
 	// readPaths are extra locations a sandboxed provider may read: the repository's Git metadata and
 	// whatever the operator listed, such as a dependency cache.
 	readPaths []string
+	// denyPaths are locations a sandboxed provider must not read. The worktree and the read paths lie
+	// inside them and stay readable because the more specific rule wins in both provider sandboxes.
+	denyPaths []string
+	// owner holds the attempt's exclusive claim on the worktree and starts every process in it.
+	owner *worktreeOwner
+	// commandSandbox is set by the provider: its sandbox for repository commands exists on this machine.
+	commandSandbox bool
 }
 
 type executionResult struct {
@@ -77,7 +87,7 @@ type executionResult struct {
 }
 
 func (provider *cliProvider) detect(ctx context.Context) {
-	provider.path, provider.version, provider.ready = "", "", false
+	provider.path, provider.version, provider.ready, provider.reason = "", "", false, ""
 	path, err := exec.LookPath(provider.binary)
 	if err != nil {
 		return
@@ -88,7 +98,18 @@ func (provider *cliProvider) detect(ctx context.Context) {
 		provider.version = truncateText(strings.TrimSpace(line), maxProviderVersion)
 	}
 	output, err := provider.probe(ctx, provider.readyArgs)
-	provider.ready = provider.isReady(output, err)
+	if !provider.isReady(output, err) {
+		provider.reason = "not signed in"
+		return
+	}
+	if provider.confinement != nil {
+		if err := provider.confinement(ctx, provider.path); err != nil {
+			log.Printf("%s is not ready: %v", provider.id, err)
+			provider.reason = "sandbox self-test failed"
+			return
+		}
+	}
+	provider.ready = true
 }
 
 func (provider *cliProvider) probe(ctx context.Context, args []string) ([]byte, error) {
@@ -100,20 +121,43 @@ func (provider *cliProvider) probe(ctx context.Context, args []string) ([]byte, 
 }
 
 func (provider *cliProvider) status() workerapi.ProviderStatus {
-	return workerapi.ProviderStatus{ID: provider.id, Version: provider.version, Ready: provider.ready}
+	return workerapi.ProviderStatus{ID: provider.id, Version: provider.version, Ready: provider.ready,
+		Reason: provider.reason, SandboxedCommands: provider.ready && provider.sandboxesCommands()}
 }
 
-// providerEnvironment keeps worker, GitHub, SSH-agent, and cloud credentials away from the agent and from
-// verification commands, and removes provider API keys so a subscription-authenticated CLI is never
-// silently switched to paid API billing. The worker's own Git push does not use this environment.
-// ponytail: a denylist of well-known names; switch to an allowlist if operators need a stricter boundary.
+func (provider *cliProvider) sandboxesCommands() bool {
+	return provider.commandSandbox == nil || provider.commandSandbox()
+}
+
+// inheritedEnvironment names the only worker variables that provider and verification processes
+// inherit: what a CLI and a build tool need to find programs, the user's directories, certificates and
+// proxies. Everything else in the worker's environment, such as tokens and connection strings of the
+// developer's shell, never reaches an agent, so it cannot end up in an event or a pull request.
+// Operators add what a repository needs under `environment` in the worker configuration.
+var inheritedEnvironment = []string{
+	"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "TMPDIR", "TZ", "LANG", "LANGUAGE", "__CF_USER_TEXT_ENCODING",
+	"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+	"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS",
+	"XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR",
+	"CODEX_HOME", "CLAUDE_CONFIG_DIR",
+}
+
+// providerEnvironment reduces the worker's environment to the inherited names. The worker's own Git
+// push does not use this environment.
 func providerEnvironment(environment []string) []string {
-	blocked := []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
-		"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "SSH_AUTH_SOCK", "GOOGLE_APPLICATION_CREDENTIALS"}
 	return slices.DeleteFunc(slices.Clone(environment), func(entry string) bool {
 		name, _, _ := strings.Cut(entry, "=")
-		return strings.HasPrefix(name, "ZENCHRON_") || strings.HasPrefix(name, "AWS_") || slices.Contains(blocked, name)
+		return !slices.Contains(inheritedEnvironment, name) && !strings.HasPrefix(name, "LC_")
 	})
+}
+
+// reservedEnvironmentName reports names an operator may not set for a repository: worker and GitHub
+// credentials, and provider API keys, which would silently switch a subscription-authenticated CLI to
+// paid API billing.
+func reservedEnvironmentName(name string) bool {
+	reserved := []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
+		"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "SSH_AUTH_SOCK"}
+	return strings.HasPrefix(name, "ZENCHRON_") || slices.Contains(reserved, name)
 }
 
 func cliPrompt(command workerapi.AgentRunCommand) string {
@@ -134,81 +178,29 @@ func (provider *cliProvider) execute(
 ) (executionResult, error) {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	arguments := append(slices.Clone(provider.guard), provider.path)
-	arguments = append(arguments, provider.args(command, workspace)...)
-	process := exec.CommandContext(runCtx, arguments[0], arguments[1:]...)
+	workspace.commandSandbox = provider.sandboxesCommands()
+	process := workspace.owner.command(runCtx, append([]string{provider.path}, provider.args(command, workspace)...))
 	process.Dir = workspace.path
 	// The agent must not depend on, or be able to read, the user's personal Git configuration.
 	process.Env = append([]string{"GIT_CONFIG_GLOBAL=" + os.DevNull}, workspace.environment...)
 	process.Stdin = strings.NewReader(cliPrompt(command))
-	ownProcessGroup(process)
-	if len(provider.guard) > 0 {
-		// The guard watches the read end of this pipe. The worker never writes to it, so the guard sees
-		// end-of-file exactly when the worker process is gone, however it died.
-		reader, writer, err := os.Pipe()
-		if err != nil {
-			return executionResult{reason: workerapi.TerminationWorkerError}, fmt.Errorf("create provider guard pipe: %w", err)
-		}
-		defer writer.Close()
-		defer reader.Close()
-		process.ExtraFiles = []*os.File{reader}
-	}
 	session := &cliSession{parse: provider.parse, emit: emit, lastActivity: time.Now(), openTools: map[string]bool{}}
 	stderr := &tailBuffer{limit: 2048}
 	process.Stdout, process.Stderr = &lineWriter{handle: session.handle}, stderr
-	if err := process.Start(); err != nil {
+	sweep, err := workspace.owner.start(process)
+	if err != nil {
 		return executionResult{reason: workerapi.TerminationWorkerError}, fmt.Errorf("start %s: %w", provider.id, err)
 	}
 	emit("status", fmt.Sprintf("%s %s started", provider.id, provider.version))
 	stopWatchdog := session.watch(runCtx, limits, cancel)
 	waitErr := process.Wait()
 	stopWatchdog()
-	// Sweep anything the provider left behind in its process group.
-	_ = syscall.Kill(-process.Process.Pid, syscall.SIGKILL)
+	sweep()
+	if errors.Is(waitErr, exec.ErrWaitDelay) && process.ProcessState.Success() {
+		// The provider exited cleanly but something it started kept its output open; the sweep stopped it.
+		waitErr = nil
+	}
 	return session.result(ctx, waitErr, stderr.String())
-}
-
-// runGuard is the `guard` command: it runs a provider and stops the whole process group when file
-// descriptor 3 reaches end-of-file, which happens when the worker that started it no longer exists.
-// Without it a provider would keep editing the worktree after a worker crash while the next attempt
-// starts a second provider there.
-func runGuard(arguments []string) int {
-	if len(arguments) == 0 {
-		fmt.Fprintln(os.Stderr, "guard needs a command")
-		return 2
-	}
-	// The guard must outlive the SIGTERM it sends to its own group so it can escalate.
-	signal.Ignore(syscall.SIGTERM)
-	command := exec.Command(arguments[0], arguments[1:]...)
-	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
-	if err := command.Start(); err != nil {
-		fmt.Fprintln(os.Stderr, "guard could not start the command:", err)
-		return 127
-	}
-	go func() {
-		_, _ = io.Copy(io.Discard, os.NewFile(3, "worker-liveness"))
-		_ = syscall.Kill(0, syscall.SIGTERM)
-		time.Sleep(cliTerminationGrace)
-		_ = syscall.Kill(0, syscall.SIGKILL)
-	}()
-	err := command.Wait()
-	var exit *exec.ExitError
-	switch {
-	case err == nil:
-		return 0
-	case errors.As(err, &exit) && exit.ExitCode() >= 0:
-		return exit.ExitCode()
-	default:
-		return 1
-	}
-}
-
-// ownProcessGroup makes cancellation stop a command together with everything it started: the group gets
-// SIGTERM, then the command is killed after a grace period.
-func ownProcessGroup(command *exec.Cmd) {
-	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	command.Cancel = func() error { return syscall.Kill(-command.Process.Pid, syscall.SIGTERM) }
-	command.WaitDelay = cliTerminationGrace
 }
 
 // cliSession tracks one provider process: its normalized result and how recently it showed activity.

@@ -35,10 +35,9 @@ type workerRegistry struct {
 // ponytail: worker presence resets on restart; persist it only if offline history becomes a requirement.
 
 type workerRecord struct {
-	ID                  string    `json:"id"`
-	Name                string    `json:"name"`
-	LastSeen            time.Time `json:"last_seen"`
-	AgentRuntimeEnabled *bool     `json:"agent_runtime_enabled,omitempty"`
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	LastSeen time.Time `json:"last_seen"`
 	// Providers are the installed coding CLIs the worker detected, with their version and sign-in state.
 	Providers []workerapi.ProviderStatus `json:"providers,omitempty"`
 }
@@ -69,7 +68,7 @@ func newMux() http.Handler {
 	agents := newAgentProfileStore()
 	return newMuxWithStores(
 		newObjectiveStore(products), newWorkflowStore(), agents, products, registry,
-		newWorktreeStore(registry), newAgentRunStore(registry, agents),
+		newAgentRunStore(registry, agents),
 	)
 }
 
@@ -98,15 +97,11 @@ func newPersistentMux(dataDir string) (http.Handler, error) {
 		return nil, err
 	}
 	registry := newWorkerRegistry()
-	worktrees, err := openWorktreeStore(filepath.Join(absoluteDir, "worktrees.json"), registry)
-	if err != nil {
-		return nil, err
-	}
 	runs, err := openAgentRunStore(filepath.Join(absoluteDir, "agent-runs.json"), registry, agents)
 	if err != nil {
 		return nil, err
 	}
-	return newMuxWithStores(objectives, workflows, agents, products, registry, worktrees, runs), nil
+	return newMuxWithStores(objectives, workflows, agents, products, registry, runs), nil
 }
 
 func newWorkerRegistry() *workerRegistry {
@@ -119,9 +114,10 @@ func newWorkerRegistry() *workerRegistry {
 
 func newMuxWithStores(
 	objectives *objectiveStore, workflows *workflowStore, agents *agentProfileStore, products *productStore,
-	registry *workerRegistry, worktrees *worktreeStore, runs *agentRunStore,
+	registry *workerRegistry, runs *agentRunStore,
 ) http.Handler {
 	registry.runs = runs
+	products.repositoryOf = registry.repositoryOf
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -150,11 +146,6 @@ func newMuxWithStores(
 	mux.HandleFunc("GET /api/v1/products", products.list)
 	mux.HandleFunc("POST /api/v1/products", products.create)
 	mux.HandleFunc("PUT /api/v1/products/{id}", products.update)
-	mux.HandleFunc("GET /api/v1/worktrees", worktrees.list)
-	mux.HandleFunc("POST /api/v1/worktrees", worktrees.create)
-	mux.HandleFunc("POST /api/v1/worktrees/{id}/cancel", worktrees.cancel)
-	mux.HandleFunc("POST /api/v1/workers/{id}/worktrees/claim", worktrees.claim)
-	mux.HandleFunc("PUT /api/v1/workers/{id}/worktrees/{requestID}", worktrees.finish)
 	mux.HandleFunc("GET /api/v1/agent-runs", runs.list)
 	mux.HandleFunc("GET /api/v1/agent-runs/{id}/diff", runs.authorized(runs.diff))
 	mux.HandleFunc("POST /api/v1/agent-runs/{id}/cancel", runs.authorized(runs.cancel))
@@ -167,6 +158,7 @@ func newMuxWithStores(
 	mux.HandleFunc("GET /api/v1/agent-runs/{id}/pull-request", runs.authorized(runs.pullRequestStatus))
 	mux.HandleFunc("POST /api/v1/agent-runs/{id}/publish", runs.authorized(runs.publish))
 	mux.HandleFunc("POST /api/v1/agent-runs/{id}/sync-reviews", runs.authorized(runs.syncReviews))
+	mux.HandleFunc("POST "+gitHubWebhookPath, runs.gitHubWebhook)
 	mux.HandleFunc("POST /api/v1/projects/{id}/issues", registry.createGitHubIssue)
 	mux.HandleFunc("PUT /api/v1/workers/{id}/agent-runs/{requestID}", runs.finish)
 	return mux
@@ -303,8 +295,7 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 
 	now := time.Now().UTC()
 	worker := workerRecord{
-		ID: id, Name: request.Name, LastSeen: now, AgentRuntimeEnabled: request.AgentRuntimeEnabled,
-		Providers: request.Providers,
+		ID: id, Name: request.Name, LastSeen: now, Providers: request.Providers,
 	}
 	registry.mu.Lock()
 	registry.workers[id] = worker
@@ -339,7 +330,8 @@ func validProviderStatuses(providers []workerapi.ProviderStatus) bool {
 		return false
 	}
 	for _, provider := range providers {
-		if !workerapi.IsCLIProvider(provider.ID) || len(provider.Version) > 100 || strings.ContainsAny(provider.Version, "\r\n") {
+		if !workerapi.IsCLIProvider(provider.ID) || len(provider.Version) > 100 || len(provider.Reason) > 100 ||
+			strings.ContainsAny(provider.Version+provider.Reason, "\r\n") {
 			return false
 		}
 	}

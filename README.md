@@ -20,22 +20,14 @@ control plane. Choose **Live** in the sidebar, or open <http://127.0.0.1:4173/?m
 plane's real data; `?mode=mock` returns to the sample data. Both modes render the same pages. On any other host the
 dashboard is always Live and has no selector.
 
-To enable queued agent runs, set an OpenAI-compatible Chat Completions endpoint before starting the preview. The
-root `./dev.sh` passes these settings only to the local worker; the API and dashboard do not inherit the model key. Keep
-the optional API key on the worker machine, use HTTPS for remote endpoints, and loopback HTTP for local models:
-
-```sh
-export ZENCHRON_LLM_BASE_URL="https://llm.example/v1"
-export ZENCHRON_LLM_API_KEY="<worker-local key>"
-./dev.sh
-```
-
-The first runtime can read repository data and, when `code.write` is enabled in a profile, write files on a per-run
+Agent runs execute through the Codex CLI or Claude Code installed and signed in on the worker machine (`codex login`,
+`claude auth login`); the worker detects them at startup, and there is no model endpoint or API key to configure.
+Agent profiles select one with provider `codex-cli` or `claude-code`; a profile with any other provider can be saved
+but not run. A run reads repository data and, when `code.write` is enabled in its profile, edits files on a per-run
 isolated branch. Successful reviewable changes are committed locally; when a GitHub origin and control-plane GitHub
 authentication are configured, the worker can push only that run branch and the control plane can create or reuse its
-pull request. Agent profiles with provider `codex-cli` or `claude-code` run the installed, signed-in CLI instead and
-can start from a GitHub issue, run the worker operator's verification commands, and open a linked pull request; see
-[Issue to pull request](docs/features/issue-to-pull-request.md). Public GitHub repositories can be read without credentials. For
+pull request. Runs can start from a GitHub issue, run the worker operator's verification commands, and open a linked
+pull request; see [Issue to pull request](docs/features/issue-to-pull-request.md). Public GitHub repositories can be read without credentials. For
 authenticated access, prefer a GitHub App installed only on the repositories Zenchron should control. Set
 `ZENCHRON_GITHUB_APP_ID`, `ZENCHRON_GITHUB_INSTALLATION_ID`, and `ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH` on the control
 plane; installation tokens are minted and cached there. Keep the PEM key outside the repository with owner-only file
@@ -82,6 +74,7 @@ Feature docs:
 - [Product workspace](docs/features/product-workspace.md)
 - [One-command local preview](docs/features/local-preview.md)
 - [GitHub issue sync and pull-request reviews](docs/features/github-review-sync.md)
+- [GitHub webhooks: reviews and CI results](docs/features/github-webhooks.md)
 
 See [One dashboard, two data modes](docs/architecture/dashboard-modes.md) for how Mock and Live share one layout, and
 [Backend architecture and decisions](docs/architecture/backend-architecture.md) for component ownership, the
@@ -98,12 +91,12 @@ go test ./cmd/zenchron \
   -run 'TestWorkerHeartbeat|TestWorktree' \
   -count=1
 go test ./cmd/zenchron-worker \
-  -run 'TestSendHeartbeatUsesWorkerEndpoint|TestDiscoverProjects|TestRepositoryLocator|TestGitRemoteScrubsCredentials|TestPrepareWorktree|TestWorkerClaimsAgentRun|TestAgentRuntimeConfiguration|TestSafeRepositoryPath|TestLongCommandKeepsWorkerPresenceAlive' \
+  -run 'TestSendHeartbeatUsesWorkerEndpoint|TestDiscoverProjects|TestRepositoryLocator|TestGitRemoteScrubsCredentials|TestPrepareWorktree|TestCLI|TestLongCommandKeepsWorkerPresenceAlive' \
   -count=1
 (cd dashboard && npm run typecheck)
 (cd dashboard && npm run test:e2e -- e2e/overview.spec.ts e2e/home.spec.ts \
-  --grep 'dashboard displays|mobile overview|overview lists only agent runs|Projects page shows|worker prepares|Reviews page|workflow graph can be edited|Objectives dashboard fits|objectives can be created|agent profiles')
+  --grep 'dashboard displays|mobile overview|overview lists only agent runs|Projects page shows|agent run branches|Reviews page|workflow graph can be edited|Objectives dashboard fits|objectives can be created|agent profiles')
 ```
 
 The browser checks use the same dashboard at `127.0.0.1:4173` as manual review; they do not launch a second dashboard
-on another port. Focused control-plane checks may start isolated API and worker processes on `8082`/`8083`.
+on another port. Focused control-plane checks may start an isolated API and worker on `8083`.

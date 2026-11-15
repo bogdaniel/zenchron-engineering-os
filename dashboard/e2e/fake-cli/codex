@@ -1,0 +1,76 @@
+#!/bin/sh
+# Deterministic stand-in for the Codex CLI. It emulates the parts of the CLI contract the worker uses,
+# for the dashboard E2E suites only: the harness puts this directory first on the worker's PATH, so the
+# worker's real detection, process runner, and Codex event parser run against it. It calls no model.
+# What it does is chosen by the prompt text, because the worker passes no custom environment to a CLI.
+set -eu
+
+case "${1:-} ${2:-}" in
+"--version ")
+  echo "codex-cli 0.0.0-e2e"
+  exit 0 ;;
+"login status")
+  exit 0 ;;
+"sandbox "*)
+  # `codex sandbox <options> -- <command...>`: the worker's confinement self-test. The command would read a
+  # denied file, write outside the workspace, then write inside it. A confining sandbox lets only the last
+  # one happen, so this performs that write, to the final argument, and runs nothing.
+  for inside; do :; done
+  echo x > "$inside"
+  exit 0 ;;
+"exec "*) ;;
+*)
+  echo "fake codex: unsupported invocation: $*" >&2
+  exit 2 ;;
+esac
+
+# `codex exec --json ... -c permissions.zenchron.filesystem=<profile> --cd <worktree> [--model=<name>] -`
+worktree="" profile=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+  --cd)
+    worktree=$2
+    shift ;;
+  permissions.zenchron.filesystem=*) profile=$1 ;;
+  esac
+  shift
+done
+if [ -z "$worktree" ] || [ -z "$profile" ]; then
+  echo "fake codex: exec needs --cd and a filesystem profile" >&2
+  exit 2
+fi
+# Like the real sandbox, write only when the profile grants the worktree write access.
+writable=false
+case "$profile" in *"\"$worktree\"=\"write\""*) writable=true ;; esac
+prompt=$(cat)
+
+file=agent-output.md content="Created by the E2E model." message="E2E model completed the requested task."
+hold=false
+case "$prompt" in
+*"Fail this run."*)
+  echo '{"type":"thread.started","thread_id":"e2e"}'
+  echo '{"type":"turn.failed","error":{"message":"The E2E model was asked to fail."}}'
+  exit 1 ;;
+*"Hold for cancellation after writing partial output."*)
+  hold=true file=partial-output.md content="Partial output before cancellation." ;;
+*"Requested changes:"*)
+  file=review-feedback.md content="Review feedback addressed by the E2E worker."
+  message="E2E model addressed reviewer feedback." ;;
+esac
+
+echo '{"type":"thread.started","thread_id":"e2e"}'
+echo '{"type":"turn.started"}'
+echo '{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"cat README.md"}}'
+echo '{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"cat README.md","exit_code":0}}'
+if [ "$writable" = true ]; then
+  printf '%s\n' "$content" > "$file"
+  echo '{"type":"item.completed","item":{"id":"item_1","type":"file_change","changes":[{"path":"'"$file"'","kind":"add"}]}}'
+fi
+if [ "$hold" = true ]; then
+  # A tool that never returns: the run stays active until it is cancelled from the dashboard.
+  echo '{"type":"item.started","item":{"id":"item_2","type":"command_execution","command":"sleep 600"}}'
+  sleep 600
+  echo '{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"sleep 600","exit_code":0}}'
+fi
+echo '{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"'"$message"'"}}'
+echo '{"type":"turn.completed","usage":{"input_tokens":120,"cached_input_tokens":0,"output_tokens":30}}'

@@ -3,30 +3,24 @@ import { expect, test } from '@playwright/test';
 test('settings and integrations routes show live runtime and honest provider states', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/');
-  const runtimeHeartbeat = await page.evaluate(async () => {
-    const response = await fetch('/api/v1/workers/ffffffffffffffffffffffffffffffff/heartbeat', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'model-runtime-test-worker', agent_runtime_enabled: true }),
-    });
-    const workers = await fetch('/api/v1/workers').then((result) => result.json());
-    const legacyResponse = await fetch('/api/v1/workers/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/heartbeat', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'legacy-runtime-test-worker' }),
-    });
-    const updatedWorkers = await fetch('/api/v1/workers').then((result) => result.json());
-    return {
-      status: response.status,
-      configured: workers.filter((worker: { id: string; agent_runtime_enabled: boolean }) =>
-        worker.agent_runtime_enabled).length,
-      legacyStatus: legacyResponse.status,
-      unknown: updatedWorkers.filter((worker: { agent_runtime_enabled?: boolean }) =>
-        worker.agent_runtime_enabled === undefined).length,
-    };
+  const reported = await page.evaluate(async () => {
+    const heartbeat = (id: string, body: object) => fetch(`/api/v1/workers/${id}/heartbeat`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }).then((response) => response.status);
+    const statuses = [
+      await heartbeat('f'.repeat(32), { name: 'cli-test-worker', providers: [{ id: 'codex-cli', version: 'codex-cli 9.9.9', ready: true }] }),
+      await heartbeat('e'.repeat(32), { name: 'no-cli-test-worker' }),
+    ];
+    const workers: { status: string; providers?: { id: string; ready: boolean }[] }[] =
+      await fetch('/api/v1/workers').then((result) => result.json());
+    const ready = (id: string) => workers.filter((worker) =>
+      worker.status === 'online' && worker.providers?.some((provider) => provider.id === id && provider.ready)).length;
+    return { statuses, codex: ready('codex-cli'), claude: ready('claude-code') };
   });
-  expect(runtimeHeartbeat.status).toBe(200);
-  expect(runtimeHeartbeat.configured).toBeGreaterThan(0);
-  expect(runtimeHeartbeat.legacyStatus).toBe(200);
-  expect(runtimeHeartbeat.unknown).toBeGreaterThan(0);
+  expect(reported.statuses).toEqual([200, 200]);
+  expect(reported.codex).toBeGreaterThan(0);
+  const readyCLIs = [['codex-cli', reported.codex], ['claude-code', reported.claude]].filter(([, count]) => count)
+    .map(([id, count]) => `${id} on ${count}`);
   await page.reload();
   // Live has no settings to persist, so nothing on this page may write to the control plane.
   const writes: string[] = [];
@@ -65,19 +59,21 @@ test('settings and integrations routes show live runtime and honest provider sta
   expect(configRail?.y).toBeCloseTo(177, 0);
   expect(configRail?.width).toBe(176);
   expect(integrationBounds?.x).toBe(configRail!.x + configRail!.width + 10);
-  expect(geometry).toHaveLength(12);
+  expect(geometry).toHaveLength(11);
   expect(geometry[0].y).toBe(geometry[3].y);
   expect(geometry[4].y).toBeGreaterThan(geometry[0].y);
   expect(geometry[0].height, 'provider cards keep the approved height').toBeLessThanOrEqual(61);
   await expect(page.getByText('Connected', { exact: true })).toBeVisible();
   await expect(page.getByText('No GitHub repo', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Model endpoint' })).toBeVisible();
-  await expect(page.getByText('Configured', { exact: true })).toBeVisible();
-  const configuredWorkers = `${runtimeHeartbeat.configured} online worker${runtimeHeartbeat.configured === 1 ? '' : 's'}`;
-  const unknownWorkers = `${runtimeHeartbeat.unknown} other online worker${runtimeHeartbeat.unknown === 1 ? '' : 's'}`;
-  await expect(page.getByText(
-    `OpenAI-compatible endpoint configured on ${configuredWorkers}. Status is unreported by ${unknownWorkers}.`
-  )).toBeVisible();
+  // Runs execute only through the coding CLIs that workers report; there is no model endpoint to configure.
+  await expect(page.getByRole('heading', { name: 'Model endpoint' })).toHaveCount(0);
+  await expect(page.locator('.system-page')).not.toContainText('OpenAI-compatible');
+  const codex = serviceCards.filter({ has: page.getByRole('heading', { name: 'OpenAI' }) });
+  await expect(codex).toContainText('CLI ready');
+  await expect(codex).toContainText(
+    `Codex CLI installed and signed in on ${reported.codex} online worker${reported.codex === 1 ? '' : 's'}.`);
+  await expect(serviceCards.filter({ has: page.getByRole('heading', { name: 'Local workers' }) }))
+    .toContainText(`Coding CLIs ready: ${readyCLIs.join(', ')}.`);
 
   // Services the control plane does not integrate with are never shown as connected, and nothing can be edited.
   const gitlab = serviceCards.filter({ has: page.getByRole('heading', { name: 'GitLab' }) });
@@ -105,9 +101,9 @@ test('settings and integrations routes show live runtime and honest provider sta
 
   // The design's rail and menus work on real data: filter by category, and read a card's full status.
   await page.getByRole('button', { name: 'Model Providers' }).click();
-  await expect(serviceCards).toHaveCount(4);
+  await expect(serviceCards).toHaveCount(3);
   await page.getByRole('link', { name: 'Connected Integrations' }).click();
-  await expect(serviceCards).toHaveCount(12);
+  await expect(serviceCards).toHaveCount(11);
   await page.getByRole('button', { name: 'Local workers options' }).click();
   await expect(page.getByRole('menuitem', { name: 'Disconnect', exact: true })).toBeDisabled();
   await page.getByRole('menuitem', { name: 'View status' }).click();
@@ -122,9 +118,8 @@ test('settings and integrations routes show live runtime and honest provider sta
   await expect(page.getByText('Roles and permissions')).toBeVisible();
   await expect(controller).toContainText('Local checkouts');
   await expect(controller).toContainText('Online workers');
-  await expect(page.getByText(
-    `${runtimeHeartbeat.configured} configured · ${runtimeHeartbeat.unknown} unknown`, { exact: true }
-  )).toBeVisible();
+  await expect(controller.locator('.system-preview-controller-values').filter({ hasText: 'Coding CLIs ready' }))
+    .toContainText(readyCLIs.join(' · '));
   await expect(page.getByRole('switch', { name: 'Auto-scale Runners' })).toBeDisabled();
   await expect(page.getByRole('slider', { name: 'Max Concurrent Runs' })).toBeDisabled();
   await page.evaluate(() => { window.location.hash = '#integrations'; });

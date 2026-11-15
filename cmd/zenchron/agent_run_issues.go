@@ -132,19 +132,11 @@ func (store *agentRunStore) syncReviews(w http.ResponseWriter, r *http.Request) 
 			strings.TrimSpace(review.Body) == "" || !trustedGitHubAuthor(review.AuthorAssociation)
 	})
 	for index, review := range pending {
-		comment := truncateUTF8(review.User.Login+" on GitHub: "+strings.TrimSpace(review.Body), maxAgentRunCommentSize)
 		// Only the newest request queues the follow-up pass; a queued run cannot take further feedback.
 		newest := index == len(pending)-1
-		if _, status, message := store.recordReview(accessFor(r), item.ID, "", comment, newest, false); status != 0 {
-			http.Error(w, message, status)
-			return
-		}
 		var status int
 		var message string
-		if item, status, message = store.update(item.ID, func(item *agentRun) (int, string) {
-			item.ImportedReviewID = review.ID
-			return 0, ""
-		}); status != 0 {
+		if item, status, message = store.importReview(accessFor(r), item, review, newest); status != 0 {
 			http.Error(w, message, status)
 			return
 		}

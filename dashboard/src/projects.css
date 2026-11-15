@@ -124,18 +124,6 @@
   color: #8f899f;
   font-size: 8px;
 }
-.prepare-worktree-button.mantine-Button-root {
-  width: 100%;
-  min-height: 31px;
-  margin-top: 7px;
-  border: 1px solid #8451b8;
-  color: #eee5ff;
-  background: linear-gradient(135deg, #4a2c67, #342143);
-  font-size: 8px;
-}
-.prepare-worktree-button:disabled {
-  opacity: .5;
-}
 .project-worktrees {
   margin-top: 9px;
   padding: 9px;
@@ -200,7 +188,7 @@
   font-size: 6px;
   text-transform: capitalize;
 }
-.worktree-status.ready {
+.worktree-status.succeeded {
   border-color: #285343;
   color: #63dba8;
   background: #17352b;
@@ -210,18 +198,6 @@
   border-color: #57432c;
   color: #edbd69;
   background: #30251a;
-}
-.prepare-worktree-note {
-  margin: 9px 0;
-  color: #9691a8;
-  font-size: 8px;
-  line-height: 1.5;
-}
-.prepare-worktree-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 7px;
-  margin-top: 12px;
 }
 .project-grid-name {
   display: inline-flex;

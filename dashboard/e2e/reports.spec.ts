@@ -467,7 +467,7 @@ test('report scope filters live snapshots by product and resets them', async ({ 
     project(firstProjectID, 'nova-api'), project(secondProjectID, 'data-pipeline'),
   ])));
   await page.route('**/api/v1/workers', (route) => route.fulfill(json([{
-    id: workerID, name: 'Mac', status: 'online', last_seen: new Date(now).toISOString(), agent_runtime_enabled: false,
+    id: workerID, name: 'Mac', status: 'online', last_seen: new Date(now).toISOString(),
   }])));
   await page.route('**/api/v1/products', (route) => route.fulfill(json([{
     id: productID, name: 'Nova Platform', description: '', repository_ids: [firstProjectID],

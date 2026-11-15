@@ -63,6 +63,11 @@ func (store *agentRunStore) progress(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "agent run belongs to another worker", http.StatusForbidden)
 		return
 	}
+	// A worker whose grant for the repository was removed mid-run is told to stop at its next report.
+	if !accessFor(r).allows(item.Repository) {
+		http.Error(w, "this worker is no longer approved for the run's repository", http.StatusForbidden)
+		return
+	}
 	if item.Status != "running" || item.Attempts != input.Attempts || now.After(item.LeaseUntil) {
 		http.Error(w, "agent run lease is no longer current", http.StatusConflict)
 		return

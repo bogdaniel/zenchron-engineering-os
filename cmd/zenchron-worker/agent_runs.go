@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -22,34 +20,6 @@ const (
 	maxAgentRunDiffSize   = 128 << 10
 	maxClaimResponseSize  = 1 << 20
 )
-
-type agentRuntime struct {
-	endpoint *url.URL
-	apiKey   string
-	client   *http.Client
-}
-
-func loadAgentRuntime() (*agentRuntime, error) {
-	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("ZENCHRON_LLM_BASE_URL")), "/")
-	apiKey := strings.TrimSpace(os.Getenv("ZENCHRON_LLM_API_KEY"))
-	if baseURL == "" {
-		if apiKey != "" {
-			return nil, errors.New("ZENCHRON_LLM_API_KEY requires ZENCHRON_LLM_BASE_URL")
-		}
-		return nil, nil
-	}
-	endpoint, err := url.ParseRequestURI(baseURL)
-	if err != nil || endpoint.Host == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" ||
-		(endpoint.Scheme != "https" && !(endpoint.Scheme == "http" && isLoopbackModelHost(endpoint.Hostname()))) {
-		return nil, errors.New("ZENCHRON_LLM_BASE_URL must be HTTPS or loopback HTTP without credentials or query data")
-	}
-	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/chat/completions"
-	return &agentRuntime{endpoint: endpoint, apiKey: apiKey, client: &http.Client{Timeout: 45 * time.Second}}, nil
-}
-
-func isLoopbackModelHost(host string) bool {
-	return strings.EqualFold(host, "localhost") || (net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback())
-}
 
 func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch string) error {
 	parts := strings.Split(expectedRemote, "/")
@@ -69,7 +39,7 @@ func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch strin
 func pushGitBranch(ctx context.Context, worktree, branch string) error {
 	pushCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	push := exec.CommandContext(pushCtx, "git", "-C", worktree, "push", "origin",
+	push := gitCommand(pushCtx, "-C", worktree, "push", "origin",
 		"refs/heads/"+branch+":refs/heads/"+branch)
 	push.Stdout, push.Stderr = io.Discard, io.Discard
 	if err := push.Run(); err != nil {
@@ -103,18 +73,18 @@ func (buffer *boundedDiff) Write(input []byte) (int, error) {
 func (buffer *boundedDiff) String() string { return strings.ToValidUTF8(string(buffer.data), "") }
 
 func collectAgentRunDiff(ctx context.Context, worktree, baseBranch string) (string, bool, error) {
-	add := exec.CommandContext(ctx, "git", "add", "--intent-to-add", "--", ".")
+	add := gitCommand(ctx, "add", "--intent-to-add", "--", ".")
 	add.Dir = worktree
 	if err := add.Run(); err != nil {
 		return "", false, err
 	}
-	mergeBase := exec.CommandContext(ctx, "git", "merge-base", baseBranch, "HEAD")
+	mergeBase := gitCommand(ctx, "merge-base", baseBranch, "HEAD")
 	mergeBase.Dir = worktree
 	base, err := mergeBase.Output()
 	if err != nil {
 		return "", false, fmt.Errorf("find agent branch base: %w", err)
 	}
-	command := exec.CommandContext(ctx, "git", "diff", strings.TrimSpace(string(base)), "--no-ext-diff", "--no-color", "--")
+	command := gitCommand(ctx, "diff", strings.TrimSpace(string(base)), "--no-ext-diff", "--no-textconv", "--no-color", "--")
 	command.Dir = worktree
 	buffer := &boundedDiff{}
 	command.Stdout, command.Stderr = buffer, io.Discard
@@ -125,19 +95,19 @@ func collectAgentRunDiff(ctx context.Context, worktree, baseBranch string) (stri
 }
 
 func commitAgentRunChanges(ctx context.Context, worktree, baseBranch, runID string, attempt int) (string, error) {
-	add := exec.CommandContext(ctx, "git", "add", "-A", "--", ".")
+	add := gitCommand(ctx, "add", "-A", "--", ".")
 	add.Dir = worktree
 	if err := add.Run(); err != nil {
 		return "", fmt.Errorf("stage agent branch changes: %w", err)
 	}
-	check := exec.CommandContext(ctx, "git", "diff", "--cached", "--quiet")
+	check := gitCommand(ctx, "diff", "--cached", "--quiet")
 	check.Dir = worktree
 	if err := check.Run(); err != nil {
 		var exitError *exec.ExitError
 		if !errors.As(err, &exitError) || exitError.ExitCode() != 1 {
 			return "", fmt.Errorf("check staged agent changes: %w", err)
 		}
-		commit := exec.CommandContext(ctx, "git", "-c", "user.name=Zenchron Agent", "-c",
+		commit := gitCommand(ctx, "-c", "user.name=Zenchron Agent", "-c",
 			"user.email=agent@zenchron.invalid", "-c", "commit.gpgsign=false", "commit", "-m",
 			fmt.Sprintf("Agent run %s attempt %d", runID, attempt))
 		commit.Dir = worktree
@@ -146,13 +116,13 @@ func commitAgentRunChanges(ctx context.Context, worktree, baseBranch, runID stri
 			return "", fmt.Errorf("create isolated agent commit: %w", err)
 		}
 	}
-	head := exec.CommandContext(ctx, "git", "rev-parse", "--verify", "HEAD")
+	head := gitCommand(ctx, "rev-parse", "--verify", "HEAD")
 	head.Dir = worktree
 	commitID, err := head.Output()
 	if err != nil {
 		return "", fmt.Errorf("read isolated agent commit: %w", err)
 	}
-	base := exec.CommandContext(ctx, "git", "merge-base", baseBranch, "HEAD")
+	base := gitCommand(ctx, "merge-base", baseBranch, "HEAD")
 	base.Dir = worktree
 	baseID, err := base.Output()
 	if err != nil {

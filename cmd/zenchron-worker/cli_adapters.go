@@ -23,6 +23,8 @@ func newCLIProviders() map[string]*cliProvider {
 			readyArgs: []string{"login", "status"},
 			isReady:   func(_ []byte, err error) bool { return err == nil },
 			args:      codexArguments, parse: func(line []byte) []cliEvent { return []cliEvent{parseCodexEvent(line)} },
+			// Codex always runs model commands, so it is ready only where its sandbox is proven to hold.
+			confinement: verifyCodexConfinement,
 		},
 		workerapi.ProviderClaude: {
 			id: workerapi.ProviderClaude, binary: "claude", versionArgs: []string{"--version"},
@@ -33,7 +35,7 @@ func newCLIProviders() map[string]*cliProvider {
 				}
 				return err == nil && json.Unmarshal(output, &status) == nil && status.LoggedIn
 			},
-			args: claudeArguments, parse: parseClaudeEvent,
+			args: claudeArguments, parse: parseClaudeEvent, commandSandbox: claudeSandboxAvailable,
 		},
 	}
 }
@@ -45,19 +47,10 @@ func canWrite(command workerapi.AgentRunCommand) bool {
 	return slices.Contains(command.Profile.Tools, "code.write")
 }
 
-// sandboxRoots are the locations both provider sandboxes are built from.
-func sandboxRoots() (home, temporary string) {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "/" {
-		home = ""
-	}
-	return home, os.TempDir()
-}
-
 // codexArguments uses `codex exec` with JSONL events. The prompt arrives on stdin. Model-run commands
 // are confined by a Codex permission profile instead of the stock workspace-write mode, because that
-// mode confines writes only: the profile also makes the home directory unreadable apart from the
-// worktree and the listed read paths. Network access stays off, as in the stock mode.
+// mode confines writes only: the profile also makes the workspace's deny paths unreadable apart from
+// the worktree and the listed read paths. Network access stays off, as in the stock mode.
 func codexArguments(command workerapi.AgentRunCommand, workspace runWorkspace) []string {
 	args := []string{"exec", "--json", "--color", "never", "-c", `default_permissions="zenchron"`,
 		"-c", "permissions.zenchron.filesystem=" + codexFilesystemProfile(workspace, canWrite(command)), "--cd", workspace.path}
@@ -68,18 +61,17 @@ func codexArguments(command workerapi.AgentRunCommand, workspace runWorkspace) [
 }
 
 // codexFilesystemProfile is a TOML inline table of path = access. More specific paths win in Codex, so
-// the worktree and read paths stay usable inside a denied home directory.
+// the worktree and read paths stay usable inside a denied directory.
 func codexFilesystemProfile(workspace runWorkspace, writable bool) string {
-	home, temporary := sandboxRoots()
 	access := "read"
 	if writable {
 		access = "write"
 	}
-	entries := []string{`"/"="read"`}
-	if home != "" {
-		entries = append(entries, strconv.Quote(home)+`="none"`)
+	entries := []string{`"/"="read"`, strconv.Quote(os.TempDir()) + `="write"`}
+	for _, path := range workspace.denyPaths {
+		entries = append(entries, strconv.Quote(path)+`="none"`)
 	}
-	entries = append(entries, strconv.Quote(workspace.path)+"="+strconv.Quote(access), strconv.Quote(temporary)+`="write"`)
+	entries = append(entries, strconv.Quote(workspace.path)+"="+strconv.Quote(access))
 	for _, path := range workspace.readPaths {
 		entries = append(entries, strconv.Quote(path)+`="read"`)
 	}
@@ -157,14 +149,14 @@ func codexCompletedItem(id, itemType, text, command string, exitCode *int, chang
 // claudeArguments uses print mode with stream-json events. The prompt arrives on stdin. User settings and
 // MCP servers are not loaded, which keeps personal plugins and connectors out of runs, and hooks are
 // disabled for every profile: a project hook is a script in the worktree that would run outside any sandbox,
-// and a writing agent could change it first. Profiles get file tools only, unless they may run tests: then
-// Bash is offered, but only inside Claude Code's own sandbox.
+// and a writing agent could change it first. Profiles get file tools only, unless they may run tests on a
+// machine that has the sandbox backend: then Bash is offered, but only inside Claude Code's own sandbox.
 func claudeArguments(command workerapi.AgentRunCommand, workspace runWorkspace) []string {
 	tools, mode := "Read,Glob,Grep", "default"
 	if canWrite(command) {
 		tools, mode = "Read,Edit,Write,Glob,Grep", "acceptEdits"
 	}
-	sandboxed := canWrite(command) && slices.Contains(command.Profile.Tools, "tests.run")
+	sandboxed := workspace.commandSandbox && canWrite(command) && slices.Contains(command.Profile.Tools, "tests.run")
 	if sandboxed {
 		tools += ",Bash"
 	}
@@ -177,9 +169,14 @@ func claudeArguments(command workerapi.AgentRunCommand, workspace runWorkspace) 
 	return args
 }
 
+// claudeSandboxFallback enables the sandbox and nothing else. It is used only if the full settings
+// cannot be encoded, so a run never starts with a shell and without a sandbox.
+const claudeSandboxFallback = `{"disableAllHooks":true,"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false}}`
+
 // claudeSettings disables hooks for every run. With sandboxed set it also confines every shell command:
-// commands that cannot be sandboxed are refused, writes are limited to the worktree and the temporary
-// directory, and the home directory cannot be read apart from the worktree itself.
+// Claude Code refuses to start when the sandbox cannot be set up, commands that cannot be sandboxed are
+// refused, writes are limited to the worktree and the temporary directory, and the workspace's deny
+// paths cannot be read apart from the worktree and the read paths.
 func claudeSettings(workspace runWorkspace, sandboxed bool) string {
 	if !sandboxed {
 		return `{"disableAllHooks":true}`
@@ -188,26 +185,34 @@ func claudeSettings(workspace runWorkspace, sandboxed bool) string {
 		DenyRead   []string `json:"denyRead,omitempty"`
 		AllowRead  []string `json:"allowRead"`
 		AllowWrite []string `json:"allowWrite"`
+		DenyWrite  []string `json:"denyWrite,omitempty"`
 	}
 	type sandbox struct {
-		Enabled                  bool       `json:"enabled"`
+		Enabled bool `json:"enabled"`
+		// Without this Claude Code runs the shell unconfined when the sandbox backend is missing.
+		FailIfUnavailable        bool       `json:"failIfUnavailable"`
 		AutoAllowBashIfSandboxed bool       `json:"autoAllowBashIfSandboxed"`
 		AllowUnsandboxedCommands bool       `json:"allowUnsandboxedCommands"`
 		Filesystem               filesystem `json:"filesystem"`
 	}
-	home, temporary := sandboxRoots()
-	rules := filesystem{AllowRead: append([]string{workspace.path}, workspace.readPaths...), AllowWrite: []string{temporary}}
-	if home != "" {
-		rules.DenyRead = []string{home}
+	rules := filesystem{DenyRead: workspace.denyPaths, AllowRead: append([]string{workspace.path}, workspace.readPaths...),
+		AllowWrite: []string{os.TempDir()}}
+	// A denied location inside the writable temporary directory would otherwise stay writable. Claude
+	// Code lets a write denial win over the worktree nested in it, so locations that contain the
+	// worktree cannot be listed.
+	// ponytail: with ZENCHRON_WORKTREES_ROOT inside the temporary directory, a Claude Code shell can write
+	// (not read) other runs' worktrees; keep the root elsewhere, as the default is.
+	for _, path := range workspace.denyPaths {
+		if !strings.HasPrefix(workspace.path+string(filepath.Separator), path+string(filepath.Separator)) {
+			rules.DenyWrite = append(rules.DenyWrite, path)
+		}
 	}
 	settings, err := json.Marshal(struct {
 		DisableAllHooks bool    `json:"disableAllHooks"`
 		Sandbox         sandbox `json:"sandbox"`
-	}{true, sandbox{Enabled: true, AutoAllowBashIfSandboxed: true, Filesystem: rules}})
+	}{true, sandbox{Enabled: true, FailIfUnavailable: true, AutoAllowBashIfSandboxed: true, Filesystem: rules}})
 	if err != nil {
-		// The value is built from strings only; if it cannot be encoded, give the CLI settings that enable
-		// the sandbox and nothing else rather than running without one.
-		return `{"disableAllHooks":true,"sandbox":{"enabled":true,"allowUnsandboxedCommands":false}}`
+		return claudeSandboxFallback
 	}
 	return string(settings)
 }

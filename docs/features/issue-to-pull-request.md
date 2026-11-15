@@ -89,18 +89,25 @@ that exits successfully is therefore not reported as delivered work unless verif
 - Each run has its own branch `zenchron/agent-run/<run id>` and its own worktree. The worker refuses any other branch
   name, so two runs never share files and a run cannot push to another branch.
 - The provider process gets the prompt on stdin. Codex runs under a permission profile built by the worker: the
-  worktree is writable (read-only when the profile lacks `code.write`), the temporary directory is writable, the home
-  directory is unreadable apart from the worktree, the repository's Git metadata, and operator-listed read paths, and
-  network access is off. Claude Code runs without user settings or MCP servers and with file tools only, unless
-  the profile has both `code.write` and `tests.run`: then it also gets Bash, forced into Claude Code's sandbox, which
-  refuses commands that cannot be sandboxed, allows writes only in the worktree and the temporary directory, and
-  denies reading the home directory outside the worktree and the listed read paths.
-- Every provider starts under `zenchron-worker guard`. If the worker process dies for any reason, the guard stops the
-  provider's whole process group within seconds, so no agent keeps editing a worktree without a worker.
-  Claude Code hooks are disabled for every run, because a project hook is a worktree script that would run outside the
-  sandbox. Worker, GitHub, SSH-agent, AWS, Google application-credential, and provider API-key environment variables
-  are removed from the provider and from verification commands, so a subscription sign-in is never replaced
-  by API billing.
+  worktree is writable (read-only when the profile lacks `code.write`), the temporary directory is writable, network
+  access is off, and home directories, mounted volumes, every checkout the worker serves, and the other runs'
+  worktrees are unreadable; the run's own worktree, the repository's Git metadata, and operator-listed read paths
+  are re-allowed. Codex is reported ready only after a self-test of that sandbox at worker start. Claude Code runs
+  without user settings or MCP servers and with file tools only, unless the profile has both `code.write` and
+  `tests.run` and the worker has Claude Code's sandbox backend: then it also gets Bash, forced into that sandbox with
+  the same rules, which refuses commands that cannot be sandboxed and refuses to start without a working sandbox.
+  [Worker enrollment and project access](worker-enrollment-and-project-access.md) states the boundary by provider
+  and operating system.
+- Every provider and every verification command starts through the attempt's exclusive claim on the worktree and
+  under `zenchron-worker guard`, which records every process the command starts. When the provider exits, when the
+  run is cancelled, or when the worker process dies for any reason, the guard stops them all, including tool commands
+  Codex starts as their own session. A new attempt first stops whatever an earlier attempt left and fails instead of
+  running beside it, so two attempts never write the same worktree.
+- Claude Code hooks are disabled for every run, and the worker's own Git commands run with Git hooks disabled, because
+  a hook can be a script in the worktree that would run outside the sandbox. Provider and verification processes
+  inherit only a fixed list of variables (path, home, locale, temporary directory, proxy and certificate settings,
+  CLI configuration directories) plus the operator's per-repository `environment`; tokens in the developer's shell
+  and provider API keys never reach them, so a subscription sign-in is never replaced by API billing.
 - The profile's model is passed to the CLI; the model name `default` leaves the choice to the CLI's own configuration.
 - Events and the final message are redacted for known credential formats, the worker token, and local absolute paths,
   and bounded: 1,000 bytes per event, 300 stored events per run, 20,000 bytes of final output.
@@ -110,7 +117,8 @@ that exits successfully is therefore not reported as delivered work unless verif
 - The pull request is created with the control plane's GitHub credential, titled after the issue, and ends with
   `Closes #<issue>`. Creation reuses an open pull request for the same branch. If GitHub fails after the push,
   `POST /api/v1/agent-runs/{id}/publish` retries without creating a duplicate.
-- A change request from the dashboard, or one imported from GitHub with `sync-reviews`, queues another attempt on the
+- A change request from the dashboard, one delivered by a [GitHub webhook](github-webhooks.md), or one imported
+  from GitHub with `sync-reviews`, queues another attempt on the
   same branch and worktree; the new commit lands on the same pull request. A run has at most three attempts. When
   several change requests are imported at once, all are kept and the newest queues the attempt.
 - The worker retries delivering a result up to four times after a connection or server error, so a finished run is
@@ -163,10 +171,12 @@ in Live.
 | `POST /api/v1/agent-runs/{id}/cancel` | Cancel a queued or running run |
 | `POST /api/v1/agent-runs/{id}/request-changes` | Queue a follow-up attempt with feedback |
 | `POST /api/v1/agent-runs/{id}/sync-reviews` | Import change requests submitted on GitHub |
+| `POST /api/v1/github/webhook` | Signed GitHub deliveries for reviews and check runs |
 | `POST /api/v1/agent-runs/{id}/publish` | Retry pull-request creation after a GitHub failure |
 
-Agent profiles select a CLI with `provider` set to `codex-cli` or `claude-code`. Any other provider value uses the
-OpenAI-compatible chat runtime described in [Agent run queue](agent-run-queue.md).
+Agent profiles select a CLI with `provider` set to `codex-cli` or `claude-code`. A profile with any other provider
+value can be saved but not run: `POST /api/v1/agent-runs` refuses it with `409`. The CLI process runner is the only
+execution implementation.
 
 ## Setup
 
@@ -237,8 +247,8 @@ Automated, deterministic:
 - `go test ./cmd/zenchron -run 'TestIssueRun|TestPullRequest|TestProgress|TestStaleAttempt|TestRunWaits|TestResult|TestVerificationFailure' -count=1`
   covers the issue snapshot and untrusted-comment filtering, identity linking, idempotent publication, lease renewal
   and fencing, provider gating, result validation, and review import against a fake GitHub API.
-- `cd dashboard && npm run test:e2e:agent-runtime` runs the real control plane and worker binaries end to end with
-  the chat runtime.
+- `cd dashboard && npm run test:e2e:agent-runtime` runs the real control plane and worker binaries end to end
+  through the fake Codex CLI in `dashboard/e2e/fake-cli` (see [Agent run queue](agent-run-queue.md)).
 
 - `cd dashboard && npm run test:e2e -- e2e/z_run_evidence.spec.ts` covers the queue dialog (issue selection and
   creation, the request body, a blocked unready provider, issues unavailable), the Mock/Live switch,
@@ -266,7 +276,24 @@ Live, on 2026-11-11 against `bogdaniel/zenchron-engineering-os` with a loopback 
 | Restart and cancellation repeated on the final build | Run `4e2d7f7cc2bf8549cd7ac171c59cc7e2`: control plane killed mid-run, attempt 1 `lease_expired`, attempt 2 resumed; cancelled with the Reviews "Cancel run" button in 0.8 s, partial diff kept, no provider process left |
 | Claude Code run started and inspected in the dashboard, final build | Issue [#353](https://github.com/bogdaniel/zenchron-engineering-os/issues/353); run `48513125f6833b6d21a270471ef47891`, commit `b5921c7`, verification `passed`, [PR #354](https://github.com/bogdaniel/zenchron-engineering-os/pull/354) |
 
-The first six rows used the build before the independent review fixes; the dashboard rows used builds that include
+Live, on 2026-11-14 with the build of this change (base `966ebfb` plus the later fixes on the branch), a loopback
+control plane with `ZENCHRON_GITHUB_TOKEN` and `ZENCHRON_GITHUB_WEBHOOK_SECRET`, and one worker with verification
+`gofmt -l cmd internal`, `go vet ./...`, `go build ./...`:
+
+| Step | Evidence |
+|---|---|
+| Codex CLI 0.167.0 on a backlog issue | Issue [#372](https://github.com/bogdaniel/zenchron-engineering-os/issues/372); run `f798e755f6a6b8eebbdaca11832d89c1`, worker `3e8b90682340009a68a3bb631a30dedd`, branch `zenchron/agent-run/f798e755…`, attempt 1 commit `c5d522c`, verification `passed`, [PR #373](https://github.com/bogdaniel/zenchron-engineering-os/pull/373) (wire type, control-plane change, worker log, tests, two documents) |
+| Review and remediation, authorized user | A review comment was posted on PR #373 and the same text sent with `request-changes`; attempt 2 produced commit `bfa91c4` on the same branch and pull request, verification `passed` |
+| Claude Code 2.1.322 on a backlog issue | Issue [#371](https://github.com/bogdaniel/zenchron-engineering-os/issues/371); run `ed288f2bfd99fbfeebbd69db75278fb9`, attempt 1 commit `be815d9`, verification `passed`, [PR #374](https://github.com/bogdaniel/zenchron-engineering-os/pull/374). The agent ran `go test ./cmd/zenchron-worker -run TestCleanupWorktrees`, `go vet`, and `go build` itself inside its sandboxed shell |
+| Review delivered through the webhook | Review `5907229109` on PR #374 was posted on GitHub and delivered to `POST /api/v1/github/webhook` as a `pull_request_review` event built from that review and signed with the webhook secret. A delivery signed with another secret got 401; the valid one answered `follow-up attempt queued`; the same delivery again answered `duplicate`; the same review under a new delivery id answered `ignored: the review is already recorded` |
+| Worker killed during that follow-up | In attempt 2 the worker (pid 6940) was killed with SIGKILL while Claude Code was working; the guard and the provider were gone within one second. The lease expired, the attempt was closed as `lease_expired`, the restarted worker claimed attempt 3 in the same worktree, and it finished with commit `b6ab8d3` on PR #374, verification `passed` |
+| Two developers, two workers, disjoint repositories | A control plane with GitHub sign-in configured and an access policy, two real workers with their own identities, sessions for `alice`, `bob`, and the administrator `carol`: 36 of 36 checks passed, covering scoped listings, refused cross-project runs, reads, change requests, worker claims and results, products, token rotation with overlap and immediate revocation, grant and worker removal, and the audit log. The provider in this scenario was the fake Codex CLI, because it tests authorization, not a model |
+
+GitHub did not originate the webhook delivery: the control plane listened on loopback, and GitHub does not let a pull
+request's author submit a change request, so the review was a comment review whose delivery was built with the state
+`changes_requested`. Everything after the control plane received the delivery ran unmodified.
+
+The first six rows of the 2026-11-11 table used the build before the independent review fixes; the dashboard rows used builds that include
 them. Those dashboard rows were driven by a Playwright script acting on the real pages; the hand-run walk-through is
 recorded under "Repeating the live check". A newly created issue can
 take a few seconds to appear in GitHub's issue list and therefore in the dialog.
@@ -303,8 +330,12 @@ panel. The other dashboard rows in the table above were driven by a script actin
   tests that bind a loopback port. The worker's verification runs outside the sandbox and covers them.
 - A build that needs a dependency cache in the home directory runs inside the agent only if the operator lists that
   cache under `read_paths`.
-- Provider sandbox behavior was probed by hand against Codex 0.167.0 and Claude Code 2.1.322 on macOS. CI has neither
-  CLI, so only the arguments the worker passes are tested automatically.
-- Review and CI state are read on request, not pushed by webhooks.
+- Provider sandbox behavior is tested against the installed Codex 0.167.0 and Claude Code 2.1.322 on macOS, with and
+  without a model call (see [Worker enrollment and project access](worker-enrollment-and-project-access.md)). CI has
+  neither CLI, so there only the arguments, the self-test logic, and the process control are tested.
+- A webhook delivery from GitHub itself to a deployed control plane, and a change request submitted by a second
+  GitHub account, have not been exercised; see the note under the 2026-11-14 table.
+- Between a worker's result and the pull request being created or found, a run reports `pull_request_failed` for
+  about a second before it reports `published`.
 - Usage is whatever the CLI reports. Codex reports tokens without cost; Claude Code reports a cost figure even under
   a subscription. No budget is enforced beyond the time limits and the three-attempt cap.

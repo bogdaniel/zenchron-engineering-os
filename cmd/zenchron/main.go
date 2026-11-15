@@ -42,6 +42,9 @@ func run() error {
 	if !isLoopbackHost(host) && !auth.https {
 		return fmt.Errorf("ZENCHRON_PUBLIC_URL must use https for a non-loopback control plane")
 	}
+	if _, err := loadWebhookSecret(); err != nil {
+		return err
+	}
 	dataDir, err := controlPlaneDataDirectory()
 	if err != nil {
 		return err

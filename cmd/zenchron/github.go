@@ -216,22 +216,25 @@ func localOrAuthorizedClient(r *http.Request) bool {
 // projectRepository resolves the GitHub repository behind a project the caller is allowed to touch.
 // A project outside the caller's access is reported exactly like one that does not exist.
 func (registry *workerRegistry) projectRepository(w http.ResponseWriter, r *http.Request) (string, string, bool) {
-	projectID := r.PathValue("id")
-	registry.mu.RLock()
-	var remote string
-	for _, project := range registry.projects {
-		if project.ID == projectID {
-			remote = project.GitRemote
-			break
-		}
-	}
-	registry.mu.RUnlock()
+	remote, _ := registry.repositoryOf(r.PathValue("id"))
 	owner, repository, ok := githubRepositoryParts(remote)
 	if !ok || !accessFor(r).allows(remote) {
 		http.Error(w, "project is not connected to a GitHub repository", http.StatusNotFound)
 		return "", "", false
 	}
 	return owner, repository, true
+}
+
+// repositoryOf resolves a registered project id to its repository.
+func (registry *workerRegistry) repositoryOf(projectID string) (string, bool) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+	for _, project := range registry.projects {
+		if project.ID == projectID {
+			return project.GitRemote, true
+		}
+	}
+	return "", false
 }
 
 func githubRepositoryParts(remote string) (string, string, bool) {

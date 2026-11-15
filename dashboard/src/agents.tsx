@@ -16,7 +16,7 @@ import { PanelHeading } from './PanelHeading';
 import { PanelCard } from './PanelCard';
 import { PageHeading } from './PageHeading';
 import { AgentPromptEditor } from './AgentPromptEditor';
-import { blocksQueueing, RunIssueSelect, runReadiness, type RunWorker } from './agentRunQueue';
+import { RunIssueSelect, runReadiness, type RunWorker } from './agentRunQueue';
 import { AgentPromptCardActions } from './AgentPromptCardActions';
 import { AgentsMobileSummary } from './AgentsMobileSummary';
 import {
@@ -608,7 +608,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
         <div className="agents-modal-actions">
           <Button variant="subtle" type="button" onClick={() => setRunOpen(false)}>Cancel</Button>
           <Button className="agents-save-button" type="submit" loading={queueRun.isPending}
-            disabled={!onlineProjects.length || blocksQueueing(selected?.provider, runReadiness(selected?.provider, selectedRunWorker).ready)}>
+            disabled={!onlineProjects.length || !runReadiness(selected?.provider, selectedRunWorker).ready}>
             Queue run
           </Button>
         </div>

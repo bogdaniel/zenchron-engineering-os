@@ -92,7 +92,7 @@ Submitting an issue comment, changing issue state, or submitting a PR review is 
 the configured App or token actor; the current preview has no user identity or actor audit and must not be network-exposed. A worker push or PR creation failure keeps
 the local diff available and is shown on the branch review. When a review is submitted from the dashboard for a
 Zenchron-created PR, the control plane matches its isolated branch to the originating run and persists the comment.
-`REQUEST_CHANGES` requeues that same run and branch when the worker is online, has a model runtime and write permission,
+`REQUEST_CHANGES` requeues that same run and branch when the worker is online with the profile's coding CLI ready, the profile has write permission,
 and has attempts remaining. If the worker cannot accept another pass, the feedback is still stored and the dashboard
 reports that no run was queued. GitHub reviews made directly on github.com are not yet imported; webhook or provider
 polling is not implemented. Approve and merge are not enabled; Reviews shows both controls disabled in Live and states

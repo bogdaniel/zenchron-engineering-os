@@ -49,9 +49,9 @@ flowchart LR
     Dashboard -->|Run history, metrics, and 30-day trend| Runs
     Tools[Profile tool allowlist] --> Store
     Runs -->|claim with profile snapshot| Worker[Configured local worker]
-    Worker -->|OpenAI-compatible Chat Completions| Harness[Bounded agent tool loop]
+    Worker -->|start process, provider codex-cli or claude-code| Harness[Codex or Claude Code CLI]
     Worker -->|create isolated branch| Worktree[Per-run Git worktree]
-    Harness -->|profile-allowed read and write tools| Worktree
+    Harness -->|profile-allowed reads, edits, sandboxed commands| Worktree
     Worker -->|fenced result| RunStore
 ```
 

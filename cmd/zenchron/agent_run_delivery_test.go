@@ -50,7 +50,7 @@ func newDeliveryHarness(t *testing.T, provider string) *deliveryHarness {
 	}
 	harness.store = store
 	harness.server = newMuxWithStores(newObjectiveStore(newProductStore()), newWorkflowStore(), agents,
-		newProductStore(), registry, newWorktreeStore(registry), store)
+		newProductStore(), registry, store)
 	harness.heartbeat(testWorkerID, `[{"id":"`+provider+`","version":"1.2.3","ready":true}]`)
 	return harness
 }
@@ -346,6 +346,56 @@ func TestStaleAttemptCannotFinishOrReportAfterRunIsReclaimed(t *testing.T) {
 	defer harness.mu.Unlock()
 	if harness.pullCreates != 0 {
 		t.Fatal("stale attempt published a pull request")
+	}
+}
+
+func TestRunLeaseRecoversAfterRestartAndFailsWhenAttemptsAreUsedUp(t *testing.T) {
+	harness := newDeliveryHarness(t, workerapi.ProviderCodex)
+	run := harness.createIssueRun()
+	harness.claim()
+	// A restarted control plane holds no leases: the running attempt is closed and the run is queued again.
+	registry := harness.store.registry
+	restarted, err := openAgentRunStore(harness.path, registry, harness.store.agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item := restarted.items[run.ID]; item.Status != "queued" || item.Attempts != 1 || len(item.AttemptLog) != 1 ||
+		item.AttemptLog[0].Status != "lease_expired" {
+		t.Fatalf("run after restart = %#v", item)
+	}
+	harness.store = restarted
+	harness.server = newMuxWithStores(newObjectiveStore(newProductStore()), newWorkflowStore(), restarted.agents,
+		newProductStore(), registry, restarted)
+	if second := harness.claim(); second.ID != run.ID || second.Attempts != 2 {
+		t.Fatalf("claim after restart = %#v, want the same run on attempt 2", second)
+	}
+	if _, status := harness.finish(run.ID, pushedResult); status != http.StatusConflict {
+		t.Fatalf("result of the attempt from before the restart returned HTTP %d", status)
+	}
+	expireLease := func() {
+		restarted.mu.Lock()
+		defer restarted.mu.Unlock()
+		item := restarted.items[run.ID]
+		item.LeaseUntil = time.Now().Add(-time.Second)
+		restarted.items[run.ID] = item
+	}
+	expireLease()
+	if third := harness.claim(); third.Attempts != maxAgentRunAttempts {
+		t.Fatalf("last claim = attempt %d, want %d", third.Attempts, maxAgentRunAttempts)
+	}
+	expireLease()
+	if response := harness.call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", ""); response.Code != http.StatusNoContent {
+		t.Fatalf("claim after the last attempt expired returned HTTP %d", response.Code)
+	}
+	restarted.mu.Lock()
+	failed := restarted.items[run.ID]
+	restarted.mu.Unlock()
+	if failed.Status != "failed" || failed.Error != "worker lease expired" || failed.TerminationReason != workerapi.TerminationLeaseLost ||
+		failed.Attempts != maxAgentRunAttempts || len(failed.AttemptLog) != maxAgentRunAttempts {
+		t.Fatalf("run after its attempts were used up = %#v", failed)
+	}
+	if response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/cancel", ""); response.Code != http.StatusConflict {
+		t.Fatalf("cancelling a failed run returned HTTP %d", response.Code)
 	}
 }
 

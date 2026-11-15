@@ -32,13 +32,13 @@ flowchart LR
   configuration rail, the provider card grid with category filters, eight settings cards, and the Discard / Test
   Connections / Save row. `#settings` hides the provider grid and marks Organization Profile in the rail. The rail
   filters provider groups or scrolls to the related settings card in both modes.
-- **Live provider cards.** Twelve cards. Six report real state: Control plane API (`/healthz`, online or offline),
+- **Live provider cards.** Eleven cards. Five report real state: Control plane API (`/healthz`, online or offline),
   Local workers (heartbeat counts and which coding CLIs are ready on online workers), GitHub (github.com checkouts
-  detected, read-only sync), Model endpoint (the worker-reported OpenAI-compatible endpoint flag; workers that have not
-  sent the field are shown as needing an update, never guessed), OpenAI and Anthropic (the Codex and Claude Code CLIs
-  signed in on online workers). Storage / Evidence is always "Not configured". GitLab, Slack, Linear / Jira,
-  Docker / Registry, and Google (Vertex AI) say "Not connected" and "Not integrated with the control plane." Category
-  counts are computed from these cards. A card's switch reflects its status and is disabled.
+  detected, read-only sync), OpenAI and Anthropic (the Codex and Claude Code CLIs signed in on online workers). There
+  is no model endpoint card: runs execute only through those CLIs. Storage / Evidence is always "Not configured".
+  GitLab, Slack, Linear / Jira, Docker / Registry, and Google (Vertex AI) say "Not connected" and "Not integrated
+  with the control plane." Category counts are computed from these cards. A card's switch reflects its status and is
+  disabled.
 - **Card status in full.** A card's link line is one line and truncates. Its options menu has "View status", which
   opens the full sentence in a dialog; the line also carries it as a tooltip.
 - **Live settings cards.** The control plane persists no organization settings, so the Live source has no actions:
@@ -46,7 +46,7 @@ flowchart LR
   empty; Budgets reads "Unavailable" with "Not tracked" rows; Permissions shows the one real access rule (allowlisted
   GitHub users, or the local workspace) with members unavailable. Each card carries a note saying why. Controller
   Configuration shows the API status and the real facts as read-only rows: dashboard auth, state storage, online
-  workers, local checkouts, and configured model endpoints; version, run limits, and its switches are disabled.
+  workers, local checkouts, and the coding CLIs ready on online workers; version, run limits, and its switches are disabled.
 - **Live writes nothing.** Add Integration, Add Policy, Add Secret, Add Rule, Audit log, Import / Export, Activity &
   audit, View Full Audit Log, Discard, Test Connections, and Save are disabled with a reason. The page sends no
   request of its own; it reuses the shell's health, session, worker, and project queries. While those are loading or
@@ -59,7 +59,7 @@ flowchart LR
 - **Authority.** A sanitized `github.com/owner/repository` locator enables issue and PR sync in Reviews. PR review
   submission requires control-plane GitHub authentication with Pull requests write permission; GitHub records the app
   or token actor. The dashboard session identifies an allowlisted OAuth user, but organization roles are not enforced.
-  The worker reports only whether its model endpoint is configured; the endpoint and credentials stay on that worker.
+  The worker reports only which coding CLIs are installed and ready; their sign-ins stay on that worker.
   GitHub App credentials or the `ZENCHRON_GITHUB_TOKEN` fallback are configured in the control-plane environment,
   never in the worker or dashboard.
 - **Layout details.** At tablet widths the page title and status/actions stack so the system-health badge and

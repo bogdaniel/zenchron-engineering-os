@@ -15,19 +15,19 @@ func TestAgentRunCancellationFencesWorkerAndKeepsPartialDiff(t *testing.T) {
 	registry := newWorkerRegistry()
 	agents := newAgentProfileStore()
 	profile := agentProfile{
-		ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Review", Provider: "custom", Model: "test",
+		ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Review", Provider: workerapi.ProviderCodex, Model: "default",
 		Status: "active", Version: 1, UpdatedAt: time.Now().UTC(), Tools: []string{"code.write"},
 	}
 	agents.items[profile.ID] = profile
 	runs := newAgentRunStore(registry, agents)
 	server := newMuxWithStores(newObjectiveStore(newProductStore()), newWorkflowStore(), agents,
-		newProductStore(), registry, newWorktreeStore(registry), runs)
+		newProductStore(), registry, runs)
 	call := func(method, path, body string) *httptest.ResponseRecorder {
 		response := httptest.NewRecorder()
 		server.ServeHTTP(response, httptest.NewRequest(method, path, strings.NewReader(body)))
 		return response
 	}
-	heartbeat := `{"name":"worker","agent_runtime_enabled":true,"projects":[{"id":"` + testProjectID + `","name":"repo","branch":"main"}]}`
+	heartbeat := `{"name":"worker","providers":[{"id":"codex-cli","version":"1","ready":true}],"projects":[{"id":"` + testProjectID + `","name":"repo","branch":"main"}]}`
 	if response := call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/heartbeat", heartbeat); response.Code != http.StatusOK {
 		t.Fatalf("heartbeat returned HTTP %d", response.Code)
 	}

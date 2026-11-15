@@ -66,7 +66,7 @@ export function LocalBranchActions({ run, onCommented }: { run?: AgentRun; onCom
       />
       {run && canComment && !run.can_request_changes && (
         <span className="reviews-action-hint">
-          Request changes requires an online worker, model runtime, code-write permission, and a remaining attempt.
+          Request changes requires an online worker with the profile's coding CLI ready, code-write permission, and a remaining attempt.
         </span>
       )}
       {reviewAction.isError && <span className="reviews-action-error" role="alert">{reviewAction.error.message}</span>}
