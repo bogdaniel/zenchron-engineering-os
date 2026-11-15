@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -94,6 +95,13 @@ func run() error {
 		return fmt.Errorf("locate the worker binary for the process guard: %w", err)
 	}
 	runner.guard = []string{self, "guard"}
+	concurrency, err := loadRunConcurrency()
+	if err != nil {
+		return err
+	}
+	runner.slots = make(chan struct{}, concurrency)
+	// Runs stop with ctx; the worker exits only after each has released its worktree.
+	defer runner.running.Wait()
 	for _, provider := range runner.providers {
 		provider.detect(ctx)
 	}
@@ -107,7 +115,7 @@ func run() error {
 			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects), Providers: runner.providerStatuses()}
 			if err := sendHeartbeat(ctx, runner.client, baseURL, workerID, heartbeat); err != nil {
 				log.Printf("worker heartbeat failed: %v", err)
-			} else if err := processWorkerCommands(ctx, runner, heartbeat, projects); err != nil {
+			} else if err := runner.dispatch(ctx, projects); err != nil {
 				log.Printf("worker command failed: %v", err)
 			}
 		}
@@ -117,6 +125,26 @@ func run() error {
 		case <-ticker.C:
 		}
 	}
+}
+
+const (
+	workerHeartbeatInterval = 5 * time.Second
+	defaultRunConcurrency   = 2
+	maxRunConcurrency       = 8
+)
+
+// loadRunConcurrency reads how many runs this worker may execute at once. Each run has its own worktree
+// and branch, so the limit protects the machine and the provider accounts, not the checkouts.
+func loadRunConcurrency() (int, error) {
+	value := strings.TrimSpace(os.Getenv("ZENCHRON_WORKER_CONCURRENCY"))
+	if value == "" {
+		return defaultRunConcurrency, nil
+	}
+	concurrency, err := strconv.Atoi(value)
+	if err != nil || concurrency < 1 || concurrency > maxRunConcurrency {
+		return 0, fmt.Errorf("ZENCHRON_WORKER_CONCURRENCY must be a number between 1 and %d", maxRunConcurrency)
+	}
+	return concurrency, nil
 }
 
 // discoverServedProjects returns the checkouts this worker may advertise and execute work for.
