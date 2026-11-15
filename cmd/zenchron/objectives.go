@@ -78,6 +78,13 @@ func openObjectiveStore(path string, products *productStore) (*objectiveStore, e
 	return store, nil
 }
 
+func (store *objectiveStore) get(id string) (objective, bool) {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	item, exists := store.items[id]
+	return item, exists
+}
+
 func (store *objectiveStore) persistLocked() error {
 	if store.path == "" {
 		return nil

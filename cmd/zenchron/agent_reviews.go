@@ -129,8 +129,7 @@ func (store *agentRunStore) recordReview(
 	})
 	item.UpdatedAt = time.Now().UTC()
 	if canQueue {
-		item.Status, item.Output, item.Error, item.CancelRequested, item.LeaseUntil = "queued", "", "", false, time.Time{}
-		item.TerminationReason, item.Verification, item.Publication = "", "", ""
+		item.requeue()
 	}
 	store.items[runID] = item
 	if err := store.persistLocked(); err != nil {
@@ -140,4 +139,28 @@ func (store *agentRunStore) recordReview(
 	}
 	store.mu.Unlock()
 	return item, 0, ""
+}
+
+// requeue returns a finished run to the queue for another pass on the same branch and worktree.
+func (item *agentRun) requeue() {
+	item.Status, item.Output, item.Error, item.CancelRequested, item.LeaseUntil = "queued", "", "", false, time.Time{}
+	item.TerminationReason, item.Verification, item.Publication = "", "", ""
+	item.UpdatedAt = time.Now().UTC()
+}
+
+// requeueForUnit queues another pass of a WorkUnit's finished run: remediation, a resumed decision, or
+// publication of a reviewed candidate. The run's attempt limit bounds how often this can happen. A run
+// that is already queued or running is left alone, so repeating the call is harmless.
+func (store *agentRunStore) requeueForUnit(runID string, publish bool) (agentRun, int, string) {
+	return store.update(runID, func(item *agentRun) (int, string) {
+		if item.Status == "queued" || item.Status == "running" {
+			return 0, ""
+		}
+		if item.Attempts >= maxAgentRunAttempts {
+			return http.StatusConflict, "the run has used all of its attempts"
+		}
+		item.requeue()
+		item.PullRequestEnabled = item.PullRequestEnabled || publish
+		return 0, ""
+	})
 }

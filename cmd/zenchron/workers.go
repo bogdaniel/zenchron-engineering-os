@@ -101,6 +101,9 @@ func newPersistentMux(dataDir string) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	if runs.graphs, err = openWorkGraphStore(filepath.Join(absoluteDir, "work-graphs.json"), runs, objectives, agents, workflows); err != nil {
+		return nil, err
+	}
 	return newMuxWithStores(objectives, workflows, agents, products, registry, runs), nil
 }
 
@@ -118,7 +121,11 @@ func newMuxWithStores(
 ) http.Handler {
 	registry.runs = runs
 	products.repositoryOf = registry.repositoryOf
+	if runs.graphs == nil {
+		runs.graphs = newWorkGraphStore(runs, objectives, agents, workflows)
+	}
 	mux := http.NewServeMux()
+	runs.graphs.routes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
