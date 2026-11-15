@@ -27,7 +27,8 @@ sequenceDiagram
     W->>W: Scan root and direct child folders for .git
     W->>W: Keep paths and remote credentials local; derive opaque IDs and sanitized origin locator
     W->>C: PUT heartbeat with worker and project names, branch, IDs, sanitized origin locator
-    C-->>W: 200 OK
+    C-->>W: 200 + optional skipped_projects [{id, reason}]
+    W->>W: Log skipped local projects when the skipped set changes
     D->>C: GET /healthz
     C-->>D: {status: ok}
     D->>C: GET /api/v1/workers and /api/v1/projects (every 5s)
@@ -55,12 +56,12 @@ Open <http://127.0.0.1:4173>. The dashboard dev server rebuilds the React app on
 ## API
 
 - `GET /healthz` returns `{"status":"ok"}`.
-- `PUT /api/v1/workers/{id}/heartbeat` upserts a worker name, server timestamp, and complete project snapshot. Worker IDs must be 32 hexadecimal characters; worker names are trimmed and limited to 128 bytes. Project IDs must be 32 hexadecimal characters; project names are trimmed and limited to 255 bytes. The project `git_remote` field is a sanitized host/repository path with URL credentials and query strings removed.
+- `PUT /api/v1/workers/{id}/heartbeat` upserts a worker name, server timestamp, and complete project snapshot. Its response includes `skipped_projects: [{id, reason}]` only when projects were not registered. Reasons are `repository_not_granted` and `project_id_registered_by_another_worker`; the response does not include repository names or details about another worker. Worker IDs must be 32 hexadecimal characters; worker names are trimmed and limited to 128 bytes. Project IDs must be 32 hexadecimal characters; project names are trimmed and limited to 255 bytes. The project `git_remote` field is a sanitized host/repository path with URL credentials and query strings removed.
 - `GET /api/v1/workers` returns each worker and its current status.
 - `GET /api/v1/projects` returns each discovered checkout, its worker, and online/offline status. A worker is online when its last heartbeat is within 15 seconds.
 - `GET /api/v1/workers/healthz` returns `200` while any worker is online and `503` otherwise; it is used by the focused browser check.
 
-The worker sends an immediate heartbeat and repeats every five seconds. Worker and project IDs are stable opaque hashes derived from machine/user identity and local checkout path; local paths and remote credentials are excluded from heartbeat JSON. A sanitized origin host/repository locator is sent so the control plane can map supported GitHub.com checkouts to issue and pull-request queries, plus top-level pull-request review submission. The worker also reports each installed coding CLI with its version, whether it is ready, and why not; CLI sign-ins and credentials stay local. `ZENCHRON_PROJECTS_ROOT` selects a scan root (default `.`). A Git root is included directly; otherwise only immediate child folders are scanned. The registry is in memory, so restarting the control plane clears the list; a running worker registers again on its next heartbeat.
+The worker sends an immediate heartbeat and repeats every five seconds. When `skipped_projects` changes, it logs one line for each skipped project using the local project name and reason; unchanged results do not repeat every heartbeat. Worker and project IDs are stable opaque hashes derived from machine/user identity and local checkout path; local paths and remote credentials are excluded from heartbeat JSON. A sanitized origin host/repository locator is sent so the control plane can map supported GitHub.com checkouts to issue and pull-request queries, plus top-level pull-request review submission. The worker also reports each installed coding CLI with its version, whether it is ready, and why not; CLI sign-ins and credentials stay local. `ZENCHRON_PROJECTS_ROOT` selects a scan root (default `.`). A Git root is included directly; otherwise only immediate child folders are scanned. The registry is in memory, so restarting the control plane clears the list; a running worker registers again on its next heartbeat.
 
 ## Security and scope
 

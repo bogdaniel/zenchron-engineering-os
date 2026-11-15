@@ -27,6 +27,7 @@ sequenceDiagram
   Worker->>API: PUT /api/v1/workers/{id}/heartbeat with Bearer token
   API->>Policy: Token hash must match the grant for exactly this id
   API->>API: Register only projects whose repository is granted to this worker
+  API-->>Worker: 200 + optional skipped_projects [{id, reason}]
   Developer->>API: POST /api/v1/agent-runs (session cookie)
   API->>Policy: User may touch the repository and may dispatch to this worker
   Worker->>API: POST /api/v1/workers/{id}/agent-runs/claim
@@ -129,8 +130,12 @@ the previous one keeps working for 24 hours, so the worker can be restarted at a
 - Rotating, revoking, or removing one worker's credential does not affect any other worker.
 - A repository grant must equal the remote the worker reports, character for character (`github.com/owner/name`, with
   the host lower-cased and no `.git` suffix; the path keeps its case). A project whose remote is not granted is left
-  out of the worker's registration and the heartbeat still returns 200, so a grant that differs only in case or suffix
-  shows up as a missing project, not as an error.
+  out of the worker's registration and the heartbeat still returns 200. The response lists its project ID with reason
+  `repository_not_granted`; a duplicate project ID already registered by another worker is listed with reason
+  `project_id_registered_by_another_worker`. The optional `skipped_projects` field is omitted when nothing was
+  skipped and contains no repository names or details about other workers. A worker logs each skipped local project
+  name and reason once while the skipped set remains unchanged, so a grant mismatch is visible in its log. Without an
+  access policy, reported repositories are unrestricted and are not skipped for `repository_not_granted`.
 - The control plane stores only the SHA-256 of each token. With an access policy, the shared `ZENCHRON_WORKER_TOKEN`
   is not accepted at all.
 - A signed-in user sees only projects, runs, and workers for repositories they are granted. A user without an entry

@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
@@ -15,13 +13,13 @@ const workerHeartbeatInterval = 5 * time.Second
 func processWorkerCommands(
 	ctx context.Context, runner *agentRunner, heartbeat workerapi.Heartbeat, projects []discoveredProject,
 ) error {
-	commandCtx, stopHeartbeat := keepWorkerHeartbeat(ctx, runner.client, runner.baseURL, runner.workerID, heartbeat)
+	commandCtx, stopHeartbeat := keepWorkerHeartbeat(ctx, runner, heartbeat)
 	defer stopHeartbeat()
 	return runner.process(commandCtx, projects)
 }
 
 func keepWorkerHeartbeat(
-	ctx context.Context, client *http.Client, baseURL *url.URL, workerID string, heartbeat workerapi.Heartbeat,
+	ctx context.Context, runner *agentRunner, heartbeat workerapi.Heartbeat,
 ) (context.Context, func()) {
 	heartbeatCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
@@ -34,8 +32,11 @@ func keepWorkerHeartbeat(
 			case <-heartbeatCtx.Done():
 				return
 			case <-ticker.C:
-				if err := sendHeartbeat(heartbeatCtx, client, baseURL, workerID, heartbeat); err != nil &&
-					heartbeatCtx.Err() == nil {
+				response, err := sendHeartbeat(heartbeatCtx, runner.client, runner.baseURL, runner.workerID, heartbeat)
+				if err == nil {
+					err = runner.logSkippedProjects(response, heartbeat.Projects)
+				}
+				if err != nil && heartbeatCtx.Err() == nil {
 					log.Printf("worker heartbeat failed during command: %v", err)
 				}
 			}
