@@ -27,6 +27,9 @@ const (
 	// guardStopGrace is how long the guard lets a command exit after the worker asked it to stop. It is
 	// shorter than cliTerminationGrace so the guard acts before the worker kills the guard itself.
 	guardStopGrace = cliTerminationGrace - 2*time.Second
+	// The ownership lock and the process record live beside the worktree under these suffixes.
+	ownerLockSuffix   = ".owner"
+	ownerRecordSuffix = ".owner.processes"
 )
 
 var errWorktreeStillOwned = errors.New("processes from an earlier attempt still hold the run worktree")
@@ -101,11 +104,11 @@ func writeOwnerRecord(file *os.File, record ownerRecord) error {
 // stopped first: its recorded process group, and every recorded descendant that left that group. If
 // something still holds the claim after that, the attempt fails instead of running beside it.
 func acquireWorktree(ctx context.Context, worktree string, guard []string) (*worktreeOwner, error) {
-	lock, err := os.OpenFile(worktree+".owner", os.O_RDWR|os.O_CREATE, 0o600)
+	lock, err := os.OpenFile(worktree+ownerLockSuffix, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open worktree ownership lock: %w", err)
 	}
-	recordFile, err := os.OpenFile(worktree+".owner.processes", os.O_RDWR|os.O_CREATE, 0o600)
+	recordFile, err := os.OpenFile(worktree+ownerRecordSuffix, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		lock.Close()
 		return nil, fmt.Errorf("open worktree process record: %w", err)
@@ -165,6 +168,60 @@ func (owner *worktreeOwner) tryLock() bool {
 func (owner *worktreeOwner) release() {
 	_ = owner.lock.Close()
 	_ = owner.record.Close()
+}
+
+// claimWorktreeForRemoval takes the ownership lock without waiting, so cleanup never removes a worktree
+// whose processes are still alive. It reports errWorktreeStillOwned when the lock is held. A worktree no
+// attempt ever claimed has no lock file; then the returned release does nothing.
+func claimWorktreeForRemoval(worktree string) (release func(), err error) {
+	lock, err := os.Open(worktree + ownerLockSuffix)
+	if errors.Is(err, os.ErrNotExist) {
+		return func() {}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("open worktree ownership lock: %w", err)
+	}
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = lock.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, errWorktreeStillOwned
+		}
+		return nil, fmt.Errorf("take worktree ownership lock: %w", err)
+	}
+	return func() { _ = lock.Close() }, nil
+}
+
+// recordedProcessesAlive reports whether a process named in the worktree's process record still runs.
+// A tool command a provider started in its own session holds no ownership lock; the record is all that
+// names it. Nothing is stopped here: cleanup only decides whether to keep the worktree. A record that
+// cannot be read is an error, as is an unreadable process table. A worktree no attempt ever claimed has
+// no record.
+func recordedProcessesAlive(worktree string) (bool, error) {
+	file, err := os.Open(worktree + ownerRecordSuffix)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("open worktree process record: %w", err)
+	}
+	defer file.Close()
+	record, err := readOwnerRecord(file)
+	if err != nil {
+		return false, err
+	}
+	live, err := liveProcesses(record.members)
+	return len(live) > 0, err
+}
+
+// removeOwnerFiles deletes the ownership lock and the process record of a removed worktree.
+func removeOwnerFiles(worktree string) error {
+	var failures []error
+	for _, suffix := range []string{ownerLockSuffix, ownerRecordSuffix} {
+		if err := os.Remove(worktree + suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
+			failures = append(failures, fmt.Errorf("remove worktree ownership file: %w", err))
+		}
+	}
+	return errors.Join(failures...)
 }
 
 // command builds a process that runs in its own process group under the guard.

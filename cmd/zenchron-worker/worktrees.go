@@ -110,28 +110,60 @@ func lockWorktree(repository, worktree string) (unlock func()) {
 }
 
 // cleanupWorktrees removes run worktrees that Git considers safe to remove: not locked by a running or
-// crashed attempt and without modified or untracked files. Run branches and their commits are kept.
+// crashed attempt and without modified or untracked files, together with their ownership files. A
+// worktree is kept while a live process holds its ownership lock or a process named in its process
+// record still runs, and when that cannot be determined. Run branches and their commits are kept. A
+// failure on one worktree is reported in the returned error and does not stop the others.
 func cleanupWorktrees(ctx context.Context, root string, projects []discoveredProject) (removed, kept []string, err error) {
+	var failures []error
 	for _, project := range projects {
 		entries, readErr := os.ReadDir(filepath.Join(root, project.ID))
 		if errors.Is(readErr, os.ErrNotExist) {
 			continue
 		}
 		if readErr != nil {
-			return removed, kept, fmt.Errorf("read worktrees for %s: %w", project.Name, readErr)
+			failures = append(failures, fmt.Errorf("read worktrees for %s: %w", project.Name, readErr))
+			return removed, kept, errors.Join(failures...)
 		}
 		for _, entry := range entries {
 			if !entry.IsDir() || !validID(entry.Name()) {
 				continue
 			}
 			label := project.Name + "/" + entry.Name()
-			path := filepath.Join(root, project.ID, entry.Name())
-			if _, removeErr := gitOutput(ctx, "-C", project.Path, "worktree", "remove", path); removeErr != nil {
+			wasRemoved, removeErr := removeWorktree(ctx, project.Path, filepath.Join(root, project.ID, entry.Name()))
+			if removeErr != nil {
+				failures = append(failures, fmt.Errorf("clean up %s: %w", label, removeErr))
+			}
+			if !wasRemoved {
 				kept = append(kept, label)
 				continue
 			}
 			removed = append(removed, label)
 		}
 	}
-	return removed, kept, nil
+	return removed, kept, errors.Join(failures...)
+}
+
+// removeWorktree removes one worktree and its ownership files while holding the ownership lock, so an
+// attempt cannot claim the worktree halfway. It reports whether the worktree itself was removed; an
+// error alongside true means an ownership file was left behind, and an error alongside false means the
+// worktree was kept because its ownership lock or recorded processes could not be checked.
+func removeWorktree(ctx context.Context, repository, path string) (bool, error) {
+	release, err := claimWorktreeForRemoval(path)
+	if errors.Is(err, errWorktreeStillOwned) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer release()
+	stillRunning, err := recordedProcessesAlive(path)
+	if err != nil || stillRunning {
+		return false, err
+	}
+	if _, err := gitOutput(ctx, "-C", repository, "worktree", "remove", path); err != nil {
+		// Git refuses locked and modified worktrees; keeping those is the expected outcome, not a failure.
+		return false, nil
+	}
+	return true, removeOwnerFiles(path)
 }
