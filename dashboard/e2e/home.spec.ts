@@ -106,7 +106,7 @@ test('objectives can be created and updated from the dashboard', async ({ page }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(item) });
   });
   await page.goto('/');
-  await page.getByRole('link', { name: 'Objectives' }).click();
+  await page.getByRole('link', { name: 'Objectives', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   await page.getByRole('button', { name: 'New Objective' }).click();
   const dialog = page.getByRole('dialog');

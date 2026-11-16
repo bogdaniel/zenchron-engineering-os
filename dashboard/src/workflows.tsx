@@ -229,7 +229,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     setDefinition({ name: current.name, description: current.description, status: current.status });
     const { nodes: workflowNodes, edges: workflowEdges } = workflowGraph(current);
     const { positions } = source.describe(current);
-    const selectedNode = workflowNodes.find((node) => node.data.kind === 'agent-task') ??
+    const selectedNode = designPreview ? workflowNodes.find((node) => node.data.kind === 'agent-router') :
+      workflowNodes.find((node) => node.data.kind === 'agent-task') ??
       workflowNodes.find((node) => node.data.kind === 'test-generator') ??
       workflowNodes.find((node) => node.data.kind === 'code-reviewer') ??
       workflowNodes.find((node) => node.data.kind === 'agent-router');
@@ -299,8 +300,16 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     node.id === selectedId ? { ...node, data: { ...node.data, acceptance: value.split('\n').filter(Boolean) } } : node
   )));
   const validate = async () => {
-    if (designPreview || !activeWorkflow || !source.validate) {
-      report('Preview data is illustrative and is not validated for execution', true);
+    if (designPreview) {
+      const ids = new Set(nodes.map((node) => node.id));
+      const valid = nodes.some((node) => node.data.kind === 'trigger') &&
+        edges.every((edge) => ids.has(edge.source) && ids.has(edge.target));
+      report(valid ? 'Graph is valid for preview · execution is unavailable in Mock mode'
+        : 'Add a Trigger and connect every edge to an existing node', !valid);
+      return;
+    }
+    if (!activeWorkflow || !source.validate) {
+      report('Workflow validation is unavailable', true);
       return;
     }
     try {
@@ -569,10 +578,10 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
                 <Textarea label="Acceptance criteria (one per line)" value={(selected.data.acceptance ?? []).join('\n')}
                   onChange={(event) => updateAcceptance(event.currentTarget.value)} maxLength={2400} autosize minRows={2} />
               </>}
-              {!['trigger', 'agent-task', 'test-generator', 'code-reviewer', 'integrate'].includes(selected.data.kind) &&
+              {!designPreview && !['trigger', 'agent-task', 'test-generator', 'code-reviewer', 'integrate'].includes(selected.data.kind) &&
                 <Text size="xs" role="status">Design-only node · this node is not supported by WorkGraph execution.</Text>}
-              {selected.data.kind === 'trigger' && <Text size="xs" role="status">Executable structural node · starts the configured WorkGraph steps.</Text>}
-              {selected.data.kind === 'integrate' && <Text size="xs" role="status">Zenchron integrates reviewed candidates and publishes the pull request.</Text>}
+              {!designPreview && selected.data.kind === 'trigger' && <Text size="xs" role="status">Executable structural node · starts the configured WorkGraph steps.</Text>}
+              {!designPreview && selected.data.kind === 'integrate' && <Text size="xs" role="status">Zenchron integrates reviewed candidates and publishes the pull request.</Text>}
             </div>
           </section>}
           <WorkflowNodeSettings settings={view.nodeSettings} tab={settingsTab} />

@@ -58,7 +58,8 @@ test('dashboard displays the connected control plane and local worker', async ({
   await expect(workflowSummary).toContainText('Run agents');
   await expect(workflowSummary).toContainText('Run test suite');
   await expect(workflowSummary).toContainText('AI + human review');
-  await expect(workflowSummary).toContainText('Gated release');
+  await expect(workflowSummary).toContainText('Design-only');
+  await expect(workflowSummary).toContainText('Unsupported workflow nodes cannot execute.');
   await expect(page.locator('.workflow-overview-actions .muted-tag')).toHaveText('Use in Objective plan');
   await expect(page.locator('.workflow-overview-actions .preview-running-badge')).toHaveCount(0);
   await expect(page.locator('.workflow-panel .shared-panel-heading p')).toHaveText(/ · (draft|active)$/);

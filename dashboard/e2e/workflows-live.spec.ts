@@ -41,12 +41,12 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await page.getByRole('button', { name: 'Workflow menu' }).click();
   await expect(page.getByRole('menuitem', { name: seededWorkflow })).toHaveAttribute('aria-current', 'true');
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Router');
+  await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Test Generator');
   await expect(page.getByRole('textbox', { name: 'Node Name' })).not.toHaveAttribute('readonly');
-  await expect(page.getByRole('textbox', { name: 'Type' })).toHaveValue('Agent Router');
+  await expect(page.getByRole('textbox', { name: 'Type' })).toHaveValue('Test Generator');
   await expect(page.getByRole('textbox', { name: 'Type' })).toHaveAttribute('readonly', '');
   await expect(page.getByRole('region', { name: 'Basic configuration' })).toBeVisible();
-  await expect(page.locator('.workflow-properties .workflow-subheading h3')).toHaveText('Agent Router');
+  await expect(page.locator('.workflow-properties .workflow-subheading h3')).toHaveText('Test Generator');
   const settingsTabs = page.getByRole('tablist', { name: 'Component settings' });
   await expect(settingsTabs.getByRole('tab', { name: 'Properties' })).toHaveAttribute('aria-selected', 'true');
   for (const tab of ['Prompt', 'Variables', 'Advanced']) await expect(settingsTabs.getByRole('tab', { name: tab })).toBeDisabled();
@@ -113,7 +113,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(page.locator('.workflow-canvas .workflow-node.human-approval .workflow-node-icon')).toHaveCSS('color', 'rgb(67, 221, 166)');
   expect(await trigger.evaluate((node) => getComputedStyle(node).boxShadow)).toContain('84, 216, 208');
   await expect(page.locator('.workflow-canvas .react-flow__node.selected .workflow-node'))
-    .toHaveCSS('outline-color', 'rgb(195, 139, 255)');
+    .toHaveCSS('outline-color', 'rgb(83, 221, 208)');
   await expect(page.locator('.workflow-canvas .workflow-preview-edge-planner .react-flow__edge-path').first())
     .toHaveCSS('stroke', 'rgb(196, 216, 255)');
   await expect(page.locator('.workflow-canvas .workflow-preview-edge-human-approval .react-flow__edge-path').first())
@@ -176,11 +176,11 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await page.setViewportSize({ width: 1672, height: 941 });
   const runButton = page.getByRole('button', { name: 'Run', exact: true });
   await expect(runButton).toBeDisabled();
-  await expect(runButton).toHaveAttribute('title', 'Runner not connected');
+  await expect(runButton).toHaveAttribute('title', 'Choose this workflow in Objectives → Plan to execute it through WorkGraph');
   await expect(page.getByRole('button', { name: 'Publish', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveAttribute('title', 'Workflow publishing is not connected');
   await page.getByRole('button', { name: 'Validate', exact: true }).click();
-  await expect(page.locator('.workflow-status')).toContainText('Graph is valid');
+  await expect(page.locator('.workflow-status')).toContainText('design-only and cannot execute');
   const paletteSearch = page.getByRole('textbox', { name: 'Search blocks' });
   await paletteSearch.fill('coverage');
   await expect(page.locator('.workflow-component-row')).toHaveCount(1);
@@ -221,7 +221,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(page.getByRole('heading', { name: `Workflow Builder — ${workflowName}` })).toBeVisible();
   await expect(page.locator('.workflow-version')).toHaveText(/^v1 \(Draft\)/);
   await expect(page.locator('.workflow-status')).toContainText(`Created ${workflowName}`);
-  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(2);
+  await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(3);
 
   const sectionTab = (name: string) => page.getByRole('navigation', { name: 'Workflow sections' }).getByRole('button', { name, exact: true });
   const sectionNote = page.locator('.workflow-section-concept');
@@ -229,9 +229,9 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await sectionTab('Settings').click();
   await expect(page.locator('.workflow-section-preview-title h2')).toHaveText('Workflow Settings');
   await expect(page.locator('.workflow-section-meta')).toContainText('v1');
-  await expect(page.locator('.workflow-section-meta')).toContainText('2 Nodes');
-  await expect(page.locator('.workflow-section-meta')).toContainText('Agent profiles unavailable');
-  await expect(sectionNote).toHaveText('SAVED DEFINITION · NO RUN DATA');
+  await expect(page.locator('.workflow-section-meta')).toContainText('3 Nodes');
+  await expect(page.locator('.workflow-section-meta')).toContainText('Execution via Objectives');
+  await expect(sectionNote).toHaveText('SAVED DEFINITION · EXECUTION VIA OBJECTIVE WORKGRAPH');
   await expect(page.getByLabel('Workflow name')).toHaveValue(workflowName);
   await expect(page.getByLabel('Description')).toHaveValue('Created from the workflow builder.');
   await expect(page.getByLabel('Status')).toHaveValue('draft');
@@ -255,12 +255,14 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await sectionTab('Runs').click();
   await expect(page.locator('.workflow-run-metric b')).toHaveText(['Unavailable', 'Unavailable', 'Unavailable', 'Unavailable']);
   await expect(page.locator('.workflow-table-row')).toHaveCount(0);
-  await expect(emptyStates).toHaveText(/^Unavailable · workflow execution is not connected/);
+  await expect(emptyStates).toHaveText(
+    /^No runs are recorded on this canvas\. Select this workflow in an Objective plan to execute it through WorkGraph/
+  );
   await expect(page.locator('.workflow-run-facts b')).toHaveText(['Unavailable', 'Unavailable', 'Unavailable']);
   for (const control of ['Run Workflow', 'View all →', /Export logs/, 'Review Approval']) {
     await expect(page.getByRole('button', { name: control })).toBeDisabled();
   }
-  await expect(page.getByRole('button', { name: 'Run Workflow' })).toHaveAttribute('title', /workflow execution is not connected/);
+  await expect(page.getByRole('button', { name: 'Run Workflow' })).toHaveAttribute('title', /Select this workflow in an Objective plan/);
   await sectionTab('Versions').click();
   await expect(page.locator('.workflow-version-row')).toHaveCount(1);
   await expect(page.locator('.workflow-version-row')).toContainText('v2');
@@ -292,7 +294,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await page.getByRole('menuitem', { name: seededWorkflow }).click();
   await expect(page.getByRole('heading', { name: `Workflow Builder — ${seededWorkflow}` })).toBeVisible();
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
-  await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Router');
+  await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Task');
   const dragHandle = page.getByRole('button', { name: 'Drag Agent Task to canvas' });
   const source = await dragHandle.boundingBox();
   const canvas = await page.locator('.workflow-canvas').boundingBox();
@@ -343,7 +345,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(page.locator('.workflow-mobile-run-preview')).toBeVisible();
   const mobileNodes = page.locator('.workflow-mobile-overview .workflow-node');
   await expect(mobileNodes).toHaveCount(6);
-  expect(await mobileNodes.locator('b').allTextContents()).toEqual(['Trigger', 'Plan', 'Build', 'Test', 'Review', 'Merge']);
+  expect(await mobileNodes.locator('b').allTextContents()).toEqual(['Trigger', 'Plan', 'Build', 'Test', 'Review', 'Design-only']);
   await expect(page.locator('.workflow-mobile-overview .workflow-overview-canvas'))
     .toHaveAttribute('aria-label', /6 stages summarize 10 components/);
   await expect(page.locator('.workflow-mobile-overview .react-flow__edge-path').first()).toHaveAttribute('marker-end', /url/);
@@ -356,7 +358,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   })).toBe(true);
   const runSummary = page.locator('.workflow-mobile-run-summary');
   await expect(runSummary).toContainText('10 components · 10 connections · execute from an Objective plan');
-  await expect(runSummary.locator('.workflow-mobile-idle')).toHaveText('Not run');
+  await expect(runSummary.locator('.workflow-mobile-idle')).toHaveText('Not run here');
   expect(await runSummary.locator('.workflow-mobile-idle').evaluate((badge) => badge.scrollWidth <= badge.clientWidth),
     'the run state badge is not clipped').toBe(true);
   await expect(page.locator('.workflow-mobile-run-progress')).toHaveCount(0);

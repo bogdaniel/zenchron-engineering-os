@@ -46,7 +46,8 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   await expect(page.locator('.workflow-component-row')).toHaveCount(4);
   await expect(page.locator('.workflow-component-add').filter({ hasText: 'Human Approval' })).toBeVisible();
   await paletteCategories.getByRole('button', { name: 'Integrations' }).click();
-  await expect(page.locator('.workflow-component-row')).toHaveCount(1);
+  await expect(page.locator('.workflow-component-row')).toHaveCount(2);
+  await expect(page.locator('.workflow-component-add').filter({ hasText: 'Integrate and publish' })).toBeVisible();
   await expect(page.locator('.workflow-component-add').filter({ hasText: 'Publish Report' })).toBeVisible();
   await paletteCategories.getByRole('button', { name: 'All' }).click();
   const integrationsGroup = page.getByRole('button', { name: 'Toggle Integrations' });
@@ -167,7 +168,7 @@ test('local Workflow Builder mock preview uses its fixture without API reads or 
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCSS('background-color', 'rgb(37, 35, 51)');
   await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveCSS('background-image', /linear-gradient/);
   await page.getByRole('button', { name: 'Validate', exact: true }).click();
-  await expect(page.locator('.workflow-status')).toContainText('Graph is valid');
+  await expect(page.locator('.workflow-status')).toContainText('Graph is valid for preview · execution is unavailable in Mock mode');
   await page.getByRole('button', { name: 'Run', exact: true }).click();
   await expect(page.locator('.workflow-status')).toContainText('Simulated run shown');
   await page.getByRole('button', { name: 'Save', exact: true }).click();

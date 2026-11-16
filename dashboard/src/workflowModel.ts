@@ -105,7 +105,7 @@ export const components = [
   ['Quality & Validation', 'coverage-analyzer', 'Coverage Analyzer'],
   ['Control & Human-in-the-loop', 'human-approval', 'Human Approval'],
   ['Control & Human-in-the-loop', 'merge-gate', 'Merge Gate'],
-  ['Control & Human-in-the-loop', 'integrate', 'Integrate and publish'],
+  ['Integrations', 'integrate', 'Integrate and publish'],
   ['Control & Human-in-the-loop', 'condition', 'Condition'],
   ['Control & Human-in-the-loop', 'loop', 'Loop'],
   ['Integrations', 'publish-report', 'Publish Report'],
@@ -175,11 +175,20 @@ export function mobileWorkflowGraph(workflow: Workflow, designPreview = false, m
     stageByNode.set(node.id, stage);
   }
   const configuredStages = new Set(stageByNode.values());
-  const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id));
+  const hasIntegrate = workflow.nodes.some((node) => node.type === 'integrate');
+  const hasUnsupportedNodes = workflow.nodes.some((node) => !['trigger', 'agent-task', 'test-generator', 'code-reviewer', 'integrate'].includes(node.type));
+  const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id)).map((stage) => {
+    if (designPreview || stage.id !== 'merge') return stage;
+    if (hasIntegrate && hasUnsupportedNodes) return { ...stage, label: 'Needs validation', description: 'Unsupported workflow nodes cannot execute.' };
+    if (hasIntegrate) return stage;
+    return { ...stage, label: 'Design-only', description: 'Unsupported workflow nodes cannot execute.', kind: 'merge-gate' as const };
+  });
   const nodes: WorkflowNode[] = stages.map(({ id, label, description, kind, previewIcon, position }) => ({
     id, type: 'workflow', position: mobile ? position : designPreviewPositions[id] ?? position,
     data: {
-      kind, label, previewIcon,
+      previewIcon,
+      kind: designPreview && id === 'merge' ? 'merge-gate' : kind,
+      label: designPreview && id === 'merge' ? 'Merge' : label,
       description: designPreview && id === 'trigger' ? 'Objective updated'
         : designPreview && id === 'merge' ? 'To trusted-main' : description,
     },

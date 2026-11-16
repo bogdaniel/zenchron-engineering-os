@@ -463,13 +463,15 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                       <div><small>Owner</small><ProfileChoice label="Profile owner" choice={fields.owner} /></div>
                       <div><small>Created</small><b>{fields.created}</b></div>
                       <div><small>Last Updated</small><b>{fields.updated}</b></div>
-                      <div><small>Persona</small><b>{selected.persona_id ? (() => {
-                        const persona = personas.find((item) => item.id === selected.persona_id);
-                        return persona ? `${persona.name} · v${persona.version} · ${persona.status}` : 'Unavailable';
-                      })() : 'None linked'}</b></div>
-                      {readiness && <div><small>CLI readiness</small><b title={readiness.note}>{readiness.label}</b></div>}
+                      {!designPreview && <>
+                        <div><small>Persona</small><b>{selected.persona_id ? (() => {
+                          const persona = personas.find((item) => item.id === selected.persona_id);
+                          return persona ? `${persona.name} · v${persona.version} · ${persona.status}` : 'Unavailable';
+                        })() : 'None linked'}</b></div>
+                        {readiness && <div><small>CLI readiness</small><b title={readiness.note}>{readiness.label}</b></div>}
+                      </>}
                     </div>}
-                    {!isEditing && selected && readiness && <div aria-label="Responsibility eligibility">
+                    {!designPreview && !isEditing && selected && readiness && <div aria-label="Responsibility eligibility">
                       <p className="agents-card-note">CLI readiness: {readiness.note}</p>
                       <p className="agents-card-note">Produce: {responsibilityEligibility(selected, 'produce', selectedPersona)}</p>
                       <p className="agents-card-note">Review: {responsibilityEligibility(selected, 'review', selectedPersona)}</p>
