@@ -28,6 +28,7 @@ flowchart LR
     Plans --> Report["ObjectiveDeliveryReport"]
     Report -->|"workflow ID"| Workflow["WorkflowsPage · current saved definition"]
     Report -->|"profile ID"| Agents["AgentsPage · current saved profile"]
+    Report -->|"run ID"| Reviews["ReviewsPage · run evidence"]
     Mock -->|"add or rename in fixture state"| Tab["This browser tab only"]
     CP --> Store[(products.json)]
     Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
@@ -93,6 +94,7 @@ Live:
   shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
 - Delivery report workflow and profile links open the referenced saved record using `?workflow=<id>#workflows` and
   `?profile=<id>#agents`. The report retains the executed versions; the editor shows the current saved configuration.
+- Execution links use `?run=<id>#reviews` to open that run's Evidence tab, including review runs without a diff.
 - Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, decisions, delivery
   metrics (card and metric), recent decisions (metric), and all trend graphics. The favorite star and the delivery
   range are disabled with a reason. Sharing shows the page link and says no invitation is sent.

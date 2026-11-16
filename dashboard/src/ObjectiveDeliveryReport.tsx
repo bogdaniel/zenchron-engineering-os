@@ -90,7 +90,7 @@ function ReportDetails({ report }: { report: Report }) {
         {unit.candidate && <> · candidate <code>{unit.candidate}</code></>}
         {unit.verdict && <> · verdict {unit.verdict}</>}</p>
       {unit.executions.map((run) => <div className="objective-delivery-run" key={run.run_id}>
-        <span>Run {run.run_id} · {run.status} · {run.attempts} attempt{run.attempts === 1 ? '' : 's'}</span>
+        <span><a href={`?run=${encodeURIComponent(run.run_id)}#reviews`}>Run {run.run_id}</a> · {run.status} · {run.attempts} attempt{run.attempts === 1 ? '' : 's'}</span>
         <span>{run.profile_name ? `${run.profile_name} v${run.profile_version ?? 'unknown'}` : 'Zenchron integration'}
           {run.persona_name && ` · ${run.persona_name} v${run.persona_version ?? 'unknown'}`}
           {run.provider && ` · ${run.provider}${run.provider_version ? ` ${run.provider_version}` : ''}`}</span>

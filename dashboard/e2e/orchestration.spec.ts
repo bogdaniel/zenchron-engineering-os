@@ -336,6 +336,7 @@ test('an objective plan approved in the dashboard runs through decision, review,
     .toHaveAttribute('href', `?profile=${created.writerID}#agents`);
   await expect(report).toContainText('E2E CSV specialist v1');
   await expect(report).toContainText('codex-cli');
+  await expect(report.locator('a[href$="#reviews"]').first()).toHaveAttribute('href', /^\?run=.+#reviews$/);
   await expect(report).toContainText('CSV');
   await expect(report).toContainText('GitHub publication is not configured');
   await expect(report).toContainText('Unknown');
