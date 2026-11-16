@@ -7,7 +7,8 @@ does not display this report.
 ## Open the graph and request its report
 
 In the dashboard, open **Objectives**, select an objective, and open **Plan**. The Plan panel shows the graph's
-status, unit states, run IDs, candidates, verdicts, messages, and any pull request link. This view loads graphs from
+status, unit states, run counts, candidates, verdicts, messages, and any pull request link. It shows the number of
+runs for each unit, not their IDs. This view loads graphs from
 `GET /api/v1/work-graphs` and polls while the panel is open.
 
 For the delivery report, use the same control-plane session or local access mode to make an authorized request:
