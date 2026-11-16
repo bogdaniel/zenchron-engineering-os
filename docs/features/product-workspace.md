@@ -95,3 +95,17 @@ go test ./cmd/zenchron -run 'TestProducts|TestPersistentMuxRestoresObjectivesAnd
 cd dashboard && npm run test:e2e -- e2e/workspace.spec.ts e2e/workspace-preview.spec.ts
 cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Product Workspace groups live repositories'
 ```
+
+## Product environment
+
+`GET /api/v1/products/{id}/environment` returns the engineering world of one product by reference: its repository
+ids; each objective linked to it with its status, the number of plan revisions, and the id, status, plan revision,
+handoff and finding counts, and pull-request URL of its newest work graph; and every decision asked in those graphs
+with the unit that asked, the question, and who resolved it.
+
+- It is a projection of the product, objective, plan, and work-graph records and stores nothing.
+- Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
+- A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
+- Not implemented: product history, configuration, knowledge entries, and promotion between scopes.
+
+Verified by `go test ./cmd/zenchron -run TestProductEnvironment -count=1`.
