@@ -14,6 +14,7 @@ import { ProductEditor } from './productEditor';
 import type { ProductInput } from './productEditor';
 import { useMockWorkspace } from './workspace-preview-data';
 import { useLiveWorkspace } from './workspaceView';
+import { WorkspaceExecution } from './WorkspaceExecution';
 import type { WorkspaceFacts, WorkspaceNote, WorkspaceObjectiveRow, WorkspaceStatusRow } from './workspaceView';
 import './workspace-preview.css';
 
@@ -223,6 +224,9 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
           onAction={() => setActiveTab('Objectives')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Objectives'}>
           {objectiveList.note ? <Note note={objectiveList.note} /> : <ObjectiveRows rows={objectiveList.rows} />}
+          {/* The Objectives tab also shows how each objective is being executed: units, handoffs, findings, decisions, PR. */}
+          {activeTab === 'Objectives' && <WorkspaceExecution sampleData={designPreview} objectiveIDs={facts.objectives
+            ?.filter((objective) => objective.product_id === selected?.id).map((objective) => objective.id) ?? []} />}
         </Card>
 
         <Card className="repositories" title={repositories.title} icon={<IconCode size={15} />} action="View All"

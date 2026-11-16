@@ -21,6 +21,9 @@ export const agentRunSchema = z.object({
   review_comments: z.array(z.object({ body: z.string(), request_changes: z.boolean(), created_at: z.string() })).optional().default([]),
   error: z.string().optional(), status: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']),
   attempts: z.number(), created_at: z.string(), updated_at: z.string(),
+  // Set on runs that execute a unit of an objective's work graph; `merge` marks the integration run.
+  graph_id: z.string().optional(), unit_key: z.string().optional(),
+  merge: z.array(z.object({ branch: z.string(), commit: z.string() })).optional(),
 }).extend(runEvidenceFields);
 export const agentRunsSchema = z.array(agentRunSchema);
 export const agentsSchema = z.array(agentSchema);

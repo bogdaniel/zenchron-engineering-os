@@ -1,0 +1,60 @@
+.work-panel { display: grid; min-height: 0; gap: 8px; overflow: hidden auto; padding: 6px 2px; color: #cfc9dc; font-size: 11px; align-content: start; }
+.work-panel h4, .workspace-execution h3 { margin: 6px 0 0; color: #e5e0ee; font-size: 12px; font-weight: 600; }
+.work-panel p, .work-graph p, .work-messages p { margin: 0; }
+.work-graph { display: grid; gap: 7px; }
+.work-graph-head { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; color: #a7a1b8; }
+.work-graph-head b { color: #e5e0ee; }
+.work-units, .plan-revisions, .work-messages { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.work-unit, .plan-revision, .work-decision, .work-messages > li { display: grid; gap: 4px; padding: 8px; border: 1px solid #302c43; border-radius: 8px; background: #191824; }
+.work-unit { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.work-unit > :not(.work-unit-title):not(.work-state) { grid-column: 1 / -1; }
+.work-unit-title { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; color: #e5e0ee; }
+.work-unit-title span { min-width: 0; overflow-wrap: anywhere; }
+.work-unit-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: #9d97aa; font-size: 10px; }
+.work-unit-meta a { display: inline-flex; align-items: center; gap: 3px; color: #c9a6ff; }
+.work-unit-meta a:hover { text-decoration: underline; }
+.work-unit-reason, .work-empty { color: #a7a1b8; overflow-wrap: anywhere; }
+.work-unit-failure, .plan-problems { color: #ee8b9d; overflow-wrap: anywhere; }
+.plan-problems, .plan-acceptance, .work-messages ul { margin: 0; padding-left: 16px; }
+.plan-acceptance, .work-messages ul { color: #a7a1b8; }
+.work-state { border: 1px solid #39344e; color: #b9b3c9; background: #211f2e; font-size: 9px; text-transform: capitalize; }
+.work-state.completed, .work-state.approved { border-color: #286347; color: #61dba9; background: #17352b; }
+.work-state.running, .work-state.active, .work-state.queued, .work-state.proposed, .work-state.planning { border-color: #304c69; color: #84baff; background: #1b2b3c; }
+.work-state.blocked { border-color: #66502c; color: #f0c06d; background: #382d1b; }
+.work-state.failed, .work-state.invalid { border-color: #67364a; color: #ed8096; background: #3b202b; }
+.work-decision { border-color: #66502c; background: #241e19; }
+.work-decision b { color: #f0c06d; }
+.work-decision-options { display: flex; flex-wrap: wrap; gap: 5px; }
+.work-decision > button { justify-self: start; }
+.work-message-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: #9d97aa; font-size: 10px; }
+.work-message-head b { color: #c9a6ff; }
+.work-messages > li.finding .work-message-head b, .work-message-head em { color: #ee8b9d; font-style: normal; }
+.work-messages > li.decision_request .work-message-head b { color: #f0c06d; }
+.work-messages > li > b { color: #e5e0ee; overflow-wrap: anywhere; }
+.work-messages small { color: #9d97aa; font-weight: 400; }
+.work-messages p { overflow-wrap: anywhere; }
+.work-graph code, .work-messages code { color: #b9b3c9; font-size: 10px; }
+.plan-propose { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; align-items: end; }
+.plan-propose > p, .plan-propose > button { grid-column: 1 / -1; }
+.plan-propose > button { justify-self: start; }
+.plan-propose label { color: #a7a1b8; font-size: 10px; }
+.agent-work-units { display: grid; gap: 5px; margin-top: 8px; color: #a7a1b8; font-size: 10px; }
+.agent-work-units > b { color: #e5e0ee; font-size: 11px; }
+.agent-work-units p { margin: 0; }
+.agent-work-units ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.agent-work-units li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; }
+.agent-work-units li > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-work-units li b { color: #e5e0ee; }
+.workspace-execution { display: grid; gap: 10px; font-size: 11px; color: #cfc9dc; }
+.workspace-execution > div { display: grid; gap: 6px; }
+.run-graph-context { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin: 0 0 8px; padding: 8px; border: 1px solid #39344e; border-radius: 8px; color: #cfc9dc; background: #161522; font-size: 11px; }
+.run-graph-context > b { color: #e5e0ee; overflow-wrap: anywhere; }
+.run-graph-context > p, .run-graph-context > ol { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 700px) {
+  .plan-propose { grid-template-columns: 1fr; }
+}
+/* The Plan tab is long: the tab row keeps its height, the plan scrolls in the space left, and the milestone
+   summary below gives its room to the plan while the tab is open. */
+.objective-detail-content > .objective-detail-tabs { flex: 0 0 auto; }
+.objective-detail-content > .work-panel { flex: 1 1 auto; }
+.objective-detail-panel:has(.work-panel) .objective-milestones-card { display: none; }

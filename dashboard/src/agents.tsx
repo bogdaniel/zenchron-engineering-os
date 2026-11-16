@@ -14,6 +14,7 @@ import type { Project } from './projects';
 import { MetricCard } from './MetricCard';
 import { PanelHeading } from './PanelHeading';
 import { PanelCard } from './PanelCard';
+import { AgentWorkUnits } from './AgentWorkUnits';
 import { PageHeading } from './PageHeading';
 import { AgentPromptEditor } from './AgentPromptEditor';
 import { RunIssueSelect, runReadiness, type RunWorker } from './agentRunQueue';
@@ -461,6 +462,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                         </tbody>
                       </table>
                     </div>
+                    <AgentWorkUnits agentID={selected.id} sampleData={designPreview} />
                   </PanelCard>
                   <PanelCard className="agents-overview-card agents-preview-trend" withBorder><PanelHeading title="Performance Trends" actions={<Menu withinPortal position="bottom-end">
                     <Menu.Target><Button className="agents-preview-period" variant="default" aria-label="Performance trend range">{performanceRange}<IconChevronDown size={10} /></Button></Menu.Target>
