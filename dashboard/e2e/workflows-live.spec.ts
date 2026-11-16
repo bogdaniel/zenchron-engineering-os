@@ -36,7 +36,8 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   expect(await workflowResponse.json()).toEqual(expect.arrayContaining([
     expect.objectContaining({ id: 'pr-review-release', name: seededWorkflow }),
   ]));
-  await expect(page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ })).toBeVisible();
+  const builderHeading = page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ });
+  await expect(builderHeading, `URL: ${page.url()} · workflow page: ${await page.locator('.workflow-page').innerText()}`).toBeVisible();
   await expect(page.locator('.workflow-page-heading .eyebrow')).toContainText('Workflow Builder');
   await expect(page.locator('.workflow-mobile-run-preview')).toBeHidden();
   const titleBox = await page.locator('.workflow-page-heading .page-heading h2').boundingBox();
