@@ -81,7 +81,7 @@ test('Product Workspace matches its desktop frame and filters products', async (
       bottom: bounds('.workspace-mock-bottom'),
     };
   });
-  // The same frame the approved fixtures render in: Live changes values, not geometry.
+  // The frame stays aligned; Live objective configuration can grow the content row.
   expect(layout.directory?.x).toBe(263);
   expect(layout.directory?.y).toBe(100);
   expect(layout.directory?.width).toBe(250);
@@ -89,9 +89,14 @@ test('Product Workspace matches its desktop frame and filters products', async (
   expect(layout.metrics?.y).toBe(192);
   expect(layout.tabs?.y).toBe(283);
   expect(layout.content?.y).toBe(334);
-  expect(layout.content?.height).toBe(348);
-  expect(layout.bottom?.y).toBe(694);
-  expect((layout.bottom?.y ?? 0) + (layout.bottom?.height ?? 0)).toBeLessThanOrEqual(856);
+  expect(layout.bottom?.y).toBe((layout.content?.bottom ?? 0) + 12);
+  await expect(page.getByRole('combobox', { name: 'Objective repository' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Objective workflow' })).toBeVisible();
+  const objectivesCard = page.locator('.workspace-mock-card.objectives');
+  const configurationBounds = await objectivesCard.locator('.workspace-mock-objective-create').boundingBox();
+  const cardBounds = await objectivesCard.boundingBox();
+  expect(configurationBounds && cardBounds).toBeTruthy();
+  expect(configurationBounds!.y + configurationBounds!.height).toBeLessThanOrEqual(cardBounds!.y + cardBounds!.height);
   const clippedCards = await page.locator('.workspace-mock-card').evaluateAll((cards) =>
     cards.filter((card) => card.scrollHeight > card.clientHeight + 1).map((card) => card.textContent?.trim()));
   expect(clippedCards).toEqual([]);
