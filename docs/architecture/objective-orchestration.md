@@ -237,7 +237,7 @@ governance machinery, and vocabulary beyond what is listed here are not ported.
 | #278 objective to team | The whole path from objective to executed graph, dynamic team size, decisions only where an agent asks | Repository intelligence is the planner reading the repository. |
 | #289 decision resolution | Durable request, authorized resolution with provenance, automatic resume | Resolutions are free text; there is no typed option or expiry. |
 | #277 workspace | Graph, units, messages, decisions, review state, and PR in Product Workspace, Objectives, Agents, Reviews | Cost and budget projections are not added. |
-| #274 product environment | Not addressed here | Products are unchanged. |
+| #274 product environment | A product-scoped, reference-only projection of repositories, objectives, plans, graphs, decisions and pull requests (`GET /api/v1/products/{id}/environment`), with nothing shared between products | No stored environment record, knowledge entries, scope ladder, promotion, or product configuration. |
 | #279 dogfood | See the live record in the feature doc | Measurements are reported as recorded; nothing is estimated. |
 
 ## Not implemented

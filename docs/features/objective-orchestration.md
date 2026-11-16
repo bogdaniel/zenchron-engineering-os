@@ -208,14 +208,66 @@ same file): a cyclic variant of its plan was refused with 400; approving a chang
 went to the producer whose branch did not merge; and cancelling the graph cancelled that producer's queued
 remediation. Nothing from it was published.
 
-Not shown live: a review verdict arriving for a candidate that had already changed, a stale integration input, a
-decision request, and a unit retry. No agent produced those situations in the live runs; they are covered by the
-focused tests above and, for restart and the whole lifecycle, by a rehearsal with the real binaries and a fake CLI.
-A webhook, a hosted control plane, and more than one worker were not part of this run.
+Two further live objectives, on the build with the review hardening, showed the decision path and a stale result:
+
+| Step | What happened | Evidence |
+|---|---|---|
+| Decision request | A Codex producer whose wording was a product decision reported a `decision_request` with two options; the graph went `blocked` | graph `5a502b73e4be9fe95c27ebdac383c4f8`, run `0f877a29d92761b5d93591fc07c887b6` attempt 1 |
+| Resolution and resume | The decision was answered in the dashboard's Plan tab; the same run was requeued and handed off commit `3ae80ee` | resolution by `local operator`, attempt 2 |
+| Defect found | After a reviewer's change request the producer asked the same decision again: its context no longer carried it | fixed in `ce54a82` (a unit keeps every decision made for it); graph cancelled |
+| Repeat on the fix | Decision, resolution in the dashboard, handoff `54c3c5c`; after a change request the third attempt applied it without asking again and handed off `ffc0a93` | graph `562f6eaf84b4025606fee931b1d6447f`, run `44facefa420f6eb2e03275b1d1d7c073` |
+| Stale verdict | The Claude review had started on `54c3c5c` at 08:45:37 UTC; the candidate became `ffc0a93` at 08:46:15; the verdict arrived at 08:46:39 and was discarded, and a fresh review run started on the new commit | review run `fb12db85ef0791623bb712690635eac0` (base `54c3c5c`), fresh run `56f488f5282a2652e6e840d6a2453c78` |
+
+Both graphs were cancelled before integration; nothing from them was published.
+
+A fifth live objective ran against a clone of `main`, for backlog issue #368, with the worker's verification
+extended by `npm ci`, typecheck, and build of the dashboard:
+
+| Step | What happened | Evidence |
+|---|---|---|
+| Product and objective | A product linked to the `main` checkout and an objective in it | objective `5e957028580207318ca3bd442f123b8d` |
+| Plan | The planner's five-unit plan was refused only because it listed capabilities on the integrate unit; the operator resubmitted it with that field emptied and approved it in the dashboard | planner run `c474320c019fc091254203d528425243`; contract fixed in `9ea762f`; graph `dd7d8db3c9bd2cfb59d2ba5648532577` |
+| Parallel producers | Claude Code (`csv-module`) and Codex (`csv-spec`) overlapped from 08:55:28 to 08:57:33 UTC | runs `7344f819dfd22fdbc1459c8ddcd908d9`, `ae9d7283661630a35f84ef406e8292f9` |
+| Review cycle 1 | Codex blocked the module for unverified validation; second pass; a fresh review accepted `9e0d000` | review runs `f8cc5d91dfc3521dedca519a428b4cb0`, `f691d09cf954972ec937d16af520fdc6` |
+| Stale integration input | The operator added a commit to the admitted branch of `csv-spec`; the integration run refused it: "An input branch no longer points at its admitted commit"; unit and graph failed, the dependent review was blocked | integration run `fb9acba6bf171692fefe0810773cb291` |
+| Unit retry | The operator restored the branch and retried the unit; a fresh integration run merged both candidates, verification passed | run `cd140323cd66db8c0b78454f95427c73`, commit `dd2f206` |
+| Review cycle 2 | Claude blocked the integrated commit: the new spec downloaded before live data had loaded. Routed by file to `csv-spec`; Codex fixed it (`bf61d8d`); re-integration `cdcf073` passed verification and a fresh review | review runs `9295f076edd99230a4ccbcfd65c95fba`, `2beed47d85249ed9bc94c43fa23c8bf8`; integration run `e7a84978adc8214a413a901873683106` |
+| Publication | One pull request against `main`, not merged | https://github.com/bogdaniel/zenchron-engineering-os/pull/377, head `cdcf073b4` |
+
+From approval to completion it took 12 min 33 s. While GitHub was creating the pull request the unit showed
+`blocked` for about a second; fixed in `c69a195`. Human actions: creating the product and objective, correcting and
+resubmitting the plan, approving it, and the deliberate branch change, restore, and retry.
+
+### Measurements and a single-agent baseline (#279)
+
+The same task (issue #368, the objective text without the staffing decision) was also run once through the existing
+single-agent path: one Claude Code run, `fcda18ab4fea1215743762b4a6f1c16a`, on the same `main` clone, with the same
+worker verification and no publication. One sample of each; nothing here is a benchmark or supports a claim of
+improvement.
+
+| Measure | Orchestrated (graph `dd7d8db3…`) | Single run (`fcda18ab…`) |
+|---|---|---|
+| Wall clock | 753 s from approval to completion, plus 107 s of planning | 199 s |
+| Runs and attempts | 9 runs, 12 attempts, 1 failed (the stale input provoked on purpose) | 1 run, 1 attempt |
+| Agents and providers | Claude Code 2.1.322 and Codex CLI 0.167.0: 2 producers, 2 reviewers, 1 planner | Claude Code 2.1.322 |
+| Largest overlap of attempts | 2 | 1 |
+| Review rounds, findings, remediation passes | 4, 2, 2 | none: no review |
+| Input and output tokens | 1,913,166 and 41,826, plus 185,855 and 11,060 for planning | 1,623,980 and 19,254 |
+| Cost reported | 4.49 USD by Claude Code plus 1.39 USD for planning; Codex reports none | 2.19 USD |
+| Human actions | 4 for delivery (create, correct plan, approve; the branch change, restore, and retry were a test) | 1 (queue the run) |
+| Manual relay of prompts or findings | 0 | 0 |
+| Worker verification | passed on the integrated commit | passed |
+| Playwright specs | pass in GitHub CI on PR #377 | 11 passed when run locally in its worktree |
+| Human supervision time | not recorded | not recorded |
+
+On this small feature the single run was faster and cheaper and its result also passed. What the orchestrated run
+added was two independent reviews by the other provider, which found one defect in the first integrated candidate
+(the new spec downloaded before live data had loaded) before a person saw it. Whether that is worth the extra time
+and cost on larger features is not measured.
 
 After the live run an independent review of the orchestration code reported ten defects; nine were fixed with the
 regression tests named above (publication bound to the reviewed commit, verdict cleared on adoption, repository
 grant on plan and graph reads, responses encoded under the store lock, requests confined to producers and the diff
 marked as task data, bounded plan history, Git failures no longer reported as conflicts, retried pushes, cancelled
 graphs following their runs, plans without a producer refused). The tenth is by design: a run of a unit is visible
-to every user with a grant for its repository, as all runs are. The live run above predates these fixes.
+to every user with a grant for its repository, as all runs are. The first two live objectives predate these fixes; the decision probes and the `main`-based objective ran on them.

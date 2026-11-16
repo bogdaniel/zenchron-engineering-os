@@ -24,6 +24,7 @@ func (store *workGraphStore) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/objectives/{id}/plans/{revision}/approve", store.approvePlan)
 	mux.HandleFunc("GET /api/v1/work-graphs", store.listGraphs)
 	mux.HandleFunc("GET /api/v1/work-graphs/{id}/report", store.reportGraph)
+	mux.HandleFunc("GET /api/v1/products/{id}/environment", store.environment)
 	mux.HandleFunc("POST /api/v1/work-graphs/{id}/cancel", store.cancelGraph)
 	mux.HandleFunc("POST /api/v1/work-graphs/{id}/units/{key}/retry", store.retryUnit)
 	mux.HandleFunc("POST /api/v1/work-graphs/{id}/decisions/{message}", store.resolveDecision)

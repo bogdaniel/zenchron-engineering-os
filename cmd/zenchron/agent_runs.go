@@ -68,21 +68,24 @@ type agentRun struct {
 	// CreatedBy is the GitHub login that started the run under an access policy.
 	CreatedBy string `json:"created_by,omitempty"`
 	// Checks and GitHubReviews are what GitHub webhooks reported for the published commit and pull request.
-	Checks          []runCheck        `json:"checks,omitempty"`
-	GitHubReviews   []runReview       `json:"github_reviews,omitempty"`
-	WorkerID        string            `json:"worker_id"`
-	WorkerName      string            `json:"worker_name"`
-	Prompt          string            `json:"prompt"`
-	Output          string            `json:"output,omitempty"`
-	Error           string            `json:"error,omitempty"`
-	Status          string            `json:"status"`
-	CancelRequested bool              `json:"cancel_requested,omitempty"`
-	Attempts        int               `json:"attempts"`
-	CreatedAt       time.Time         `json:"created_at"`
-	UpdatedAt       time.Time         `json:"updated_at"`
-	LeaseUntil      time.Time         `json:"-"`
-	Profile         *agentProfile     `json:"profile,omitempty"`
-	ReviewComments  []agentRunComment `json:"review_comments,omitempty"`
+	Checks          []runCheck  `json:"checks,omitempty"`
+	GitHubReviews   []runReview `json:"github_reviews,omitempty"`
+	WorkerID        string      `json:"worker_id"`
+	WorkerName      string      `json:"worker_name"`
+	Prompt          string      `json:"prompt"`
+	Output          string      `json:"output,omitempty"`
+	Error           string      `json:"error,omitempty"`
+	Status          string      `json:"status"`
+	CancelRequested bool        `json:"cancel_requested,omitempty"`
+	Attempts        int         `json:"attempts"`
+	CreatedAt       time.Time   `json:"created_at"`
+	UpdatedAt       time.Time   `json:"updated_at"`
+	LeaseUntil      time.Time   `json:"-"`
+	// Publishing is set between a pushed result and GitHub's answer about the pull request. It is not
+	// persisted: after a restart an unanswered publication is a failed one that can be retried.
+	Publishing     bool              `json:"-"`
+	Profile        *agentProfile     `json:"profile,omitempty"`
+	ReviewComments []agentRunComment `json:"review_comments,omitempty"`
 	// GraphID and UnitKey name the WorkUnit this run executes; both are empty for a run started directly.
 	GraphID string `json:"graph_id,omitempty"`
 	UnitKey string `json:"unit_key,omitempty"`

@@ -88,7 +88,7 @@ func (store *agentRunStore) applyResult(item *agentRun, workerID string, input w
 	item.Result, item.ResultAttempt = input.Result, input.Attempts
 	if input.BranchPushed {
 		// Recorded with the result, so a crash before the pull request exists still leaves a retry path.
-		item.Publication = publicationPullRequestFailed
+		item.Publication, item.Publishing = publicationPullRequestFailed, item.PullRequestEnabled
 	}
 	if input.CommitSHA != "" {
 		item.CommitSHA = input.CommitSHA
@@ -131,7 +131,7 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 		}
 	}
 	item, status, message := store.update(runID, func(item *agentRun) (int, string) {
-		item.Publication, item.PullRequestError = publication, publishError
+		item.Publication, item.PullRequestError, item.Publishing = publication, publishError, false
 		if number > 0 {
 			item.PullRequestNumber, item.PullRequestURL = number, pullURL
 		}

@@ -111,14 +111,16 @@ func (graph *workGraph) inbox(unit *workUnit) string {
 				message.From, message.Body)
 		}
 	}
-	for _, message := range graph.Messages[unit.HandoffAt:] {
+	for index, message := range graph.Messages {
+		// A decision stays in force for every later pass of the unit; findings are shown until the unit
+		// hands off again.
 		switch {
 		case message.Type == messageDecisionRequest && message.From == unit.Key:
 			fmt.Fprintf(&inbox, "\nYou asked for a decision: %s\n", message.Body)
 		case !slices.Contains(message.To, unit.Key):
 		case message.Type == messageDecisionResolution:
-			fmt.Fprintf(&inbox, "\nDecision by %s: %s\nContinue the work with this decision.\n", message.By, message.Body)
-		case message.Type == messageFinding:
+			fmt.Fprintf(&inbox, "\nDecision by %s: %s\nThis decision stands; work with it and do not ask again.\n", message.By, message.Body)
+		case message.Type == messageFinding && index >= unit.HandoffAt:
 			fmt.Fprintf(&inbox, "\nFinding from %q on commit %s to fix in this pass: %s", message.From, shortCommit(message.Commit), message.Title)
 			if message.File != "" {
 				fmt.Fprintf(&inbox, " (%s:%d)", message.File, message.Line)
@@ -204,7 +206,7 @@ Rules, checked by Zenchron before anything runs:
 - kind "review": judges exactly one produce or integrate unit, named as its only dependency; needs an
   agent_id without code.write and different from the agent of the work it reviews. Add reviews where the
   risk justifies them.
-- kind "integrate": exactly one; no agent_id. Zenchron merges every produced candidate, runs verification on
+- kind "integrate": exactly one; no agent_id and an empty "capabilities" list. Zenchron merges every produced candidate, runs verification on
   the combined result, and opens the pull request. Every produce unit must be reachable through its
   dependencies; depend on a review to integrate only reviewed work.
 - keys are lowercase letters, digits, and dashes; at most 8 units; "capabilities" lists tools the unit needs
