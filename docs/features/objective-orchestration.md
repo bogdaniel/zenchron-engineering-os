@@ -238,6 +238,33 @@ From approval to completion it took 12 min 33 s. While GitHub was creating the p
 `blocked` for about a second; fixed in `c69a195`. Human actions: creating the product and objective, correcting and
 resubmitting the plan, approving it, and the deliberate branch change, restore, and retry.
 
+### Measurements and a single-agent baseline (#279)
+
+The same task (issue #368, the objective text without the staffing decision) was also run once through the existing
+single-agent path: one Claude Code run, `fcda18ab4fea1215743762b4a6f1c16a`, on the same `main` clone, with the same
+worker verification and no publication. One sample of each; nothing here is a benchmark or supports a claim of
+improvement.
+
+| Measure | Orchestrated (graph `dd7d8db3…`) | Single run (`fcda18ab…`) |
+|---|---|---|
+| Wall clock | 753 s from approval to completion, plus 107 s of planning | 199 s |
+| Runs and attempts | 9 runs, 12 attempts, 1 failed (the stale input provoked on purpose) | 1 run, 1 attempt |
+| Agents and providers | Claude Code 2.1.322 and Codex CLI 0.167.0: 2 producers, 2 reviewers, 1 planner | Claude Code 2.1.322 |
+| Largest overlap of attempts | 2 | 1 |
+| Review rounds, findings, remediation passes | 4, 2, 2 | none: no review |
+| Input and output tokens | 1,913,166 and 41,826, plus 185,855 and 11,060 for planning | 1,623,980 and 19,254 |
+| Cost reported | 4.49 USD by Claude Code plus 1.39 USD for planning; Codex reports none | 2.19 USD |
+| Human actions | 4 for delivery (create, correct plan, approve; the branch change, restore, and retry were a test) | 1 (queue the run) |
+| Manual relay of prompts or findings | 0 | 0 |
+| Worker verification | passed on the integrated commit | passed |
+| Playwright specs | pass in GitHub CI on PR #377 | 11 passed when run locally in its worktree |
+| Human supervision time | not recorded | not recorded |
+
+On this small feature the single run was faster and cheaper and its result also passed. What the orchestrated run
+added was two independent reviews by the other provider, which found one defect in the first integrated candidate
+(the new spec downloaded before live data had loaded) before a person saw it. Whether that is worth the extra time
+and cost on larger features is not measured.
+
 After the live run an independent review of the orchestration code reported ten defects; nine were fixed with the
 regression tests named above (publication bound to the reviewed commit, verdict cleared on adoption, repository
 grant on plan and graph reads, responses encoded under the store lock, requests confined to producers and the diff
