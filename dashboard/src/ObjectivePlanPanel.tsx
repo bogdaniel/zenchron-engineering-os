@@ -45,9 +45,9 @@ function PlanRevision({ plan, latest, source }: { plan: ObjectivePlan; latest: b
 }
 
 function ProposeForm({ source }: { source: OrchestrationSource }) {
-  const [projectID, setProjectID] = useState<string | null>(null);
+  const [projectID, setProjectID] = useState<string | null>(() => new URLSearchParams(window.location.search).get('project'));
   const [plannerID, setPlannerID] = useState<string | null>(null);
-  const [workflowID, setWorkflowID] = useState<string | null>(null);
+  const [workflowID, setWorkflowID] = useState<string | null>(() => new URLSearchParams(window.location.search).get('workflow'));
   const [strategy, setStrategy] = useState<'workflow' | 'planner'>('workflow');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
@@ -93,7 +93,8 @@ function ProposeForm({ source }: { source: OrchestrationSource }) {
     </>}
     {error && <p className="work-unit-failure" role="alert">{error}</p>}
     <Button type="submit" size="xs" color="violet" loading={sending} title={source.readOnlyReason || undefined}
-      disabled={!source.propose || !projectID || (strategy === 'planner' ? !plannerID : !workflowID)}>Propose plan</Button>
+      disabled={!source.propose || !projects.some((project) => project.value === projectID)
+        || (strategy === 'planner' ? !plannerID : !workflows.some((workflow) => workflow.value === workflowID))}>Propose plan</Button>
   </form>;
 }
 

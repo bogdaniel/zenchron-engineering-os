@@ -80,6 +80,13 @@ async function openPlan(page: Page) {
   return page.getByRole('tabpanel');
 }
 
+test('plan proposal refuses unknown workflow and unlinked checkout address selections', async ({ page }) => {
+  await mockOrchestration(page, {});
+  await page.goto(`/?objective=${objectiveID}&tab=plan&project=unlinked&workflow=missing#objectives`);
+  await expect(page.getByRole('button', { name: 'Propose plan', exact: true })).toBeDisabled();
+  await expect(page.getByRole('combobox', { name: 'Repository checkout' })).toBeVisible();
+});
+
 const noHorizontalScroll = (page: Page) => page.evaluate(() =>
   document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 

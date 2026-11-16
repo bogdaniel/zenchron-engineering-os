@@ -141,7 +141,14 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     setCreating(true);
     setSubmitError('');
     try {
-      selectObjective(await source.create(objectiveInputSchema.parse(values)));
+      const created = await source.create(objectiveInputSchema.parse(values));
+      selectObjective(created);
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('workflow') || url.searchParams.has('project')) {
+        url.searchParams.set('objective', created.id);
+        url.searchParams.set('tab', 'plan');
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+      }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Could not create the objective.');
       return;
@@ -149,6 +156,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
       setCreating(false);
     }
     setActionNotice(`Objective created${source.savedSuffix}`);
+    if (new URLSearchParams(window.location.search).has('workflow') || new URLSearchParams(window.location.search).has('project')) {
+      setDetailTab('plan');
+    }
     createForm.reset();
     createForm.setFieldValue('product_id', '');
     setCreateOpen(false);

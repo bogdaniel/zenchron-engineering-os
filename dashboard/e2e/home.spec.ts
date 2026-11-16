@@ -327,6 +327,7 @@ for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: '
 }
 
 test('Reviews page shows unavailable provider data without invented pull requests', async ({ page }) => {
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({ json: [] }));
   await page.goto('/');
   await page.getByRole('link', { name: 'Reviews', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible();
@@ -503,7 +504,23 @@ test('Reports summarizes live objectives and run records without inventing deliv
   await expect(page.getByRole('button', { name: 'Download Executive Summary CSV' })).toBeVisible();
 });
 
-test('Product Workspace groups live repositories into persisted products', async ({ page }) => {
+test('Product Workspace groups live repositories into persisted products', async ({ page }, testInfo) => {
+  let productID = '';
+  // Keep the first-use view independent of products created by concurrent real-backend specs.
+  await page.route('**/api/v1/products', async (route) => {
+    const upstream = new URL(route.request().url());
+    upstream.hostname = '127.0.0.1';
+    upstream.port = '8083';
+    const response = await route.fetch({ url: upstream.toString() });
+    if (route.request().method() === 'POST') {
+      const created: { id: string } = await response.json();
+      productID = created.id;
+      await route.fulfill({ response });
+      return;
+    }
+    const products: { id: string }[] = await response.json();
+    await route.fulfill({ response, json: products.filter((product) => product.id === productID) });
+  });
   const objectiveTitle = `Product objective ${Date.now()}`;
   await page.goto('/');
   await page.getByRole('link', { name: 'Product Workspace' }).click();
@@ -522,11 +539,30 @@ test('Product Workspace groups live repositories into persisted products', async
     .toContainText('1 linked repositories');
   await expect(page.locator('.workspace-mock-heading')).toContainText('Shared platform and APIs');
 
+  await page.getByRole('combobox', { name: 'Objective repository' }).click();
+  await page.getByRole('option', { name: /zenchron-engineering-os/ }).click();
+  await page.getByRole('combobox', { name: 'Objective workflow' }).click();
+  await page.getByRole('option', { name: /PR Review & Release Orchestration/ }).click();
+  for (const viewport of [{ width: 1672, height: 941 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`product-start-${viewport.width}.png`), fullPage: true });
+  }
+  await page.setViewportSize({ width: 1672, height: 941 });
   await page.getByRole('link', { name: 'Create objective for Core Product' }).click();
   const objectiveDialog = page.getByRole('dialog');
   await objectiveDialog.getByLabel('Objective title').fill(objectiveTitle);
   await expect(objectiveDialog.getByRole('combobox', { name: 'Product' })).toHaveValue('Core Product');
   await objectiveDialog.getByRole('button', { name: 'Create objective' }).click();
+  await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('combobox', { name: 'Repository checkout' })).toHaveValue(/zenchron-engineering-os/);
+  await expect(page.getByRole('combobox', { name: 'Executable workflow' })).toHaveValue(/PR Review & Release Orchestration/);
+  await expect(page.getByRole('button', { name: 'Propose plan', exact: true })).toBeEnabled();
+  await page.reload();
+  await expect(page.locator('.objective-detail-head h3')).toContainText(objectiveTitle);
+  await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('combobox', { name: 'Executable workflow' })).toHaveValue(/PR Review & Release Orchestration/);
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   await expect(page.locator('.detail-meta-grid').getByText('Core Product', { exact: true })).toBeVisible();
 
   await page.getByRole('link', { name: 'Product Workspace' }).click();

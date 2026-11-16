@@ -23,6 +23,8 @@ flowchart LR
     Editor -->|"source.saveProduct"| Source
     Live -->|"POST /api/v1/products · PUT /api/v1/products/{id}"| CP
     Page -->|"Create objective for selected product"| Objective["ObjectivesPage · product_id prefilled"]
+    Page -->|"linked checkout + saved workflow selection"| Start["WorkspaceObjectiveStart"]
+    Start -->|"project/workflow IDs carried to Plan form"| Plans
     Objective -->|"create objective, then select repository and workflow in Plan"| Plans["ObjectivePlanPanel"]
     Plans -->|"POST /api/v1/objectives/{id}/plans"| CP
     Plans --> Report["ObjectiveDeliveryReport"]
@@ -89,6 +91,9 @@ Live:
   objective's Plan tab, where the saved graph is compiled into inspectable WorkUnits. Workflows remain workspace-wide,
   not linked to a product. The Templates tab adds agent profiles; linked personas are managed from Agents.
 - In Live, "Create objective" on the selected product opens the existing objective form with that product selected.
+  Optional repository and workflow choices are carried into the Plan tab after creation. Only online linked checkouts
+  are offered; the Plan form checks the selected IDs against its scoped options before enabling proposal. Selecting a
+  saved workflow does not certify it as executable: existing compilation/validation still rejects unsupported semantics.
   The Plan tab then offers only online repository checkouts linked to that product; legacy objectives without a product
   keep the existing all-checkouts choice.
 - The Objectives tab projects each linked objective's current WorkGraph, pending decisions, findings, review and

@@ -15,6 +15,7 @@ import type { ProductInput } from './productEditor';
 import { useMockWorkspace } from './workspace-preview-data';
 import { useLiveWorkspace } from './workspaceView';
 import { WorkspaceExecution } from './WorkspaceExecution';
+import { WorkspaceObjectiveStart } from './WorkspaceObjectiveStart';
 import type { WorkspaceFacts, WorkspaceNote, WorkspaceObjectiveRow, WorkspaceStatusRow } from './workspaceView';
 import './workspace-preview.css';
 
@@ -197,7 +198,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
         </button>)}
       </nav>
 
-      <div className={`workspace-mock-grid ${activeTab.toLowerCase()}`}>
+      <div className={`workspace-mock-grid ${activeTab.toLowerCase()}${designPreview ? '' : ' workspace-live-grid'}`}>
         <Card className="roadmap" title="Product Roadmap" description="Strategic delivery plan and key milestones" icon={<IconMap2 size={15} />}
           hidden={activeTab !== 'Overview' && activeTab !== 'Objectives'}
           action={<span className="workspace-mock-roadmap-tabs">
@@ -225,9 +226,9 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
           onAction={() => setActiveTab('Objectives')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Objectives'}>
           {objectiveList.note ? <Note note={objectiveList.note} /> : <ObjectiveRows rows={objectiveList.rows} />}
-          {!designPreview && selected && <a className="workspace-mock-card-action workspace-mock-objective-create"
-            href={`/?create=1&product_id=${encodeURIComponent(selected.id)}#objectives`}
-            aria-label={`Create objective for ${selected.name}`}>＋ Create objective</a>}
+          {!designPreview && selected && <WorkspaceObjectiveStart key={selected.id} productID={selected.id}
+            productName={selected.name} projects={(source.repositories ?? []).filter((project) =>
+              source.editable(selected.id)?.repository_ids.includes(project.id))} />}
           {/* The Objectives tab also shows how each objective is being executed: units, handoffs, findings, decisions, PR. */}
           {activeTab === 'Objectives' && <WorkspaceExecution sampleData={designPreview} objectiveIDs={facts.objectives
             ?.filter((objective) => objective.product_id === selected?.id).map((objective) => objective.id) ?? []} />}
