@@ -82,6 +82,12 @@ flowchart LR
 - At phone widths, Product Summary and Workspace Summary keep their columns readable in keyboard-focusable horizontal
   scroll regions; the page itself remains within the viewport width.
 - Product summary rows use PR and GitHub Actions history attributed to unique supported GitHub remotes linked to each product. Velocity, cycle time, and acceptance rate follow the same formulas and completeness limits as the workspace KPIs; CI duration is the average of qualifying completed runs. Missing or incomplete history stays unavailable. The workspace summary applies the active report scope and counts objectives as work items. Autonomous completion remains unavailable because agent-run records do not record whether a person had to intervene. The Downloads panel offers executive summary, detailed metrics, agent spend/utilization, and product/workspace CSV files using the applied scope. The product/workspace export includes the same delivery metrics as the summary tables alongside repository and objective counts. Each row shows a 30px CSV file icon, a 12px report name, 10px source detail, and a 24px download action; details wrap and the bottom row can grow at narrower desktop widths. The spend export lists scoped run records with the cost and token usage the provider reported, and marks them unavailable on runs without a usage record.
+- CSV exports are encoded by `encodeCSV` in `dashboard/src/csvCell.ts`. String cells are wrapped in double quotes with
+  each `"` doubled; commas, line breaks, and Unicode stay as they are inside the quotes. A string cell whose first
+  character after leading whitespace and control characters (code points below 0x21) is `=`, `+`, `-`, or `@` gets one
+  leading apostrophe in front of the whole original text, so spreadsheet programs do not evaluate it as a formula; this
+  includes numeric-looking text such as `-5`. Number cells are written unquoted, missing values as an empty quoted
+  field, fields are joined with commas, and rows with CRLF without a trailing line break.
 - The Insights & Narrative panel derives its statements and key takeaway from current scoped snapshots and GitHub PR history. The takeaway summarizes merged, closed-unmerged, and open PR counts when history is complete; otherwise it reports the source or completeness state. It does not infer status history or delivery trends from objective/run `updated_at`. Delivery source status reports missing remotes, unsupported remotes, provider errors, and incomplete history.
 - The Work outcomes chart uses complete GitHub pull-request history and counts merged PRs by merge time, closed
   unmerged PRs by close time, and still-open PRs by creation time within the selected range. It does not infer review
@@ -134,6 +140,8 @@ cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep "Reports page"
 product counts, complete and truncated GitHub PR and Actions histories, derived delivery metrics, provider-reported
 agent spend, the disabled and Unavailable parts of the frame, and all four downloaded CSV reports against isolated API
 responses.
+`cd dashboard && npm run test:e2e -- e2e/reports-csv-export.spec.ts` checks neutralized cells, unchanged ordinary text
+and unquoted numbers in all four exports.
 `cd dashboard && npm run test:e2e -- e2e/report-summary-metrics.spec.ts` checks per-product and workspace metric
 attribution from distinct GitHub PR and Actions histories.
 `cd dashboard && npm run test:e2e -- e2e/reports-preview.spec.ts` checks that the local mock route uses frontend fixtures
