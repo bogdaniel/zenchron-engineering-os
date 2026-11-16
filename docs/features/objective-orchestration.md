@@ -164,4 +164,45 @@ approved in the page that runs through a decision, a blocking review, remediatio
 
 ## Live record
 
-Not yet run with the installed Codex and Claude Code CLIs. The fake-CLI checks above do not count as live proof.
+Live, on 2026-11-16, with a loopback control plane (`ZENCHRON_GITHUB_TOKEN` set), one worker with two slots,
+Claude Code 2.1.322 and Codex CLI 0.167.0, and a dedicated clone of this repository on `feat/objective-orchestration`
+whose worker configuration runs `go vet`, `go build`, the `gofmt` check, `go test ./cmd/zenchron`, and the file-size
+check as verification. The objective was backlog issue #334, backend slice: a delivery report API for a WorkGraph.
+
+| Step | What happened | Evidence |
+|---|---|---|
+| Objective | Created through the API with five agent profiles (two writers, two read-only reviewers, one read-only planner) | objective `ea0c9bacd5f9248f37f138d5beaf32e4` |
+| Plan, revision 1 | The Claude Code planner proposed one producer; validation refused the plan because its instructions and acceptance criteria exceeded the limits, and approving it answered 409 | planner run `47ff903effce40613763ea836194ed52`; fixed in `c9887d0` (the contract now states the limits) |
+| Plan, revision 2 | The operator added a staffing decision (two parallel producers) to the objective; the planner's five-unit plan exceeded the 16 KiB result limit and the worker dropped it | planner run `f152190f57e7073a61edc9604ef3ea43`; fixed in `28acb64` (limit 48 KiB) |
+| Plan, revision 3 | Valid: `api` (Claude engineer), `docs` (Codex engineer), `review-api` (Codex reviewer), `integrate`, `review-all` (Claude reviewer); approved in the dashboard's Plan tab | planner run `5e9e88791e4066232c8f7e9dd1b14bc3`; graph `22bca11eeb7e82bfdb1df1bb04a4f28b` |
+| Parallel producers | Claude Code and Codex ran at the same time in separate worktrees | `api` run `9e926b3aed9d9830134959479373e992` attempt 1, 08:06:02 to 08:09:55 UTC; `docs` run `2ef35490fc31bd7eae5b797aca29decf` attempt 1, 08:06:02 to 08:07:59 UTC |
+| Inadmissible result | The first `api` attempt ended without an admissible typed result; Zenchron wrote a finding against the unit and the same run's second attempt handed off | candidate `01e6fdf118225a24e8d91f6f20dfea6621a9c9c8` |
+| Independent review | Codex reviewed Claude's exact candidate and accepted it | review run `ebcaef22da79cce1ec1ddee739805ccc` |
+| Integration and restart | The control plane was killed while the integration run was executing; its attempt 1 closed as `lease_expired` and attempt 2 merged both candidates with verification passed | integration run `5ec0e9b4f6d0cfa6ce8fe0fbf6900cee`, commit `35b1fcdab7` |
+| Review finding | Claude reviewed the integrated commit and blocked it: the document's Mermaid edge label with an unquoted `{id}` does not parse. The finding was routed by file to `docs` | review run `c6b097bf304798e7be78968f804f42ff` |
+| Remediation | Codex fixed it in attempt 2 of its own run | candidate `65f20dc4c0228ade0e159da1e8a6ddea3909f4d0` |
+| Fresh integration and review | A new integration run merged the new candidates, verification passed, and a fresh Claude review accepted that commit | integration run `08e70ab84e6e1bafc781756b00d7a0b8`, commit `9ae5c9cd0d6d2e56f200b8c928069655e6e32169`; review run `69e75f0d55e8eefdfb1d2f7c8bddaf49` |
+| Publication | The second pass of the integration run pushed the reviewed commit and one pull request was created, not merged | https://github.com/bogdaniel/zenchron-engineering-os/pull/376, head `9ae5c9c`, base `feat/objective-orchestration` |
+
+Measured by the report endpoint that pull request adds, run against a copy of the live data: 5 units, 7 runs, 11
+attempts of which 1 failed (the lease lost to the restart), 3 review rounds, 2 findings, 2 remediation passes, 0
+decisions, 1 human action recorded by the graph (the approval), largest overlap of attempts 2, 645 s from approval to
+completion, 1,295,087 input and 25,810 output tokens, and 3.29 USD reported by Claude Code; Codex reports no cost, and
+human supervision time is not recorded anywhere. The three planning runs took another 643,113 input and 39,327 output
+tokens and 4.61 USD.
+
+Human actions in total: creating the profiles and the objective, adding the staffing decision, requesting a plan three
+times (twice because of the two defects above), approving revision 3 in the dashboard, and killing the control plane
+on purpose. No prompt, finding, handoff, or result was copied between agents by a person.
+
+A second live objective was built to conflict (graph `b6303346a2dfd9a7fdcb3f6f91a523f4`, two producers creating the
+same file): a cyclic variant of its plan was refused with 400; approving a changed plan while it executed answered
+409; proposing the identical plan returned the approved revision; the integration run
+`f7d945ef52122a30fd7795628307dd02` failed with `merge_conflict` and the aborted merge; the finding named the file and
+went to the producer whose branch did not merge; and cancelling the graph cancelled that producer's queued
+remediation. Nothing from it was published.
+
+Not shown live: a review verdict arriving for a candidate that had already changed, a stale integration input, a
+decision request, and a unit retry. No agent produced those situations in the live runs; they are covered by the
+focused tests above and, for restart and the whole lifecycle, by a rehearsal with the real binaries and a fake CLI.
+A webhook, a hosted control plane, and more than one worker were not part of this run.
