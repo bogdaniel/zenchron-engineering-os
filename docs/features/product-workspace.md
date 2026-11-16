@@ -11,13 +11,14 @@ control plane records nothing.
 
 ```mermaid
 flowchart LR
-    Shell["App shell · main.tsx<br/>mode, projects, objectives"] -->|"designPreview, WorkspaceFacts"| Page["WorkspacePage · workspace.tsx<br/>one layout, UI state"]
+    Shell["App shell · main.tsx<br/>mode, projects, objectives, workers"] -->|"designPreview, WorkspaceFacts"| Page["WorkspacePage · workspace.tsx<br/>one layout, UI state"]
     Page -->|"source.view(product, quarter)"| Source{"WorkspaceSource"}
     Source -->|Mock| Mock["useMockWorkspace<br/>workspace-preview-data.tsx · useState"]
     Source -->|Live| Live["useLiveWorkspace<br/>workspaceView.tsx · TanStack Query"]
     Live -->|"GET /api/v1/products"| CP[(Go control plane)]
     Live -->|"GET /api/v1/workflows"| CP
     Live -->|"GET /api/v1/agents"| CP
+    Live -->|"GET /api/v1/personas"| CP
     Shell -->|"GET /api/v1/projects · GET /api/v1/objectives"| CP
     Page -->|"Add / Edit product"| Editor["ProductEditor · productEditor.tsx"]
     Editor -->|"source.saveProduct"| Source
@@ -89,7 +90,9 @@ Live:
   linked and is shown as unavailable.
 - "Available Workflows" lists workflow definitions with their version and status. A workflow can be selected in an
   objective's Plan tab, where the saved graph is compiled into inspectable WorkUnits. Workflows remain workspace-wide,
-  not linked to a product. The Templates tab adds agent profiles; linked personas are managed from Agents.
+  not linked to a product. The Templates tab lists agent profiles with their linked persona, provider, model, and
+  current local worker readiness; profile and workflow names open the saved records. Definitions remain workspace-wide,
+  while executed assignments are associated with the product through its objectives and WorkGraphs.
 - In Live, "Create objective" on the selected product opens the existing objective form with that product selected.
   Optional repository and workflow choices are carried into the Plan tab after creation. Only online linked checkouts
   are offered; the Plan form checks the selected IDs against its scoped options before enabling proposal. Selecting a

@@ -173,9 +173,16 @@
 .workspace-mock-list > div > span:last-child:not(.workspace-mock-run) { color: #aaa5b5; }
 .workspace-mock-list > div > em { padding: 2px 6px; border-radius: 8px; color: #c9c1d3; background: #29263a; font-size: 8px; font-style: normal; }
 .workspace-mock-list.status-list { gap: 6px; }
+.workspace-mock-list.status-list b small { display: block; overflow: hidden; color: #aaa4b7; font-size: 8px; font-weight: 400; text-overflow: ellipsis; }
+.workspace-mock-list.status-list b a { color: inherit; }
 .workspace-mock-state { min-height: 15px; padding: 0 5px; border: 0; border-radius: 8px; color: #3cdaa1; background: #14392e; font-size: 8px; text-transform: none; }
 .workspace-mock-state.scheduled, .workspace-mock-state.pending, .workspace-mock-state.draft,
-.workspace-mock-state.loading, .workspace-mock-state.unavailable { color: #e8bb56; background: #392b13; }
+.workspace-mock-state.loading, .workspace-mock-state.unavailable,
+.workspace-mock-state.no-online-worker, .workspace-mock-state.persona-unavailable,
+.workspace-mock-state.persona-data-unavailable, .workspace-mock-state.profile-disabled,
+.workspace-mock-state.cannot-run, .workspace-mock-state.codex-cli-not-ready,
+.workspace-mock-state.claude-code-not-ready, .workspace-mock-state.checking-worker,
+.workspace-mock-state.checking-persona { color: #e8bb56; background: #392b13; }
 .workspace-mock-state.in-progress, .workspace-mock-state.agent-profile { color: #a9d4ff; background: #152f51; }
 .workspace-mock-list.files { gap: 6px; }
 .workspace-mock-list.files > div > span { display: grid; width: 16px; place-items: center; color: #c898ff; }

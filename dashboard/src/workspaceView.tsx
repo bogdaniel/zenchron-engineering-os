@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { loadAgents } from './agentsData';
+import { loadAgents, loadPersonas } from './agentsData';
+import { profileReadiness } from './agentReadiness';
+import type { RunWorker } from './agentRunQueue';
 import type { Objective } from './objectives';
 import { loadProducts, productSchema } from './productEditor';
 import type { Product, ProductInput } from './productEditor';
@@ -14,7 +16,7 @@ export type WorkspaceRoadmapRow = {
 };
 export type WorkspaceObjectiveRow = { title: string; detail?: string; progress: number; done: boolean; href?: string };
 export type WorkspaceRepositoryRow = { name: string; detail?: string; branch: string };
-export type WorkspaceStatusRow = { name: string; state: string };
+export type WorkspaceStatusRow = { name: string; state: string; detail?: string; href?: string; note?: string };
 
 /** Display values for the selected product, in the same shape for Mock and Live. */
 export type WorkspaceView = {
@@ -89,6 +91,8 @@ export interface WorkspaceFacts {
   projectsError: boolean;
   objectivesLoading: boolean;
   objectivesError: boolean;
+  workers?: RunWorker[];
+  workersLoading?: boolean;
 }
 
 const unavailable = 'Unavailable';
@@ -234,7 +238,7 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
       title: definitions.workflowsNote ? 'Available Workflows' : `Available Workflows (${definitions.workflows.length})`,
       rows: definitions.workflows.slice(0, overviewRowLimit),
       note: definitions.workflowsNote ?? (definitions.workflows.length ? undefined : { text: 'No workflow definitions saved.' }),
-      templatesTitle: `Workflow and Agent Templates (${templateRows.length})`,
+      templatesTitle: `Workflows and Agent Profiles (${templateRows.length})`,
       templateRows,
       templatesNote: definitions.workflowsNote ?? (templateRows.length ? undefined : { text: 'No definitions saved.' }),
     },
@@ -256,6 +260,7 @@ export function useLiveWorkspace(enabled: boolean, facts: WorkspaceFacts): Works
   const products = useQuery({ queryKey: ['products'], queryFn: loadProducts, enabled });
   const workflows = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows, enabled });
   const agents = useQuery({ queryKey: ['agents'], queryFn: loadAgents, enabled });
+  const personas = useQuery({ queryKey: ['personas'], queryFn: loadPersonas, enabled });
   const save = useMutation({
     mutationFn: async ({ input, productID }: { input: ProductInput; productID?: string }) => {
       const response = await fetch(productID ? `/api/v1/products/${productID}` : '/api/v1/products', {
@@ -269,12 +274,21 @@ export function useLiveWorkspace(enabled: boolean, facts: WorkspaceFacts): Works
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
   });
   const definitions = {
-    workflows: workflows.data?.map((workflow) => ({ name: workflow.name, state: workflow.status })) ?? [],
+    workflows: workflows.data?.map((workflow) => ({ name: workflow.name, state: workflow.status,
+      detail: `Workflow v${workflow.version}`, href: `?workflow=${encodeURIComponent(workflow.id)}#workflows` })) ?? [],
     workflowsNote: workflows.isError ? failed('Workflow definitions unavailable.')
       : workflows.isLoading ? { text: 'Loading workflow definitions…' } : undefined,
     agents: agents.isError ? [{ name: 'Agent profiles', state: unavailable }]
       : agents.isLoading ? [{ name: 'Agent profiles', state: 'Loading' }]
-      : agents.data?.map((agent) => ({ name: agent.name, state: 'Agent profile' })) ?? [],
+      : agents.data?.map((agent) => {
+        const persona = personas.data?.find((item) => item.id === agent.persona_id);
+        const readiness = personas.isError && agent.persona_id
+          ? { label: 'Persona data unavailable', note: 'Could not check the linked persona.' }
+          : profileReadiness(agent, facts.workers ?? [], persona, personas.isLoading, false, facts.workersLoading);
+        return { name: agent.name, state: readiness.label, note: readiness.note,
+          detail: `${persona?.name ?? (agent.persona_id ? 'Persona unavailable' : 'No persona')} · ${agent.provider} · ${agent.model}`,
+          href: `?profile=${encodeURIComponent(agent.id)}#agents` };
+      }) ?? [],
   };
 
   return {

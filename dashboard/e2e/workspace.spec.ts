@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 const novaID = 'a'.repeat(32);
 const orionID = 'b'.repeat(32);
 const projectID = 'c'.repeat(32);
+const personaID = 'e'.repeat(32);
 const createdAt = '2026-01-01T00:00:00Z';
 const nova = { id: novaID, name: 'Nova Platform', description: 'Developer platform', repository_ids: [projectID], created_at: createdAt, updated_at: createdAt };
 const orion = { id: orionID, name: 'Orion Analytics', description: 'Data tools', repository_ids: [], created_at: createdAt, updated_at: createdAt };
@@ -26,6 +27,10 @@ async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, or
     id: projectID, name: 'nova-platform', branch: 'main', git_remote: 'github.com/zenchron/nova-platform',
     worker_id: 'c'.repeat(32), worker_name: 'Mac Studio', last_seen: createdAt, worker_status: 'online',
   }])));
+  await page.route('**/api/v1/workers', (route) => route.fulfill(json([{
+    id: 'c'.repeat(32), name: 'Mac Studio', status: 'online', last_seen: createdAt,
+    providers: [{ id: 'codex-cli', version: 'codex 1.0', ready: true, sandboxed_commands: true }],
+  }])));
   await page.route('**/api/v1/objectives', (route) => route.fulfill(json([
     { id: '1'.repeat(32), title: 'Ship Platform v3.0', description: '', owner: 'Alex', product: 'Nova Platform', product_id: novaID, status: 'on_track', progress: 78, due_date: '2026-12-15', created_at: createdAt, updated_at: createdAt },
     { id: '2'.repeat(32), title: 'Launch Agent SDK', description: '', owner: 'Priya', product: 'Nova Platform', product_id: novaID, status: 'at_risk', progress: 34, due_date: '2027-02-10', created_at: '2026-01-02T00:00:00Z', updated_at: '2026-01-02T00:00:00Z' },
@@ -36,8 +41,12 @@ async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, or
     { id: 'release', name: 'Release train', description: '', status: 'draft', version: 1, nodes: [], edges: [], updated_at: createdAt },
   ])));
   await page.route('**/api/v1/agents', (route) => route.fulfill(json([{
-    id: 'd'.repeat(32), name: 'Code Reviewer', description: '', provider: 'custom', model: 'review-v1', status: 'active',
-    system_prompt: '', goal_prompt: '', tools: [], version: 1, updated_at: createdAt,
+    id: 'd'.repeat(32), name: 'Code Reviewer', description: '', provider: 'codex-cli', model: 'gpt-6.1-sol', status: 'active',
+    system_prompt: '', goal_prompt: '', tools: [], persona_id: personaID, version: 1, updated_at: createdAt,
+  }])));
+  await page.route('**/api/v1/personas', (route) => route.fulfill(json([{
+    id: personaID, name: 'Review specialist', role: 'Reviewer', responsibilities: [], instructions: '', behavior: '',
+    review_specialization: 'Code review', status: 'active', version: 1, updated_at: createdAt,
   }])));
   return writes;
 }
@@ -121,7 +130,7 @@ test('Product Workspace matches its desktop frame and filters products', async (
   expect(await page.locator('.workspace-mock-directory').evaluate((element) => element.getBoundingClientRect().x)).toBe(263);
 });
 
-test('Live Product Workspace shows real data, honest gaps, and saves product edits', async ({ page }) => {
+test('Live Product Workspace shows real data, honest gaps, and saves product edits', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   const writes = await useLiveFixtures(page);
   await page.goto('/#workspace');
@@ -167,8 +176,11 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(page.locator('.workspace-mock-roadmap-row')).toHaveCount(1);
   await expect(page.locator('.workspace-mock-roadmap-row')).toContainText('Launch Agent SDK');
   await sections.getByRole('button', { name: 'Templates' }).click();
-  await expect(page.getByRole('heading', { name: 'Workflow and Agent Templates (2)' })).toBeVisible();
-  await expect(page.locator('.workspace-mock-card.linked-workflows')).toContainText('Code ReviewerAgent profile');
+  await expect(page.getByRole('heading', { name: 'Workflows and Agent Profiles (2)' })).toBeVisible();
+  await expect(page.locator('.workspace-mock-card.linked-workflows')).toContainText('Code ReviewerReview specialist · codex-cli · gpt-6.1-solcodex-cli ready');
+  await expect(page.locator('.workspace-mock-card.linked-workflows').getByRole('link', { name: 'Code Reviewer' }))
+    .toHaveAttribute('href', `?profile=${'d'.repeat(32)}#agents`);
+  await page.screenshot({ path: testInfo.outputPath('workspace-profiles-desktop.png'), fullPage: true });
   await sections.getByRole('button', { name: 'Overview' }).click();
   await page.locator('.workspace-mock-card.people').getByRole('button', { name: /Manage/ }).click();
   await expect(page.getByRole('dialog', { name: 'Stakeholders' })).toContainText('not configured in the control plane');
@@ -199,6 +211,27 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
+test('Live Product Workspace explains unavailable profile configuration', async ({ page }, testInfo) => {
+  await useLiveFixtures(page);
+  await page.route('**/api/v1/personas', (route) => route.fulfill(json([])));
+  await page.goto('/#workspace');
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Templates' }).click();
+  await expect(page.locator('.workspace-mock-card.linked-workflows')).toContainText('Persona unavailable');
+
+  await page.route('**/api/v1/agents', (route) => route.fulfill(json([{
+    id: 'd'.repeat(32), name: 'Code Reviewer', description: '', provider: 'codex-cli', model: 'gpt-6.1-sol',
+    status: 'active', system_prompt: '', goal_prompt: '', tools: [], version: 1, updated_at: createdAt,
+  }])));
+  await page.route('**/api/v1/workers', (route) => route.fulfill(json([])));
+  await page.reload();
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Templates' }).click();
+  await expect(page.locator('.workspace-mock-card.linked-workflows')).toContainText('Code ReviewerNo persona · codex-cli · gpt-6.1-solNo online worker');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.workspace-mock-card.linked-workflows')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({ path: testInfo.outputPath('workspace-profiles-mobile.png'), fullPage: true });
+});
+
 test('Live Product Workspace reports failed and empty product lists without fixtures', async ({ page }) => {
   await useLiveFixtures(page, []);
   await page.goto('/#workspace');
@@ -213,6 +246,8 @@ test('Live Product Workspace reports failed and empty product lists without fixt
   // TanStack Query retries a failed read three times with backoff before it reports the error.
   await expect(page.getByRole('alert').filter({ hasText: 'Product list unavailable.' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('alert').filter({ hasText: 'Workflow definitions unavailable.' })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Templates' }).click();
+  await expect(page.locator('.workspace-mock-card.linked-workflows')).toContainText('Code Reviewer');
   await expect(page.locator('.workspace-mock-product')).toHaveCount(0);
   await expect(page.locator('.workspace-mock')).not.toContainText('Nova Platform');
 });

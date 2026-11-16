@@ -62,9 +62,10 @@ function ObjectiveRows({ rows }: { rows: WorkspaceObjectiveRow[] }) {
 }
 
 function StatusRows({ rows }: { rows: WorkspaceStatusRow[] }) {
-  return <div className="workspace-mock-list status-list">{rows.map(({ name, state }) => <div key={`${name}-${state}`}>
-    <span className="workspace-mock-run"><IconPlayerPlay size={12} fill="currentColor" /></span><b>{name}</b>
-    <Badge className={`workspace-mock-state ${stateClass(state)}`} variant="light">{state}</Badge>
+  return <div className="workspace-mock-list status-list">{rows.map(({ name, state, detail, href, note }) => <div key={`${name}-${href ?? state}`}>
+    <span className="workspace-mock-run"><IconPlayerPlay size={12} fill="currentColor" /></span>
+    <b>{href ? <a href={href}>{name}</a> : name}{detail && <small>{detail}</small>}</b>
+    <Badge className={`workspace-mock-state ${stateClass(state)}`} variant="light" title={note}>{state}</Badge>
   </div>)}</div>;
 }
 
@@ -246,7 +247,8 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
         <Card className="linked-workflows" title={workflowList.title}
           icon={<IconHierarchy size={15} />} action="View All" onAction={() => setActiveTab('Templates')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Repos' && activeTab !== 'Templates'}>
-          {workflowList.note ? <Note note={workflowList.note} /> : <StatusRows rows={workflowList.rows} />}
+          {workflowList.note && <Note note={workflowList.note} />}
+          {workflowList.rows.length > 0 && <StatusRows rows={workflowList.rows} />}
         </Card>
         <Card className="files" title="Design / Docs / Files" icon={<IconFileText size={15} />} action="View All"
           onAction={() => setActiveTab('Files')}
