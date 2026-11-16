@@ -45,12 +45,14 @@ flowchart LR
 - A plan has 1 to 8 units of kind `produce`, `review`, or `integrate`, each with a key, title, instructions, acceptance
   criteria, dependencies, and capabilities, and `max_parallel` from 1 to 4 (default 2).
 - A plan is refused, with every problem listed, when: a key is malformed or repeated; a dependency is unknown or forms
-  a cycle; there is not exactly one integrate unit; a produce unit never reaches the integrate unit; a produce unit
+  a cycle; there is no produce unit or not exactly one integrate unit; a produce unit never reaches the integrate unit; a produce unit
   builds on more than one produce unit; a produce unit's profile is missing, disabled, has no CLI adapter, cannot
   write code, or lacks a listed capability; a review unit does not review exactly one produce or integrate unit; a
   reviewer's profile may write code or produced the work it reviews; the integrate unit names an agent.
 - A plan submitted in the body that is invalid is answered with 400 and stored nowhere. A planner's invalid plan is
   stored as an `invalid` revision with its problems.
+- An objective keeps at most 20 plan revisions. Plans and graphs are returned only to callers who may see the
+  objective and hold a grant for the plan's repository.
 - Only the latest `proposed` revision can be approved. Approval is refused with 409 while another plan of the objective
   is executing; that graph must be cancelled first. Proposing a plan identical to the executing one returns the
   approved revision and creates nothing. Approving an approved revision returns its graph.
@@ -103,7 +105,8 @@ flowchart LR
 - A conflict becomes a finding for the producer whose branch did not merge, and integration runs again after that
   producer hands off. Failed verification of the combined candidate fails the unit.
 - With reviews of the integrate unit, the candidate is pushed and the pull request created only after they accept, by
-  a second pass of the same run that must produce the same commit. Without GitHub credentials or a GitHub origin the
+  a second pass of the same run. The worker is told the reviewed commit and pushes nothing if the worktree produces
+  another one; a push that fails is tried again while the run has attempts. Without GitHub credentials or a GitHub origin the
   unit completes with the candidate on its local branch.
 - The pull request names the objective, the graph, and each unit with its agent and candidate. It is never merged.
 
@@ -143,7 +146,10 @@ Focused Go tests, through the HTTP API with a fake GitHub (`go test ./cmd/zenchr
 | `TestWorkGraphRecoversAfterRestartWithoutQueueingWorkTwice` | Restart recovery and adoption of an unrecorded run |
 | `TestIntegrationConflictGoesToItsOwnerAndStaleInputsFailVisibly` | Conflict routing, re-integration, stale inputs, unit retry |
 | `TestDecisionRequestBlocksItsUnitUntilAPersonResolvesIt`, `TestOnlyAnAuthorizedPersonCanResolveADecision` | Durable decisions, resume, and who may resolve |
-| `TestCancellingAGraphStopsItsRunsAndFailedUnitsBlockTheirDependents` | Cancellation and failure propagation |
+| `TestCancellingAGraphStopsItsRunsAndFailedUnitsBlockTheirDependents`, `TestCancelledGraphFollowsItsRunningRunUntilItStops` | Cancellation and failure propagation |
+| `TestPublicationPassIsBoundToTheReviewedCommitAndAFailedPushIsRetried` | Only the reviewed commit is published; a failed push is retried |
+| `TestAdoptedReviewRunDoesNotInheritTheVerdictOfTheRoundBeforeIt` | A verdict from before a crash cannot approve a newer candidate |
+| `TestPlanHistoryIsBoundedAndAPlanNeedsAProducer`, `TestPlansAndGraphsNeedTheRepositoryGrantNotOnlyTheObjective` | Bounded plan history; repository grant on every plan and graph read |
 | `TestPlanIsRejectedBeforeAnythingRuns`, `TestChangedPlanCannotReplaceAnExecutingOneAndAnUnchangedPlanNeedsNoNewApproval`, `TestPlannerRunOnlyProposesAndItsPlanIsValidatedLikeAnyOther` | Plan validation, safe plan changes, planner output as a proposal |
 
 Worker tests with a real Git repository and a fake CLI (`go test ./cmd/zenchron-worker -run '<name>' -count=1`):
@@ -206,3 +212,10 @@ Not shown live: a review verdict arriving for a candidate that had already chang
 decision request, and a unit retry. No agent produced those situations in the live runs; they are covered by the
 focused tests above and, for restart and the whole lifecycle, by a rehearsal with the real binaries and a fake CLI.
 A webhook, a hosted control plane, and more than one worker were not part of this run.
+
+After the live run an independent review of the orchestration code reported ten defects; nine were fixed with the
+regression tests named above (publication bound to the reviewed commit, verdict cleared on adoption, repository
+grant on plan and graph reads, responses encoded under the store lock, requests confined to producers and the diff
+marked as task data, bounded plan history, Git failures no longer reported as conflicts, retried pushes, cancelled
+graphs following their runs, plans without a producer refused). The tenth is by design: a run of a unit is visible
+to every user with a grant for its repository, as all runs are. The live run above predates these fixes.
