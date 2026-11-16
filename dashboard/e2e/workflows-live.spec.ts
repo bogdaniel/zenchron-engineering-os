@@ -28,11 +28,14 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
     return route.continue({ url: apiURL.toString() });
   });
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/');
   const workflowList = page.waitForResponse((response) => response.url().includes('/api/v1/workflows') &&
     response.request().method() === 'GET');
-  await page.getByRole('link', { name: 'Workflows' }).click();
-  expect((await workflowList).status()).toBe(200);
+  await page.goto('/#workflows');
+  const workflowResponse = await workflowList;
+  expect(workflowResponse.status()).toBe(200);
+  expect(await workflowResponse.json()).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: 'pr-review-release', name: seededWorkflow }),
+  ]));
   await expect(page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ })).toBeVisible();
   await expect(page.locator('.workflow-page-heading .eyebrow')).toContainText('Workflow Builder');
   await expect(page.locator('.workflow-mobile-run-preview')).toBeHidden();
