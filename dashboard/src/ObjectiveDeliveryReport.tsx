@@ -82,11 +82,11 @@ function ReportDetails({ report }: { report: Report }) {
       {report.approved_plan.approved_by && ` · approved by ${report.approved_plan.approved_by}`}
       {report.approved_plan.approved_at && ` · ${new Date(report.approved_plan.approved_at).toLocaleString()}`}</p>
     <p>{report.approved_plan.summary || 'No plan summary recorded.'}</p>
-    {report.workflow_id && <p>Workflow <a href="#workflows">{report.workflow_id}</a> · version {report.workflow_version ?? 'unknown'}</p>}
+    {report.workflow_id && <p>Workflow <a href={`?workflow=${encodeURIComponent(report.workflow_id)}#workflows`}>{report.workflow_id}</a> · version {report.workflow_version ?? 'unknown'}</p>}
     <h5>Executed work units</h5>
     <div className="objective-delivery-units">{report.units.map((unit) => <article key={unit.key}>
       <div className="objective-delivery-unit-title"><b>{unit.key} · {unit.kind}</b><Badge variant="light">{unit.state}</Badge></div>
-      <p>{unit.agent_name || 'Zenchron'}{unit.agent_id && <> · <a href="#agents">Agent profile</a> ({unit.agent_id})</>}
+      <p>{unit.agent_name || 'Zenchron'}{unit.agent_id && <> · <a href={`?profile=${encodeURIComponent(unit.agent_id)}#agents`}>Agent profile</a> ({unit.agent_id})</>}
         {unit.candidate && <> · candidate <code>{unit.candidate}</code></>}
         {unit.verdict && <> · verdict {unit.verdict}</>}</p>
       {unit.executions.map((run) => <div className="objective-delivery-run" key={run.run_id}>

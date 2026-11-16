@@ -25,6 +25,9 @@ flowchart LR
     Page -->|"Create objective for selected product"| Objective["ObjectivesPage · product_id prefilled"]
     Objective -->|"create objective, then select repository and workflow in Plan"| Plans["ObjectivePlanPanel"]
     Plans -->|"POST /api/v1/objectives/{id}/plans"| CP
+    Plans --> Report["ObjectiveDeliveryReport"]
+    Report -->|"workflow ID"| Workflow["WorkflowsPage · current saved definition"]
+    Report -->|"profile ID"| Agents["AgentsPage · current saved profile"]
     Mock -->|"add or rename in fixture state"| Tab["This browser tab only"]
     CP --> Store[(products.json)]
     Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
@@ -88,6 +91,8 @@ Live:
 - The Objectives tab projects each linked objective's current WorkGraph, pending decisions, findings, review and
   integration states, and observed pull-request link from existing product-environment records. Opening an objective
   shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
+- Delivery report workflow and profile links open the referenced saved record using `?workflow=<id>#workflows` and
+  `?profile=<id>#agents`. The report retains the executed versions; the editor shows the current saved configuration.
 - Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, decisions, delivery
   metrics (card and metric), recent decisions (metric), and all trend graphics. The favorite star and the delivery
   range are disabled with a reason. Sharing shows the page link and says no invitation is sent.

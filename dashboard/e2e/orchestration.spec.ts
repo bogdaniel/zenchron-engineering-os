@@ -285,7 +285,8 @@ test('an objective plan approved in the dashboard runs through decision, review,
         saved: saved.status }));
     }
     return { objectiveID: objective.body.id as string, workflowID: workflow.body.id as string,
-      workflowVersion: savedWorkflow.version as number, personaID: persona.body.id as string, productID: product.body.id as string };
+      workflowVersion: savedWorkflow.version as number, personaID: persona.body.id as string, productID: product.body.id as string,
+      writerID: first.body.id as string };
   });
   const apiStatus = await page.evaluate(async (id) => Promise.all([
     '/api/v1/work-graphs', `/api/v1/objectives/${id}/plans`, '/api/v1/projects', '/api/v1/products',
@@ -329,6 +330,10 @@ test('an objective plan approved in the dashboard runs through decision, review,
   const report = panel.getByRole('region', { name: 'Objective delivery report' });
   await report.getByRole('button', { name: 'View delivery report' }).click();
   await expect(report).toContainText('Approved plan revision 1');
+  await expect(report.getByRole('link', { name: created.workflowID, exact: true }))
+    .toHaveAttribute('href', `?workflow=${created.workflowID}#workflows`);
+  await expect(report.getByRole('link', { name: 'Agent profile', exact: true }).first())
+    .toHaveAttribute('href', `?profile=${created.writerID}#agents`);
   await expect(report).toContainText('E2E CSV specialist v1');
   await expect(report).toContainText('codex-cli');
   await expect(report).toContainText('CSV');
