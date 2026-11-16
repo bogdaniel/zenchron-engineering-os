@@ -14,6 +14,7 @@ import type { Project } from './projects';
 import { MetricCard } from './MetricCard';
 import { PanelHeading } from './PanelHeading';
 import { PanelCard } from './PanelCard';
+import { AgentWorkUnits } from './AgentWorkUnits';
 import { PageHeading } from './PageHeading';
 import { AgentPromptEditor } from './AgentPromptEditor';
 import { RunIssueSelect, runReadiness, type RunWorker } from './agentRunQueue';
@@ -516,6 +517,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                   : <div className="agents-preview-variable" key={label}><span>{label}</span><small>{state}</small></div>)}
               </div></Tabs.Panel>
               <Tabs.Panel value="history" pt="sm">
+                <AgentWorkUnits agentID={selected.id} sampleData={designPreview} />
                 {view.notes.history && <div className="agents-preview-variable-panel">{view.notes.history}</div>}
                 {source.runsLoading ? <div className="agents-run-empty">Loading agent runs…</div>
                   : source.runsError ? <div className="agents-run-empty">Agent run history is unavailable.</div>

@@ -68,21 +68,32 @@ type agentRun struct {
 	// CreatedBy is the GitHub login that started the run under an access policy.
 	CreatedBy string `json:"created_by,omitempty"`
 	// Checks and GitHubReviews are what GitHub webhooks reported for the published commit and pull request.
-	Checks          []runCheck        `json:"checks,omitempty"`
-	GitHubReviews   []runReview       `json:"github_reviews,omitempty"`
-	WorkerID        string            `json:"worker_id"`
-	WorkerName      string            `json:"worker_name"`
-	Prompt          string            `json:"prompt"`
-	Output          string            `json:"output,omitempty"`
-	Error           string            `json:"error,omitempty"`
-	Status          string            `json:"status"`
-	CancelRequested bool              `json:"cancel_requested,omitempty"`
-	Attempts        int               `json:"attempts"`
-	CreatedAt       time.Time         `json:"created_at"`
-	UpdatedAt       time.Time         `json:"updated_at"`
-	LeaseUntil      time.Time         `json:"-"`
-	Profile         *agentProfile     `json:"profile,omitempty"`
-	ReviewComments  []agentRunComment `json:"review_comments,omitempty"`
+	Checks          []runCheck  `json:"checks,omitempty"`
+	GitHubReviews   []runReview `json:"github_reviews,omitempty"`
+	WorkerID        string      `json:"worker_id"`
+	WorkerName      string      `json:"worker_name"`
+	Prompt          string      `json:"prompt"`
+	Output          string      `json:"output,omitempty"`
+	Error           string      `json:"error,omitempty"`
+	Status          string      `json:"status"`
+	CancelRequested bool        `json:"cancel_requested,omitempty"`
+	Attempts        int         `json:"attempts"`
+	CreatedAt       time.Time   `json:"created_at"`
+	UpdatedAt       time.Time   `json:"updated_at"`
+	LeaseUntil      time.Time   `json:"-"`
+	// Publishing is set between a pushed result and GitHub's answer about the pull request. It is not
+	// persisted: after a restart an unanswered publication is a failed one that can be retried.
+	Publishing     bool              `json:"-"`
+	Profile        *agentProfile     `json:"profile,omitempty"`
+	ReviewComments []agentRunComment `json:"review_comments,omitempty"`
+	// GraphID and UnitKey name the WorkUnit this run executes; both are empty for a run started directly.
+	GraphID string `json:"graph_id,omitempty"`
+	UnitKey string `json:"unit_key,omitempty"`
+	// Merge makes this an integration run that combines admitted candidates instead of starting a provider.
+	Merge []workerapi.MergeInput `json:"merge,omitempty"`
+	// Result is the typed result reported by attempt ResultAttempt; the WorkGraph admits it.
+	Result        string `json:"result,omitempty"`
+	ResultAttempt int    `json:"result_attempt,omitempty"`
 }
 
 type agentRunStore struct {
@@ -98,6 +109,8 @@ type agentRunStore struct {
 	// webhookSecret authenticates GitHub deliveries; empty disables the webhook endpoint.
 	webhookSecret []byte
 	deliveries    *webhookDeliveries
+	// graphs advances WorkGraphs from run outcomes; nil when no orchestration store is wired.
+	graphs *workGraphStore
 }
 
 // agentRunAttempt records one claim of a run by a worker and how that attempt ended.
@@ -113,7 +126,7 @@ type agentRunAttempt struct {
 
 // publicAgentRun removes the fields that are only needed to build the worker command.
 func publicAgentRun(item agentRun) agentRun {
-	item.Profile, item.IssueContext = nil, ""
+	item.Profile, item.IssueContext, item.Result = nil, "", ""
 	return item
 }
 
@@ -216,7 +229,16 @@ func validStoredAgentRun(item agentRun) bool {
 		workerapi.ValidTerminationReason(item.TerminationReason) && workerapi.ValidVerification(item.Verification) &&
 		len(item.AttemptLog) <= maxAgentRunAttempts && validPublication(item.Publication) &&
 		validRunObservations(item.Checks, item.GitHubReviews) && len(item.CreatedBy) <= 100 &&
-		len(item.Provider) <= 100 && len(item.ProviderVersion) <= 100 && item.DiffAttempt >= 0 && item.DiffAttempt <= item.Attempts
+		len(item.Provider) <= 100 && len(item.ProviderVersion) <= 100 && item.DiffAttempt >= 0 && item.DiffAttempt <= item.Attempts &&
+		(item.GraphID == "" || validHexID(item.GraphID)) && len(item.UnitKey) <= maxUnitKeySize &&
+		len(item.Result) <= workerapi.MaxResultSize && item.ResultAttempt >= 0 && item.ResultAttempt <= item.Attempts &&
+		validMergeInputs(item.Merge)
+}
+
+func validMergeInputs(inputs []workerapi.MergeInput) bool {
+	return len(inputs) <= workerapi.MaxMergeInputs && !slices.ContainsFunc(inputs, func(input workerapi.MergeInput) bool {
+		return len(input.Branch) == 0 || len(input.Branch) > 255 || input.Commit == "" || !validCommitSHA(input.Commit)
+	})
 }
 
 func validPublication(publication string) bool {
@@ -324,39 +346,50 @@ func (store *agentRunStore) create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "this worker belongs to another user", http.StatusForbidden)
 		return
 	}
-	id := make([]byte, 16)
-	if _, err := rand.Read(id); err != nil {
-		http.Error(w, "could not create agent run id", http.StatusInternalServerError)
-		return
-	}
-	now := time.Now().UTC()
-	item := agentRun{ID: hex.EncodeToString(id), AgentID: profile.ID, AgentName: profile.Name, ProjectID: project.ID,
-		ProjectName: project.Name, Repository: project.GitRemote, Branch: workerapi.AgentRunBranch(hex.EncodeToString(id)),
+	item := agentRun{AgentID: profile.ID, AgentName: profile.Name, ProjectID: project.ID,
+		ProjectName: project.Name, Repository: project.GitRemote,
 		BaseBranch: project.Branch, WorkerID: project.WorkerID, WorkerName: project.WorkerName, Prompt: input.Prompt,
-		Provider: profile.Provider, Status: "queued", CreatedAt: now, UpdatedAt: now, Profile: &profile,
-		CreatedBy:          accessFor(r).user,
-		PullRequestEnabled: store.registry.github.authConfigured() && isGitHubProject(project.GitRemote)}
+		Provider: profile.Provider, Profile: &profile, CreatedBy: accessFor(r).user,
+		PullRequestEnabled: store.publishable(project.GitRemote)}
 	if input.IssueNumber > 0 {
 		if status, message := store.attachIssue(r.Context(), &item, input.IssueNumber); status != 0 {
 			http.Error(w, message, status)
 			return
 		}
 	}
-	store.mu.Lock()
-	if len(store.items) >= maxAgentRuns {
-		store.mu.Unlock()
-		http.Error(w, "agent run history is full", http.StatusInsufficientStorage)
+	item, status, message := store.enqueue(item)
+	if status != 0 {
+		http.Error(w, message, status)
 		return
+	}
+	writeJSON(w, http.StatusAccepted, publicAgentRun(item))
+}
+
+// publishable reports whether a successful run for a repository can become a GitHub pull request.
+func (store *agentRunStore) publishable(repository string) bool {
+	return store.registry.github.authConfigured() && isGitHubProject(repository)
+}
+
+// enqueue gives a run its identity and branch and adds it to the queue. It is the only way a run is created.
+func (store *agentRunStore) enqueue(item agentRun) (agentRun, int, string) {
+	id := make([]byte, 16)
+	if _, err := rand.Read(id); err != nil {
+		return agentRun{}, http.StatusInternalServerError, "could not create agent run id"
+	}
+	now := time.Now().UTC()
+	item.ID, item.Status, item.CreatedAt, item.UpdatedAt = hex.EncodeToString(id), "queued", now, now
+	item.Branch = workerapi.AgentRunBranch(item.ID)
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.items) >= maxAgentRuns {
+		return agentRun{}, http.StatusInsufficientStorage, "agent run history is full"
 	}
 	store.items[item.ID] = item
 	if err := store.persistLocked(); err != nil {
 		delete(store.items, item.ID)
-		store.mu.Unlock()
-		http.Error(w, "could not persist agent run", http.StatusInternalServerError)
-		return
+		return agentRun{}, http.StatusInternalServerError, "could not persist agent run"
 	}
-	store.mu.Unlock()
-	writeJSON(w, http.StatusAccepted, publicAgentRun(item))
+	return item, 0, ""
 }
 
 // workerRunsProfile reports whether a worker has the execution provider an agent profile names.
@@ -377,16 +410,42 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "worker is offline", http.StatusConflict)
 		return
 	}
+	// A worker asking for work is what moves WorkGraphs forward: finished units are admitted and the
+	// runnable frontier is queued before the oldest queued run is leased.
+	store.graphs.reconcileAll()
+	selected, status, message := store.lease(worker, accessFor(r))
+	if status != 0 {
+		http.Error(w, message, status)
+		return
+	}
+	if selected.ID == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	profile := selected.Profile
+	writeJSON(w, http.StatusOK, workerapi.AgentRunCommand{
+		ID: selected.ID, ProjectID: selected.ProjectID, Branch: selected.Branch, BaseBranch: selected.BaseBranch,
+		Prompt: agentRunPrompt(selected) + store.graphs.runContext(selected), Attempts: selected.Attempts,
+		PublishPullRequest: selected.PullRequestEnabled, Merge: selected.Merge,
+		PublishCommit: store.graphs.publishCommit(selected),
+		Profile: workerapi.AgentProfile{Provider: profile.Provider, Model: profile.Model,
+			SystemPrompt: profile.SystemPrompt, GoalPrompt: profile.GoalPrompt, Tools: profile.Tools},
+	})
+}
+
+// lease hands the worker its oldest queued run, or a run with an empty id when nothing is queued for it.
+func (store *agentRunStore) lease(worker workerRecord, access requestAccess) (agentRun, int, string) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	now := time.Now().UTC()
 	recovered := store.recoverExpiredLocked(now)
-	access := accessFor(r)
 	var selected agentRun
 	for _, item := range store.items {
 		// A run waits in the queue until its worker reports the provider it needs, and is never handed to
-		// a worker whose grant for the repository has been removed since the run was created.
-		if item.WorkerID == workerID && item.Status == "queued" && workerRunsProfile(worker, *item.Profile) &&
+		// a worker whose grant for the repository has been removed since the run was created. An
+		// integration run starts no provider.
+		if item.WorkerID == worker.ID && item.Status == "queued" &&
+			(len(item.Merge) > 0 || workerRunsProfile(worker, *item.Profile)) &&
 			access.allows(item.Repository) &&
 			(selected.ID == "" || item.CreatedAt.Before(selected.CreatedAt)) {
 			selected = item
@@ -395,34 +454,25 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 	if selected.ID == "" {
 		if recovered {
 			if err := store.persistLocked(); err != nil {
-				http.Error(w, "could not persist expired agent run lease", http.StatusInternalServerError)
-				return
+				return agentRun{}, http.StatusInternalServerError, "could not persist expired agent run lease"
 			}
 		}
-		w.WriteHeader(http.StatusNoContent)
-		return
+		return agentRun{}, 0, ""
 	}
 	previous := selected
 	selected.Status, selected.Attempts, selected.UpdatedAt, selected.LeaseUntil = "running", selected.Attempts+1, now, now.Add(agentRunLease)
 	selected.AttemptLog = append(slices.Clone(selected.AttemptLog), agentRunAttempt{
-		Attempt: selected.Attempts, WorkerID: workerID, StartedAt: now,
+		Attempt: selected.Attempts, WorkerID: worker.ID, StartedAt: now,
 	})
 	store.items[selected.ID] = selected
 	if err := store.persistLocked(); err != nil {
 		store.items[selected.ID] = previous
-		http.Error(w, "could not persist agent run lease", http.StatusInternalServerError)
-		return
+		return agentRun{}, http.StatusInternalServerError, "could not persist agent run lease"
 	}
 	store.appendEventsLocked(selected.ID, selected.Attempts, workerapi.AgentRunEvent{
 		Kind: "status", Message: fmt.Sprintf("Attempt %d claimed by worker %s", selected.Attempts, worker.Name),
 	})
-	profile := selected.Profile
-	writeJSON(w, http.StatusOK, workerapi.AgentRunCommand{
-		ID: selected.ID, ProjectID: selected.ProjectID, Branch: selected.Branch, BaseBranch: selected.BaseBranch,
-		Prompt: agentRunPrompt(selected), Attempts: selected.Attempts, PublishPullRequest: selected.PullRequestEnabled,
-		Profile: workerapi.AgentProfile{Provider: profile.Provider, Model: profile.Model,
-			SystemPrompt: profile.SystemPrompt, GoalPrompt: profile.GoalPrompt, Tools: profile.Tools},
-	})
+	return selected, 0, ""
 }
 
 func isGitHubProject(remote string) bool {
@@ -438,34 +488,60 @@ func (store *agentRunStore) diff(w http.ResponseWriter, r *http.Request) {
 	}
 	store.mu.Lock()
 	item, exists := store.items[runID]
-	var diff string
-	if exists && item.DiffAvailable && store.diffDir == "" {
-		diff, _ = store.diffs[fmt.Sprintf("%s-%d", runID, item.DiffAttempt)]
-	}
 	store.mu.Unlock()
 	if !exists || !item.DiffAvailable || item.DiffAttempt < 1 || item.DiffAttempt > item.Attempts {
 		http.NotFound(w, r)
 		return
 	}
-	if store.diffDir != "" {
-		path := filepath.Join(store.diffDir, fmt.Sprintf("%s-%d.diff", runID, item.DiffAttempt))
-		info, err := os.Lstat(path)
-		if err != nil || !info.Mode().IsRegular() || info.Size() > maxAgentRunDiffSize {
-			http.Error(w, "agent run diff is unavailable", http.StatusInternalServerError)
-			return
-		}
-		diffBytes, err := os.ReadFile(path)
-		if err != nil || len(diffBytes) > maxAgentRunDiffSize {
-			http.Error(w, "agent run diff is unavailable", http.StatusInternalServerError)
-			return
-		}
-		diff = string(diffBytes)
+	diff, err := store.readDiff(item)
+	if err != nil {
+		http.Error(w, "agent run diff is unavailable", http.StatusInternalServerError)
+		return
 	}
 	writeJSON(w, http.StatusOK, struct {
 		RunID     string `json:"run_id"`
 		Diff      string `json:"diff"`
 		Truncated bool   `json:"truncated"`
 	}{runID, diff, item.DiffTruncated})
+}
+
+func (store *agentRunStore) get(runID string) (agentRun, bool) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	item, exists := store.items[runID]
+	return item, exists
+}
+
+// unitRuns returns the runs that execute the units of one WorkGraph, by run id.
+func (store *agentRunStore) unitRuns(graphID string) map[string]agentRun {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	runs := map[string]agentRun{}
+	for id, item := range store.items {
+		if item.GraphID == graphID {
+			runs[id] = item
+		}
+	}
+	return runs
+}
+
+// readDiff returns the stored diff of a run's latest attempt that captured one.
+func (store *agentRunStore) readDiff(item agentRun) (string, error) {
+	if store.diffDir == "" {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		return store.diffs[fmt.Sprintf("%s-%d", item.ID, item.DiffAttempt)], nil
+	}
+	path := filepath.Join(store.diffDir, fmt.Sprintf("%s-%d.diff", item.ID, item.DiffAttempt))
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxAgentRunDiffSize {
+		return "", fmt.Errorf("agent run diff is not a readable file within the size limit")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read agent run diff: %w", err)
+	}
+	return string(data), nil
 }
 
 func (store *agentRunStore) writeDiff(runID string, attempt int, diff string) error {

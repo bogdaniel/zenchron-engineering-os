@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -47,6 +48,9 @@ func pushGitBranch(ctx context.Context, worktree, branch string) error {
 	}
 	return nil
 }
+
+// agentIdentity is the author of every commit the worker creates on a run branch.
+var agentIdentity = []string{"-c", "user.name=Zenchron Agent", "-c", "user.email=agent@zenchron.invalid", "-c", "commit.gpgsign=false"}
 
 type boundedDiff struct {
 	data      []byte
@@ -107,9 +111,8 @@ func commitAgentRunChanges(ctx context.Context, worktree, baseBranch, runID stri
 		if !errors.As(err, &exitError) || exitError.ExitCode() != 1 {
 			return "", fmt.Errorf("check staged agent changes: %w", err)
 		}
-		commit := gitCommand(ctx, "-c", "user.name=Zenchron Agent", "-c",
-			"user.email=agent@zenchron.invalid", "-c", "commit.gpgsign=false", "commit", "-m",
-			fmt.Sprintf("Agent run %s attempt %d", runID, attempt))
+		commit := gitCommand(ctx, append(slices.Clone(agentIdentity), "commit", "-m",
+			fmt.Sprintf("Agent run %s attempt %d", runID, attempt))...)
 		commit.Dir = worktree
 		commit.Stdout, commit.Stderr = io.Discard, io.Discard
 		if err := commit.Run(); err != nil {

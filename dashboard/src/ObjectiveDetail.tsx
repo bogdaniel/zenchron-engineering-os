@@ -4,12 +4,13 @@ import { Badge, Button, Menu, NumberInput, Progress, Select, Text, Textarea, Tex
 import { IconActivity, IconAlertTriangle, IconCalendar, IconChecklist, IconCube, IconDots, IconFileText,
   IconGitPullRequest, IconHierarchy, IconLink, IconListCheck, IconShieldCheck, IconStar, IconTarget,
   IconUser } from '@tabler/icons-react';
+import { ObjectivePlanPanel } from './ObjectivePlanPanel';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
 import { formatObjectiveDate, objectiveEditSchema, objectiveFormErrors } from './objectivesView';
 import type { Objective, ObjectiveDetails, ObjectiveEdit, ObjectivesSource } from './objectivesView';
 
-export type ObjectiveDetailTab = 'overview' | 'milestones' | 'pull-requests' | 'activity';
+export type ObjectiveDetailTab = 'overview' | 'plan' | 'milestones' | 'pull-requests' | 'activity';
 
 export const objectiveStatusOptions = [
   { value: 'in_progress', label: 'In Progress' },
@@ -19,7 +20,7 @@ export const objectiveStatusOptions = [
   { value: 'completed', label: 'Completed' },
 ];
 const detailTabs = [
-  ['overview', 'Overview', IconTarget], ['milestones', 'Milestones', IconCalendar],
+  ['overview', 'Overview', IconTarget], ['plan', 'Plan', IconListCheck], ['milestones', 'Milestones', IconCalendar],
   ['pull-requests', 'Related PRs', IconGitPullRequest], ['activity', 'Activity', IconActivity],
 ] as const;
 const unavailable = 'Unavailable';
@@ -143,7 +144,7 @@ function ObjectiveOverview({ item, details, onTab }: {
   </div>;
 }
 
-function ObjectiveTabPanel({ tab, details }: { tab: Exclude<ObjectiveDetailTab, 'overview'>; details: ObjectiveDetails }) {
+function ObjectiveTabPanel({ tab, details }: { tab: Exclude<ObjectiveDetailTab, 'overview' | 'plan'>; details: ObjectiveDetails }) {
   if (tab === 'milestones') {
     if (!details.milestones) return <UnavailablePanel title="Milestones" what="milestones" />;
     return <div className="objective-detail-milestones" role="tabpanel">{details.milestones.map((milestone) =>
@@ -161,9 +162,10 @@ function ObjectiveTabPanel({ tab, details }: { tab: Exclude<ObjectiveDetailTab, 
 }
 
 /** The selected objective: header actions, summary, tabs, and the editor that replaces the tab body while editing. */
-export function ObjectiveDetail({ item, source, tab, editing, notice, onTab, onEditing, onNotice }: {
+export function ObjectiveDetail({ item, source, sampleData, tab, editing, notice, onTab, onEditing, onNotice }: {
   item: Objective;
   source: ObjectivesSource;
+  sampleData: boolean;
   tab: ObjectiveDetailTab;
   editing: boolean;
   notice: string;
@@ -230,6 +232,7 @@ export function ObjectiveDetail({ item, source, tab, editing, notice, onTab, onE
       onEditing(false);
       onNotice(`Objective updated${source.savedSuffix}`);
     }} /> : tab === 'overview' ? <ObjectiveOverview item={item} details={details} onTab={onTab} />
+      : tab === 'plan' ? <ObjectivePlanPanel objectiveID={item.id} sampleData={sampleData} />
       : <ObjectiveTabPanel tab={tab} details={details} />}
   </div>;
 }

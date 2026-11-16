@@ -75,10 +75,13 @@ Feature docs:
 - [One-command local preview](docs/features/local-preview.md)
 - [GitHub issue sync and pull-request reviews](docs/features/github-review-sync.md)
 - [GitHub webhooks: reviews and CI results](docs/features/github-webhooks.md)
+- [Objective orchestration: plan, parallel agents, review, integration, one pull request](docs/features/objective-orchestration.md)
 
 See [One dashboard, two data modes](docs/architecture/dashboard-modes.md) for how Mock and Live share one layout, and
 [Backend architecture and decisions](docs/architecture/backend-architecture.md) for component ownership, the
-control-plane and worker boundary, and what is not implemented, and the
+control-plane and worker boundary, and what is not implemented,
+[Objective orchestration: architecture and decisions](docs/architecture/objective-orchestration.md) for plans,
+WorkGraphs, typed messages, and integration, and the
 [Control plane roadmap](docs/architecture/roadmap.md) for delivery phases and acceptance evidence.
 
 ## Focused checks

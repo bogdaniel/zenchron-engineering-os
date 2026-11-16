@@ -458,7 +458,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
               </> : <>
                 <b>Execution preview unavailable</b>
                 <span>Workflow execution is not connected. This graph has {nodes.length} components and {edges.length} connections
-                  and has not run.</span>
+                  and has not run. The canvas does not execute: an objective's plan can name this workflow, and the
+                  planner reads its steps as guidance (Objectives → Plan).</span>
               </>}</div>}
           </div>
         </Panel>

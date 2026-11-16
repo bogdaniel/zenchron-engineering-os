@@ -13,36 +13,34 @@ func (store *agentRunStore) cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	store.mu.Lock()
-	item, exists := store.items[runID]
-	if !exists {
-		store.mu.Unlock()
-		http.NotFound(w, r)
+	alreadyCancelled := store.items[runID].Status == "cancelled"
+	store.mu.Unlock()
+	item, status, message := store.cancelRun(runID)
+	if status != 0 {
+		http.Error(w, message, status)
 		return
 	}
-	if item.Status == "cancelled" {
-		store.mu.Unlock()
+	if alreadyCancelled {
 		writeJSON(w, http.StatusOK, publicAgentRun(item))
 		return
 	}
-	if item.Status != "queued" && item.Status != "running" {
-		store.mu.Unlock()
-		http.Error(w, "only queued or running agent runs can be cancelled", http.StatusConflict)
-		return
-	}
-	previous := item
-	item.UpdatedAt = time.Now().UTC()
-	if item.Status == "queued" {
-		item.Status, item.Error = "cancelled", "Cancelled before worker claim."
-	} else {
-		item.CancelRequested = true
-	}
-	store.items[runID] = item
-	if err := store.persistLocked(); err != nil {
-		store.items[runID] = previous
-		store.mu.Unlock()
-		http.Error(w, "could not persist agent run cancellation", http.StatusInternalServerError)
-		return
-	}
-	store.mu.Unlock()
+	store.graphs.reconcileAll()
 	writeJSON(w, http.StatusAccepted, publicAgentRun(item))
+}
+
+// cancelRun cancels a queued run at once and asks the worker to stop a running one. Cancelling a run
+// that is already cancelled changes nothing.
+func (store *agentRunStore) cancelRun(runID string) (agentRun, int, string) {
+	return store.update(runID, func(item *agentRun) (int, string) {
+		switch item.Status {
+		case "cancelled":
+		case "queued":
+			item.Status, item.Error, item.UpdatedAt = "cancelled", "Cancelled before worker claim.", time.Now().UTC()
+		case "running":
+			item.CancelRequested, item.UpdatedAt = true, time.Now().UTC()
+		default:
+			return http.StatusConflict, "only queued or running agent runs can be cancelled"
+		}
+		return 0, ""
+	})
 }

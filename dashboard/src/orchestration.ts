@@ -1,0 +1,142 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
+import { loadAgents } from './agentsData';
+import { projectsSchema } from './projects';
+import { loadWorkflows } from './workflowModel';
+
+// The control plane encodes an empty Go slice as null.
+const list = <T extends z.ZodType>(item: T) => z.array(item).nullish().transform((value) => value ?? []);
+
+const planUnitSchema = z.object({
+  key: z.string(), kind: z.enum(['produce', 'review', 'integrate']), title: z.string(),
+  instructions: z.string().optional().default(''), acceptance: list(z.string()), depends_on: list(z.string()),
+  capabilities: list(z.string()), agent_id: z.string().optional().default(''),
+});
+const unitSchema = planUnitSchema.extend({
+  agent_name: z.string().optional(),
+  state: z.enum(['waiting', 'queued', 'running', 'blocked', 'completed', 'failed', 'cancelled']),
+  reason: z.string().optional(), failure: z.string().optional(), run_ids: list(z.string()),
+  candidate: z.string().optional(), verdict: z.string().optional(), pull_request_url: z.string().optional(),
+});
+const messageSchema = z.object({
+  id: z.string(),
+  type: z.enum(['handoff', 'collaboration_request', 'finding', 'decision_request', 'decision_resolution', 'state_update']),
+  from: z.string(), to: list(z.string()), run_id: z.string().optional(), attempt: z.number().optional(),
+  commit: z.string().optional(), title: z.string().optional(), body: z.string().optional(), notes: list(z.string()),
+  file: z.string().optional(), line: z.number().optional(), severity: z.string().optional(),
+  resolves: z.string().optional(), by: z.string().optional(), created_at: z.string(),
+});
+const graphSchema = z.object({
+  id: z.string(), objective_id: z.string(), objective_title: z.string(), plan_revision: z.number(),
+  revision: z.number(), status: z.enum(['active', 'blocked', 'completed', 'failed', 'cancelled']),
+  project_name: z.string(), base_branch: z.string(), workflow_id: z.string().optional(), max_parallel: z.number(),
+  units: list(unitSchema), messages: list(messageSchema), created_at: z.string(), updated_at: z.string(),
+});
+const planSchema = z.object({
+  objective_id: z.string(), revision: z.number(),
+  status: z.enum(['planning', 'proposed', 'invalid', 'approved', 'superseded']),
+  project_id: z.string(), workflow_id: z.string().optional(), summary: z.string().optional().default(''),
+  max_parallel: z.number().optional().default(0), units: list(planUnitSchema), problems: list(z.string()),
+  graph_id: z.string().optional(), created_at: z.string(), approved_by: z.string().optional(),
+});
+export const workGraphsSchema = z.array(graphSchema);
+export const plansSchema = z.array(planSchema);
+export type WorkGraph = z.infer<typeof graphSchema>;
+export type WorkUnit = z.infer<typeof unitSchema>;
+export type PlanUnit = z.infer<typeof planUnitSchema>;
+export type GraphMessage = z.infer<typeof messageSchema>;
+export type ObjectivePlan = z.infer<typeof planSchema>;
+type Option = { value: string; label: string };
+
+/** Plans, work graphs, and the operations on them. Mock and Live each provide one; Mock has no operations. */
+export type OrchestrationSource = {
+  graphs: WorkGraph[];
+  loading: boolean;
+  failed: boolean;
+  retry?: () => void;
+  /** Plan revisions of the objective the source was asked for, newest first. */
+  plans: ObjectivePlan[];
+  plansLoading: boolean;
+  plansFailed: boolean;
+  options: { projects: Option[]; planners: Option[]; workflows: Option[] };
+  agentNames: Record<string, string>;
+  /** Why operations are off; empty where they are available. */
+  readOnlyReason: string;
+  propose?: (input: { project_id: string; planner_agent_id: string; workflow_id?: string }) => Promise<void>;
+  approve?: (revision: number) => Promise<void>;
+  cancel?: (graphID: string) => Promise<void>;
+  retryUnit?: (graphID: string, key: string) => Promise<void>;
+  resolve?: (graphID: string, messageID: string, resolution: string) => Promise<void>;
+};
+
+/** The newest graph of an objective; the control plane lists graphs newest first. */
+export function graphOfObjective(graphs: WorkGraph[], objectiveID: string) {
+  return graphs.find((graph) => graph.objective_id === objectiveID);
+}
+
+/** Decision requests nobody has answered yet. */
+export function openDecisions(graph: WorkGraph) {
+  return graph.messages.filter((message) => message.type === 'decision_request'
+    && !graph.messages.some((other) => other.type === 'decision_resolution' && other.resolves === message.id));
+}
+
+async function load<T>(path: string, schema: z.ZodType<T>, what: string) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(`Could not load ${what} (${response.status})`);
+  return schema.parse(await response.json());
+}
+
+/** Sends a change. A rejected plan answers with its problems; any other refusal answers with its reason as text. */
+async function send(path: string, body?: unknown) {
+  const response = await fetch(path, body === undefined ? { method: 'POST' }
+    : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (response.ok) return;
+  const text = (await response.text()).trim();
+  const problems = z.object({ problems: z.array(z.string()) }).safeParse(text.startsWith('{') ? JSON.parse(text) : null);
+  throw new Error(problems.success ? problems.data.problems.join(' ') : text || `Request failed (${response.status})`);
+}
+
+/** Orchestration state from the control plane. It polls while mounted so unit states follow the workers. */
+export function useLiveOrchestration(enabled: boolean, objectiveID?: string): OrchestrationSource {
+  const queryClient = useQueryClient();
+  const graphs = useQuery({ queryKey: ['work-graphs'], enabled, retry: false, refetchInterval: 3_000,
+    queryFn: () => load('/api/v1/work-graphs', workGraphsSchema, 'work graphs') });
+  const plans = useQuery({ queryKey: ['objective-plans', objectiveID], enabled: enabled && Boolean(objectiveID),
+    retry: false, refetchInterval: 3_000,
+    queryFn: () => load(`/api/v1/objectives/${objectiveID}/plans`, plansSchema, 'plans') });
+  const projects = useQuery({ queryKey: ['projects'], enabled,
+    queryFn: () => load('/api/v1/projects', projectsSchema, 'projects') });
+  const agents = useQuery({ queryKey: ['agents'], queryFn: loadAgents, enabled });
+  const workflows = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows, enabled });
+  const change = async (path: string, body?: unknown) => {
+    await send(path, body);
+    await Promise.all([queryClient.invalidateQueries({ queryKey: ['work-graphs'] }),
+      queryClient.invalidateQueries({ queryKey: ['objective-plans'] })]);
+  };
+  const cliProviders = ['codex-cli', 'claude-code'];
+  return {
+    graphs: graphs.data ?? [],
+    loading: graphs.isLoading,
+    failed: graphs.isError,
+    retry: () => void graphs.refetch(),
+    plans: plans.data ?? [],
+    plansLoading: plans.isLoading,
+    plansFailed: plans.isError,
+    options: {
+      projects: (projects.data ?? []).filter((project) => project.worker_status === 'online')
+        .map((project) => ({ value: project.id, label: `${project.name} · ${project.branch}` })),
+      // A planner only reads: a profile that may write code is refused by the control plane.
+      planners: (agents.data ?? []).filter((agent) => agent.status === 'active' && cliProviders.includes(agent.provider)
+        && !agent.tools.includes('code.write')).map((agent) => ({ value: agent.id, label: agent.name })),
+      workflows: (workflows.data ?? []).map((workflow) => ({ value: workflow.id, label: workflow.name })),
+    },
+    agentNames: Object.fromEntries((agents.data ?? []).map((agent) => [agent.id, agent.name])),
+    readOnlyReason: '',
+    propose: (input) => change(`/api/v1/objectives/${objectiveID}/plans`, input),
+    approve: (revision) => change(`/api/v1/objectives/${objectiveID}/plans/${revision}/approve`),
+    cancel: (graphID) => change(`/api/v1/work-graphs/${graphID}/cancel`),
+    retryUnit: (graphID, key) => change(`/api/v1/work-graphs/${graphID}/units/${key}/retry`),
+    resolve: (graphID, messageID, resolution) =>
+      change(`/api/v1/work-graphs/${graphID}/decisions/${messageID}`, { resolution }),
+  };
+}

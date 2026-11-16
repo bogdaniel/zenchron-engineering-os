@@ -9,6 +9,14 @@ const (
 
 	MaxProgressEvents   = 50
 	MaxEventMessageSize = 1000
+
+	// ResultFence labels the fenced block in an agent's final message that carries its typed result.
+	ResultFence = "zenchron-result"
+	// MaxResultSize bounds one typed result. A plan of several units with full instructions needs most of it.
+	// ponytail: results are stored on the run record, so 200 runs of 48 KiB stay under the 16 MiB snapshot;
+	// move results to per-run files, like diffs, if either limit has to grow.
+	MaxResultSize  = 48 << 10
+	MaxMergeInputs = 8
 )
 
 // Verification outcomes reported by the worker. An empty value means verification did not run.
@@ -29,6 +37,8 @@ const (
 	TerminationLeaseLost    = "lease_lost"
 	TerminationVerification = "verification_failed"
 	TerminationWorkerError  = "worker_error"
+	// TerminationMergeConflict ends an integration run whose inputs could not be combined.
+	TerminationMergeConflict = "merge_conflict"
 )
 
 // IsCLIProvider reports whether an agent profile provider runs through a locally installed coding CLI.
@@ -45,7 +55,7 @@ func ValidTerminationReason(reason string) bool {
 	switch reason {
 	case "", TerminationCompleted, TerminationProviderExit, TerminationWallClock, TerminationInactivity,
 		TerminationToolTimeout, TerminationCancelled, TerminationLeaseLost, TerminationVerification,
-		TerminationWorkerError:
+		TerminationWorkerError, TerminationMergeConflict:
 		return true
 	default:
 		return false
@@ -107,6 +117,28 @@ type AgentRunCommand struct {
 	Profile            AgentProfile `json:"profile"`
 	Attempts           int          `json:"attempts"`
 	PublishPullRequest bool         `json:"publish_pull_request,omitempty"`
+	// PublishCommit, when set, is the only commit this attempt may push: the reviewed candidate.
+	PublishCommit string `json:"publish_commit,omitempty"`
+	// Merge makes this an integration run: the worker combines these local branches in order instead of
+	// starting a provider. Each branch must still point at the commit named here.
+	Merge []MergeInput `json:"merge,omitempty"`
+}
+
+// MergeInput is one admitted candidate an integration run combines.
+type MergeInput struct {
+	Branch string `json:"branch"`
+	Commit string `json:"commit"`
+}
+
+// MergeResult is what the worker observed while combining branches. It is the typed result of an
+// integration run, under the key "integration".
+type MergeResult struct {
+	Merged []MergeInput `json:"merged,omitempty"`
+	// Stale lists branches that no longer point at the commit the control plane admitted.
+	Stale []string `json:"stale,omitempty"`
+	// ConflictBranch is the first branch that could not be merged, with the files in conflict.
+	ConflictBranch string   `json:"conflict_branch,omitempty"`
+	ConflictFiles  []string `json:"conflict_files,omitempty"`
 }
 
 // Usage carries only what the provider reported. CostUSD is nil when the provider reports no cost.
@@ -131,6 +163,9 @@ type AgentRunResult struct {
 	TerminationReason string  `json:"termination_reason,omitempty"`
 	Verification      string  `json:"verification,omitempty"`
 	Usage             *Usage  `json:"usage,omitempty"`
+	// Result is the typed result of the attempt as JSON: the block an agent ended its final message with,
+	// or what the worker observed in an integration run. The control plane validates it.
+	Result string `json:"result,omitempty"`
 }
 
 type AgentRunEvent struct {

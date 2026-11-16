@@ -38,6 +38,8 @@ type runHarness struct {
 	// finishFailures is how many result deliveries fail with a server error before one succeeds.
 	finishFailures int
 	finishCalls    int
+	// queue, when set, is handed out one command per claim instead of repeating command.
+	queue []workerapi.AgentRunCommand
 }
 
 // newRunHarness installs script as the fake Codex CLI. The script runs in the run worktree and prints
@@ -92,6 +94,13 @@ func (harness *runHarness) serve(w http.ResponseWriter, r *http.Request) {
 	harness.mu.Lock()
 	defer harness.mu.Unlock()
 	switch {
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/agent-runs/claim") && harness.queue != nil:
+		if len(harness.queue) == 0 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(harness.queue[0])
+		harness.queue = harness.queue[1:]
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/agent-runs/claim"):
 		_ = json.NewEncoder(w).Encode(harness.command)
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/progress"):
@@ -111,7 +120,7 @@ func (harness *runHarness) serve(w http.ResponseWriter, r *http.Request) {
 		harness.events = append(harness.events, progress.Events...)
 		cancel := harness.cancelOnCall > 0 && harness.progress >= harness.cancelOnCall
 		_ = json.NewEncoder(w).Encode(workerapi.AgentRunProgressReply{CancelRequested: cancel})
-	case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/agent-runs/"+harness.command.ID):
+	case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/agent-runs/"):
 		var result workerapi.AgentRunResult
 		if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
 			harness.t.Errorf("decode result: %v", err)

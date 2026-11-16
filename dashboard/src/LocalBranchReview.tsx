@@ -3,6 +3,7 @@ import { Badge, Button, Textarea } from '@mantine/core';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AgentRun } from './agentsData';
 import { CodeDiff } from './reviews-preview-diff';
+import { RunGraphContext } from './RunGraphContext';
 
 async function postRunAction(runID: string, action: string, failure: string, body?: unknown) {
   const response = await fetch(`/api/v1/agent-runs/${runID}/${action}`, body === undefined ? { method: 'POST' } : {
@@ -14,6 +15,7 @@ async function postRunAction(runID: string, action: string, failure: string, bod
 /** An agent run's isolated branch diff with its commit, truncation notice, and pull-request publication state. */
 export function LocalBranchDiff({ run, diff, truncated }: { run: AgentRun; diff: string; truncated: boolean }) {
   return <div className="reviews-diff-view">
+    <RunGraphContext run={run} />
     <div className="reviews-diff-meta">
       <span>{run.branch} → {run.base_branch || 'base branch'}</span>
       {run.commit_sha && <span>Local commit {run.commit_sha.slice(0, 7)}</span>}

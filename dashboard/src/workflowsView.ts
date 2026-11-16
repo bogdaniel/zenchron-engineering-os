@@ -116,7 +116,9 @@ export type WorkflowsSource = {
 
 const runnerOffline = 'Workflow execution is not connected';
 const liveUnavailable: NonNullable<WorkflowSectionsData['unavailable']> = {
-  runs: `Unavailable · ${runnerOffline.toLowerCase()}, so no run has been recorded`,
+  // A workflow is guidance: an objective's plan can name it, and the planner reads its steps. The canvas never runs.
+  runs: `Unavailable · ${runnerOffline.toLowerCase()}, so no run has been recorded. The canvas itself does not execute: `
+    + 'choose this workflow when proposing an objective plan (Objectives → Plan) and the planner uses its steps as guidance',
   versions: 'Unavailable · the control plane keeps only the latest saved version',
   schedules: 'Unavailable · workflow schedules and triggers are not connected',
   permissions: 'Unavailable · access follows the dashboard session; per-workflow roles are not stored',

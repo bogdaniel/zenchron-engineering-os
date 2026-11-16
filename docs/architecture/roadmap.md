@@ -90,6 +90,15 @@ members, or collaborators are imported on request and reach the run that publish
 pass added a second commit to a run's pull request. Inline comments, approval, merge, and automatic import remain
 outstanding.
 
+### 5a. Objective orchestration — implemented locally
+
+One objective is planned, validated, approved, and executed as a durable WorkGraph on the existing run queue:
+parallel producers in separate worktrees, typed handoffs and findings, independent exact-commit review with bounded
+remediation, deterministic integration, durable human decisions, and one pull request. See
+[Objective orchestration](../features/objective-orchestration.md) for behavior and evidence and
+[its architecture record](objective-orchestration.md) for what is not implemented: more than one checkout per graph,
+cost budgets, and model-resolved conflicts.
+
 ### 6. Operational dashboard
 
 Product/workspace views, workflows, agents, reviews, reports, integrations, and responsive layouts. Accept when each
@@ -118,7 +127,8 @@ policy enforcement.
   shell, page and panel headings, metric cards, and selected-entity titles keep a common type scale across routes.
   Objective, workflow, and agent profile definitions persist as versioned JSON snapshots; the overview and Agents route
   poll live agent-run history. Worker presence remains in process memory.
-- The workflow canvas can edit and validate a graph, but it does not execute that graph.
+- The workflow canvas can edit and validate a graph, but it does not execute that graph. An objective plan can name
+  a workflow, whose steps the planner reads as guidance.
 - Agent profiles store prompt configuration and tool allowlists. Profiles with provider `codex-cli` or `claude-code`
   run the installed CLI in a per-run Git worktree, followed by the worker operator's verification commands; run events
   and reported usage are stored as evidence, and successful, reviewable changes are committed locally on the isolated

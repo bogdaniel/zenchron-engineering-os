@@ -31,6 +31,8 @@ type deliveryHarness struct {
 	pulls          []string
 	lastPullBody   string
 	reviews        string
+	// duringPullCreate, when set, runs while GitHub is answering a pull-request creation.
+	duringPullCreate func()
 }
 
 func newDeliveryHarness(t *testing.T, provider string) *deliveryHarness {
@@ -78,6 +80,9 @@ func (harness *deliveryHarness) serveGitHub(w http.ResponseWriter, r *http.Reque
 		_, _ = io.WriteString(w, "["+strings.Join(harness.pulls, ",")+"]")
 	case r.Method == http.MethodPost && r.URL.Path == repository+"/pulls":
 		harness.pullCreates++
+		if harness.duringPullCreate != nil {
+			harness.duringPullCreate()
+		}
 		if harness.failPullCreate {
 			w.WriteHeader(http.StatusBadGateway)
 			return

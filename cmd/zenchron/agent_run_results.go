@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log"
@@ -19,6 +20,7 @@ func validAgentRunResult(input workerapi.AgentRunResult) bool {
 		validCommitSHA(input.CommitSHA) && validCommitSHA(input.BaseCommit) &&
 		!(input.BranchPushed && input.BranchPushFailed) && len(input.ProviderVersion) <= 100 &&
 		workerapi.ValidTerminationReason(input.TerminationReason) && workerapi.ValidVerification(input.Verification) &&
+		len(input.Result) <= workerapi.MaxResultSize &&
 		(input.Usage == nil || input.Usage.InputTokens >= 0 && input.Usage.OutputTokens >= 0 &&
 			(input.Usage.CostUSD == nil || *input.Usage.CostUSD >= 0))
 }
@@ -58,6 +60,7 @@ func (store *agentRunStore) finish(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	store.graphs.reconcileAll()
 	writeJSON(w, http.StatusOK, publicAgentRun(item))
 }
 
@@ -82,9 +85,10 @@ func (store *agentRunStore) applyResult(item *agentRun, workerID string, input w
 		input.Status, input.Output, input.Error, false, now, time.Time{}
 	item.TerminationReason, item.Verification, item.Usage = input.TerminationReason, input.Verification, input.Usage
 	item.ProviderVersion, item.Publication = input.ProviderVersion, ""
+	item.Result, item.ResultAttempt = input.Result, input.Attempts
 	if input.BranchPushed {
 		// Recorded with the result, so a crash before the pull request exists still leaves a retry path.
-		item.Publication = publicationPullRequestFailed
+		item.Publication, item.Publishing = publicationPullRequestFailed, item.PullRequestEnabled
 	}
 	if input.CommitSHA != "" {
 		item.CommitSHA = input.CommitSHA
@@ -127,7 +131,7 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 		}
 	}
 	item, status, message := store.update(runID, func(item *agentRun) (int, string) {
-		item.Publication, item.PullRequestError = publication, publishError
+		item.Publication, item.PullRequestError, item.Publishing = publication, publishError, false
 		if number > 0 {
 			item.PullRequestNumber, item.PullRequestURL = number, pullURL
 		}
@@ -192,6 +196,10 @@ func (store *agentRunStore) createPullRequest(ctx context.Context, item agentRun
 	}
 	if bodyRunes := []rune(body); len(bodyRunes) > 9_000 {
 		body = string(bodyRunes[:9_000])
+	}
+	if item.GraphID != "" {
+		// An integrated candidate is described from the WorkGraph that produced it.
+		body = cmp.Or(store.graphs.pullRequestBody(item), body)
 	}
 	if item.IssueNumber > 0 {
 		body += fmt.Sprintf("\n\nCloses #%d", item.IssueNumber)

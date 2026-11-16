@@ -58,6 +58,35 @@ case "$prompt" in
   message="E2E model addressed reviewer feedback." ;;
 esac
 
+# A run that executes a unit of an objective's work graph must end its final message with a typed result
+# block. Which result is chosen by the unit's prompt; the text is already escaped for the JSON event line.
+fence='\n```zenchron-result\n' result=""
+case "$prompt" in
+*'"review":{"verdict"'*)
+  # A reviewer blocks a candidate until its diff shows the finding was addressed.
+  case "$prompt" in
+  *"E2E: block this review"*"Finding addressed"* | *"Finding addressed"*"E2E: block this review"*)
+    result='{\"review\":{\"verdict\":\"accept\"}}' ;;
+  *"E2E: block this review"*)
+    result='{\"review\":{\"verdict\":\"block\",\"findings\":[{\"title\":\"E2E finding\",\"detail\":\"Address the finding.\",\"file\":\"unit-api.md\",\"line\":1,\"severity\":\"high\"}]}}' ;;
+  *) result='{\"review\":{\"verdict\":\"accept\"}}' ;;
+  esac ;;
+*'"handoff":{"summary"'*)
+  unit=$(printf '%s' "$prompt" | sed -n 's/^You execute one responsibility ("\([a-z0-9-]*\)").*/\1/p' | head -n 1)
+  file="unit-${unit:-work}.md" content="Created by unit ${unit:-work}."
+  result='{\"handoff\":{\"summary\":\"E2E unit '"${unit:-work}"' finished\",\"notes\":[\"checked by the fake CLI\"]}}'
+  case "$prompt" in
+  *"Finding from"*) content="Finding addressed by unit ${unit:-work}." ;;
+  *"E2E: ask for a decision"*"Decision by"*) ;;
+  *"E2E: ask for a decision"*)
+    writable=false
+    result='{\"decision_request\":{\"question\":\"E2E: which format?\",\"options\":[\"CSV\",\"JSON\"]}}' ;;
+  esac ;;
+esac
+if [ -n "$result" ]; then
+  message="$message$fence$result"'\n```'
+fi
+
 echo '{"type":"thread.started","thread_id":"e2e"}'
 echo '{"type":"turn.started"}'
 echo '{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"cat README.md"}}'
@@ -72,5 +101,6 @@ if [ "$hold" = true ]; then
   sleep 600
   echo '{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"sleep 600","exit_code":0}}'
 fi
-echo '{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"'"$message"'"}}'
+# printf, not echo: the message carries JSON escapes that echo may rewrite.
+printf '%s\n' '{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"'"$message"'"}}'
 echo '{"type":"turn.completed","usage":{"input_tokens":120,"cached_input_tokens":0,"output_tokens":30}}'

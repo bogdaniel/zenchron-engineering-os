@@ -78,6 +78,26 @@ func openObjectiveStore(path string, products *productStore) (*objectiveStore, e
 	return store, nil
 }
 
+func (store *objectiveStore) get(id string) (objective, bool) {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	item, exists := store.items[id]
+	return item, exists
+}
+
+// ofProduct returns the objectives linked to a product.
+func (store *objectiveStore) ofProduct(productID string) []objective {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	var items []objective
+	for _, item := range store.items {
+		if item.ProductID == productID {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
 func (store *objectiveStore) persistLocked() error {
 	if store.path == "" {
 		return nil

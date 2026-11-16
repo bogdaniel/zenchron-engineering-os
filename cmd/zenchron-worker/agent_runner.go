@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
@@ -32,6 +33,12 @@ type agentRunner struct {
 	push func(ctx context.Context, worktree, remote, branch string) error
 	// finishRetryDelay overrides the pause between result deliveries; zero uses the default.
 	finishRetryDelay time.Duration
+	// slots bounds how many runs execute at once; running tracks them so the worker can wait for them.
+	slots   chan struct{}
+	running sync.WaitGroup
+	// checkout serializes the Git commands that change a shared checkout's list of worktrees, which
+	// concurrent runs of the same repository would otherwise race on.
+	checkout sync.Mutex
 }
 
 func (runner *agentRunner) providerStatuses() []workerapi.ProviderStatus {
@@ -54,6 +61,7 @@ func (runner *agentRunner) canExecute() bool {
 	return false
 }
 
+// process claims one run and executes it before returning.
 func (runner *agentRunner) process(ctx context.Context, projects []discoveredProject) error {
 	if !runner.canExecute() {
 		return nil
@@ -62,6 +70,37 @@ func (runner *agentRunner) process(ctx context.Context, projects []discoveredPro
 	if err != nil || !found {
 		return err
 	}
+	return runner.execute(ctx, command, projects)
+}
+
+// dispatch claims runs for as long as a slot is free and executes each in its own goroutine, in its own
+// worktree. It returns as soon as nothing more can start; wait blocks until the started runs are done.
+func (runner *agentRunner) dispatch(ctx context.Context, projects []discoveredProject) error {
+	if !runner.canExecute() {
+		return nil
+	}
+	for {
+		select {
+		case runner.slots <- struct{}{}:
+		default:
+			return nil
+		}
+		command, found, err := claimAgentRun(ctx, runner.client, runner.baseURL, runner.workerID)
+		if err != nil || !found {
+			<-runner.slots
+			return err
+		}
+		runner.running.Go(func() {
+			defer func() { <-runner.slots }()
+			if err := runner.execute(ctx, command, projects); err != nil {
+				log.Printf("worker command failed: %v", err)
+			}
+		})
+	}
+}
+
+// execute runs one claimed attempt and delivers its result.
+func (runner *agentRunner) execute(ctx context.Context, command workerapi.AgentRunCommand, projects []discoveredProject) error {
 	result, report := runner.run(ctx, command, projects)
 	if !report {
 		return fmt.Errorf("agent run %s attempt %d was interrupted; its worktree is kept for the next attempt",
@@ -94,12 +133,16 @@ func (runner *agentRunner) run(
 	if command.Branch != workerapi.AgentRunBranch(command.ID) {
 		return failedRun(workerapi.TerminationWorkerError, "Run branch is not the branch authorized for this run."), true
 	}
-	if !modelPattern.MatchString(command.Profile.Model) {
-		return failedRun(workerapi.TerminationWorkerError, "The agent profile's model name is not valid for a CLI provider."), true
-	}
-	provider := runner.providers[command.Profile.Provider]
-	if provider == nil || !provider.ready {
-		return failedRun(workerapi.TerminationWorkerError, "The agent provider is not ready on this worker."), true
+	// An integration run combines branches with Git and starts no provider.
+	var provider *cliProvider
+	if len(command.Merge) == 0 {
+		if !modelPattern.MatchString(command.Profile.Model) {
+			return failedRun(workerapi.TerminationWorkerError, "The agent profile's model name is not valid for a CLI provider."), true
+		}
+		provider = runner.providers[command.Profile.Provider]
+		if provider == nil || !provider.ready {
+			return failedRun(workerapi.TerminationWorkerError, "The agent provider is not ready on this worker."), true
+		}
 	}
 	root, err := worktreeRoot()
 	if err != nil {
@@ -127,9 +170,14 @@ func (runner *agentRunner) attempt(
 	ctx context.Context, command workerapi.AgentRunCommand, project discoveredProject, root string,
 	workspace runWorkspace, provider *cliProvider, reporter *progressReporter,
 ) workerapi.AgentRunResult {
-	result := workerapi.AgentRunResult{ProviderVersion: provider.version}
+	result := workerapi.AgentRunResult{ProviderVersion: "git merge"}
+	if provider != nil {
+		result.ProviderVersion = provider.version
+	}
 	worktree := workspace.path
+	runner.checkout.Lock()
 	err := prepareWorktree(ctx, root, project, command.ID, command.Branch, command.BaseBranch)
+	runner.checkout.Unlock()
 	if cancelled, _ := reporter.state(); cancelled && err != nil {
 		return cancelledRun(result)
 	}
@@ -150,12 +198,21 @@ func (runner *agentRunner) attempt(
 	if owner.tookOver {
 		reporter.emit("status", "Stopped processes left in the worktree by an earlier attempt.")
 	}
+	runner.checkout.Lock()
 	unlock := lockWorktree(project.Path, worktree)
-	defer unlock()
+	runner.checkout.Unlock()
+	defer func() {
+		runner.checkout.Lock()
+		defer runner.checkout.Unlock()
+		unlock()
+	}()
 	if base, err := gitOutput(ctx, "-C", worktree, "merge-base", command.BaseBranch, "HEAD"); err == nil {
 		result.BaseCommit = strings.TrimSpace(base)
 	}
 	reporter.emit("status", fmt.Sprintf("Isolated worktree ready on %s from %s", command.Branch, command.BaseBranch))
+	if len(command.Merge) > 0 {
+		return runner.integrate(ctx, command, project, workspace, result, reporter)
+	}
 
 	runCtx, cancelRun := context.WithTimeout(ctx, runner.limits.wallClock)
 	// Git keeps a worktree's metadata in the source checkout; a sandboxed agent needs to read it.
@@ -186,6 +243,7 @@ func (runner *agentRunner) attempt(
 		return failed(result, execution.reason, executionFailureMessage(execution.reason))
 	}
 	result.Output = truncateText(reporter.redactor.clean(execution.output), maxAgentRunOutputSize)
+	result.Result = typedResult(reporter.redactor.clean(execution.output))
 	return runner.deliver(ctx, gitCtx, command, project, workspace, result, reporter)
 }
 
@@ -218,6 +276,10 @@ func (runner *agentRunner) deliver(
 	if _, leaseLost := reporter.state(); leaseLost || ctx.Err() != nil {
 		// This attempt no longer owns the run; the commit stays local for the attempt that does.
 		return result
+	}
+	if command.PublishCommit != "" && result.CommitSHA != command.PublishCommit {
+		// The worktree no longer reproduces the reviewed candidate; nothing unreviewed is published.
+		return failed(result, workerapi.TerminationWorkerError, "The commit differs from the reviewed candidate; nothing was pushed.")
 	}
 	if command.PublishPullRequest {
 		push := runner.push
