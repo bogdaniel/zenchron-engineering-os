@@ -59,6 +59,10 @@ test('Reports CSV exports neutralize formula text and preserve number fields', a
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#reports');
   await expect(page.locator('.reports-page')).not.toHaveAttribute('data-preview');
+  await expect(page.locator('.reports-metric.agent-spend strong')).toHaveText('$1.25');
+  await expect(page.locator('.inventory-panel .report-summary-table tbody tr td').nth(1)).toHaveText('1');
+  await expect(page.locator('.product-summary-panel .report-summary-table tbody tr')
+    .filter({ hasText: '@SUM(A1)' })).toBeVisible();
 
   const downloadCsv = async (name: string) => {
     const downloadPromise = page.waitForEvent('download');
