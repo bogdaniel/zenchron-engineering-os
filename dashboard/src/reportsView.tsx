@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { IconActivity, IconCircleCheck, IconCode, IconFolders, IconRobot, IconSparkles, IconStack } from '@tabler/icons-react';
 import { agentsSchema, loadAgentRuns, type AgentRun } from './agentsData';
+import { encodeCSV } from './csvCell';
 import type { DownloadableReport } from './DownloadableReports';
 import type { Objective } from './objectives';
 import type { Project } from './projects';
@@ -114,7 +115,7 @@ function spendTrend(runs: AgentRun[], range: ReportTimeRange, now = Date.now()) 
 }
 
 function downloadCSV(name: string, rows: (string | number | undefined)[][]) {
-  const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n');
+  const csv = encodeCSV(rows);
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
