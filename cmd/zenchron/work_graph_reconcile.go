@@ -352,6 +352,8 @@ func (graph *workGraph) integrationState(unit *workUnit, run agentRun, runs map[
 		return unitWaiting, "Waiting for review of the integrated candidate."
 	case run.PullRequestURL != "":
 		return unitCompleted, ""
+	case run.Publishing:
+		return unitWaiting, "Creating the pull request."
 	case run.PullRequestEnabled:
 		return unitBlocked, cmp.Or(run.PullRequestError, "The pull request was not created.")
 	case publishable:

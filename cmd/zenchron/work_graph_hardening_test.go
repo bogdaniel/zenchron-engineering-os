@@ -127,3 +127,20 @@ func TestPlansAndGraphsNeedTheRepositoryGrantNotOnlyTheObjective(t *testing.T) {
 		t.Fatalf("graphs of a repository without a grant are listed: %#v", graphs)
 	}
 }
+
+func TestUnitIsNotReportedBlockedWhileItsPullRequestIsBeingCreated(t *testing.T) {
+	harness := newGraphHarness(t)
+	harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID), unitJSON("integrate", unitIntegrate, "", "api")))
+	harness.handOff(harness.claimUnit("api"), commit(1), "api")
+	integration := harness.claimUnit("integrate")
+	var during workGraph
+	harness.duringPullCreate = func() { during = harness.graph() }
+	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
+		BranchPushed: true, Result: `{"integration":{}}`})
+	if unit := during.unit("integrate"); unit.State != unitWaiting || unit.Reason != "Creating the pull request." || during.Status != graphActive {
+		t.Fatalf("while GitHub was answering: graph %s, integrate %s %q", during.Status, unit.State, unit.Reason)
+	}
+	if graph := harness.graph(); graph.Status != graphCompleted {
+		t.Fatalf("after publication: %s", graph.Status)
+	}
+}
