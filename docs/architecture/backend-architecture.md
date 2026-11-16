@@ -65,6 +65,8 @@ credentials and the provider sign-ins. Neither side receives the other's secrets
 | Worker registration and presence | Control plane | `workers.go` |
 | Run orchestration, leases, attempts, persistence | Control plane | `agent_runs.go`, `agent_run_results.go`, `agent_run_progress.go` |
 | Issue snapshot, pull-request status, review import | Control plane | `agent_run_issues.go`, `agent_reviews.go` |
+| Objective plans, WorkGraphs, typed messages, decisions (see [Objective orchestration](objective-orchestration.md)) | Control plane | `orchestration_plan.go`, `orchestration_api.go`, `work_graph*.go` |
+| Concurrent run slots and deterministic integration runs | Worker | `agent_runner.go` (`dispatch`), `integration.go` |
 | Checkout discovery and repository allowlist | Worker | `projects.go`, `verification.go` (`workerConfig`) |
 | Worktree creation (only by the run pipeline), locking, cleanup | Worker | `worktrees.go` |
 | Exclusive worktree ownership, process guard, process record | Worker | `worktree_owner.go`, `process_tree.go` |
