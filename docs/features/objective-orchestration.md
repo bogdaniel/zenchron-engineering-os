@@ -75,7 +75,7 @@ flowchart LR
 
 - An agent ends its final message with one fenced `zenchron-result` block holding one JSON object: `handoff`
   (summary, notes), `review` (verdict `accept`, or `block` with 1 to 10 findings), `decision_request` (question,
-  options), and optionally `collaboration_requests` and `state_updates`. The limits are 16 KiB for the block and
+  options), and optionally `collaboration_requests` and `state_updates`. The limits are 48 KiB for the block and
   bounded lengths per field; an unknown member rejects the result.
 - Messages are `handoff`, `collaboration_request`, `finding`, `decision_request`, `decision_resolution`, and
   `state_update`. Each records its sender, recipients, run, attempt, and the commit the worker reported. Messages are

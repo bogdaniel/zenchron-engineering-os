@@ -12,8 +12,10 @@ const (
 
 	// ResultFence labels the fenced block in an agent's final message that carries its typed result.
 	ResultFence = "zenchron-result"
-	// MaxResultSize bounds one typed result.
-	MaxResultSize  = 16 << 10
+	// MaxResultSize bounds one typed result. A plan of several units with full instructions needs most of it.
+	// ponytail: results are stored on the run record, so 200 runs of 48 KiB stay under the 16 MiB snapshot;
+	// move results to per-run files, like diffs, if either limit has to grow.
+	MaxResultSize  = 48 << 10
 	MaxMergeInputs = 8
 )
 
