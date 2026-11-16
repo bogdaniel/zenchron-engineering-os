@@ -1,0 +1,19 @@
+.objective-delivery-report { margin-top: 18px; padding: 14px; border: 1px solid #302b40; border-radius: 8px; background: #11111b; }
+.objective-delivery-heading, .objective-delivery-actions, .objective-delivery-unit-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.objective-delivery-heading h4, .objective-delivery-content h5 { margin: 0 0 5px; }
+.objective-delivery-heading p, .objective-delivery-content p { color: #a7a1b8; }
+.objective-delivery-content { margin-top: 14px; }
+.objective-delivery-content h5 { margin-top: 18px; }
+.objective-delivery-units { display: grid; gap: 10px; }
+.objective-delivery-units article { min-width: 0; padding: 10px; border: 1px solid #302b40; border-radius: 6px; }
+.objective-delivery-run { display: grid; gap: 3px; margin: 8px 0 0; padding: 8px; border-left: 2px solid #7048aa; color: #c2bdd0; overflow-wrap: anywhere; }
+.objective-delivery-metrics { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr); gap: 7px 14px; }
+.objective-delivery-metrics dt { color: #9995ad; }
+.objective-delivery-metrics dd { margin: 0; overflow-wrap: anywhere; }
+.objective-delivery-unknown { color: #ddb875 !important; }
+@media (max-width: 600px) {
+  .objective-delivery-report { padding: 10px; }
+  .objective-delivery-heading { align-items: flex-start; flex-direction: column; }
+  .objective-delivery-metrics { grid-template-columns: 1fr; gap: 3px; }
+  .objective-delivery-metrics dt { margin-top: 8px; }
+}

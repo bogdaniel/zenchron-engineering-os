@@ -162,6 +162,22 @@ func reservedEnvironmentName(name string) bool {
 
 func cliPrompt(command workerapi.AgentRunCommand) string {
 	var prompt strings.Builder
+	if persona := command.Profile.Persona; persona != nil {
+		fmt.Fprintf(&prompt, "Persona: %s (version %d)\nRole: %s\n", persona.Name, persona.Version, persona.Role)
+		for _, responsibility := range persona.Responsibilities {
+			prompt.WriteString("Responsibility: " + responsibility + "\n")
+		}
+		if instructions := strings.TrimSpace(persona.Instructions); instructions != "" {
+			prompt.WriteString("Persona instructions: " + instructions + "\n")
+		}
+		if behavior := strings.TrimSpace(persona.Behavior); behavior != "" {
+			prompt.WriteString("Behavior: " + behavior + "\n")
+		}
+		if review := strings.TrimSpace(persona.ReviewSpecialization); review != "" {
+			prompt.WriteString("Review specialization: " + review + "\n")
+		}
+		prompt.WriteString("\n")
+	}
 	if system := strings.TrimSpace(command.Profile.SystemPrompt); system != "" {
 		prompt.WriteString(system + "\n\n")
 	}

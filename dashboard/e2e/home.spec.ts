@@ -522,12 +522,10 @@ test('Product Workspace groups live repositories into persisted products', async
     .toContainText('1 linked repositories');
   await expect(page.locator('.workspace-mock-heading')).toContainText('Shared platform and APIs');
 
-  await page.getByRole('link', { name: 'Objectives' }).click();
-  await page.getByRole('button', { name: 'New Objective' }).click();
+  await page.getByRole('link', { name: 'Create objective for Core Product' }).click();
   const objectiveDialog = page.getByRole('dialog');
   await objectiveDialog.getByLabel('Objective title').fill(objectiveTitle);
-  await objectiveDialog.getByLabel('Product').click();
-  await page.getByRole('option', { name: 'Core Product' }).click();
+  await expect(objectiveDialog.getByRole('combobox', { name: 'Product' })).toHaveValue('Core Product');
   await objectiveDialog.getByRole('button', { name: 'Create objective' }).click();
   await expect(page.locator('.detail-meta-grid').getByText('Core Product', { exact: true })).toBeVisible();
 

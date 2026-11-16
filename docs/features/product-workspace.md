@@ -22,6 +22,9 @@ flowchart LR
     Page -->|"Add / Edit product"| Editor["ProductEditor · productEditor.tsx"]
     Editor -->|"source.saveProduct"| Source
     Live -->|"POST /api/v1/products · PUT /api/v1/products/{id}"| CP
+    Page -->|"Create objective for selected product"| Objective["ObjectivesPage · product_id prefilled"]
+    Objective -->|"create objective, then select repository and workflow in Plan"| Plans["ObjectivePlanPanel"]
+    Plans -->|"POST /api/v1/objectives/{id}/plans"| CP
     Mock -->|"add or rename in fixture state"| Tab["This browser tab only"]
     CP --> Store[(products.json)]
     Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
@@ -70,8 +73,15 @@ Live:
   shown. Objectives without a valid due date stay in the objectives card.
 - Repositories show name, worker, worker status, and branch. A linked repository missing from the inventory stays
   linked and is shown as unavailable.
-- "Available Workflows" lists workflow definitions with their status. They are workspace-wide, not linked to a
-  product. The Templates tab adds agent profiles.
+- "Available Workflows" lists workflow definitions with their version and status. A workflow can be selected in an
+  objective's Plan tab, where the saved graph is compiled into inspectable WorkUnits. Workflows remain workspace-wide,
+  not linked to a product. The Templates tab adds agent profiles; linked personas are managed from Agents.
+- In Live, "Create objective" on the selected product opens the existing objective form with that product selected.
+  The Plan tab then offers only online repository checkouts linked to that product; legacy objectives without a product
+  keep the existing all-checkouts choice.
+- The Objectives tab projects each linked objective's current WorkGraph, pending decisions, findings, review and
+  integration states, and observed pull-request link from existing product-environment records. Opening an objective
+  shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
 - Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, decisions, delivery
   metrics (card and metric), recent decisions (metric), and all trend graphics. The favorite star and the delivery
   range are disabled with a reason. Sharing shows the page link and says no invitation is sent.
@@ -85,6 +95,10 @@ Live:
 - Repository IDs are stable for a worker identity and checkout path. Names, branches, worker names, and heartbeat state
   come from current worker inventory; local paths remain on the worker. Only repository names and worker IDs are shared
   with the control plane.
+- New fields are additive: prior profile records without personas and prior plans without configuration snapshots load
+  with their previous behavior. The strict state reader rejects unknown fields, so rolling back after personas or pinned
+  plans have been saved, or after saving a workflow with the `integrate` node, requires restoring pre-upgrade copies of
+  `agents.json`, `work-graphs.json`, and `workflows.json`; retain a local data-directory backup before a downgrade.
 - A worker restart does not erase product configuration. Moving a checkout changes its ID and requires relinking.
 - Objectives link to products by ID. Unlinked and legacy free-text objectives remain visible on the Objectives page.
 - File search, evidence artifacts, decisions, stakeholder membership, release streams, and delivery history require

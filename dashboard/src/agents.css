@@ -624,3 +624,7 @@
 .agents-preview-permissions:has(> div:nth-child(6)) > div { min-height: 18px; }
 .agents-preview-run-table b.failed, .agents-preview-run-table b.cancelled { color: #ff9a9a; }
 .agents-preview-run-table b.queued, .agents-preview-run-table b.running { color: #c7a1ff; }
+.persona-list { display: grid; gap: 8px; }
+.persona-list-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.persona-list-row > span { display: grid; flex: 1 1 220px; gap: 3px; }
+.persona-list-row small { color: #9995ad; }

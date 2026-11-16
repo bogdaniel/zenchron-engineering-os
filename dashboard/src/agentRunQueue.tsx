@@ -20,7 +20,7 @@ export const workerProvidersSchema = z.array(providerSchema).optional();
 const issueOptionSchema = z.object({ number: z.number(), title: z.string() });
 const issueOptionsSchema = z.array(issueOptionSchema);
 
-export type RunWorker = { id: string; name: string; providers?: z.infer<typeof providerSchema>[] };
+export type RunWorker = { id: string; name: string; status?: 'online' | 'offline'; providers?: z.infer<typeof providerSchema>[] };
 
 /**
  * Says whether the worker behind a project can execute the selected agent profile's provider. Only the coding

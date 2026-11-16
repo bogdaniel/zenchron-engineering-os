@@ -91,7 +91,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const live = useLiveObjectives(!sampleData);
   const source = sampleData ? mock : live;
   const { items, view: sourceView } = source;
-  const [createOpen, setCreateOpen] = useState(false);
+  const workspaceProductID = new URLSearchParams(window.location.search).get('product_id') ?? '';
+  const [createOpen, setCreateOpen] = useState(() => new URLSearchParams(window.location.search).get('create') === '1');
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
   const [detailTab, setDetailTab] = useState<ObjectiveDetailTab>('overview');
@@ -117,9 +118,16 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     activeRow.setSelected(true);
   }, [items, objectiveGridApi, selectedID]);
   const createForm = useForm<ObjectiveInput>({
-    initialValues: { title: '', description: '', owner: '', product_id: '', due_date: '' },
+    initialValues: { title: '', description: '', owner: '', product_id: workspaceProductID, due_date: '' },
     validate: (values) => objectiveFormErrors(objectiveInputSchema, values),
   });
+
+  function clearWorkspaceCreateContext() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('create');
+    url.searchParams.delete('product_id');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }
 
   function selectObjective(item: Objective) {
     selectedIDRef.current = item.id;
@@ -141,7 +149,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     }
     setActionNotice(`Objective created${source.savedSuffix}`);
     createForm.reset();
+    createForm.setFieldValue('product_id', '');
     setCreateOpen(false);
+    clearWorkspaceCreateContext();
   }
 
   const columns = useMemo<ColDef<Objective>[]>(() => [
@@ -377,7 +387,12 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
         </div>
       </div>
 
-      <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="New objective" centered className="objective-modal">
+      <Modal opened={createOpen} onClose={() => {
+        setCreateOpen(false);
+        createForm.reset();
+        createForm.setFieldValue('product_id', '');
+        clearWorkspaceCreateContext();
+      }} title="New objective" centered className="objective-modal">
         <form onSubmit={createForm.onSubmit((values) => void createObjective(values))}>
           <TextInput label="Objective title" placeholder="e.g. Improve review velocity" required {...createForm.getInputProps('title')} />
           <Textarea label="Description" placeholder="Describe the outcome and why it matters" minRows={3} {...createForm.getInputProps('description')} />

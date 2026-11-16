@@ -54,7 +54,7 @@ export function useMockOrchestration(objectiveID?: string): OrchestrationSource 
     plans: objectiveID === sampleObjectiveID ? [samplePlan] : [],
     plansLoading: false,
     plansFailed: false,
-    options: { projects: [], planners: [], workflows: [] },
+    options: { projects: [], planners: [], workflows: [], agents: [], personas: [] },
     agentNames,
     readOnlyReason: 'Illustrative data: plans are proposed, approved, and executed in Live mode only.',
   };

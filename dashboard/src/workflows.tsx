@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Badge, Button, Menu, Modal, TextInput, Textarea } from '@mantine/core';
+import { Badge, Button, Menu, Modal, Select, Text, TextInput, Textarea } from '@mantine/core';
 import { DndContext, useDroppable } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { Group, Panel, Separator } from 'react-resizable-panels';
@@ -23,6 +23,8 @@ import { WorkflowPhoneRunCards, WorkflowRunPreview } from './WorkflowRun';
 import { WorkflowSectionTabs, WorkflowSectionView } from './WorkflowSections';
 import type { WorkflowSection } from './WorkflowSections';
 import { useMockWorkflows } from './workflow-preview-data';
+import { loadAgents, loadPersonas } from './agentsData';
+import type { Agent, AgentPersona } from './agentsData';
 import {
   components, defaultDescriptions, designPreviewWorkflow, layoutNodes, loadWorkflows, mobileWorkflowGraph, workflowEdgeClass,
   workflowGraph, workflowNodeIcons, workflowNodeSize,
@@ -66,8 +68,8 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
   // No workflow runner is connected, so only the fixture has a run to report.
   const execution = designPreview
     ? { badge: '● Running', badgeClass: 'preview-running-badge', stagesComplete: true }
-    : { badge: 'Execution unavailable', badgeClass: 'muted-tag', stagesComplete: false,
-      note: workflow && `${workflow.nodes.length} components · ${workflow.edges.length} connections · runner not connected` };
+    : { badge: 'Use in Objective plan', badgeClass: 'muted-tag', stagesComplete: false,
+      note: workflow && `${workflow.nodes.length} components · ${workflow.edges.length} connections · run through an Objective WorkGraph` };
 
   return <PanelCard className="panel workflow-panel" id="workflow" withBorder>
     <PanelHeading className="panel-heading" icon={<span className="section-icon purple-icon"><IconHierarchy size={22} /></span>}
@@ -76,7 +78,7 @@ export function WorkflowOverview({ mobile = false, workflowID, designPreview = f
         : workflow ? `${workflow.name} · ${workflow.status}` : 'Saved workflow definition'}
       actions={<div className="panel-actions workflow-overview-actions">
         <Badge className={execution.badgeClass} variant="light">{execution.badge}</Badge>
-        <a className="subtle-button" href="#workflows">View Runs</a>
+        <a className="subtle-button" href="#objectives">Open Objectives</a>
         <a className="workflow-icon-link" href="#workflows" aria-label="Open workflow editor"><IconMaximize size={14} /></a>
         <Menu position="bottom-end" withinPortal>
           <Menu.Target><button className="workflow-icon-link" aria-label="Workflow options"><IconDots size={16} /></button></Menu.Target>
@@ -111,14 +113,27 @@ const mobileSections = [
   ['Overview', 'workflow-mobile-overview'], ['Runs', 'workflow-mobile-run-summary'],
   ['Tasks', 'workflow-mobile-run-tasks'], ['Approvals', 'workflow-mobile-run-approvals'],
 ];
-const runnerOffline = 'Runner not connected';
+const runnerOffline = 'Choose this workflow in Objectives → Plan to execute it through WorkGraph';
 /** workflows.css draws compact cards from this width up. */
 const hasCompactCards = () => window.matchMedia('(min-width: 1051px)').matches;
 const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
+function profileIneligibility(agent: Agent | undefined, kind: ComponentType, personas: AgentPersona[]) {
+  if (!agent) return 'Choose a profile';
+  if (agent.status !== 'active') return 'Disabled';
+  if (!['codex-cli', 'claude-code'].includes(agent.provider)) return 'No CLI adapter';
+  if (kind === 'code-reviewer' && agent.tools.includes('code.write')) return 'Reviewer must be read-only';
+  if (kind !== 'code-reviewer' && !agent.tools.includes('code.write')) return 'Needs code.write';
+  if (agent.persona_id && personas.find((persona) => persona.id === agent.persona_id)?.status !== 'active') return 'Linked persona unavailable';
+  return '';
+}
 
 export function WorkflowsPage({ designPreview = false }: { designPreview?: boolean }) {
   const mock = useMockWorkflows();
   const live = useLiveWorkflows(!designPreview);
+  const agentQuery = useQuery({ queryKey: ['agents'], queryFn: loadAgents, enabled: !designPreview });
+  const personaQuery = useQuery({ queryKey: ['personas'], queryFn: loadPersonas, enabled: !designPreview });
+  const agents = agentQuery.data ?? [];
+  const personas = personaQuery.data ?? [];
   const source = designPreview ? mock : live;
   const [section, setSection] = useState<WorkflowSection>('Builder');
   const [notice, setNotice] = useState({ text: '', isError: false });
@@ -164,7 +179,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       report(await source.save(activeWorkflow.id, {
         ...definition,
         nodes: nodes.map(({ id, position, data }) => ({
-          id, type: data.kind, position, data: { label: data.label, description: data.description },
+          id, type: data.kind, position, data: { label: data.label, description: data.description,
+            agent_id: data.agent_id ?? '', persona_id: data.persona_id ?? '', acceptance: data.acceptance ?? [] },
         })),
         edges: edges.map(({ id, source: from, target, label }) => ({
           id, source: from, target, label: typeof label === 'string' ? label : '',
@@ -187,6 +203,23 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       setCreateError(errorMessage(error, 'Create failed'));
     }
   };
+  const createDialog = <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="New Workflow">
+    <TextInput
+      label="Workflow name" value={createName} onChange={(event) => setCreateName(event.currentTarget.value)}
+      maxLength={200} required
+    />
+    <Textarea
+      label="Description" value={createDescription}
+      onChange={(event) => setCreateDescription(event.currentTarget.value)} maxLength={1000} autosize minRows={2}
+    />
+    {createError && <p className="form-error" role="alert">{createError}</p>}
+    <Button
+      className="workflow-create-button"
+      loading={source.creating}
+      disabled={!createName.trim()}
+      onClick={createWorkflow}
+    >Create workflow</Button>
+  </Modal>;
   useEffect(() => {
     if (!activeWorkflow) return;
     const current = activeWorkflow;
@@ -196,7 +229,10 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     setDefinition({ name: current.name, description: current.description, status: current.status });
     const { nodes: workflowNodes, edges: workflowEdges } = workflowGraph(current);
     const { positions } = source.describe(current);
-    const selectedNode = workflowNodes.find((node) => node.data.kind === 'agent-router');
+    const selectedNode = workflowNodes.find((node) => node.data.kind === 'agent-task') ??
+      workflowNodes.find((node) => node.data.kind === 'test-generator') ??
+      workflowNodes.find((node) => node.data.kind === 'code-reviewer') ??
+      workflowNodes.find((node) => node.data.kind === 'agent-router');
     const selectedNodes = workflowNodes.map((node) => ({ ...node,
       ...(positions?.[node.id] ? { position: positions[node.id] } : {}),
       ...(node.data.kind === 'loop' ? { style: { width: workflowNodeSize('loop', true).width } } : {}),
@@ -256,25 +292,48 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       report(`Could not arrange workflow nodes: ${errorMessage(error, 'layout failed')}`, true);
     }
   };
-  const validate = () => {
-    const ids = new Set(nodes.map((node) => node.id));
-    const valid = nodes.some((node) => node.data.kind === 'trigger') &&
-      edges.every((edge) => ids.has(edge.source) && ids.has(edge.target));
-    report(valid
-      ? 'Graph is valid · execution is not connected yet'
-      : 'Add a Trigger and connect every edge to an existing node', !valid);
-  };
   const updateSelected = (key: keyof WorkflowData, value: string) => setNodes((current) => current.map((node) => (
     node.id === selectedId ? { ...node, data: { ...node.data, [key]: value } } : node
   )));
+  const updateAcceptance = (value: string) => setNodes((current) => current.map((node) => (
+    node.id === selectedId ? { ...node, data: { ...node.data, acceptance: value.split('\n').filter(Boolean) } } : node
+  )));
+  const validate = async () => {
+    if (designPreview || !activeWorkflow || !source.validate) {
+      report('Preview data is illustrative and is not validated for execution', true);
+      return;
+    }
+    try {
+      const result = await source.validate(activeWorkflow.id, {
+        nodes: nodes.map(({ id, position, data }) => ({ id, type: data.kind, position, data: {
+          label: data.label, description: data.description, agent_id: data.agent_id ?? '',
+          persona_id: data.persona_id ?? '', acceptance: data.acceptance ?? [],
+        } })),
+        edges: edges.map(({ id, source: from, target, label }) => ({ id, source: from, target, label: typeof label === 'string' ? label : '' })),
+      });
+      report(result.problems.length ? result.problems.join(' · ')
+        : `Executable workflow configuration validated · saved identity v${result.workflow_version}`,
+      result.problems.length > 0);
+    } catch (error) { report(errorMessage(error, 'Workflow validation failed'), true); }
+  };
   const deleteSelected = () => {
     setNodes((current) => current.filter((node) => node.id !== selectedId));
     setEdges((current) => current.filter((edge) => edge.source !== selectedId && edge.target !== selectedId));
     setSelectedId('');
   };
   if (source.loading) return <div className="workflow-page"><p role="status">Loading workflows…</p></div>;
-  if (source.error || !activeWorkflow) {
-    return <div className="workflow-page"><p role="alert">{source.error ?? 'No workflows available'}</p></div>;
+  if (source.error) return <div className="workflow-page"><p role="alert">{source.error}</p></div>;
+  if (!activeWorkflow) {
+    return <section className="workflow-page">
+      {createDialog}
+      <PageHeading eyebrow="Workflows" title="Workflow Builder"
+        description="Create a workflow before selecting it for an objective." />
+      <PanelCard className="workflow-empty-state" withBorder>
+        <h3>No workflows available</h3>
+        <p role="status">Create the first workflow to define reusable delivery steps.</p>
+        <Button onClick={() => { setCreateError(''); setCreateOpen(true); }}>Create first workflow</Button>
+      </PanelCard>
+    </section>;
   }
   const view = source.describe(activeWorkflow);
   const { acknowledge, publish } = source;
@@ -295,23 +354,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         </Menu.Dropdown>
       </Menu>
     </header>
-    <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="New Workflow">
-      <TextInput
-        label="Workflow name" value={createName} onChange={(event) => setCreateName(event.currentTarget.value)}
-        maxLength={200} required
-      />
-      <Textarea
-        label="Description" value={createDescription}
-        onChange={(event) => setCreateDescription(event.currentTarget.value)} maxLength={1000} autosize minRows={2}
-      />
-      {createError && <p className="form-error" role="alert">{createError}</p>}
-      <Button
-        className="workflow-create-button"
-        loading={source.creating}
-        disabled={!createName.trim()}
-        onClick={createWorkflow}
-      >Create workflow</Button>
-    </Modal>
+    {createDialog}
     <div className={layoutClasses}>
       <div className={`workflow-page-heading${isBuilder ? '' : ' workflow-section-heading'}`}>
         <PageHeading
@@ -350,7 +393,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
               <Menu.Item onClick={autoLayout}>Auto layout</Menu.Item>
             </Menu.Dropdown>
           </Menu>
-          <Button className="workflow-validate" variant="default" leftSection={<IconCheck size={15} />} onClick={validate}>Validate</Button>
+          <Button className="workflow-validate" variant="default" leftSection={<IconCheck size={15} />} onClick={() => void validate()}>Validate</Button>
           <Button className="workflow-run" variant="default" leftSection={<IconPlayerPlay size={15} />}
             disabled={!view.timeline} title={view.timeline ? undefined : runnerOffline}
             onClick={() => { setRunPreviewView('Execution Graph'); setSimulateRun(true); report('Simulated run shown · workflow was not executed'); }}>
@@ -457,9 +500,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
                 <b>Simulation paused</b><span>Turn on Simulate Run to view execution details.</span>
               </> : <>
                 <b>Execution preview unavailable</b>
-                <span>Workflow execution is not connected. This graph has {nodes.length} components and {edges.length} connections
-                  and has not run. The canvas does not execute: an objective's plan can name this workflow, and the
-                  planner reads its steps as guidance (Objectives → Plan).</span>
+                <span>The canvas does not run workflows directly. This graph has {nodes.length} components and {edges.length} connections
+                  and has no recorded run. Choose it in Objectives → Plan to execute through WorkGraph.</span>
               </>}</div>}
           </div>
         </Panel>
@@ -501,6 +543,36 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
                 onChange={(event) => updateSelected('description', event.currentTarget.value)}
                 maxLength={500} autosize minRows={2} readOnly={Boolean(view.inspectorDescriptions)}
               />
+              {['agent-task', 'test-generator', 'code-reviewer'].includes(selected.data.kind) && <>
+                <Select label="Assigned CLI agent profile" placeholder="Choose an eligible profile"
+                  data={agents.map((agent) => {
+                    const personaMismatch = selected.data.persona_id && agent.persona_id !== selected.data.persona_id;
+                    const reason = personaMismatch ? 'Profile is not bound to selected persona'
+                      : profileIneligibility(agent, selected.data.kind, personas);
+                    return { value: agent.id, label: `${agent.name} · ${agent.provider} · ${agent.model}${reason ? ` · ${reason}` : ''}`,
+                      disabled: Boolean(reason) };
+                  })} value={selected.data.agent_id || null} onChange={(value) => updateSelected('agent_id', value ?? '')}
+                  searchable clearable />
+                <Select label="Required persona" placeholder="Use the profile's linked persona"
+                  data={personas.filter((persona) => persona.status === 'active')
+                    .map((persona) => ({ value: persona.id, label: `${persona.name} · v${persona.version}` }))}
+                  value={selected.data.persona_id || null} onChange={(value) => updateSelected('persona_id', value ?? '')} clearable />
+                {selected.data.agent_id && (() => {
+                  const profile = agents.find((item) => item.id === selected.data.agent_id);
+                  const reason = selected.data.persona_id && profile?.persona_id !== selected.data.persona_id
+                    ? 'Selected profile is not bound to the required persona.'
+                    : profileIneligibility(profile, selected.data.kind, personas);
+                  return reason ? <Text size="xs" c="red" role="alert">{reason}</Text> : null;
+                })()}
+                {agentQuery.isError && <Text size="xs" role="alert">Could not load agent profiles: {errorMessage(agentQuery.error, 'request failed')}</Text>}
+                {personaQuery.isError && <Text size="xs" role="alert">Could not load personas: {errorMessage(personaQuery.error, 'request failed')}</Text>}
+                <Textarea label="Acceptance criteria (one per line)" value={(selected.data.acceptance ?? []).join('\n')}
+                  onChange={(event) => updateAcceptance(event.currentTarget.value)} maxLength={2400} autosize minRows={2} />
+              </>}
+              {!['trigger', 'agent-task', 'test-generator', 'code-reviewer', 'integrate'].includes(selected.data.kind) &&
+                <Text size="xs" role="status">Design-only node · this node is not supported by WorkGraph execution.</Text>}
+              {selected.data.kind === 'trigger' && <Text size="xs" role="status">Executable structural node · starts the configured WorkGraph steps.</Text>}
+              {selected.data.kind === 'integrate' && <Text size="xs" role="status">Zenchron integrates reviewed candidates and publishes the pull request.</Text>}
             </div>
           </section>}
           <WorkflowNodeSettings settings={view.nodeSettings} tab={settingsTab} />

@@ -62,7 +62,7 @@
   .agents-mobile-evidence .mantine-Badge-root { border: 1px solid #28684d; color: #55dba6; background: #143126; font-size: 7px; }
   .agents-mobile-quick-actions > .shared-panel-heading > div:first-child { gap: 6px; }
   .agents-mobile-quick-actions > .shared-panel-heading svg { color: #c994ff; }
-  .agents-mobile-quick-actions > div:last-child { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .agents-mobile-quick-actions > div:last-child { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
   .agents-mobile-quick-actions > div:last-child > button { display: flex; min-width: 0; min-height: 40px; align-items: center; gap: 7px; padding: 4px; border: 1px solid #344d72; border-radius: 9px; color: #f1edf7; background: linear-gradient(135deg, #142a3c, #11131c); text-align: left; cursor: pointer; }
   .agents-mobile-quick-actions > div:last-child > button.review { border-color: #5d3e8a; background: linear-gradient(135deg, #2c1e45, #15131e); }
   .agents-mobile-quick-actions > div:last-child > button > svg { flex: 0 0 auto; color: #48d7ce; }

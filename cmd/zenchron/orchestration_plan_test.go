@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
@@ -58,6 +59,16 @@ func TestPlanIsRejectedBeforeAnythingRuns(t *testing.T) {
 	}
 }
 
+func TestEmptyPlanAndWorkGraphCollectionsAreJSONArrays(t *testing.T) {
+	harness := newGraphHarness(t)
+	for _, path := range []string{"/api/v1/objectives/" + harness.objectiveID + "/plans", "/api/v1/work-graphs"} {
+		response := harness.call(http.MethodGet, path, "")
+		if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "[]" {
+			t.Fatalf("empty collection %s = HTTP %d %q", path, response.Code, response.Body.String())
+		}
+	}
+}
+
 func TestChangedPlanCannotReplaceAnExecutingOneAndAnUnchangedPlanNeedsNoNewApproval(t *testing.T) {
 	harness := newGraphHarness(t)
 	graph := harness.start(harness.twoProducerPlan())
@@ -93,6 +104,71 @@ func TestChangedPlanCannotReplaceAnExecutingOneAndAnUnchangedPlanNeedsNoNewAppro
 	plans := decodeList[objectivePlan](t, harness.call(http.MethodGet, "/api/v1/objectives/"+harness.objectiveID+"/plans", ""))
 	if len(plans) != 2 || plans[0].Status != planApproved || plans[1].Status != planSuperseded {
 		t.Fatalf("plan history = %#v", plans)
+	}
+}
+
+func TestPlanPinsProfileConfigurationAndRejectsStaleApproval(t *testing.T) {
+	harness := newGraphHarness(t)
+	harness.profile.SystemPrompt = "Pinned system prompt"
+	harness.profile.Version = 1
+	personaID := strings.Repeat("d", 32)
+	harness.profile.PersonaID = personaID
+	harness.store.agents.items[harness.profile.ID] = harness.profile
+	harness.store.agents.personas[personaID] = agentPersona{ID: personaID, Name: "CSV specialist", Role: "Implement CSV output",
+		Instructions: "Keep exports compatible.", Status: "active", Version: 3, UpdatedAt: time.Now().UTC()}
+	response := harness.call(http.MethodPost, "/api/v1/objectives/"+harness.objectiveID+"/plans", harness.twoProducerPlan())
+	var proposed objectivePlan
+	if err := json.NewDecoder(response.Body).Decode(&proposed); err != nil || response.Code != http.StatusCreated {
+		t.Fatalf("propose plan: HTTP %d, %v", response.Code, err)
+	}
+	if _, exposed := proposed.ProfileSnapshots[harness.profile.ID]; exposed {
+		t.Fatal("plan response exposed private provider prompt snapshots")
+	}
+	stored := harness.store.graphs.plans[harness.objectiveID][proposed.Revision-1]
+	if stored.ProfileSnapshots[harness.profile.ID].SystemPrompt != "Pinned system prompt" ||
+		stored.ProfileSnapshots[harness.profile.ID].PersonaSnapshot == nil ||
+		stored.ProfileSnapshots[harness.profile.ID].PersonaSnapshot.Version != 3 || stored.Units[0].ProfileVersion != 1 ||
+		stored.Units[0].PersonaVersion != 3 {
+		t.Fatalf("stored plan did not pin profile configuration: %#v", stored)
+	}
+
+	harness.store.agents.items[harness.profile.ID] = agentProfile{ID: harness.profile.ID, Name: harness.profile.Name,
+		Provider: harness.profile.Provider, Model: harness.profile.Model, Status: "active", SystemPrompt: "Edited prompt",
+		PersonaID: personaID, Version: 2, UpdatedAt: time.Now().UTC(), Tools: []string{"code.write"}}
+	if _, status := harness.approve(proposed.Revision); status != http.StatusConflict {
+		t.Fatalf("stale plan approval returned HTTP %d, want 409", status)
+	}
+
+	// A later accepted revision uses its stored snapshot even if the live profile changes after approval.
+	newer, proposalResponse := harness.propose(harness.twoProducerPlan())
+	if proposalResponse.StatusCode != http.StatusCreated {
+		t.Fatalf("propose updated plan returned HTTP %d", proposalResponse.StatusCode)
+	}
+	graph, status := harness.approve(newer.Revision)
+	if status != http.StatusCreated {
+		t.Fatalf("approve updated plan returned HTTP %d", status)
+	}
+	reopened, err := openWorkGraphStore(harness.store.graphs.path, harness.store, harness.store.graphs.objectives,
+		harness.store.agents, harness.store.graphs.workflows)
+	if err != nil || reopened.plans[harness.objectiveID][newer.Revision-1].ProfileSnapshots[harness.profile.ID].PersonaSnapshot.Version != 3 {
+		t.Fatalf("restart lost pinned profile or persona snapshot: err=%v plans=%#v", err, reopened.plans)
+	}
+	run, exists := harness.store.get(graph.unit("api").RunIDs[0])
+	if !exists || run.Profile == nil || run.Profile.SystemPrompt != "Edited prompt" || run.Profile.Version != 2 {
+		t.Fatalf("approved run did not use pinned profile snapshot: %#v", run.Profile)
+	}
+	harness.store.agents.items[harness.profile.ID] = agentProfile{ID: harness.profile.ID, Name: harness.profile.Name,
+		Provider: harness.profile.Provider, Model: harness.profile.Model, Status: "active", SystemPrompt: "Changed after approval",
+		PersonaID: personaID, Version: 3, UpdatedAt: time.Now().UTC(), Tools: []string{"code.write"}}
+	persona := harness.store.agents.personas[personaID]
+	persona.Instructions, persona.Version = "Edited after approval.", 4
+	harness.store.agents.personas[personaID] = persona
+	claimed := harness.claimUnit("api")
+	queued, exists := harness.store.get(claimed.ID)
+	if !exists || queued.Profile == nil || queued.Profile.SystemPrompt != "Edited prompt" || queued.Profile.Version != 2 ||
+		queued.Profile.PersonaSnapshot == nil || queued.Profile.PersonaSnapshot.Version != 3 ||
+		queued.Profile.PersonaSnapshot.Instructions != "Keep exports compatible." {
+		t.Fatalf("queued run did not retain the approved profile snapshot: %#v", queued.Profile)
 	}
 }
 

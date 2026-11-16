@@ -328,8 +328,9 @@ func (store *agentRunStore) create(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if profile.Status != "active" {
-		http.Error(w, "agent profile is disabled", http.StatusConflict)
+	profile, exists = store.agents.activeSnapshot(profile)
+	if !exists {
+		http.Error(w, "agent profile or its linked persona is disabled", http.StatusConflict)
 		return
 	}
 	// Only the coding CLIs execute runs; any other profile would wait in the queue for ever.
@@ -429,7 +430,16 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 		PublishPullRequest: selected.PullRequestEnabled, Merge: selected.Merge,
 		PublishCommit: store.graphs.publishCommit(selected),
 		Profile: workerapi.AgentProfile{Provider: profile.Provider, Model: profile.Model,
-			SystemPrompt: profile.SystemPrompt, GoalPrompt: profile.GoalPrompt, Tools: profile.Tools},
+			SystemPrompt: profile.SystemPrompt, GoalPrompt: profile.GoalPrompt, Tools: profile.Tools,
+			Persona: func() *workerapi.AgentPersona {
+				if profile.PersonaSnapshot == nil {
+					return nil
+				}
+				persona := profile.PersonaSnapshot
+				return &workerapi.AgentPersona{ID: persona.ID, Name: persona.Name, Role: persona.Role,
+					Responsibilities: persona.Responsibilities, Instructions: persona.Instructions,
+					Behavior: persona.Behavior, ReviewSpecialization: persona.ReviewSpecialization, Version: persona.Version}
+			}()},
 	})
 }
 

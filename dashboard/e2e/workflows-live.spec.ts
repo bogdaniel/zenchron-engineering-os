@@ -66,7 +66,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(page.getByRole('region', { name: 'Simulated run timeline' })).toHaveCount(0);
   const executionFlow = page.locator('.workflow-preview-execution-flow');
   await expect(executionFlow).toContainText(/Execution Flow \(v\d+\)/);
-  await expect(executionFlow).toContainText('Not run · 9 nodes · runner not connected');
+  await expect(executionFlow).toContainText('Not run here · Select this workflow in an Objective plan to execute it through WorkGraph');
   for (const text of fixtureOnlyText) await expect(page.locator('.workflow-page')).not.toContainText(text);
   await expect(page.locator('.workflow-component-add').filter({ hasText: 'Trigger' }))
     .toContainText('Start on a pull request or event');
@@ -355,7 +355,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
         box.right <= other.left || box.left >= other.right || box.bottom <= other.top || box.top >= other.bottom));
   })).toBe(true);
   const runSummary = page.locator('.workflow-mobile-run-summary');
-  await expect(runSummary).toContainText('10 components · 10 connections · runner not connected');
+  await expect(runSummary).toContainText('10 components · 10 connections · execute from an Objective plan');
   await expect(runSummary.locator('.workflow-mobile-idle')).toHaveText('Not run');
   expect(await runSummary.locator('.workflow-mobile-idle').evaluate((badge) => badge.scrollWidth <= badge.clientWidth),
     'the run state badge is not clipped').toBe(true);
@@ -386,7 +386,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
     'the Live phone layout has no horizontal scroll').toBe(true);
 });
 
-test('Live workflows report failed loads, empty lists, and failed saves without fixtures or stray writes', async ({ page }) => {
+test('Live workflows can create the first workflow and report failed loads and saves', async ({ page }) => {
   await page.addInitScript(() => {
     if (!crypto.randomUUID) Object.defineProperty(Crypto.prototype, 'randomUUID', {
       value: () => crypto.getRandomValues(new Uint32Array(4)).join('-'),
@@ -404,13 +404,38 @@ test('Live workflows report failed loads, empty lists, and failed saves without 
   };
   let list: { status: number; body: string } = { status: 500, body: 'store unavailable' };
   const writes: string[] = [];
+  const firstWorkflow = {
+    id: 'b'.repeat(32), name: 'First workflow', description: 'Created from an empty Live workspace.',
+    status: 'draft', version: 1, updated_at: '2026-11-16T10:00:00Z',
+    nodes: [
+      { id: 'trigger', type: 'trigger', position: { x: 0, y: 0 }, data: { label: 'Trigger', description: 'Start' } },
+      { id: 'planner', type: 'planner', position: { x: 200, y: 0 }, data: { label: 'Planner', description: 'Plan' } },
+    ],
+    edges: [{ id: 'start-plan', source: 'trigger', target: 'planner', label: '' }],
+  };
   await page.route('**/api/v1/workflows**', (route) => {
     const request = route.request();
     if (request.method() === 'GET') return route.fulfill({ ...list, contentType: 'application/json' });
+    if (request.method() === 'POST' && request.url().endsWith('/validate')) {
+      const draft = request.postDataJSON();
+      const missingTrigger = !draft.nodes.some((node: { type: string }) => node.type === 'trigger');
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        valid: !missingTrigger, workflow_id: saved.id, workflow_version: saved.version,
+        problems: missingTrigger ? ['Add a Trigger and connect every edge to an existing node'] : [],
+      }) });
+    }
     writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
-    return request.method() === 'POST'
-      ? route.fulfill({ status: 400, body: 'workflow name or description is invalid' })
-      : route.fulfill({ status: 400, body: 'workflow graph is invalid' });
+    if (request.method() === 'POST' && request.postDataJSON().name === firstWorkflow.name) {
+      list = { status: 200, body: JSON.stringify([firstWorkflow]) };
+      return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(firstWorkflow) });
+    }
+    if (request.method() === 'PUT' && request.url().includes(firstWorkflow.id)) {
+      const updated = { ...firstWorkflow, ...request.postDataJSON(), version: 2 };
+      list = { status: 200, body: JSON.stringify([updated]) };
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(updated) });
+    }
+    return route.fulfill({ status: 400, body: request.method() === 'POST'
+      ? 'workflow name or description is invalid' : 'workflow graph is invalid' });
   });
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/#workflows');
@@ -420,8 +445,33 @@ test('Live workflows report failed loads, empty lists, and failed saves without 
 
   list = { status: 200, body: '[]' };
   await page.reload();
-  await expect(page.locator('.workflow-page').getByRole('alert')).toHaveText('No workflows available');
+  await expect(page.locator('.workflow-page').getByRole('heading', { name: 'No workflows available' })).toBeVisible();
+  await expect(page.locator('.workflow-page').getByRole('status')).toHaveText(
+    'Create the first workflow to define reusable delivery steps.');
   await expect(page.locator('.workflow-canvas')).toHaveCount(0);
+  const firstCreate = page.waitForRequest((request) => request.method() === 'POST' &&
+    request.url().endsWith('/api/v1/workflows'));
+  await page.getByRole('button', { name: 'Create first workflow' }).click();
+  const firstDialog = page.getByRole('dialog', { name: 'New Workflow' });
+  await firstDialog.getByLabel('Workflow name').fill(firstWorkflow.name);
+  await firstDialog.getByLabel('Description').fill(firstWorkflow.description);
+  await firstDialog.getByRole('button', { name: 'Create workflow' }).click();
+  expect((await firstCreate).postDataJSON()).toMatchObject({
+    name: firstWorkflow.name, description: firstWorkflow.description,
+  });
+  await expect(page.getByRole('heading', { name: 'Workflow Builder — First workflow' })).toBeVisible();
+  await page.locator('.workflow-canvas .workflow-node.trigger').click();
+  await page.getByRole('textbox', { name: 'Node Name' }).fill('Objective started');
+  const firstSave = page.waitForRequest((request) => request.method() === 'PUT' &&
+    request.url().includes(firstWorkflow.id));
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  const savedFirstWorkflow = (await firstSave).postDataJSON();
+  expect(savedFirstWorkflow.name).toBe(firstWorkflow.name);
+  expect(savedFirstWorkflow.nodes).toContainEqual(expect.objectContaining({
+    id: 'trigger', data: expect.objectContaining({ label: 'Objective started' }),
+  }));
+  await expect(page.locator('.workflow-version')).toHaveText(/^v2 \(Draft\)/);
+  writes.length = 0;
 
   list = { status: 200, body: JSON.stringify([saved]) };
   await page.reload();
@@ -430,6 +480,8 @@ test('Live workflows report failed loads, empty lists, and failed saves without 
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(2);
   await expect(page.getByText('Select a node on the canvas to edit it.'), 'a graph without an Agent Router opens unselected').toBeVisible();
   await expect(page.locator('.workflow-canvas .workflow-preview-edge-merge-gate')).toHaveCount(1);
+  await page.locator('.workflow-canvas .workflow-node.merge-gate').click();
+  await expect(page.locator('.workflow-basic-fields p[role="status"]')).toContainText('Design-only node');
   for (const text of fixtureOnlyText) await expect(page.locator('.workflow-page')).not.toContainText(text);
 
   await page.locator('.workflow-canvas .workflow-node.merge-gate').click();

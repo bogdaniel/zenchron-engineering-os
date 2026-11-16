@@ -177,7 +177,7 @@ test('Overview design preview renders the supplied mock content without replacin
   await expect(page.locator('.workflow-overview-canvas .react-flow__edge-path').first()).toHaveAttribute('marker-end', /url/);
   expect(await page.locator('.workflow-overview-canvas .react-flow__edge-path').first().boundingBox()).not.toBeNull();
   await expect(page.locator('.workflow-overview-canvas .react-flow__attribution')).toBeHidden();
-  await expect(page.getByRole('link', { name: 'View Runs' })).toHaveAttribute('href', '#workflows');
+  await expect(page.getByRole('link', { name: 'Open Objectives' })).toHaveAttribute('href', '#objectives');
   await page.getByRole('button', { name: 'Workflow options' }).click();
   await expect(page.getByRole('menuitem', { name: 'Open workflow editor' })).toBeVisible();
   await page.keyboard.press('Escape');

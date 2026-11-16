@@ -46,6 +46,10 @@ func (store *workGraphStore) agentProfiles() map[string]agentProfile {
 	defer store.agents.mu.RUnlock()
 	profiles := make(map[string]agentProfile, len(store.agents.items))
 	for id, profile := range store.agents.items {
+		if persona, exists := store.agents.personas[profile.PersonaID]; profile.PersonaID != "" && exists {
+			persona.Responsibilities = append([]string{}, persona.Responsibilities...)
+			profile.PersonaSnapshot = &persona
+		}
 		profiles[id] = profile
 	}
 	return profiles
@@ -60,7 +64,12 @@ func (store *workGraphStore) listPlans(w http.ResponseWriter, r *http.Request) {
 	access := accessFor(r)
 	store.mu.Lock()
 	// A plan names files and work of its repository, so it is shown only to callers granted that repository.
-	plans := slices.DeleteFunc(slices.Clone(store.plans[item.ID]), func(plan objectivePlan) bool { return !access.allows(plan.Repository) })
+	plans := slices.DeleteFunc(append([]objectivePlan{}, store.plans[item.ID]...), func(plan objectivePlan) bool {
+		return !access.allows(plan.Repository)
+	})
+	for index := range plans {
+		plans[index].ProfileSnapshots = nil
+	}
 	slices.Reverse(plans)
 	body := encodeResponse(plans)
 	store.mu.Unlock()
@@ -90,14 +99,14 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "project_id does not identify an online checkout you may dispatch work to", http.StatusConflict)
 		return
 	}
+	var definition *workflow
 	if input.WorkflowID != "" {
-		store.workflows.mu.RLock()
-		_, exists := store.workflows.items[input.WorkflowID]
-		store.workflows.mu.RUnlock()
+		item, exists := store.savedWorkflow(input.WorkflowID)
 		if !exists {
 			http.Error(w, "workflow_id does not identify a saved workflow", http.StatusBadRequest)
 			return
 		}
+		definition = &item
 	}
 	store.mu.Lock()
 	full := len(store.plans[item.ID]) >= maxPlanRevisions
@@ -108,13 +117,34 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	}
 	plan := objectivePlan{ObjectiveID: item.ID, ProjectID: project.ID, Repository: project.GitRemote, WorkflowID: input.WorkflowID,
 		Status: planProposed, CreatedBy: access.user, CreatedAt: time.Now().UTC()}
+	if definition != nil {
+		plan.WorkflowVersion = definition.Version
+	}
 	switch {
 	case input.Plan != nil && input.PlannerAgentID == "":
-		if problems := input.Plan.problems(store.agentProfiles()); len(problems) > 0 {
+		profiles := store.agentProfiles()
+		snapshots, pinProblems := pinPlanProfiles(input.Plan, profiles)
+		problems := append(pinProblems, input.Plan.problems(profiles)...)
+		if len(problems) > 0 {
 			writeJSON(w, http.StatusBadRequest, map[string][]string{"problems": problems})
 			return
 		}
-		plan.planProposal, plan.Hash = *input.Plan, planHash(project.ID, input.WorkflowID, *input.Plan)
+		plan.planProposal, plan.ProfileSnapshots = *input.Plan, snapshots
+		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, *input.Plan)
+	case input.Plan == nil && input.PlannerAgentID == "" && definition != nil:
+		profiles := store.agentProfiles()
+		proposal, problems := compileWorkflow(*definition, profiles)
+		if len(problems) > 0 {
+			writeJSON(w, http.StatusBadRequest, map[string][]string{"problems": problems})
+			return
+		}
+		plan.ProfileSnapshots, problems = pinPlanProfiles(&proposal, profiles)
+		if problems = append(problems, proposal.problems(profiles)...); len(problems) > 0 {
+			writeJSON(w, http.StatusBadRequest, map[string][]string{"problems": problems})
+			return
+		}
+		plan.planProposal = proposal
+		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, proposal)
 	case input.Plan == nil && input.PlannerAgentID != "":
 		run, status, message := store.queuePlanner(item, project, strings.ToLower(input.PlannerAgentID), access.user)
 		if status != 0 {
@@ -130,7 +160,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	defer store.mu.Unlock()
 	// A plan identical to the one already approved and still executing needs no second approval.
 	if approved, executing := store.executingPlanLocked(item.ID); executing && plan.Hash != "" && approved.Hash == plan.Hash {
-		writeJSON(w, http.StatusOK, approved)
+		writeJSON(w, http.StatusOK, publicPlan(approved))
 		return
 	}
 	plan.Revision = len(store.plans[item.ID]) + 1
@@ -140,6 +170,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "could not persist the plan", http.StatusInternalServerError)
 		return
 	}
+	plan.ProfileSnapshots = nil
 	writeJSON(w, http.StatusCreated, plan)
 }
 
@@ -189,10 +220,13 @@ func (store *workGraphStore) admitPlansLocked() bool {
 				plan.Status, plan.Problems = planInvalid, []string{"The planner reported no plan: " + cmp.Or(errorText(err), "the result carried none") + "."}
 			default:
 				plan.planProposal, plan.Status = *result.Plan, planProposed
-				if plan.Problems = plan.planProposal.problems(store.agentProfiles()); len(plan.Problems) > 0 {
+				profiles := store.agentProfiles()
+				plan.ProfileSnapshots, plan.Problems = pinPlanProfiles(&plan.planProposal, profiles)
+				plan.Problems = append(plan.Problems, plan.planProposal.problems(profiles)...)
+				if len(plan.Problems) > 0 {
 					plan.Status = planInvalid
 				}
-				plan.Hash = planHash(plan.ProjectID, plan.WorkflowID, plan.planProposal)
+				plan.Hash = planHash(plan.ProjectID, plan.WorkflowID, plan.WorkflowVersion, plan.planProposal)
 			}
 		}
 	}
@@ -253,7 +287,7 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 	graph := &workGraph{ID: graphID, ObjectiveID: item.ID, ObjectiveTitle: item.Title, PlanRevision: plan.Revision,
 		PlanHash: plan.Hash, Revision: 1, Status: graphActive, ProjectID: project.ID, ProjectName: project.Name,
 		Repository: project.GitRemote, WorkerID: project.WorkerID, WorkerName: project.WorkerName, BaseBranch: project.Branch,
-		WorkflowID: plan.WorkflowID, MaxParallel: plan.MaxParallel, Messages: []graphMessage{},
+		WorkflowID: plan.WorkflowID, WorkflowVersion: plan.WorkflowVersion, MaxParallel: plan.MaxParallel, Messages: []graphMessage{},
 		CreatedBy: access.user, CreatedAt: now, UpdatedAt: now}
 	for _, unit := range plan.Units {
 		graph.Units = append(graph.Units, workUnit{planUnit: unit, AgentName: profiles[unit.AgentID].Name,
@@ -292,6 +326,11 @@ func encodeResponse(value any) []byte {
 	// Plans and graphs hold only strings, numbers, times, and slices of them, which always encode.
 	body, _ := json.Marshal(value)
 	return body
+}
+
+func publicPlan(plan objectivePlan) objectivePlan {
+	plan.ProfileSnapshots = nil
+	return plan
 }
 
 func writeEncoded(w http.ResponseWriter, status int, body []byte) {
@@ -337,8 +376,13 @@ func (store *workGraphStore) reportGraph(w http.ResponseWriter, r *http.Request)
 	// Units are rewritten in place by later reconciles; messages are immutable and only appended.
 	graph := *stored
 	graph.Units = slices.Clone(stored.Units)
+	var plan *objectivePlan
+	if graph.PlanRevision > 0 && graph.PlanRevision <= len(store.plans[graph.ObjectiveID]) {
+		approved := store.plans[graph.ObjectiveID][graph.PlanRevision-1]
+		plan = &approved
+	}
 	store.mu.Unlock()
-	writeJSON(w, http.StatusOK, buildDeliveryReport(graph, store.runs.unitRuns(graph.ID)))
+	writeJSON(w, http.StatusOK, buildDeliveryReport(graph, store.runs.unitRuns(graph.ID), plan))
 }
 
 func (store *workGraphStore) mayRead(access requestAccess, graph *workGraph) bool {

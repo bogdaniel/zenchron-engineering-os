@@ -3,6 +3,7 @@ package main
 import (
 	"slices"
 	"strings"
+	"time"
 )
 
 // supervisionMinutes names the measurement no record can supply: nothing stores how long a person
@@ -11,55 +12,125 @@ const supervisionMinutes = "supervision_minutes"
 
 // deliveryReport says what one WorkGraph's run actually did, from durable records only.
 type deliveryReport struct {
-	GraphID        string               `json:"graph_id"`
-	ObjectiveID    string               `json:"objective_id"`
-	ObjectiveTitle string               `json:"objective_title"`
-	PlanRevision   int                  `json:"plan_revision"`
-	Status         string               `json:"status"`
-	Units          []reportUnit         `json:"units"`
-	Measurements   deliveryMeasurements `json:"measurements"`
-	PullRequestURL string               `json:"pull_request_url,omitempty"`
+	GraphID         string               `json:"graph_id"`
+	ObjectiveID     string               `json:"objective_id"`
+	ObjectiveTitle  string               `json:"objective_title"`
+	PlanRevision    int                  `json:"plan_revision"`
+	WorkflowID      string               `json:"workflow_id,omitempty"`
+	WorkflowVersion int                  `json:"workflow_version,omitempty"`
+	Status          string               `json:"status"`
+	ApprovedPlan    reportPlan           `json:"approved_plan"`
+	Units           []reportUnit         `json:"units"`
+	Handoffs        []reportHandoff      `json:"handoffs"`
+	Decisions       []reportDecision     `json:"decisions"`
+	Outstanding     []reportOutstanding  `json:"outstanding_steps"`
+	Measurements    deliveryMeasurements `json:"measurements"`
+	PullRequestURL  string               `json:"pull_request_url,omitempty"`
+}
+
+type reportPlan struct {
+	Revision   int        `json:"revision"`
+	Status     string     `json:"status"`
+	Hash       string     `json:"hash"`
+	Summary    string     `json:"summary"`
+	ApprovedBy string     `json:"approved_by,omitempty"`
+	ApprovedAt *time.Time `json:"approved_at,omitempty"`
 }
 
 type reportUnit struct {
 	Key       string   `json:"key"`
 	Kind      string   `json:"kind"`
+	AgentID   string   `json:"agent_id,omitempty"`
 	AgentName string   `json:"agent_name"`
 	State     string   `json:"state"`
+	Reason    string   `json:"reason,omitempty"`
 	Candidate string   `json:"candidate,omitempty"`
 	Verdict   string   `json:"verdict,omitempty"`
 	RunIDs    []string `json:"run_ids"`
 	// Attempts sums the attempts counter of the unit's stored runs.
-	Attempts  int      `json:"attempts"`
-	Providers []string `json:"providers"`
+	Attempts   int               `json:"attempts"`
+	Providers  []string          `json:"providers"`
+	Executions []reportExecution `json:"executions"`
+}
+
+type reportExecution struct {
+	RunID           string `json:"run_id"`
+	Status          string `json:"status"`
+	ProfileID       string `json:"profile_id,omitempty"`
+	ProfileName     string `json:"profile_name,omitempty"`
+	ProfileVersion  int    `json:"profile_version,omitempty"`
+	PersonaID       string `json:"persona_id,omitempty"`
+	PersonaName     string `json:"persona_name,omitempty"`
+	PersonaVersion  int    `json:"persona_version,omitempty"`
+	Provider        string `json:"provider,omitempty"`
+	ProviderVersion string `json:"provider_version,omitempty"`
+	Attempts        int    `json:"attempts"`
+	CandidateCommit string `json:"candidate_commit,omitempty"`
+	ReviewVerdict   string `json:"review_verdict,omitempty"`
+	Publication     string `json:"publication,omitempty"`
+	PullRequestURL  string `json:"pull_request_url,omitempty"`
+	FailureRecorded bool   `json:"failure_recorded,omitempty"`
+}
+
+type reportHandoff struct {
+	From    string   `json:"from"`
+	RunID   string   `json:"run_id,omitempty"`
+	Attempt int      `json:"attempt,omitempty"`
+	Commit  string   `json:"commit,omitempty"`
+	Summary string   `json:"summary"`
+	Notes   []string `json:"notes"`
+}
+
+type reportDecision struct {
+	RequestID  string     `json:"request_id"`
+	Question   string     `json:"question"`
+	Options    []string   `json:"options"`
+	Resolution string     `json:"resolution,omitempty"`
+	ResolvedBy string     `json:"resolved_by,omitempty"`
+	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+}
+
+type reportOutstanding struct {
+	Key    string `json:"key"`
+	State  string `json:"state"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // deliveryMeasurements holds counts that are always known and, as pointers, values that are present
 // only when something recorded them. Every absent one is named in Unknown.
 type deliveryMeasurements struct {
-	UnitCount          int      `json:"unit_count"`
-	RunCount           int      `json:"run_count"`
-	AttemptCount       int      `json:"attempt_count"`
-	FailedAttempts     int      `json:"failed_attempts"`
-	ReviewRounds       int      `json:"review_rounds"`
-	Findings           int      `json:"findings"`
-	RemediationPasses  int      `json:"remediation_passes"`
-	DecisionsRequested int      `json:"decisions_requested"`
-	DecisionsResolved  int      `json:"decisions_resolved"`
-	HumanActions       int      `json:"human_actions"`
-	MaxConcurrency     int      `json:"max_concurrency"`
-	WallClockSeconds   *float64 `json:"wall_clock_seconds,omitempty"`
-	InputTokens        *int64   `json:"input_tokens,omitempty"`
-	OutputTokens       *int64   `json:"output_tokens,omitempty"`
-	CostUSD            *float64 `json:"cost_usd,omitempty"`
-	Unknown            []string `json:"unknown"`
+	UnitCount            int      `json:"unit_count"`
+	RunCount             int      `json:"run_count"`
+	AttemptCount         int      `json:"attempt_count"`
+	FailedAttempts       int      `json:"failed_attempts"`
+	ReviewRounds         int      `json:"review_rounds"`
+	Findings             int      `json:"findings"`
+	RemediationPasses    int      `json:"remediation_passes"`
+	DecisionsRequested   int      `json:"decisions_requested"`
+	DecisionsResolved    int      `json:"decisions_resolved"`
+	HumanActions         int      `json:"human_actions"`
+	HumanActionsComplete bool     `json:"human_actions_complete"`
+	MaxConcurrency       int      `json:"max_concurrency"`
+	WallClockSeconds     *float64 `json:"wall_clock_seconds,omitempty"`
+	InputTokens          *int64   `json:"input_tokens,omitempty"`
+	OutputTokens         *int64   `json:"output_tokens,omitempty"`
+	CostUSD              *float64 `json:"cost_usd,omitempty"`
+	RunsWithUsage        int      `json:"runs_with_usage"`
+	RunsWithCost         int      `json:"runs_with_cost"`
+	Unknown              []string `json:"unknown"`
 }
 
 // buildDeliveryReport computes the report of a graph from the graph and its stored runs. A run id
 // whose run is no longer stored still counts as a run but contributes nothing else.
-func buildDeliveryReport(graph workGraph, runs map[string]agentRun) deliveryReport {
+func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *objectivePlan) deliveryReport {
 	report := deliveryReport{GraphID: graph.ID, ObjectiveID: graph.ObjectiveID, ObjectiveTitle: graph.ObjectiveTitle,
-		PlanRevision: graph.PlanRevision, Status: graph.Status, Units: make([]reportUnit, 0, len(graph.Units))}
+		PlanRevision: graph.PlanRevision, WorkflowID: graph.WorkflowID, WorkflowVersion: graph.WorkflowVersion,
+		Status: graph.Status, Units: make([]reportUnit, 0, len(graph.Units)), Handoffs: []reportHandoff{},
+		Decisions: []reportDecision{}, Outstanding: []reportOutstanding{}}
+	if plan != nil {
+		report.ApprovedPlan = reportPlan{Revision: plan.Revision, Status: plan.Status, Hash: plan.Hash, Summary: plan.Summary,
+			ApprovedBy: plan.ApprovedBy, ApprovedAt: plan.ApprovedAt}
+	}
 	measured := &report.Measurements
 	measured.UnitCount = len(graph.Units)
 	var attempts []agentRunAttempt
@@ -67,7 +138,12 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun) deliveryRepo
 		unitAttempts := unitAttemptLog(unit, runs)
 		attempts = append(attempts, unitAttempts...)
 		summary := summarizeUnit(unit, runs)
+		summary.Executions = summarizeExecutions(unit, runs)
 		report.Units = append(report.Units, summary)
+		if unit.State != unitCompleted {
+			report.Outstanding = append(report.Outstanding, reportOutstanding{Key: unit.Key, State: unit.State,
+				Reason: firstNonEmpty(unit.Failure, unit.Reason)})
+		}
 		measured.RunCount += len(unit.RunIDs)
 		measured.AttemptCount += summary.Attempts
 		switch unit.Kind {
@@ -79,6 +155,7 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun) deliveryRepo
 			report.PullRequestURL = unit.PullRequestURL
 		}
 	}
+	report.Handoffs, report.Decisions = summarizeMessages(graph.Messages)
 	for _, attempt := range attempts {
 		if attempt.FinishedAt != nil && attempt.Status != "succeeded" {
 			measured.FailedAttempts++
@@ -90,7 +167,9 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun) deliveryRepo
 	measured.DecisionsResolved = countMessages(graph.Messages, messageDecisionResolution)
 	// The plan approval that created the graph is the one human action every graph has.
 	measured.HumanActions = measured.DecisionsResolved + 1
+	measured.HumanActionsComplete = false
 	measured.Unknown = []string{supervisionMinutes}
+	measured.Unknown = append(measured.Unknown, "unrecorded_human_actions")
 	if graph.Status == graphCompleted {
 		seconds := graph.UpdatedAt.Sub(graph.CreatedAt).Seconds()
 		measured.WallClockSeconds = &seconds
@@ -102,22 +181,97 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun) deliveryRepo
 	return report
 }
 
+func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecution {
+	executions := make([]reportExecution, 0, len(unit.RunIDs))
+	for _, id := range unit.RunIDs {
+		run, exists := runs[id]
+		if !exists {
+			continue
+		}
+		execution := reportExecution{RunID: id, Status: run.Status, Attempts: run.Attempts,
+			CandidateCommit: run.CommitSHA, Provider: run.Provider, ProviderVersion: run.ProviderVersion,
+			Publication: run.Publication, PullRequestURL: run.PullRequestURL, FailureRecorded: run.Error != ""}
+		if run.Profile != nil {
+			execution.ProfileID, execution.ProfileName, execution.ProfileVersion = run.Profile.ID, run.Profile.Name, run.Profile.Version
+			if persona := run.Profile.PersonaSnapshot; persona != nil {
+				execution.PersonaID, execution.PersonaName, execution.PersonaVersion = persona.ID, persona.Name, persona.Version
+			}
+		}
+		if result, err := parseUnitResult(run.Result); err == nil && result.Review != nil {
+			execution.ReviewVerdict = result.Review.Verdict
+		}
+		executions = append(executions, execution)
+	}
+	return executions
+}
+
+func summarizeMessages(messages []graphMessage) ([]reportHandoff, []reportDecision) {
+	var handoffs []reportHandoff
+	var decisions []reportDecision
+	decisionIndex := make(map[string]int)
+	for _, message := range messages {
+		switch message.Type {
+		case messageHandoff:
+			handoffs = append(handoffs, reportHandoff{From: message.From, RunID: message.RunID,
+				Attempt: message.Attempt, Commit: message.Commit, Summary: message.Body, Notes: append([]string{}, message.Notes...)})
+		case messageDecisionRequest:
+			decisionIndex[message.ID] = len(decisions)
+			decisions = append(decisions, reportDecision{RequestID: message.ID, Question: message.Body,
+				Options: append([]string{}, message.Notes...)})
+		case messageDecisionResolution:
+			if index, exists := decisionIndex[message.Resolves]; exists {
+				decisions[index].Resolution, decisions[index].ResolvedBy = message.Body, message.By
+				resolvedAt := message.CreatedAt
+				decisions[index].ResolvedAt = &resolvedAt
+			}
+		}
+	}
+	if handoffs == nil {
+		handoffs = []reportHandoff{}
+	}
+	if decisions == nil {
+		decisions = []reportDecision{}
+	}
+	return handoffs, decisions
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 // sumUsage adds up what the providers reported and names what none of them did.
 func (measured *deliveryMeasurements) sumUsage(graph workGraph, runs map[string]agentRun) {
+	missingUsage, missingCost := 0, 0
 	for _, unit := range graph.Units {
 		for _, id := range unit.RunIDs {
-			usage := runs[id].Usage
-			if usage == nil {
+			run, exists := runs[id]
+			if !exists {
+				missingUsage++
+				missingCost++
 				continue
 			}
+			usage := run.Usage
+			if usage == nil {
+				missingUsage++
+				missingCost++
+				continue
+			}
+			measured.RunsWithUsage++
 			if measured.InputTokens == nil {
 				measured.InputTokens, measured.OutputTokens = new(int64), new(int64)
 			}
 			*measured.InputTokens += usage.InputTokens
 			*measured.OutputTokens += usage.OutputTokens
 			if usage.CostUSD == nil {
+				missingCost++
 				continue
 			}
+			measured.RunsWithCost++
 			if measured.CostUSD == nil {
 				measured.CostUSD = new(float64)
 			}
@@ -129,11 +283,17 @@ func (measured *deliveryMeasurements) sumUsage(graph workGraph, runs map[string]
 	}
 	if measured.CostUSD == nil {
 		measured.Unknown = append(measured.Unknown, "cost_usd")
+	} else if missingCost > 0 {
+		measured.Unknown = append(measured.Unknown, "cost_usd_for_some_runs")
+	}
+	if measured.InputTokens != nil && missingUsage > 0 {
+		measured.Unknown = append(measured.Unknown, "input_tokens_for_some_runs", "output_tokens_for_some_runs")
 	}
 }
 
 func summarizeUnit(unit workUnit, runs map[string]agentRun) reportUnit {
-	summary := reportUnit{Key: unit.Key, Kind: unit.Kind, AgentName: unit.AgentName, State: unit.State,
+	summary := reportUnit{Key: unit.Key, Kind: unit.Kind, AgentID: unit.AgentID, AgentName: unit.AgentName, State: unit.State,
+		Reason:    unit.Reason,
 		Candidate: unit.Candidate, Verdict: unit.Verdict, RunIDs: append([]string{}, unit.RunIDs...), Providers: []string{}}
 	for _, id := range unit.RunIDs {
 		run, stored := runs[id]

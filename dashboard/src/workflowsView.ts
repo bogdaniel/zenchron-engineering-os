@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
 import { loadWorkflows, mobileWorkflowGraph, workflowSchema } from './workflowModel';
 import type { ComponentType, Workflow } from './workflowModel';
 
@@ -105,6 +106,7 @@ export type WorkflowsSource = {
   saving: boolean; creating: boolean;
   /** Resolves to the confirmation to show. */
   save: (id: string, draft: WorkflowDraft) => Promise<string>;
+  validate?: (id: string, draft: Pick<WorkflowDraft, 'nodes' | 'edges'>) => Promise<{ workflow_version: number; problems: string[] }>;
   create: (name: string, description: string) => Promise<{ workflow: Workflow; notice: string }>;
   /** Absent where nothing can publish a workflow; the control is then off. */
   publish?: () => string;
@@ -114,11 +116,9 @@ export type WorkflowsSource = {
   describe: (workflow: Workflow) => WorkflowView;
 };
 
-const runnerOffline = 'Workflow execution is not connected';
+const canvasExecution = 'Select this workflow in an Objective plan to execute it through WorkGraph';
 const liveUnavailable: NonNullable<WorkflowSectionsData['unavailable']> = {
-  // A workflow is guidance: an objective's plan can name it, and the planner reads its steps. The canvas never runs.
-  runs: `Unavailable · ${runnerOffline.toLowerCase()}, so no run has been recorded. The canvas itself does not execute: `
-    + 'choose this workflow when proposing an objective plan (Objectives → Plan) and the planner uses its steps as guidance',
+  runs: `No runs are recorded on this canvas. ${canvasExecution}; run history appears with the objective's WorkGraph.`,
   versions: 'Unavailable · the control plane keeps only the latest saved version',
   schedules: 'Unavailable · workflow schedules and triggers are not connected',
   permissions: 'Unavailable · access follows the dashboard session; per-workflow roles are not stored',
@@ -132,11 +132,11 @@ function describeLiveWorkflow(workflow: Workflow): WorkflowView {
   const saved = new Date(workflow.updated_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   return {
     versionLabel: `v${workflow.version} (${status})`,
-    execution: { title: `Execution Flow (v${workflow.version})`, idle: `Not run · ${workflow.nodes.length} nodes · runner not connected` },
+    execution: { title: `Execution Flow (v${workflow.version})`, idle: `Not run here · ${canvasExecution}` },
     phone: {
       eyebrow: 'Workflow', description: workflow.name,
       run: {
-        description: `${counts} · runner not connected`, badge: 'Not run', isRunning: false,
+        description: `${counts} · execute from an Objective plan`, badge: 'Not run here', isRunning: false,
         tasksSummary: 'Not run',
         tasks: mobileWorkflowGraph(workflow, false, true).nodes
           .map((stage) => ({ label: stage.data.label, status: 'Not run', state: 'pending' as const })),
@@ -144,8 +144,8 @@ function describeLiveWorkflow(workflow: Workflow): WorkflowView {
         approvals: approvals.map((node) => ({ label: node.data.label, status: 'Not requested', isApproved: false })),
       },
     },
-    sectionBadges: [`v${workflow.version}`, `${workflow.nodes.length} Nodes`, 'Agent profiles unavailable'],
-    sectionNote: 'SAVED DEFINITION · NO RUN DATA',
+    sectionBadges: [`v${workflow.version}`, `${workflow.nodes.length} Nodes`, 'Execution via Objectives'],
+    sectionNote: 'SAVED DEFINITION · EXECUTION VIA OBJECTIVE WORKGRAPH',
     sections: {
       unavailable: liveUnavailable,
       runs: { metrics: Array.from({ length: 4 }, () => ['Unavailable', '']), rows: [], footer: 'No runs recorded' },
@@ -190,6 +190,15 @@ export function useLiveWorkflows(enabled: boolean): WorkflowsSource {
     }), 'Create'),
     onSuccess: refresh,
   });
+  const validate = useMutation({
+    mutationFn: async ({ id, draft }: { id: string; draft: Pick<WorkflowDraft, 'nodes' | 'edges'> }) => {
+      const response = await fetch(`/api/v1/workflows/${id}/validate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft),
+      });
+      if (!response.ok) throw new Error((await response.text()).trim() || `Validation failed (${response.status})`);
+      return z.object({ workflow_version: z.number(), problems: z.array(z.string()) }).parse(await response.json());
+    },
+  });
   return {
     workflows: query.data ?? [], loading: query.isLoading, error: query.error?.message,
     saving: save.isPending, creating: create.isPending,
@@ -198,6 +207,7 @@ export function useLiveWorkflows(enabled: boolean): WorkflowsSource {
       const workflow = await create.mutateAsync({ name, description });
       return { workflow, notice: `Created ${workflow.name}` };
     },
+    validate: (id, draft) => validate.mutateAsync({ id, draft }),
     blockAddedNotice: 'Block added · save to keep it',
     describe: describeLiveWorkflow,
   };

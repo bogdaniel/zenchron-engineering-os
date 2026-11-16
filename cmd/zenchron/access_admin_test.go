@@ -260,19 +260,24 @@ func TestProductsAndObjectivesFollowRepositoryAccess(t *testing.T) {
 
 func TestProfilesAndWorkflowsAreReadableByAllAndChangedOnlyByCreatorOrAdministrator(t *testing.T) {
 	harness := newAdminHarness(t)
+	personaBody := `{"name":"Security reviewer","role":"Review sensitive changes","status":"active"}`
+	personaItem := decodeBody[agentPersona](t, harness.user("alice", http.MethodPost, "/api/v1/personas", personaBody), http.StatusCreated)
 	profileBody := `{"name":"Reviewer","provider":"codex-cli","model":"default","tools":[]}`
 	profile := decodeBody[agentProfile](t, harness.user("alice", http.MethodPost, "/api/v1/agents", profileBody), http.StatusCreated)
 	workflowItem := decodeBody[workflow](t, harness.user("alice", http.MethodPost, "/api/v1/workflows", `{"name":"Release"}`), http.StatusCreated)
-	if profile.CreatedBy != "alice" || workflowItem.CreatedBy != "alice" {
-		t.Fatalf("creators = %q, %q", profile.CreatedBy, workflowItem.CreatedBy)
+	if personaItem.CreatedBy != "alice" || profile.CreatedBy != "alice" || workflowItem.CreatedBy != "alice" {
+		t.Fatalf("creators = %q, %q, %q", personaItem.CreatedBy, profile.CreatedBy, workflowItem.CreatedBy)
 	}
 	if !strings.Contains(harness.user("bob", http.MethodGet, "/api/v1/agents", "").Body.String(), "Reviewer") ||
-		!strings.Contains(harness.user("bob", http.MethodGet, "/api/v1/workflows", "").Body.String(), "Release") {
-		t.Error("profiles and workflows must be readable by every signed-in user")
+		!strings.Contains(harness.user("bob", http.MethodGet, "/api/v1/workflows", "").Body.String(), "Release") ||
+		!strings.Contains(harness.user("bob", http.MethodGet, "/api/v1/personas", "").Body.String(), "Security reviewer") {
+		t.Error("profiles, personas, and workflows must be readable by every signed-in user")
 	}
+	personaUpdate := `{"name":"Security reviewer v2","role":"Review sensitive changes","status":"active"}`
 	workflowBody := `{"name":"Release 2","description":"","status":"draft","nodes":[{"id":"trigger","type":"trigger","position":{"x":0,"y":0},"data":{"label":"Trigger","description":""}}],"edges":[]}`
 	changes := []struct{ method, path, body string }{
 		{http.MethodPut, "/api/v1/agents/" + profile.ID, profileBody},
+		{http.MethodPut, "/api/v1/personas/" + personaItem.ID, personaUpdate},
 		{http.MethodPut, "/api/v1/workflows/" + workflowItem.ID, workflowBody},
 	}
 	for _, change := range changes {

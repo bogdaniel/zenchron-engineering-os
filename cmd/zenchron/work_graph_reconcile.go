@@ -264,9 +264,17 @@ func (store *workGraphStore) newUnitRun(graph *workGraph, unit *workUnit, runs m
 		item.PullRequestEnabled = store.runs.publishable(graph.Repository) && len(graph.reviewersOf(unit.Key)) == 0
 	default:
 		var exists bool
-		store.agents.mu.RLock()
-		profile, exists = store.agents.items[unit.AgentID]
-		store.agents.mu.RUnlock()
+		if graph.PlanRevision > 0 && graph.PlanRevision <= len(store.plans[graph.ObjectiveID]) {
+			profile, exists = store.plans[graph.ObjectiveID][graph.PlanRevision-1].ProfileSnapshots[unit.AgentID]
+		}
+		if !exists {
+			store.agents.mu.RLock()
+			profile, exists = store.agents.items[unit.AgentID]
+			store.agents.mu.RUnlock()
+			if exists {
+				profile = store.agents.snapshot(profile)
+			}
+		}
 		if !exists || profile.Status != "active" {
 			return agentRun{}, "The assigned agent profile no longer exists or is disabled."
 		}

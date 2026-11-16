@@ -4,6 +4,7 @@ import { graphOfObjective, useLiveOrchestration } from './orchestration';
 import type { ObjectivePlan, OrchestrationSource } from './orchestration';
 import { useMockOrchestration } from './orchestration-preview-data';
 import { StateBadge, UnitFacts, WorkGraphView } from './WorkGraphView';
+import { ObjectiveDeliveryReport } from './ObjectiveDeliveryReport';
 
 function PlanRevision({ plan, latest, source }: { plan: ObjectivePlan; latest: boolean; source: OrchestrationSource }) {
   const [error, setError] = useState('');
@@ -29,6 +30,7 @@ function PlanRevision({ plan, latest, source }: { plan: ObjectivePlan; latest: b
     {plan.status === 'planning' && <p className="work-unit-reason" role="status">
       A planning agent is reading the repository. The proposal appears here when it finishes.</p>}
     {plan.summary && <p>{plan.summary}</p>}
+    {plan.workflow_id && <p className="work-unit-reason">Compiled from workflow {plan.workflow_id} · version {plan.workflow_version ?? 'unknown'}</p>}
     {plan.problems.length > 0 && <ul className="plan-problems" aria-label={`Problems in revision ${plan.revision}`}>
       {plan.problems.map((problem) => <li key={problem}>{problem}</li>)}</ul>}
     {error && <p className="work-unit-failure" role="alert">{error}</p>}
@@ -46,6 +48,7 @@ function ProposeForm({ source }: { source: OrchestrationSource }) {
   const [projectID, setProjectID] = useState<string | null>(null);
   const [plannerID, setPlannerID] = useState<string | null>(null);
   const [workflowID, setWorkflowID] = useState<string | null>(null);
+  const [strategy, setStrategy] = useState<'workflow' | 'planner'>('workflow');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
   const { projects, planners, workflows } = source.options;
@@ -53,7 +56,9 @@ function ProposeForm({ source }: { source: OrchestrationSource }) {
     setSending(true);
     setError('');
     try {
-      await source.propose?.({ project_id: projectID!, planner_agent_id: plannerID!, ...(workflowID ? { workflow_id: workflowID } : {}) });
+      await source.propose?.({ project_id: projectID!,
+        ...(strategy === 'planner' && plannerID ? { planner_agent_id: plannerID } : {}),
+        ...(workflowID ? { workflow_id: workflowID } : {}) });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not propose a plan.');
     } finally {
@@ -61,24 +66,43 @@ function ProposeForm({ source }: { source: OrchestrationSource }) {
     }
   }
   return <form className="plan-propose" aria-label="Propose a plan" onSubmit={(event) => { event.preventDefault(); void propose(); }}>
-    <Select label="Repository checkout" placeholder={projects.length ? 'Choose an online checkout' : 'No online checkout'}
+    <Select label="Repository checkout" placeholder={projects.length ? 'Choose a linked online checkout' : 'No linked online checkout'}
       data={projects} value={projectID} onChange={setProjectID} disabled={!projects.length} />
-    <Select label="Planning agent" placeholder={planners.length ? 'Choose a read-only profile' : 'No read-only CLI profile'}
-      data={planners} value={plannerID} onChange={setPlannerID} disabled={!planners.length} />
-    <Select label="Workflow (optional guidance)" placeholder="None" data={workflows} value={workflowID}
-      onChange={setWorkflowID} clearable disabled={!workflows.length} />
-    {!planners.length && !source.readOnlyReason && <p className="work-unit-reason">
-      Planning needs an active Codex CLI or Claude Code profile without code-write permission. Create one under Agents.</p>}
+    {source.options.projectNotice && <p className="work-unit-reason" role="status">{source.options.projectNotice}</p>}
+    <Select label="Planning strategy" data={[{ value: 'workflow', label: 'Compile a saved workflow' },
+      { value: 'planner', label: 'Ask a read-only CLI agent to plan' }]} value={strategy}
+    onChange={(value) => setStrategy(value === 'planner' ? 'planner' : 'workflow')} />
+    {strategy === 'workflow' ? <Select label="Executable workflow" placeholder={workflows.length ? 'Choose a saved workflow' : 'No saved workflows'}
+      data={workflows} value={workflowID} onChange={setWorkflowID} disabled={!workflows.length} /> : <>
+      <Select label="Planning agent" placeholder={planners.length ? 'Choose an eligible profile' : 'No eligible read-only CLI profile'}
+        data={planners} value={plannerID} onChange={setPlannerID} disabled={!planners.length} />
+      <Select label="Workflow guidance (optional)" placeholder="None" data={workflows} value={workflowID}
+        onChange={setWorkflowID} clearable disabled={!workflows.length} />
+      {!planners.length && !source.readOnlyReason && <p className="work-unit-reason">
+        Planning needs an active Codex or Claude CLI profile with read-only tools. Profiles with disabled personas are unavailable.</p>}
+      {source.options.agents.some((agent) => agent.status === 'active' && !planners.some((option) => option.value === agent.id)) &&
+        <p className="work-unit-reason">Unavailable planning profiles: {source.options.agents
+          .filter((agent) => agent.status === 'active' && !planners.some((option) => option.value === agent.id))
+          .map((agent) => {
+            const persona = source.options.personas.find((item) => item.id === agent.persona_id);
+            const reason = !['codex-cli', 'claude-code'].includes(agent.provider) ? 'no CLI adapter'
+              : agent.tools.includes('code.write') ? 'profile may write code'
+                : agent.persona_id && persona?.status !== 'active' ? 'linked persona unavailable' : 'not eligible';
+            return `${agent.name}: ${reason}`;
+          }).join('; ')}</p>}
+    </>}
     {error && <p className="work-unit-failure" role="alert">{error}</p>}
     <Button type="submit" size="xs" color="violet" loading={sending} title={source.readOnlyReason || undefined}
-      disabled={!source.propose || !projectID || !plannerID}>Propose plan</Button>
+      disabled={!source.propose || !projectID || (strategy === 'planner' ? !plannerID : !workflowID)}>Propose plan</Button>
   </form>;
 }
 
 /** The Plan tab of an objective: propose and approve a plan, then follow and steer the work it started. */
-export function ObjectivePlanPanel({ objectiveID, sampleData }: { objectiveID: string; sampleData: boolean }) {
+export function ObjectivePlanPanel({ objectiveID, productID, sampleData }: {
+  objectiveID: string; productID?: string; sampleData: boolean;
+}) {
   const mock = useMockOrchestration(objectiveID);
-  const live = useLiveOrchestration(!sampleData, objectiveID);
+  const live = useLiveOrchestration(!sampleData, objectiveID, productID);
   const source = sampleData ? mock : live;
   const graph = graphOfObjective(source.graphs, objectiveID);
   if (source.loading || source.plansLoading) return <div className="work-panel" role="tabpanel"><p role="status">Loading the plan…</p></div>;
@@ -87,7 +111,8 @@ export function ObjectivePlanPanel({ objectiveID, sampleData }: { objectiveID: s
     <Button size="xs" variant="subtle" onClick={source.retry}>Retry loading the plan</Button></div>;
   return <div className="work-panel" role="tabpanel">
     {source.readOnlyReason && <p className="work-unit-reason">{source.readOnlyReason}</p>}
-    {graph && <WorkGraphView graph={graph} source={source} />}
+    {graph && <><WorkGraphView graph={graph} source={source} />
+      {!sampleData && <ObjectiveDeliveryReport graphID={graph.id} />}</>}
     <h4>Plan revisions</h4>
     {source.plans.length ? <ul className="plan-revisions">{source.plans.map((plan, index) =>
       <PlanRevision key={plan.revision} plan={plan} latest={index === 0} source={source} />)}</ul>

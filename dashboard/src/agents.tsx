@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from '@mantine/form';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CompositeChart, Sparkline } from '@mantine/charts';
 import { YAxis } from 'recharts';
 import { Badge, Button, Checkbox, Menu, Modal, Select, Tabs, Text, Textarea, TextInput } from '@mantine/core';
@@ -21,8 +21,9 @@ import { RunIssueSelect, runReadiness, type RunWorker } from './agentRunQueue';
 import { AgentPromptCardActions } from './AgentPromptCardActions';
 import { AgentsMobileSummary } from './AgentsMobileSummary';
 import {
-  agentInputSchema, agentRunSchema, agentsSchema, blankProfile, runInputSchema, toolOptions, validateAgentInput,
-  type Agent, type AgentInput, type AgentRun, type RunInput,
+  agentInputSchema, agentPersonaInputSchema, agentPersonaSchema, agentRunSchema, agentsSchema, blankPersona, blankProfile,
+  loadPersonas, runInputSchema, toolOptions, validateAgentInput,
+  type Agent, type AgentInput, type AgentPersona, type AgentPersonaInput, type AgentRun, type RunInput,
 } from './agentsData';
 import { useLiveAgents, type Choice, type Figure } from './agentsView';
 import { useMockAgents } from './agents-preview-data';
@@ -78,6 +79,30 @@ const kpiColors = { total: undefined, active: '#16cfcb', runs: undefined, succes
 
 type Worker = RunWorker;
 
+function profileReadiness(agent: Agent, workers: Worker[], persona: AgentPersona | undefined,
+  personasLoading: boolean, preview: boolean) {
+  if (preview) return { label: 'Preview only', note: 'Mock data does not report local CLI readiness.' };
+  if (agent.status !== 'active') return { label: 'Profile disabled', note: 'Enable the profile before assigning work.' };
+  if (agent.persona_id && personasLoading) return { label: 'Checking persona', note: 'Linked persona readiness is loading.' };
+  if (agent.persona_id && persona?.status !== 'active') {
+    return { label: 'Persona unavailable', note: 'The linked persona is missing or disabled.' };
+  }
+  const online = workers.filter((worker) => worker.status === 'online');
+  if (!online.length) return { label: 'No online worker', note: 'No online worker can run this profile.' };
+  const readyWorker = online.find((worker) => worker.providers?.some((provider) => provider.id === agent.provider && provider.ready));
+  return runReadiness(agent.provider, readyWorker ?? online[0]);
+}
+
+function responsibilityEligibility(agent: Agent, kind: 'produce' | 'review' | 'plan', persona?: AgentPersona) {
+  if (agent.status !== 'active') return 'Ineligible: profile is disabled.';
+  if (!['codex-cli', 'claude-code'].includes(agent.provider)) return 'Ineligible: provider has no CLI adapter.';
+  if (agent.persona_id && persona?.status !== 'active') return 'Ineligible: linked persona is unavailable.';
+  const canWrite = agent.tools.includes('code.write');
+  if (kind === 'produce' && !canWrite) return 'Ineligible: profile lacks code.write.';
+  if (kind !== 'produce' && canWrite) return 'Ineligible: profile may write code.';
+  return 'Eligible by configured tools.';
+}
+
 export function AgentsPage({ projects, workers, designPreview = false, onNavigate }: {
   projects: Project[];
   workers: Worker[];
@@ -85,6 +110,13 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   onNavigate: (href: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const personasQuery = useQuery({ queryKey: ['personas'], queryFn: loadPersonas, enabled: !designPreview });
+  const personas = personasQuery.data ?? [];
+  const [personasOpen, setPersonasOpen] = useState(false);
+  const [personaEditorOpen, setPersonaEditorOpen] = useState(false);
+  const [personaEdit, setPersonaEdit] = useState<AgentPersona | null>(null);
+  const [personaError, setPersonaError] = useState('');
+  const [personaDraft, setPersonaDraft] = useState<AgentPersonaInput>(blankPersona);
   const mock = useMockAgents();
   const live = useLiveAgents(!designPreview);
   const source = designPreview ? mock : live;
@@ -126,7 +158,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
     editForm.setValues({
       name: selected.name, description: selected.description, provider: selected.provider, model: selected.model,
       status: selected.status, system_prompt: selected.system_prompt, goal_prompt: selected.goal_prompt,
-      tools: selected.tools,
+      tools: selected.tools, persona_id: selected.persona_id ?? '',
     });
   }
   function editSection(tab: string) {
@@ -183,6 +215,37 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
       setDetailTab('history');
     },
   });
+  const savePersona = useMutation({
+    mutationFn: async ({ id, input }: { id?: string; input: AgentPersonaInput }) => {
+      const response = await fetch(id ? `/api/v1/personas/${id}` : '/api/v1/personas', {
+        method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+      });
+      if (!response.ok) throw new Error((await response.text()).trim() || `Request failed (${response.status})`);
+      return agentPersonaSchema.parse(await response.json());
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['personas'] });
+      setPersonaEdit(null); setPersonaEditorOpen(false);
+    },
+  });
+  function openPersona(persona?: AgentPersona) {
+    setPersonasOpen(false);
+    setPersonaEditorOpen(true);
+    setPersonaError('');
+    setPersonaEdit(persona ?? null);
+    setPersonaDraft(persona ? {
+      name: persona.name, role: persona.role, responsibilities: persona.responsibilities, instructions: persona.instructions,
+      behavior: persona.behavior, review_specialization: persona.review_specialization, status: persona.status,
+    } : blankPersona);
+  }
+  function mutatePersona(persona: AgentPersona, input: AgentPersonaInput) {
+    savePersona.mutate({ id: persona.id, input });
+  }
+  function personaInput(values: AgentPersonaInput) {
+    const result = agentPersonaInputSchema.safeParse(values);
+    if (!result.success) { setPersonaError(result.error.issues[0].message); return; }
+    savePersona.mutate({ id: personaEdit?.id, input: result.data }, { onError: (error) => setPersonaError(message(error)) });
+  }
   const onlineProjects = projects.filter((project) => project.worker_status === 'online');
   const workersByID = new Map(workers.map((worker) => [worker.id, worker]));
   const runProjectOptions = onlineProjects.map((project) => {
@@ -193,6 +256,8 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   const selectedRunProject = onlineProjects.find((project) => project.id === runProjectID);
   const selectedRunWorker = selectedRunProject ? workersByID.get(selectedRunProject.worker_id) : undefined;
   const selectedRuns = runItems.filter((run) => run.agent_id === selected?.id);
+  const selectedPersona = personas.find((persona) => persona.id === selected?.persona_id);
+  const readiness = selected && profileReadiness(selected, workers, selectedPersona, personasQuery.isLoading, designPreview);
   /** Mock records a labelled simulated run; Live opens the queue dialog for a real worker. */
   function runAgent(agent: Agent) {
     if (source.simulateRun) {
@@ -222,7 +287,8 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
     <AgentsMobileSummary dataLabel={view.dataLabel} summary={view.mobile}
       onRunAgent={() => { setMobileManagerOpen(true); if (selected) runAgent(selected); }}
       onOpenRunHistory={() => { setMobileManagerOpen(true); setDetailTab('history'); }}
-      onOpenReviews={() => onNavigate('#reviews')} />
+      onOpenReviews={() => onNavigate('#reviews')}
+      onManageProfiles={() => { setMobileManagerOpen(true); setDetailTab('overview'); }} />
     <Button className="agents-mobile-back agents-mobile-return" variant="default"
       onClick={() => setMobileManagerOpen(false)}>← Agents &amp; Reviews</Button>
     <div className="agents-preview-main">
@@ -235,6 +301,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
         <Button className="agents-create-button" leftSection={<IconPlus size={15} />}
           rightSection={<IconChevronDown size={13} />} onClick={() => { createForm.reset(); setSubmitError(''); setCreateOpen(true); }}>Create Agent</Button>
         <Button variant="default" onClick={() => setLibraryOpen(true)}>Agent Library</Button>
+        {!designPreview && <Button variant="default" onClick={() => setPersonasOpen(true)}>Personas</Button>}
         <Menu position="bottom-end" withinPortal>
           <Menu.Target><Button variant="default" rightSection={<IconChevronDown size={13} />}>Import / Export</Button></Menu.Target>
           <Menu.Dropdown>
@@ -338,7 +405,8 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
             description={selected.description || 'Agent profile'}
             icon={<span className="agent-detail-icon"><AgentProfileIcon name={selected.name} size={20} /></span>}
             actions={<div className="agents-detail-actions"><Badge className={`agent-status ${selected.status}`} variant="light">{selected.status}</Badge>
-              <Button className="agents-run-button" disabled={selected.status !== 'active'} leftSection={<IconPlayerPlay size={13} />}
+              <Button className="agents-run-button" disabled={selected.status !== 'active' || Boolean(selected.persona_id &&
+                personas.find((item) => item.id === selected.persona_id)?.status !== 'active')} leftSection={<IconPlayerPlay size={13} />}
                 onClick={() => runAgent(selected)}>Run Agent</Button>
               <Button variant="default" leftSection={<IconCopy size={13} />} onClick={() => duplicateProfile(selected)}>Duplicate Profile</Button>
               <Button variant="default" disabled={source.saving} onClick={() => toggleStatus(selected)}>
@@ -383,6 +451,11 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                         <TextInput label="Profile name" {...editForm.getInputProps('name')} />
                         <TextInput label="Description" {...editForm.getInputProps('description')} />
                       </div>
+                      <Select label="Linked persona" data={personas.map((persona) => ({
+                        value: persona.id, label: `${persona.name} · v${persona.version}${persona.status === 'disabled' ? ' · disabled' : ''}`,
+                        disabled: persona.status !== 'active',
+                      }))} value={editForm.values.persona_id || null} clearable placeholder="No persona"
+                      onChange={(value) => editForm.setFieldValue('persona_id', value ?? '')} />
                     </> : <div className="agents-profile-summary agents-preview-profile-fields">
                       <div><small>Model / Provider</small><ProfileChoice label="Model / Provider" choice={fields.modelProvider} /></div>
                       <div><small>Version</small><ProfileChoice label="Version" choice={fields.version} /></div>
@@ -390,6 +463,17 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                       <div><small>Owner</small><ProfileChoice label="Profile owner" choice={fields.owner} /></div>
                       <div><small>Created</small><b>{fields.created}</b></div>
                       <div><small>Last Updated</small><b>{fields.updated}</b></div>
+                      <div><small>Persona</small><b>{selected.persona_id ? (() => {
+                        const persona = personas.find((item) => item.id === selected.persona_id);
+                        return persona ? `${persona.name} · v${persona.version} · ${persona.status}` : 'Unavailable';
+                      })() : 'None linked'}</b></div>
+                      {readiness && <div><small>CLI readiness</small><b title={readiness.note}>{readiness.label}</b></div>}
+                    </div>}
+                    {!isEditing && selected && readiness && <div aria-label="Responsibility eligibility">
+                      <p className="agents-card-note">CLI readiness: {readiness.note}</p>
+                      <p className="agents-card-note">Produce: {responsibilityEligibility(selected, 'produce', selectedPersona)}</p>
+                      <p className="agents-card-note">Review: {responsibilityEligibility(selected, 'review', selectedPersona)}</p>
+                      <p className="agents-card-note">Planning: {responsibilityEligibility(selected, 'plan', selectedPersona)}</p>
                     </div>}
                   </PanelCard>
                   <PanelCard className="agents-overview-card" withBorder>
@@ -566,6 +650,10 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
             label="Model identifier" placeholder="e.g. claude-sonnet" required
             {...createForm.getInputProps('model')}
           />
+        <Select label="Linked persona" data={personas.filter((persona) => persona.status === 'active')
+          .map((persona) => ({ value: persona.id, label: `${persona.name} · v${persona.version}` }))}
+        value={createForm.values.persona_id || null} clearable placeholder="No persona"
+        onChange={(value) => createForm.setFieldValue('persona_id', value ?? '')} />
         </div>
         <Textarea label="System prompt" minRows={3} {...createForm.getInputProps('system_prompt')} />
         <Textarea label="Goal prompt" minRows={3} {...createForm.getInputProps('goal_prompt')} />
@@ -585,6 +673,42 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
             Create profile
           </Button>
         </div>
+      </form>
+    </Modal>
+    <Modal opened={personasOpen} onClose={() => setPersonasOpen(false)} title="Agent personas" centered size="lg">
+      <div className="persona-list">
+        {personasQuery.isLoading && <Text role="status">Loading personas…</Text>}
+        {personasQuery.isError && <Text role="alert">Could not load personas: {message(personasQuery.error)}</Text>}
+        {!personasQuery.isLoading && !personasQuery.isError && personas.length === 0 && <Text role="status">No personas yet.</Text>}
+        {personas.map((persona) => <div className="persona-list-row" key={persona.id}>
+          <span><b>{persona.name}</b><small>{persona.role} · v{persona.version} · {persona.status}</small></span>
+          <Button size="xs" variant="default" onClick={() => openPersona(persona)}>Edit</Button>
+          <Button size="xs" variant="default" onClick={() => savePersona.mutate({ input: agentPersonaInputSchema.parse({
+            name: `${persona.name} Copy`, role: persona.role, responsibilities: persona.responsibilities,
+            instructions: persona.instructions, behavior: persona.behavior, review_specialization: persona.review_specialization,
+            status: 'active',
+          }) })}>Duplicate</Button>
+          <Button size="xs" variant="default" disabled={savePersona.isPending} onClick={() => mutatePersona(persona,
+            agentPersonaInputSchema.parse({ ...persona, status: persona.status === 'active' ? 'disabled' : 'active' }))}>
+            {persona.status === 'active' ? 'Disable' : 'Enable'}
+          </Button>
+        </div>)}
+      </div>
+      <Button mt="sm" onClick={() => openPersona()}>Create persona</Button>
+    </Modal>
+    <Modal opened={personaEditorOpen} onClose={() => { setPersonaEditorOpen(false); setPersonaError(''); }}
+      title={personaEdit ? 'Edit persona' : 'Create persona'} centered>
+      <form onSubmit={(event) => { event.preventDefault(); personaInput(personaDraft); }}>
+        <TextInput label="Persona name" value={personaDraft.name} onChange={(event) => setPersonaDraft({ ...personaDraft, name: event.currentTarget.value })} required />
+        <TextInput label="Role" value={personaDraft.role} onChange={(event) => setPersonaDraft({ ...personaDraft, role: event.currentTarget.value })} required />
+        <Textarea label="Responsibilities (one per line)" value={personaDraft.responsibilities.join('\n')}
+          onChange={(event) => setPersonaDraft({ ...personaDraft, responsibilities: event.currentTarget.value.split('\n').filter(Boolean) })} />
+        <Textarea label="Instructions" value={personaDraft.instructions} onChange={(event) => setPersonaDraft({ ...personaDraft, instructions: event.currentTarget.value })} />
+        <Textarea label="Behavior expectations" value={personaDraft.behavior} onChange={(event) => setPersonaDraft({ ...personaDraft, behavior: event.currentTarget.value })} />
+        <Textarea label="Review specialization" value={personaDraft.review_specialization}
+          onChange={(event) => setPersonaDraft({ ...personaDraft, review_specialization: event.currentTarget.value })} />
+        {personaError && <Text role="alert">{personaError}</Text>}
+        <Button type="submit" loading={savePersona.isPending}>{personaEdit ? 'Save persona' : 'Create persona'}</Button>
       </form>
     </Modal>
     <Modal opened={libraryOpen} onClose={() => setLibraryOpen(false)} title="Agent Library" centered size="lg">
