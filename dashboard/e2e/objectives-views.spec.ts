@@ -74,7 +74,7 @@ test('Objectives in Mock renders the supplied screen and keeps create and edit l
   }
   await expect(page.locator('.objective-metric.red .tabler-icon-circle-minus')).toHaveCount(1);
   await expect(page.locator('.objective-metric.red .tabler-icon-alert-triangle')).toHaveCount(0);
-  await expect(page.getByRole('combobox', { name: 'Filter by due quarter' })).toHaveValue('This Quarter');
+  await expect(page.getByRole('combobox', { name: 'Filter by due quarter' })).toHaveValue('All due dates');
   const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(6);
   await expect(page.locator('.objective-grid-wrap .objective-row-actions')).toHaveCount(6);
@@ -379,6 +379,41 @@ test('filtered objective table distinguishes no matches from an empty workspace'
   await expect(page.locator('.objective-grid-toolbar')).not.toContainText('Select an objective to inspect details');
 });
 
+test('Live objectives include unscheduled objectives by default and preserve quarter filters', async ({ page }) => {
+  await useLocalSession(page);
+  await page.route('**/api/v1/objectives', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify(objectives),
+  }));
+  await page.route('**/api/v1/products', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+
+  const dueQuarter = page.getByRole('combobox', { name: 'Filter by due quarter' });
+  const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
+  await expect(dueQuarter).toHaveValue('All due dates');
+  await expect(objectiveRows).toHaveCount(4);
+  const unscheduled = objectiveRows.filter({ hasText: 'Document ownership' });
+  await expect(unscheduled).toBeVisible();
+  await unscheduled.click();
+  await expect(unscheduled).toHaveClass(/ag-row-selected/);
+  await expect(page.locator('.objective-detail-head h3')).toContainText('Document ownership');
+
+  await dueQuarter.click();
+  await expect(page.getByRole('option', { name: 'This Quarter' })).toBeVisible();
+  await page.getByRole('option', { name: 'This Quarter' }).click();
+  await expect(objectiveRows).toHaveCount(2);
+  await expect(objectiveRows).not.toContainText('Document ownership');
+
+  await dueQuarter.click();
+  await expect(page.getByRole('option', { name: 'Last Quarter' })).toBeVisible();
+  await page.getByRole('option', { name: 'Last Quarter' }).click();
+  await expect(objectiveRows).toHaveCount(1);
+  await expect(objectiveRows.first()).toContainText('Complete migration');
+});
+
 test('objective quarter filter and table, cards, and Kanban views share records', async ({ page }) => {
   await useLocalSession(page);
   await page.route('**/api/v1/objectives', (route) => route.fulfill({
@@ -393,10 +428,10 @@ test('objective quarter filter and table, cards, and Kanban views share records'
 
   await expect(page.getByRole('button', { name: 'Table', pressed: true })).toBeVisible();
   const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
-  await expect(objectiveRows).toHaveCount(2);
+  await expect(objectiveRows).toHaveCount(4);
   await page.getByRole('combobox', { name: 'Filter by owner' }).click();
   await page.getByRole('option', { name: 'Alex Chen' }).click();
-  await expect(objectiveRows).toHaveCount(1);
+  await expect(objectiveRows).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Filter by owner' }).click();
   await page.getByRole('option', { name: 'All Owners' }).click();
   await page.getByRole('combobox', { name: 'Filter by status' }).click();
@@ -406,7 +441,7 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await page.getByRole('option', { name: 'All Status' }).click();
   await page.getByRole('combobox', { name: 'Filter by product' }).click();
   await page.getByRole('option', { name: 'Core Product' }).click();
-  await expect(objectiveRows).toHaveCount(2);
+  await expect(objectiveRows).toHaveCount(4);
   await page.getByRole('combobox', { name: 'Filter by product' }).click();
   await page.getByRole('option', { name: 'All Products' }).click();
   await expect(objectiveRows.first()).toHaveCSS('height', '42px');
@@ -624,11 +659,11 @@ test('Objectives in Live uses the approved layout with honest unavailable parts'
   await expect(metrics.nth(1)).toContainText('Objective Success Rate0%');
   await expect(metrics.nth(2)).toContainText('4');
   await expect(page.locator('.objective-metric-trend')).toHaveCount(0);
-  await expect(page.locator('.objective-preview-layout .objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(2);
+  await expect(page.locator('.objective-preview-layout .objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(4);
   await expect(page.locator('.objective-grid-wrap .objective-title-cell small').first()).toHaveText('11111111');
   await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="approval"]').first()).toHaveText('—');
   await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="workflow_count"]').first()).toHaveText('—');
-  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 1–2 of 2 objectives');
+  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 1–4 of 4 objectives');
   await expect(page.getByRole('textbox', { name: 'Search objectives' })).toBeVisible();
   await expect(page.locator('.objective-capacity')).toContainText('Unavailable: the control plane does not record when objectives were planned or completed.');
   await expect(page.locator('.objective-capacity-chart')).toHaveCount(0);

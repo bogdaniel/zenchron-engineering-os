@@ -105,7 +105,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [productFilter, setProductFilter] = useState('all');
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dueQuarter, setDueQuarter] = useState<'this' | 'last' | 'all'>('this');
+  const [dueQuarter, setDueQuarter] = useState<'this' | 'last' | 'all'>('all');
   const [section, setSection] = useState<'objectives' | 'planning' | 'roadmap'>('objectives');
   const [view, setView] = useState<'kanban' | 'table' | 'cards'>('table');
   const [objectiveGridApi, setObjectiveGridApi] = useState<GridApi<Objective> | null>(null);
@@ -237,7 +237,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
               leftSection={<IconCalendar size={13} />} data={[
               { value: 'this', label: 'This Quarter' }, { value: 'last', label: 'Last Quarter' },
               { value: 'all', label: 'All due dates' },
-            ]} value={dueQuarter} onChange={(value) => setDueQuarter(value ?? 'this')} />
+            ]} value={dueQuarter} onChange={(value) => setDueQuarter(value ?? 'all')} />
           </div>
           <Button className="new-objective-button" leftSection={<IconPlus size={16} />} onClick={() => { setSubmitError(''); setCreateOpen(true); }}>New Objective</Button>
         </div>
