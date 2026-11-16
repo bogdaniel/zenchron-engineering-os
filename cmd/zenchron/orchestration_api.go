@@ -23,6 +23,7 @@ func (store *workGraphStore) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/objectives/{id}/plans", store.proposePlan)
 	mux.HandleFunc("POST /api/v1/objectives/{id}/plans/{revision}/approve", store.approvePlan)
 	mux.HandleFunc("GET /api/v1/work-graphs", store.listGraphs)
+	mux.HandleFunc("GET /api/v1/work-graphs/{id}/report", store.reportGraph)
 	mux.HandleFunc("GET /api/v1/products/{id}/environment", store.environment)
 	mux.HandleFunc("POST /api/v1/work-graphs/{id}/cancel", store.cancelGraph)
 	mux.HandleFunc("POST /api/v1/work-graphs/{id}/units/{key}/retry", store.retryUnit)
@@ -320,6 +321,24 @@ func (store *workGraphStore) listGraphs(w http.ResponseWriter, r *http.Request) 
 	body := encodeResponse(graphs)
 	store.mu.Unlock()
 	writeEncoded(w, http.StatusOK, body)
+}
+
+// reportGraph answers the delivery report of one graph from what is already stored. It never
+// reconciles or persists, so reading a report cannot change the run it describes.
+func (store *workGraphStore) reportGraph(w http.ResponseWriter, r *http.Request) {
+	access := accessFor(r)
+	store.mu.Lock()
+	stored := store.graphs[strings.ToLower(r.PathValue("id"))]
+	if stored == nil || !store.mayRead(access, stored) {
+		store.mu.Unlock()
+		http.NotFound(w, r)
+		return
+	}
+	// Units are rewritten in place by later reconciles; messages are immutable and only appended.
+	graph := *stored
+	graph.Units = slices.Clone(stored.Units)
+	store.mu.Unlock()
+	writeJSON(w, http.StatusOK, buildDeliveryReport(graph, store.runs.unitRuns(graph.ID)))
 }
 
 func (store *workGraphStore) mayRead(access requestAccess, graph *workGraph) bool {
