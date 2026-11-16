@@ -206,7 +206,7 @@ Rules, checked by Zenchron before anything runs:
 - kind "review": judges exactly one produce or integrate unit, named as its only dependency; needs an
   agent_id without code.write and different from the agent of the work it reviews. Add reviews where the
   risk justifies them.
-- kind "integrate": exactly one; no agent_id. Zenchron merges every produced candidate, runs verification on
+- kind "integrate": exactly one; no agent_id and an empty "capabilities" list. Zenchron merges every produced candidate, runs verification on
   the combined result, and opens the pull request. Every produce unit must be reachable through its
   dependencies; depend on a review to integrate only reviewed work.
 - keys are lowercase letters, digits, and dashes; at most 8 units; "capabilities" lists tools the unit needs
