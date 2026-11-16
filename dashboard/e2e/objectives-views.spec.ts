@@ -405,7 +405,7 @@ test('Live objectives include unscheduled objectives by default and preserve qua
   await expect(page.getByRole('option', { name: 'This Quarter' })).toBeVisible();
   await page.getByRole('option', { name: 'This Quarter' }).click();
   await expect(objectiveRows).toHaveCount(2);
-  await expect(objectiveRows).not.toContainText('Document ownership');
+  await expect(objectiveRows.filter({ hasText: 'Document ownership' })).toHaveCount(0);
 
   await dueQuarter.click();
   await expect(page.getByRole('option', { name: 'Last Quarter' })).toBeVisible();
@@ -623,7 +623,7 @@ test('a late grid selection report does not replace the objective being edited',
     if (!await selectedRow.count()) expect(await deliverGridReports(1)).toBe(1);
     await expect(selectedRow).toHaveCount(1, { timeout: 250 });
   }).toPass();
-  // No due date keeps the new objective out of the "This Quarter" rows, so the grid cannot select it.
+  // The default All due dates view keeps the new unscheduled objective selectable.
   await page.getByRole('button', { name: 'New Objective' }).click();
   await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability testing');
   await page.getByRole('button', { name: 'Create objective' }).click();
@@ -727,6 +727,6 @@ test('Objectives in Live reports failed loads and saves without showing fixtures
 
   listStatus = 200;
   await page.getByRole('button', { name: 'Retry loading objectives' }).click();
-  await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(2);
+  await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(4);
   await expect(page.locator('.objective-detail-head h3')).toContainText('Ship API v2');
 });
