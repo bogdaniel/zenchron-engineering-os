@@ -153,6 +153,15 @@ func TestDecisionRequestBlocksItsUnitUntilAPersonResolvesIt(t *testing.T) {
 		!strings.Contains(resumed.Prompt, "Comma or semicolon") {
 		t.Fatalf("resumed run = %s attempt %d, prompt %q", resumed.ID, resumed.Attempts, resumed.Prompt)
 	}
+	// The decision stays in the unit's context after it handed off: a later pass must not ask again.
+	harness.handOff(resumed, commit(1), "api")
+	if response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+api.ID+"/request-changes", `{"comment":"Add a header."}`); response.Code != http.StatusOK {
+		t.Fatalf("request changes returned HTTP %d", response.Code)
+	}
+	if later := harness.claimUnit("api"); later.Attempts != 3 || !strings.Contains(later.Prompt, "Use a comma.") ||
+		!strings.Contains(later.Prompt, "Add a header.") {
+		t.Fatalf("pass after the handoff = attempt %d, prompt %q", later.Attempts, later.Prompt)
+	}
 }
 
 func TestCancellingAGraphStopsItsRunsAndFailedUnitsBlockTheirDependents(t *testing.T) {

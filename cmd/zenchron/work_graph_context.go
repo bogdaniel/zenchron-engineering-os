@@ -111,14 +111,16 @@ func (graph *workGraph) inbox(unit *workUnit) string {
 				message.From, message.Body)
 		}
 	}
-	for _, message := range graph.Messages[unit.HandoffAt:] {
+	for index, message := range graph.Messages {
+		// A decision stays in force for every later pass of the unit; findings are shown until the unit
+		// hands off again.
 		switch {
 		case message.Type == messageDecisionRequest && message.From == unit.Key:
 			fmt.Fprintf(&inbox, "\nYou asked for a decision: %s\n", message.Body)
 		case !slices.Contains(message.To, unit.Key):
 		case message.Type == messageDecisionResolution:
-			fmt.Fprintf(&inbox, "\nDecision by %s: %s\nContinue the work with this decision.\n", message.By, message.Body)
-		case message.Type == messageFinding:
+			fmt.Fprintf(&inbox, "\nDecision by %s: %s\nThis decision stands; work with it and do not ask again.\n", message.By, message.Body)
+		case message.Type == messageFinding && index >= unit.HandoffAt:
 			fmt.Fprintf(&inbox, "\nFinding from %q on commit %s to fix in this pass: %s", message.From, shortCommit(message.Commit), message.Title)
 			if message.File != "" {
 				fmt.Fprintf(&inbox, " (%s:%d)", message.File, message.Line)
