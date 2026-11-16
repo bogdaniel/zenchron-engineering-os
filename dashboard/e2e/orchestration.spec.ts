@@ -214,6 +214,7 @@ test('workspace, agents, reviews, and workflows project the same work graph', as
   await expect(execution.getByRole('link', { name: /Open pull request/ })).toBeVisible();
 
   await page.goto('/#agents');
+  await page.getByRole('tab', { name: 'Run History' }).click();
   const assigned = page.getByRole('region', { name: 'Assigned work units' });
   await expect(assigned.getByRole('listitem')).toHaveCount(1);
   await expect(assigned.getByRole('listitem')).toContainText('Ship usage export');
