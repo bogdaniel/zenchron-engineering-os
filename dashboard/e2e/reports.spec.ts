@@ -541,8 +541,8 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   };
   const executive = await downloadCsv('Executive Summary');
   expect(executive.filename).toMatch(/^zenchron-executive-summary-\d{4}-\d{2}-\d{2}\.csv$/);
-  expect(executive.csv).toContain('"Objectives","1"');
-  expect(executive.csv).toContain('"Local checkouts","1"');
+  expect(executive.csv).toContain('"Objectives",1');
+  expect(executive.csv).toContain('"Local checkouts",1');
   const detailed = await downloadCsv('Detailed Metrics');
   expect(detailed.filename).toMatch(/^zenchron-detailed-metrics-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(detailed.csv).toContain('"Delivery velocity","Unavailable","No Git remotes are configured for these checkouts."');
@@ -554,7 +554,7 @@ test('report scope filters live snapshots by product and resets them', async ({ 
   const workspace = await downloadCsv('Product & Workspace Report');
   expect(workspace.filename).toMatch(/^zenchron-product-workspace-\d{4}-\d{2}-\d{2}\.csv$/);
   expect(workspace.csv).toContain('"Velocity (PRs/week)"');
-  expect(workspace.csv).toContain('"Product","Nova Platform","1","1","1"');
+  expect(workspace.csv).toContain('"Product","Nova Platform",1,1,1');
   expect(workspace.csv).toContain('"Workspace","Local workspace"');
   await page.getByRole('button', { name: 'Reset' }).click();
   await expect(workspaceItems).toHaveText('2');
@@ -605,7 +605,7 @@ test('Reports shows the cost providers reported for agent runs and never a fixtu
   await page.getByRole('button', { name: 'Download Agent Spend & Utilization CSV' }).click();
   await downloadPromise;
   const csv = await page.evaluate(async () => await (window as Window & { downloadedCSV?: Promise<string> }).downloadedCSV);
-  expect(csv).toContain('"agent/costed","succeeded","1.25","1200 input / 300 output tokens","Reported by the provider"');
+  expect(csv).toContain('"agent/costed","succeeded",1.25,"1200 input / 300 output tokens","Reported by the provider"');
   expect(csv).toContain('"agent/tokens-only","succeeded","Unavailable","40 input / 2 output tokens","Reported by the provider"');
   expect(csv).toContain('"agent/unreported","succeeded","Unavailable","Unavailable","Provider usage records are not connected"');
   expect(csv).not.toContain('out-of-range');
