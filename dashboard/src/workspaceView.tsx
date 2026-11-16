@@ -12,7 +12,7 @@ export type WorkspaceProduct = { id: string; name: string; summary: string; stat
 export type WorkspaceRoadmapRow = {
   name: string; status: string; tone: string; detail?: string; bar?: { left: string; width: string };
 };
-export type WorkspaceObjectiveRow = { title: string; detail?: string; progress: number; done: boolean };
+export type WorkspaceObjectiveRow = { title: string; detail?: string; progress: number; done: boolean; href?: string };
 export type WorkspaceRepositoryRow = { name: string; detail?: string; branch: string };
 export type WorkspaceStatusRow = { name: string; state: string };
 
@@ -173,6 +173,7 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
   const openObjectives = productObjectives.filter((objective) => objective.status !== 'completed');
   const objectiveRow = (objective: Objective): WorkspaceObjectiveRow => ({
     title: objective.title,
+    href: `?objective=${encodeURIComponent(objective.id)}&tab=plan#objectives`,
     detail: `${statusLabel(objective.status)} · ${objective.owner || 'No owner'}`,
     progress: objective.progress,
     done: objective.status === 'completed',

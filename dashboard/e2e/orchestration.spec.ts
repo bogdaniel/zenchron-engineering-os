@@ -236,6 +236,31 @@ test('workspace, agents, reviews, and workflows project the same work graph', as
   await expect(context).toContainText('Header row is missing');
 });
 
+for (const viewport of viewports) {
+  test(`product execution links retain workflow and assignment identity (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const configured = { ...graph, workflow_id: 'product-flow', workflow_version: 7,
+      units: graph.units.map((unit) => unit.kind === 'integrate' ? unit
+        : ({ ...unit, profile_version: 2, persona_id: 'product-persona', persona_version: 3 })) };
+    await mockOrchestration(page, { graphs: [configured], plans: [plan] });
+    await page.goto('/#workspace');
+    await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
+    const configuration = page.getByLabel(`Execution configuration for ${objective.title}`);
+    await expect(configuration).toContainText('executed version 7');
+    await expect(configuration).toContainText('recorded profile v2');
+    await expect(configuration).toContainText('persona product-persona v3');
+    await expect(configuration.getByRole('link', { name: 'product-flow' }))
+      .toHaveAttribute('href', '?workflow=product-flow#workflows');
+    await expect(configuration.getByRole('link', { name: 'Codex engineer' }))
+      .toHaveAttribute('href', `?profile=${writerID}#agents`);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('product-execution.png'), fullPage: true });
+    await page.getByRole('heading', { name: objective.title, exact: true }).getByRole('link').click();
+    await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('region', { name: `Work graph for ${objective.title}` })).toBeVisible();
+  });
+}
+
 test('an objective plan approved in the dashboard runs through decision, review, remediation, and integration', async ({ page }, testInfo) => {
   test.setTimeout(240_000);
   await page.setViewportSize(viewports[0]);

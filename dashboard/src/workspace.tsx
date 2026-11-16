@@ -54,7 +54,8 @@ function ObjectiveRows({ rows }: { rows: WorkspaceObjectiveRow[] }) {
   return <div className="workspace-mock-objectives">{rows.map((row) => <div key={row.title}>
     <span className={`workspace-mock-objective-status${row.done ? ' done' : ''}`} role="img"
       aria-label={row.done ? 'Completed objective' : 'Open objective'}>{row.done ? '✓' : ''}</span>
-    <RowTitle title={row.title} detail={row.detail} />
+    {row.href ? <a href={row.href}><RowTitle title={row.title} detail={row.detail} /></a>
+      : <RowTitle title={row.title} detail={row.detail} />}
     <Progress value={row.progress} size="xs" color="teal.5" /><small>{`${row.progress}%`}</small>
   </div>)}</div>;
 }

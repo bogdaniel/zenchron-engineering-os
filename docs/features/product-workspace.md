@@ -33,6 +33,8 @@ flowchart LR
     CP --> Store[(products.json)]
     Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
     Execution -->|"GET /api/v1/work-graphs"| CP
+    Execution -->|"recorded workflow/profile IDs and versions"| Report
+    Execution -->|"objective ID · Plan tab"| Plans
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
     Environment --> Store
     Environment --> Graphs[(objectives.json · work-graphs.json)]
@@ -95,6 +97,10 @@ Live:
 - Delivery report workflow and profile links open the referenced saved record using `?workflow=<id>#workflows` and
   `?profile=<id>#agents`. The report retains the executed versions; the editor shows the current saved configuration.
 - Execution links use `?run=<id>#reviews` to open that run's Evidence tab, including review runs without a diff.
+- Product objective rows and execution headings open that objective's Plan tab. Each historical WorkGraph lists its
+  recorded workflow version and profile/persona assignments with links to the saved records. Current provider/model
+  and profile status are labeled as current configuration, distinct from the executed versions. These relationships
+  come from the product's objectives and WorkGraphs; workspace-wide definitions remain available separately.
 - Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, decisions, delivery
   metrics (card and metric), recent decisions (metric), and all trend graphics. The favorite star and the delivery
   range are disabled with a reason. Sharing shows the page link and says no invitation is sent.

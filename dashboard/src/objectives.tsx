@@ -95,7 +95,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [createOpen, setCreateOpen] = useState(() => new URLSearchParams(window.location.search).get('create') === '1');
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [detailTab, setDetailTab] = useState<ObjectiveDetailTab>('overview');
+  const [detailTab, setDetailTab] = useState<ObjectiveDetailTab>(() =>
+    new URLSearchParams(window.location.search).get('tab') === 'plan' ? 'plan' : 'overview');
   const [selectedID, setSelectedID] = useState<string | null>(() => new URLSearchParams(window.location.search).get('objective'));
   const selectedIDRef = useRef(selectedID);
   selectedIDRef.current = selectedID;
