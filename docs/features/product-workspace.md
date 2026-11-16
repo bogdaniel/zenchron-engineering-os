@@ -24,6 +24,11 @@ flowchart LR
     Live -->|"POST /api/v1/products · PUT /api/v1/products/{id}"| CP
     Mock -->|"add or rename in fixture state"| Tab["This browser tab only"]
     CP --> Store[(products.json)]
+    Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
+    Execution -->|"GET /api/v1/work-graphs"| CP
+    Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
+    Environment --> Store
+    Environment --> Graphs[(objectives.json · work-graphs.json)]
     Page -->|"Product actions → Open repository inventory"| Projects["#projects"]
 ```
 
