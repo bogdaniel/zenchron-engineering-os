@@ -35,6 +35,12 @@ flowchart LR
     Page -->|"Product actions → Open repository inventory"| Projects["#projects"]
 ```
 
+## Integration boundaries
+
+| KEEP | CONNECT | EXTEND | REMOVE |
+|---|---|---|---|
+| Existing product/repository records, agent profiles, workflow definitions, objective plans, WorkGraphs, report API, dashboard shell, and Mock/Live boundary. | Product → repository/objective; workflow → compiled plan; persona → profile/run snapshot; objective → WorkGraph/report; workspace cards → authoritative APIs. | Reusable personas and eligibility reasons; supported workflow compilation; objective delivery report and safe export. | Any second scheduler, execution store, prompt truth, or evidence store; Live claims that unsupported visual nodes execute. |
+
 ## Behavior
 
 Both modes:
