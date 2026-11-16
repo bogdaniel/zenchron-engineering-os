@@ -220,11 +220,27 @@ Two further live objectives, on the build with the review hardening, showed the 
 
 Both graphs were cancelled before integration; nothing from them was published.
 
-Not shown live: a stale integration input and a unit retry. No live run produced those situations; they are covered
-by the focused tests above and, for restart and the whole lifecycle, by a rehearsal with the real binaries and a fake
-CLI. After the live run an independent review of the orchestration code reported ten defects; nine were fixed with the
+A fifth live objective ran against a clone of `main`, for backlog issue #368, with the worker's verification
+extended by `npm ci`, typecheck, and build of the dashboard:
+
+| Step | What happened | Evidence |
+|---|---|---|
+| Product and objective | A product linked to the `main` checkout and an objective in it | objective `5e957028580207318ca3bd442f123b8d` |
+| Plan | The planner's five-unit plan was refused only because it listed capabilities on the integrate unit; the operator resubmitted it with that field emptied and approved it in the dashboard | planner run `c474320c019fc091254203d528425243`; contract fixed in `9ea762f`; graph `dd7d8db3c9bd2cfb59d2ba5648532577` |
+| Parallel producers | Claude Code (`csv-module`) and Codex (`csv-spec`) overlapped from 08:55:28 to 08:57:33 UTC | runs `7344f819dfd22fdbc1459c8ddcd908d9`, `ae9d7283661630a35f84ef406e8292f9` |
+| Review cycle 1 | Codex blocked the module for unverified validation; second pass; a fresh review accepted `9e0d000` | review runs `f8cc5d91dfc3521dedca519a428b4cb0`, `f691d09cf954972ec937d16af520fdc6` |
+| Stale integration input | The operator added a commit to the admitted branch of `csv-spec`; the integration run refused it: "An input branch no longer points at its admitted commit"; unit and graph failed, the dependent review was blocked | integration run `fb9acba6bf171692fefe0810773cb291` |
+| Unit retry | The operator restored the branch and retried the unit; a fresh integration run merged both candidates, verification passed | run `cd140323cd66db8c0b78454f95427c73`, commit `dd2f206` |
+| Review cycle 2 | Claude blocked the integrated commit: the new spec downloaded before live data had loaded. Routed by file to `csv-spec`; Codex fixed it (`bf61d8d`); re-integration `cdcf073` passed verification and a fresh review | review runs `9295f076edd99230a4ccbcfd65c95fba`, `2beed47d85249ed9bc94c43fa23c8bf8`; integration run `e7a84978adc8214a413a901873683106` |
+| Publication | One pull request against `main`, not merged | https://github.com/bogdaniel/zenchron-engineering-os/pull/377, head `cdcf073b4` |
+
+From approval to completion it took 12 min 33 s. While GitHub was creating the pull request the unit showed
+`blocked` for about a second; fixed in `c69a195`. Human actions: creating the product and objective, correcting and
+resubmitting the plan, approving it, and the deliberate branch change, restore, and retry.
+
+After the live run an independent review of the orchestration code reported ten defects; nine were fixed with the
 regression tests named above (publication bound to the reviewed commit, verdict cleared on adoption, repository
 grant on plan and graph reads, responses encoded under the store lock, requests confined to producers and the diff
 marked as task data, bounded plan history, Git failures no longer reported as conflicts, retried pushes, cancelled
 graphs following their runs, plans without a producer refused). The tenth is by design: a run of a unit is visible
-to every user with a grant for its repository, as all runs are. The first two live objectives predate these fixes; the two decision probes ran on them.
+to every user with a grant for its repository, as all runs are. The first two live objectives predate these fixes; the decision probes and the `main`-based objective ran on them.
