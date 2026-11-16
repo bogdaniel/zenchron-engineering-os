@@ -7,10 +7,10 @@ summarizes recorded graph, unit, message, attempt, and run usage data without re
 
 ```mermaid
 flowchart LR
-  Client[Operator or API client] -->|GET /api/v1/work-graphs/{id}/report| Handler[orchestration_api.go]
-  Handler --> Visibility{Objective visible and repository access?}
+  Client[Operator or API client] -->|"GET /api/v1/work-graphs/{id}/report"| Handler[orchestration_api.go]
+  Handler --> Graphs[(work-graphs.json<br/>graph and messages)]
+  Graphs --> Visibility{Objective visible and repository access?}
   Visibility -->|No: 404| NotFound[Not found]
-  Visibility -->|Yes| Graphs[(work-graphs.json<br/>graph and messages)]
   Visibility -->|Yes| Runs[(agent-runs.json<br/>runs, attempts, usage)]
   Graphs --> Compute[work_graph_report.go<br/>pure computation]
   Runs --> Compute
