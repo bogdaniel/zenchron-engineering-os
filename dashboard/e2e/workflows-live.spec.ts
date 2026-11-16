@@ -36,6 +36,8 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   expect(await workflowResponse.json()).toEqual(expect.arrayContaining([
     expect.objectContaining({ id: 'pr-review-release', name: seededWorkflow }),
   ]));
+  await page.getByRole('button', { name: 'Workflow menu' }).click();
+  await page.getByRole('menuitem', { name: seededWorkflow }).click();
   const builderHeading = page.getByRole('heading', { name: /Workflow Builder — PR Review & Release Orchestration/ });
   await expect(builderHeading, `URL: ${page.url()} · workflow page: ${await page.locator('.workflow-page').innerText()}`).toBeVisible();
   await expect(page.locator('.workflow-page-heading .eyebrow')).toContainText('Workflow Builder');
@@ -48,6 +50,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await page.getByRole('button', { name: 'Workflow menu' }).click();
   await expect(page.getByRole('menuitem', { name: seededWorkflow })).toHaveAttribute('aria-current', 'true');
   await page.keyboard.press('Escape');
+  await page.locator('.workflow-canvas .workflow-node.test-generator').click();
   await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Test Generator');
   await expect(page.getByRole('textbox', { name: 'Node Name' })).not.toHaveAttribute('readonly');
   await expect(page.getByRole('textbox', { name: 'Type' })).toHaveValue('Test Generator');
