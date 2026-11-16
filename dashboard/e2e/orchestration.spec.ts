@@ -273,7 +273,7 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await page.setViewportSize(viewports[0]);
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'E2E' })));
   await page.goto('/#objectives');
-  // A persona, profiles, workflow, and objective are created through the real control-plane API.
+  // Seed reusable configuration through real APIs; create and execute the objective from Product Workspace.
   const created = await page.evaluate(async () => {
     const post = async (path: string, body: unknown) => {
       const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -291,8 +291,6 @@ test('an objective plan approved in the dashboard runs through decision, review,
     const projects = await fetch('/api/v1/projects').then((response) => response.json());
     const product = await post('/api/v1/products', { name: 'E2E product', description: '',
       repository_ids: projects.map((project: { id: string }) => project.id) });
-    const objective = await post('/api/v1/objectives', { title: 'Orchestrated export', description: 'Deliver the export.',
-      product_id: product.body.id });
     const workflow = await post('/api/v1/workflows', { name: 'E2E executable flow', description: 'Two producers with review and integration.' });
     const node = (id: string, type: string, label: string, description: string, agentID = '', personaID = '') => ({
       id, type, position: { x: 0, y: 0 }, data: { label, description, agent_id: agentID, persona_id: personaID,
@@ -311,15 +309,33 @@ test('an objective plan approved in the dashboard runs through decision, review,
       }) });
     const savedWorkflow = await saved.json();
     if (persona.status !== 201 || first.status !== 201 || second.status !== 201 || reviewer.status !== 201 ||
-      product.status !== 201 || objective.status !== 201 || workflow.status !== 201 || saved.status !== 200) {
+      product.status !== 201 || workflow.status !== 201 || saved.status !== 200) {
       throw new Error(JSON.stringify({ persona: persona.status, first: first.status, second: second.status,
-        reviewer: reviewer.status, product: product.status, objective: objective.status, workflow: workflow.status,
+        reviewer: reviewer.status, product: product.status, workflow: workflow.status,
         saved: saved.status }));
     }
-    return { objectiveID: objective.body.id as string, workflowID: workflow.body.id as string,
+    return { objectiveID: '', workflowID: workflow.body.id as string,
       workflowVersion: savedWorkflow.version as number, personaID: persona.body.id as string, productID: product.body.id as string,
       writerID: first.body.id as string };
   });
+  await page.goto('/?mode=live#workspace');
+  await page.locator('.workspace-mock-product').filter({ hasText: 'E2E product' }).click();
+  await page.getByRole('combobox', { name: 'Objective repository' }).click();
+  await page.getByRole('option').first().click();
+  await page.getByRole('combobox', { name: 'Objective workflow' }).click();
+  await page.getByRole('option', { name: `E2E executable flow · v${created.workflowVersion}` }).click();
+  await page.getByRole('link', { name: 'Create objective for E2E product' }).click();
+  const objectiveDialog = page.getByRole('dialog');
+  await expect(objectiveDialog.getByRole('combobox', { name: 'Product' })).toHaveValue('E2E product');
+  await objectiveDialog.getByLabel('Objective title').fill('Orchestrated export');
+  await objectiveDialog.getByLabel('Description').fill('Deliver the export.');
+  const savedObjective = page.waitForResponse((response) => response.request().method() === 'POST'
+    && new URL(response.url()).pathname === '/api/v1/objectives');
+  await objectiveDialog.getByRole('button', { name: 'Create objective' }).click();
+  const objectiveResponse = await savedObjective;
+  expect(objectiveResponse.status()).toBe(201);
+  const saved: { id: string } = await objectiveResponse.json();
+  created.objectiveID = saved.id;
   const apiStatus = await page.evaluate(async (id) => Promise.all([
     '/api/v1/work-graphs', `/api/v1/objectives/${id}/plans`, '/api/v1/projects', '/api/v1/products',
   ].map(async (path) => {
@@ -328,15 +344,13 @@ test('an objective plan approved in the dashboard runs through decision, review,
   })), created.objectiveID);
   expect(apiStatus.filter((item) => item.status !== 200), JSON.stringify(apiStatus)).toEqual([]);
 
-  await page.goto(`/?mode=live&objective=${created.objectiveID}#objectives`);
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
   const panel = page.getByRole('tabpanel');
   const proposeForm = panel.getByRole('form', { name: 'Propose a plan' });
   await expect(proposeForm.getByRole('combobox', { name: 'Repository checkout' })).toBeVisible({ timeout: 30_000 });
-  await proposeForm.getByRole('combobox', { name: 'Repository checkout' }).click();
-  await page.getByRole('option').first().click();
-  await proposeForm.getByRole('combobox', { name: 'Executable workflow' }).click();
-  await page.getByRole('option', { name: `E2E executable flow · v${created.workflowVersion}` }).click();
+  await expect(proposeForm.getByRole('combobox', { name: 'Executable workflow' }))
+    .toHaveValue(`E2E executable flow · v${created.workflowVersion}`);
   await proposeForm.getByRole('button', { name: 'Propose plan' }).click();
   const revision = panel.getByRole('list', { name: 'Units of revision 1' });
   await expect(revision.locator(':scope > li')).toHaveCount(4);

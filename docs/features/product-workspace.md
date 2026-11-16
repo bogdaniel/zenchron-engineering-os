@@ -94,6 +94,10 @@ Live:
   Optional repository and workflow choices are carried into the Plan tab after creation. Only online linked checkouts
   are offered; the Plan form checks the selected IDs against its scoped options before enabling proposal. Selecting a
   saved workflow does not certify it as executable: existing compilation/validation still rejects unsupported semantics.
+- Regression evidence: `orchestration.spec.ts` creates an objective through this Product Workspace entry point,
+  reloads the retained selection, approves the compiled plan, and follows real backend/fake CLI decision, review,
+  remediation and integration through delivery-report JSON export. This is deterministic regression evidence;
+  installed CLI and GitHub publication acceptance is recorded separately.
   The Plan tab then offers only online repository checkouts linked to that product; legacy objectives without a product
   keep the existing all-checkouts choice.
 - The Objectives tab projects each linked objective's current WorkGraph, pending decisions, findings, review and
