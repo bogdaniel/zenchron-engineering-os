@@ -199,6 +199,7 @@
 .workspace-mock-list.release-list .mantine-Progress-section { background: #2ecb92; }
 .workspace-mock-list.release-list .release-progress-label { color: #c4bdcf; font-size: 8px; text-align: right; white-space: nowrap; }
 .workspace-mock-list.decision-list { gap: 5px; }
+.workspace-mock-list.decision-list b a { color: inherit; }
 .workspace-mock-list.decision-list > div > svg { flex: 0 0 auto; color: #c4a0f4; }
 .workspace-mock-list.decision-list > div > small { color: #aaa4b7; font-size: 8px; white-space: nowrap; }
 .workspace-mock-range { display: flex; align-items: center; gap: 4px; padding: 4px 7px; border: 1px solid #38324b; border-radius: 7px; color: #d8d1e1; background: transparent; font: inherit; cursor: pointer; }

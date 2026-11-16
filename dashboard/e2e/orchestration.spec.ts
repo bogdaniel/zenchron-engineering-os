@@ -410,4 +410,17 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await noHorizontalScroll(page)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('objective-report-mobile.png'), fullPage: true });
+
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/?mode=live#workspace');
+  await page.locator('.workspace-mock-product').filter({ hasText: 'E2E product' }).click();
+  await expect(page.locator('.workspace-mock-metric.decisions strong')).toHaveText('0');
+  await expect(page.locator('.workspace-mock-card.decisions')).toContainText('E2E: which format?');
+  await expect(page.locator('.workspace-mock-card.decisions')).toContainText('Resolved');
+  await expect(page.locator('.workspace-mock-card.analytics')).toContainText('WorkGraphs1 current');
+  await expect(page.locator('.workspace-mock-metric.delivery strong')).toHaveText('0');
+  await page.screenshot({ path: testInfo.outputPath('workspace-evidence-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await noHorizontalScroll(page)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('workspace-evidence-mobile.png'), fullPage: true });
 });

@@ -23,6 +23,16 @@ async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, or
     products.splice(0, 1, saved);
     return route.fulfill(json(saved));
   });
+  await page.route('**/api/v1/products/*/environment', (route) => route.fulfill(json({
+    product_id: route.request().url().includes(novaID) ? novaID : orionID,
+    objectives: route.request().url().includes(novaID) ? [{
+      graph_id: 'f'.repeat(32), graph_status: 'running', findings: 2, handoffs: 1,
+      pull_request_url: 'https://github.com/zenchron/nova-platform/pull/42',
+    }] : [],
+    decisions: route.request().url().includes(novaID) ? [{
+      objective_id: '1'.repeat(32), question: 'Publish the revised export?', resolved_by: '',
+    }] : [],
+  })));
   await page.route('**/api/v1/projects', (route) => route.fulfill(json([{
     id: projectID, name: 'nova-platform', branch: 'main', git_remote: 'github.com/zenchron/nova-platform',
     worker_id: 'c'.repeat(32), worker_name: 'Mac Studio', last_seen: createdAt, worker_status: 'online',
@@ -140,8 +150,8 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   const metrics = page.locator('.workspace-mock-metric');
   await expect(metrics.filter({ hasText: 'Product Health' })).toContainText('1 of 1');
   await expect(metrics.filter({ hasText: 'Open Objectives' }).locator('strong')).toHaveText('2');
-  await expect(metrics.filter({ hasText: 'Delivery Metrics' }).locator('strong')).toHaveText('Unavailable');
-  await expect(metrics.filter({ hasText: 'Recent Decisions' }).locator('strong')).toHaveText('Unavailable');
+  await expect(metrics.filter({ hasText: 'Delivery Metrics' }).locator('strong')).toHaveText('1');
+  await expect(metrics.filter({ hasText: 'Pending Decisions' }).locator('strong')).toHaveText('1');
   await expect(page.getByRole('img', { name: 'Active initiative trend' })).toHaveCount(0);
   await expect(page.getByRole('img', { name: 'Delivery metrics trend' })).toHaveCount(0);
 
@@ -152,10 +162,20 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(page.locator('.workspace-mock-card.files')).toContainText('Unavailable: files and evidence');
   await expect(page.locator('.workspace-mock-card.people')).toContainText('Unavailable: workspace membership');
   await expect(page.locator('.workspace-mock-card.release')).toContainText('Unavailable: release streams');
-  await expect(page.locator('.workspace-mock-card.decisions')).toContainText('Unavailable: decisions require');
-  await expect(page.locator('.workspace-mock-card.analytics')).toContainText('Unavailable: delivery metrics require PR and run history.');
+  await expect(page.locator('.workspace-mock-card.decisions')).toContainText('Publish the revised export?');
+  await expect(page.locator('.workspace-mock-card.analytics')).toContainText('WorkGraphs1 current');
+  await expect(page.locator('.workspace-mock-card.analytics')).toContainText('Findings2 recorded');
+  await expect(page.locator('.workspace-mock-card.decisions').getByRole('link', { name: 'Publish the revised export?' }))
+    .toHaveAttribute('href', `?objective=${'1'.repeat(32)}&tab=plan#objectives`);
+  await page.screenshot({ path: testInfo.outputPath('workspace-environment-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({ path: testInfo.outputPath('workspace-environment-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1672, height: 941 });
   await expect(page.getByRole('img', { name: /Delivery trend/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Choose delivery metrics time range' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Choose delivery metrics time range' }))
+    .toHaveAttribute('title', 'No time-series delivery data is recorded.');
   await expect(page.getByRole('button', { name: 'Add Nova Platform to favorites' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Add Nova Platform to favorites' }))
     .toHaveAttribute('title', 'Favorites are not stored by the control plane');
@@ -209,6 +229,19 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(page.locator('.workspace-mock-heading h1')).toHaveText('Orion Analytics');
   await expect(page.locator('.workspace-mock-card.repositories')).toContainText('No repositories linked yet.');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
+
+test('Live Product Workspace rejects another product’s execution projection', async ({ page }) => {
+  await useLiveFixtures(page);
+  await page.route('**/api/v1/products/*/environment', (route) => route.fulfill(json({
+    product_id: orionID, objectives: [{ graph_id: 'f'.repeat(32), pull_request_url: 'https://github.com/example/other/pull/1' }],
+    decisions: [{ objective_id: '3'.repeat(32), question: 'Other product decision' }],
+  })));
+  await page.goto('/#workspace');
+  await expect(page.getByRole('alert').filter({ hasText: 'Product execution evidence unavailable.' }).first())
+    .toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.workspace-mock-metric.delivery strong')).toHaveText('Unavailable');
+  await expect(page.locator('.workspace-mock')).not.toContainText('Other product decision');
 });
 
 test('Live Product Workspace explains unavailable profile configuration', async ({ page }, testInfo) => {

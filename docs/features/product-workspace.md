@@ -19,6 +19,7 @@ flowchart LR
     Live -->|"GET /api/v1/workflows"| CP
     Live -->|"GET /api/v1/agents"| CP
     Live -->|"GET /api/v1/personas"| CP
+    Live -->|"GET /api/v1/products/{id}/environment"| CP
     Shell -->|"GET /api/v1/projects · GET /api/v1/objectives"| CP
     Page -->|"Add / Edit product"| Editor["ProductEditor · productEditor.tsx"]
     Editor -->|"source.saveProduct"| Source
@@ -106,6 +107,9 @@ Live:
 - The Objectives tab projects each linked objective's current WorkGraph, pending decisions, findings, review and
   integration states, and observed pull-request link from existing product-environment records. Opening an objective
   shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
+- The selected product's environment projection supplies the pending-decision count, decision links, current
+  WorkGraph/handoff/finding counts, and observed PR-link count. These are recorded counts, without a time trend or
+  implied merge state. A failed projection shows an error, and a missing product shows an empty explanation.
 - Delivery report workflow and profile links open the referenced saved record using `?workflow=<id>#workflows` and
   `?profile=<id>#agents`. The report retains the executed versions; the editor shows the current saved configuration.
 - Execution links use `?run=<id>#reviews` to open that run's Evidence tab, including review runs without a diff.
@@ -113,9 +117,9 @@ Live:
   recorded workflow version and profile/persona assignments with links to the saved records. Current provider/model
   and profile status are labeled as current configuration, distinct from the executed versions. These relationships
   come from the product's objectives and WorkGraphs; workspace-wide definitions remain available separately.
-- Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, decisions, delivery
-  metrics (card and metric), recent decisions (metric), and all trend graphics. The favorite star and the delivery
-  range are disabled with a reason. Sharing shows the page link and says no invitation is sent.
+- Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, and time-series
+  delivery trends. The favorite star and the delivery range are disabled with a reason. Sharing shows the page link
+  and says no invitation is sent.
 - While the worker inventory or the product list loads, the directory says so; a failed product list shows "Product
   list unavailable." Fixtures are never used as a fallback.
 
