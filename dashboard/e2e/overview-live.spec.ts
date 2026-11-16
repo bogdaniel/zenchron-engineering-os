@@ -19,6 +19,12 @@ test('dashboard displays the connected control plane and local worker', async ({
     upstream.hostname = '127.0.0.1';
     upstream.port = '8083';
     const response = await page.request.get(upstream.toString());
+    if (upstream.pathname === '/api/v1/workflows') {
+      // Other real-backend specs create workflows concurrently; this layout check uses the seeded definition.
+      const workflows: { id: string }[] = await response.json();
+      await route.fulfill({ response, json: workflows.filter((workflow) => workflow.id === 'pr-review-release') });
+      return;
+    }
     await route.fulfill({ response });
   });
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill({
