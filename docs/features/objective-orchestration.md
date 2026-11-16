@@ -208,14 +208,23 @@ same file): a cyclic variant of its plan was refused with 400; approving a chang
 went to the producer whose branch did not merge; and cancelling the graph cancelled that producer's queued
 remediation. Nothing from it was published.
 
-Not shown live: a review verdict arriving for a candidate that had already changed, a stale integration input, a
-decision request, and a unit retry. No agent produced those situations in the live runs; they are covered by the
-focused tests above and, for restart and the whole lifecycle, by a rehearsal with the real binaries and a fake CLI.
-A webhook, a hosted control plane, and more than one worker were not part of this run.
+Two further live objectives, on the build with the review hardening, showed the decision path and a stale result:
 
-After the live run an independent review of the orchestration code reported ten defects; nine were fixed with the
+| Step | What happened | Evidence |
+|---|---|---|
+| Decision request | A Codex producer whose wording was a product decision reported a `decision_request` with two options; the graph went `blocked` | graph `5a502b73e4be9fe95c27ebdac383c4f8`, run `0f877a29d92761b5d93591fc07c887b6` attempt 1 |
+| Resolution and resume | The decision was answered in the dashboard's Plan tab; the same run was requeued and handed off commit `3ae80ee` | resolution by `local operator`, attempt 2 |
+| Defect found | After a reviewer's change request the producer asked the same decision again: its context no longer carried it | fixed in `ce54a82` (a unit keeps every decision made for it); graph cancelled |
+| Repeat on the fix | Decision, resolution in the dashboard, handoff `54c3c5c`; after a change request the third attempt applied it without asking again and handed off `ffc0a93` | graph `562f6eaf84b4025606fee931b1d6447f`, run `44facefa420f6eb2e03275b1d1d7c073` |
+| Stale verdict | The Claude review had started on `54c3c5c` at 08:45:37 UTC; the candidate became `ffc0a93` at 08:46:15; the verdict arrived at 08:46:39 and was discarded, and a fresh review run started on the new commit | review run `fb12db85ef0791623bb712690635eac0` (base `54c3c5c`), fresh run `56f488f5282a2652e6e840d6a2453c78` |
+
+Both graphs were cancelled before integration; nothing from them was published.
+
+Not shown live: a stale integration input and a unit retry. No live run produced those situations; they are covered
+by the focused tests above and, for restart and the whole lifecycle, by a rehearsal with the real binaries and a fake
+CLI. After the live run an independent review of the orchestration code reported ten defects; nine were fixed with the
 regression tests named above (publication bound to the reviewed commit, verdict cleared on adoption, repository
 grant on plan and graph reads, responses encoded under the store lock, requests confined to producers and the diff
 marked as task data, bounded plan history, Git failures no longer reported as conflicts, retried pushes, cancelled
 graphs following their runs, plans without a producer refused). The tenth is by design: a run of a unit is visible
-to every user with a grant for its repository, as all runs are. The live run above predates these fixes.
+to every user with a grant for its repository, as all runs are. The first two live objectives predate these fixes; the two decision probes ran on them.
