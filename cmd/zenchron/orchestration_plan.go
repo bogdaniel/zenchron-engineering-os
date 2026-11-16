@@ -28,6 +28,8 @@ const (
 	maxPlanParallel     = 4
 	defaultPlanParallel = 2
 	maxUnitAcceptance   = 8
+	// maxPlanRevisions bounds the plan history of one objective, and with it the size of the snapshot.
+	maxPlanRevisions = 20
 
 	planPlanning   = "planning"
 	planProposed   = "proposed"
@@ -67,7 +69,9 @@ type objectivePlan struct {
 	Revision    int    `json:"revision"`
 	Status      string `json:"status"`
 	ProjectID   string `json:"project_id"`
-	WorkflowID  string `json:"workflow_id,omitempty"`
+	// Repository is the repository of the project when the plan was proposed; reading the plan needs a grant for it.
+	Repository string `json:"repository,omitempty"`
+	WorkflowID string `json:"workflow_id,omitempty"`
 	// Hash identifies the plan's content, so an unchanged plan is recognized and not approved twice.
 	Hash string `json:"hash,omitempty"`
 	// Problems says why a proposal is invalid.
@@ -197,6 +201,9 @@ func (proposal *planProposal) assignmentProblems(units map[string]planUnit, agen
 				}
 			}
 		}
+	}
+	if !slices.ContainsFunc(proposal.Units, func(unit planUnit) bool { return unit.Kind == unitProduce }) {
+		add("a plan needs at least one produce unit")
 	}
 	if integrators != 1 {
 		add("a plan needs exactly one integrate unit, which combines the produced work and publishes the pull request")

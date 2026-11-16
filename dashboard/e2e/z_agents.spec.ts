@@ -506,6 +506,8 @@ test('Agents dashboard completes a run and resumes requested review changes on t
   await expect(row).toContainText(`commit ${evidence.run.commit_sha.slice(0, 7)}`);
   await page.getByRole('link', { name: 'Reviews' }).click();
   await page.getByRole('button', { name: 'Local branches' }).click();
+  // Other specs queue runs on the same control plane at the same time, so this run is chosen by its branch.
+  await page.getByRole('row', { name: new RegExp(evidence.run.branch) }).click();
   await expect(page.locator('.reviews-diff-meta')).toContainText(`Local commit ${evidence.run.commit_sha.slice(0, 7)}`);
   await page.getByLabel('Review comment').fill('Add a regression note for the requested change.');
   await page.getByRole('button', { name: 'Request changes' }).click();

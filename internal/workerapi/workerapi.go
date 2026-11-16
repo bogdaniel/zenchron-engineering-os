@@ -12,8 +12,10 @@ const (
 
 	// ResultFence labels the fenced block in an agent's final message that carries its typed result.
 	ResultFence = "zenchron-result"
-	// MaxResultSize bounds one typed result.
-	MaxResultSize  = 16 << 10
+	// MaxResultSize bounds one typed result. A plan of several units with full instructions needs most of it.
+	// ponytail: results are stored on the run record, so 200 runs of 48 KiB stay under the 16 MiB snapshot;
+	// move results to per-run files, like diffs, if either limit has to grow.
+	MaxResultSize  = 48 << 10
 	MaxMergeInputs = 8
 )
 
@@ -115,6 +117,8 @@ type AgentRunCommand struct {
 	Profile            AgentProfile `json:"profile"`
 	Attempts           int          `json:"attempts"`
 	PublishPullRequest bool         `json:"publish_pull_request,omitempty"`
+	// PublishCommit, when set, is the only commit this attempt may push: the reviewed candidate.
+	PublishCommit string `json:"publish_commit,omitempty"`
 	// Merge makes this an integration run: the worker combines these local branches in order instead of
 	// starting a provider. Each branch must still point at the commit named here.
 	Merge []MergeInput `json:"merge,omitempty"`

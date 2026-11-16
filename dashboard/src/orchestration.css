@@ -38,7 +38,7 @@
 .plan-propose > p, .plan-propose > button { grid-column: 1 / -1; }
 .plan-propose > button { justify-self: start; }
 .plan-propose label { color: #a7a1b8; font-size: 10px; }
-.agent-work-units { display: grid; gap: 5px; margin-top: 8px; color: #a7a1b8; font-size: 10px; }
+.agent-work-units { display: grid; gap: 5px; margin-bottom: 10px; color: #a7a1b8; font-size: 10px; }
 .agent-work-units > b { color: #e5e0ee; font-size: 11px; }
 .agent-work-units p { margin: 0; }
 .agent-work-units ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }

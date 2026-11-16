@@ -54,6 +54,12 @@ func (runner *agentRunner) integrate(
 		result.Result = report()
 		return failed(result, workerapi.TerminationWorkerError, "An input branch no longer points at its admitted commit.")
 	}
+	// An attempt that was interrupted in the middle of a merge leaves it in the worktree; start clean.
+	if _, err := gitOutput(gitCtx, "-C", worktree, "rev-parse", "--verify", "--quiet", "MERGE_HEAD"); err == nil {
+		if _, err := gitOutput(gitCtx, "-C", worktree, "merge", "--abort"); err != nil {
+			return failed(result, workerapi.TerminationWorkerError, "An interrupted merge could not be cleared from the integration worktree.")
+		}
+	}
 	for _, input := range command.Merge {
 		arguments := append([]string{"-C", worktree}, agentIdentity...)
 		mergeCommand := gitCommand(gitCtx, append(arguments, "merge", "--no-ff", "--no-edit", "-m", "Integrate "+input.Branch, input.Commit)...)
@@ -62,8 +68,10 @@ func (runner *agentRunner) integrate(
 			conflicts, _ := gitOutput(gitCtx, "-C", worktree, "diff", "--name-only", "--diff-filter=U")
 			merge.ConflictBranch, merge.ConflictFiles = input.Branch, strings.Fields(conflicts)
 			merge.ConflictFiles = merge.ConflictFiles[:min(len(merge.ConflictFiles), maxConflictFiles)]
-			if _, abortErr := gitOutput(gitCtx, "-C", worktree, "merge", "--abort"); abortErr != nil {
-				return failed(result, workerapi.TerminationWorkerError, "A merge failed and could not be aborted; the integration worktree needs inspection.")
+			_, abortErr := gitOutput(gitCtx, "-C", worktree, "merge", "--abort")
+			if abortErr != nil || len(merge.ConflictFiles) == 0 {
+				// Git failed for another reason than a conflict, such as a timeout; no producer is blamed for it.
+				return failed(result, workerapi.TerminationWorkerError, "Git could not merge an admitted candidate; see the worker log.")
 			}
 			reporter.emit("error", "Merge conflict in "+input.Branch)
 			result.Result = report()

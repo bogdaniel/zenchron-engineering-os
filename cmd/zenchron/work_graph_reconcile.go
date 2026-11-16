@@ -44,12 +44,17 @@ func (store *workGraphStore) reconcileAll() {
 		return cmp.Or(a.CreatedAt.Compare(b.CreatedAt), strings.Compare(a.ID, b.ID))
 	})
 	for _, graph := range graphs {
-		if graph.Status == graphCompleted || graph.Status == graphCancelled {
+		if graph.Status == graphCompleted {
 			continue
 		}
 		// Encoding a graph cannot fail: it holds only strings, numbers, times, and slices of them.
 		before, _ := json.Marshal(graph)
-		store.reconcile(graph)
+		if graph.Status == graphCancelled {
+			// Nothing is admitted or queued any more; units only follow their runs as those stop.
+			graph.project(store.runs.unitRuns(graph.ID), false)
+		} else {
+			store.reconcile(graph)
+		}
 		if after, _ := json.Marshal(graph); !bytes.Equal(before, after) {
 			graph.Revision, graph.UpdatedAt, changed = graph.Revision+1, time.Now().UTC(), true
 		}
@@ -112,6 +117,10 @@ func (graph *workGraph) adopt(runs map[string]agentRun) {
 	for _, run := range orphans {
 		unit := graph.unit(run.UnitKey)
 		unit.RunIDs, unit.Seen, unit.Restart = append(unit.RunIDs, run.ID), len(graph.Messages), false
+		if unit.Kind == unitReview {
+			// The adopted run is a new round; the verdict of the round before it no longer counts.
+			unit.Verdict = ""
+		}
 		if unit.Kind == unitIntegrate {
 			unit.Inputs, unit.Candidate = run.Merge, ""
 		}
@@ -172,7 +181,10 @@ func (graph *workGraph) frontier(runs map[string]agentRun, publishable bool) []u
 		case !dependenciesSettled:
 		case !started || unit.Restart || graph.integrationDue(unit):
 			actions = append(actions, unitAction{unit.Key, actionStart})
-		case publishable && !run.PullRequestEnabled && unit.Candidate != "" && graph.reviewed(unit, runs):
+		// A reviewed candidate is published by another pass of its run; a push that failed is tried again,
+		// for as long as the run has attempts.
+		case publishable && unit.Candidate != "" && graph.reviewed(unit, runs) &&
+			(!run.PullRequestEnabled || run.Publication == publicationPushFailed):
 			actions = append(actions, unitAction{unit.Key, actionPublish})
 		}
 	}

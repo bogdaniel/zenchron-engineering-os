@@ -242,6 +242,7 @@ governance machinery, and vocabulary beyond what is listed here are not ported.
 
 ## Not implemented
 
+- A wake-up when a run finishes: the worker asks for work every 5 seconds, so each transition waits up to that long.
 - Units on more than one checkout or worker; a graph runs on the one project its plan names.
 - Automatic remediation of a combined candidate that fails verification; the unit fails and an operator retries.
 - Reopening a completed unit on a CollaborationRequest.

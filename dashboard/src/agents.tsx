@@ -462,7 +462,6 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                         </tbody>
                       </table>
                     </div>
-                    <AgentWorkUnits agentID={selected.id} sampleData={designPreview} />
                   </PanelCard>
                   <PanelCard className="agents-overview-card agents-preview-trend" withBorder><PanelHeading title="Performance Trends" actions={<Menu withinPortal position="bottom-end">
                     <Menu.Target><Button className="agents-preview-period" variant="default" aria-label="Performance trend range">{performanceRange}<IconChevronDown size={10} /></Button></Menu.Target>
@@ -518,6 +517,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
                   : <div className="agents-preview-variable" key={label}><span>{label}</span><small>{state}</small></div>)}
               </div></Tabs.Panel>
               <Tabs.Panel value="history" pt="sm">
+                <AgentWorkUnits agentID={selected.id} sampleData={designPreview} />
                 {view.notes.history && <div className="agents-preview-variable-panel">{view.notes.history}</div>}
                 {source.runsLoading ? <div className="agents-run-empty">Loading agent runs…</div>
                   : source.runsError ? <div className="agents-run-empty">Agent run history is unavailable.</div>

@@ -277,6 +277,10 @@ func (runner *agentRunner) deliver(
 		// This attempt no longer owns the run; the commit stays local for the attempt that does.
 		return result
 	}
+	if command.PublishCommit != "" && result.CommitSHA != command.PublishCommit {
+		// The worktree no longer reproduces the reviewed candidate; nothing unreviewed is published.
+		return failed(result, workerapi.TerminationWorkerError, "The commit differs from the reviewed candidate; nothing was pushed.")
+	}
 	if command.PublishPullRequest {
 		push := runner.push
 		if push == nil {
