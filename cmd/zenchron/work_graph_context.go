@@ -192,7 +192,10 @@ Rules, checked by Zenchron before anything runs:
 - keys are lowercase letters, digits, and dashes; at most 8 units; "capabilities" lists tools the unit needs
   from: code.search, code.write, docs.search, git.diff, git.read, tests.run.
 - instructions must be specific enough for an agent that sees nothing but its own unit: name the files and
-  the behavior. acceptance lists checkable outcomes.
+  the behavior. acceptance lists checkable outcomes. Every unit also receives the objective text, so do not
+  repeat it.
+- size limits, in bytes: summary 2000; title 200; instructions 4000; at most 8 acceptance criteria of at most
+  300 each. A plan over any limit is rejected as a whole.
 ` + resultContract + "```" + workerapi.ResultFence + `
 {"plan":{"summary":"...","max_parallel":2,"units":[{"key":"api","kind":"produce","title":"...","instructions":"...",
 "acceptance":["..."],"depends_on":[],"capabilities":["code.write"],"agent_id":"<agent_id>"}]}}

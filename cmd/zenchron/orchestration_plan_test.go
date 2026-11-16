@@ -108,7 +108,8 @@ func TestPlannerRunOnlyProposesAndItsPlanIsValidatedLikeAnyOther(t *testing.T) {
 	}
 	command := harness.claim()
 	if command.ID != plan.PlannerRunID || !strings.Contains(command.Prompt, "agent_id "+harness.profile.ID) ||
-		!strings.Contains(command.Prompt, "Export usage as CSV.") || !strings.Contains(command.Prompt, `"plan"`) {
+		!strings.Contains(command.Prompt, "Export usage as CSV.") || !strings.Contains(command.Prompt, `"plan"`) ||
+		!strings.Contains(command.Prompt, "instructions 4000") {
 		t.Fatalf("planner command = %q", command.Prompt)
 	}
 	// The model proposes a reviewer that may write code; deterministic validation refuses it.
