@@ -424,6 +424,7 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 		ID: selected.ID, ProjectID: selected.ProjectID, Branch: selected.Branch, BaseBranch: selected.BaseBranch,
 		Prompt: agentRunPrompt(selected) + store.graphs.runContext(selected), Attempts: selected.Attempts,
 		PublishPullRequest: selected.PullRequestEnabled, Merge: selected.Merge,
+		PublishCommit: store.graphs.publishCommit(selected),
 		Profile: workerapi.AgentProfile{Provider: profile.Provider, Model: profile.Model,
 			SystemPrompt: profile.SystemPrompt, GoalPrompt: profile.GoalPrompt, Tools: profile.Tools},
 	})

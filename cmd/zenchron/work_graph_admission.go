@@ -140,7 +140,8 @@ func (graph *workGraph) admitProduction(unit *workUnit, run agentRun, result uni
 		graph.add(message)
 	}
 	for _, request := range result.CollaborationRequests {
-		if graph.unit(request.To) == nil || request.To == unit.Key {
+		// A request reaches only another producer: one addressed to a reviewer would let work speak to its own judge.
+		if target := graph.unit(request.To); target == nil || target.Kind != unitProduce || request.To == unit.Key {
 			continue
 		}
 		message := origin

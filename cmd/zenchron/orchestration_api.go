@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"log"
 	"net/http"
 	"slices"
@@ -54,11 +55,14 @@ func (store *workGraphStore) listPlans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	store.reconcileAll()
+	access := accessFor(r)
 	store.mu.Lock()
-	plans := slices.Clone(store.plans[item.ID])
-	store.mu.Unlock()
+	// A plan names files and work of its repository, so it is shown only to callers granted that repository.
+	plans := slices.DeleteFunc(slices.Clone(store.plans[item.ID]), func(plan objectivePlan) bool { return !access.allows(plan.Repository) })
 	slices.Reverse(plans)
-	writeJSON(w, http.StatusOK, plans)
+	body := encodeResponse(plans)
+	store.mu.Unlock()
+	writeEncoded(w, http.StatusOK, body)
 }
 
 // proposePlan records a new plan revision for an objective. The body either carries the plan itself or
@@ -93,7 +97,14 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	plan := objectivePlan{ObjectiveID: item.ID, ProjectID: project.ID, WorkflowID: input.WorkflowID,
+	store.mu.Lock()
+	full := len(store.plans[item.ID]) >= maxPlanRevisions
+	store.mu.Unlock()
+	if full {
+		http.Error(w, "this objective reached its limit of plan revisions", http.StatusConflict)
+		return
+	}
+	plan := objectivePlan{ObjectiveID: item.ID, ProjectID: project.ID, Repository: project.GitRemote, WorkflowID: input.WorkflowID,
 		Status: planProposed, CreatedBy: access.user, CreatedAt: time.Now().UTC()}
 	switch {
 	case input.Plan != nil && input.PlannerAgentID == "":
@@ -214,11 +225,11 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 	_, executing := store.executingPlanLocked(item.ID)
 	problem := ""
 	switch {
-	case plan.Status == planApproved && store.graphs[plan.GraphID] != nil:
+	case plan.Status == planApproved && store.graphs[plan.GraphID] != nil && store.mayRead(access, store.graphs[plan.GraphID]):
 		// Approving an approved plan again changes nothing.
-		graph := *store.graphs[plan.GraphID]
+		body := encodeResponse(store.graphs[plan.GraphID])
 		store.mu.Unlock()
-		writeJSON(w, http.StatusOK, graph)
+		writeEncoded(w, http.StatusOK, body)
 		return
 	case revision != len(plans) || plan.Status != planProposed:
 		problem = "only the latest valid proposal can be approved"
@@ -273,26 +284,41 @@ func newHexID() (string, error) {
 	return hex.EncodeToString(id), nil
 }
 
+// encodeResponse encodes a value while the caller holds the store lock. Graphs are changed in place by
+// every reconcile, so a response is never encoded from a graph after the lock is released.
+func encodeResponse(value any) []byte {
+	// Plans and graphs hold only strings, numbers, times, and slices of them, which always encode.
+	body, _ := json.Marshal(value)
+	return body
+}
+
+func writeEncoded(w http.ResponseWriter, status int, body []byte) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write(append(body, '\n'))
+}
+
 func (store *workGraphStore) writeGraph(w http.ResponseWriter, status int, graphID string) {
 	store.mu.Lock()
-	graph := *store.graphs[graphID]
+	body := encodeResponse(store.graphs[graphID])
 	store.mu.Unlock()
-	writeJSON(w, status, graph)
+	writeEncoded(w, status, body)
 }
 
 func (store *workGraphStore) listGraphs(w http.ResponseWriter, r *http.Request) {
 	store.reconcileAll()
 	access := accessFor(r)
 	store.mu.Lock()
-	graphs := make([]workGraph, 0, len(store.graphs))
+	graphs := make([]*workGraph, 0, len(store.graphs))
 	for _, graph := range store.graphs {
 		if store.mayRead(access, graph) {
-			graphs = append(graphs, *graph)
+			graphs = append(graphs, graph)
 		}
 	}
+	slices.SortFunc(graphs, func(a, b *workGraph) int { return b.CreatedAt.Compare(a.CreatedAt) })
+	body := encodeResponse(graphs)
 	store.mu.Unlock()
-	slices.SortFunc(graphs, func(a, b workGraph) int { return b.CreatedAt.Compare(a.CreatedAt) })
-	writeJSON(w, http.StatusOK, graphs)
+	writeEncoded(w, http.StatusOK, body)
 }
 
 func (store *workGraphStore) mayRead(access requestAccess, graph *workGraph) bool {

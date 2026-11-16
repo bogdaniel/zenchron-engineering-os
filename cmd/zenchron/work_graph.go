@@ -189,6 +189,13 @@ func validStoredWorkGraph(graph workGraph) bool {
 		!slices.Contains([]string{graphActive, graphBlocked, graphCompleted, graphFailed, graphCancelled}, graph.Status) {
 		return false
 	}
+	plan := make([]planUnit, 0, len(graph.Units))
+	for _, unit := range graph.Units {
+		plan = append(plan, unit.planUnit)
+	}
+	if len(dependencyCycle(plan)) > 0 {
+		return false
+	}
 	return !slices.ContainsFunc(graph.Units, func(unit workUnit) bool {
 		return !unitKeyPattern.MatchString(unit.Key) || unit.HandoffAt < 0 || unit.HandoffAt > len(graph.Messages) ||
 			(unit.Kind == unitReview && len(unit.DependsOn) != 1) ||

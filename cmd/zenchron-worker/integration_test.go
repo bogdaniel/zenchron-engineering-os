@@ -70,7 +70,15 @@ func TestIntegrationRunMergesExactCandidatesVerifiesTheCombinationAndPublishesOn
 		pushed = append(pushed, branch)
 		return nil
 	}
-	harness.command.Attempts, harness.command.PublishPullRequest = 2, true
+	// A publication bound to another commit than the worktree reproduces pushes nothing.
+	harness.command.Attempts, harness.command.PublishPullRequest, harness.command.PublishCommit = 2, true, strings.Repeat("d", 40)
+	if err := harness.process(); err != nil {
+		t.Fatalf("process mismatched publication: %v", err)
+	}
+	if refused := harness.lastResult(); refused.Status != "failed" || refused.BranchPushed || len(pushed) != 0 {
+		t.Fatalf("mismatched publication result = %#v, pushed %v", refused, pushed)
+	}
+	harness.command.Attempts, harness.command.PublishCommit = 3, head
 	if err := harness.process(); err != nil {
 		t.Fatalf("process publication: %v", err)
 	}
