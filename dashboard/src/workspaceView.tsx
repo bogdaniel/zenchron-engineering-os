@@ -113,7 +113,8 @@ const environmentSchema = z.object({
   objectives: z.array(z.object({ graph_id: z.string().optional(), graph_status: z.string().optional(),
     findings: z.number().int().nonnegative().optional(), handoffs: z.number().int().nonnegative().optional(),
     pull_request_url: z.string().optional() })),
-  decisions: z.array(z.object({ objective_id: z.string(), question: z.string(), resolved_by: z.string().optional() })),
+  decisions: z.array(z.object({ graph_id: z.string().optional(), graph_status: z.string().optional(), message_id: z.string().optional(),
+    objective_id: z.string(), question: z.string(), resolved_by: z.string().optional() })),
 });
 type WorkspaceEnvironment = z.infer<typeof environmentSchema>;
 
@@ -214,7 +215,7 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
   const templateRows = [...definitions.workflows, ...definitions.agents];
   const graphCount = environment?.objectives.filter((item) => item.graph_id).length ?? 0;
   const pullRequestCount = environment?.objectives.filter((item) => item.pull_request_url).length ?? 0;
-  const pendingDecisions = environment?.decisions.filter((item) => !item.resolved_by).length ?? 0;
+  const pendingDecisions = environment?.decisions.filter((item) => !item.resolved_by && item.graph_status !== 'cancelled').length ?? 0;
   const findingCount = environment?.objectives.reduce((count, item) => count + (item.findings ?? 0), 0) ?? 0;
   const handoffCount = environment?.objectives.reduce((count, item) => count + (item.handoffs ?? 0), 0) ?? 0;
 
@@ -270,8 +271,9 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
       manageNote: 'Workspace membership and roles are not configured in the control plane, so there is nothing to manage yet.' },
     releases: { rows: [], note: missing('release streams are not recorded by the control plane.') },
     decisions: { rows: environment?.decisions.map((item) => ({ name: item.question,
-      state: item.resolved_by ? 'Resolved' : 'Pending',
-      href: livePageHref('objectives', { objective: item.objective_id, tab: 'plan' }) })) ?? [],
+      state: item.resolved_by ? 'Resolved' : item.graph_status === 'cancelled' ? 'Cancelled' : 'Pending',
+      href: item.graph_status === 'cancelled' ? undefined : livePageHref('objectives', { objective: item.objective_id, tab: 'plan',
+        ...(item.graph_id ? { graph_id: item.graph_id } : {}), ...(item.message_id ? { decision: item.message_id } : {}) }) })) ?? [],
       note: environmentNote ?? (environment?.decisions.length ? undefined : { text: 'No decisions recorded in current WorkGraphs.' }) },
     delivery: { ranges: [], metrics: () => [
       ['WorkGraphs', String(graphCount), 'current'], ['PR links', String(pullRequestCount), 'observed'],

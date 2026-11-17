@@ -36,6 +36,7 @@ type environmentObjective struct {
 // environmentDecision names a decision asked within the product and whether a person answered it.
 type environmentDecision struct {
 	GraphID     string `json:"graph_id"`
+	GraphStatus string `json:"graph_status"`
 	MessageID   string `json:"message_id"`
 	ObjectiveID string `json:"objective_id"`
 	Unit        string `json:"unit"`
@@ -77,7 +78,8 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 					entry.Findings++
 				case messageDecisionRequest:
 					environment.Decisions = append(environment.Decisions, environmentDecision{GraphID: graph.ID, MessageID: message.ID,
-						ObjectiveID: objective.ID, Unit: message.From, Question: message.Body, ResolvedBy: graph.resolvedBy(message.ID)})
+						GraphStatus: graph.Status, ObjectiveID: objective.ID, Unit: message.From, Question: message.Body,
+						ResolvedBy: graph.resolvedBy(message.ID)})
 				}
 			}
 			for _, unit := range graph.Units {
