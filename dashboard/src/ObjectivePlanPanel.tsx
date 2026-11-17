@@ -111,17 +111,18 @@ export function ObjectivePlanPanel({ objectiveID, productID, sampleData }: {
   const live = useLiveOrchestration(!sampleData, objectiveID, productID);
   const source = sampleData ? mock : live;
   const graph = graphOfObjective(source.graphs, objectiveID);
-  if (source.loading || source.plansLoading) return <div className="work-panel" role="tabpanel"><p role="status">Loading the plan…</p></div>;
   if (source.failed || source.plansFailed) return <div className="work-panel" role="tabpanel">
     <p role="alert">Could not load the plan and its work graph.</p>
     <Button size="xs" variant="subtle" onClick={source.retry}>Retry loading the plan</Button></div>;
   return <div className="work-panel" role="tabpanel">
     {source.readOnlyReason && <p className="work-unit-reason">{source.readOnlyReason}</p>}
+    {(source.loading || source.plansLoading) && <p role="status">Loading existing work…</p>}
     {graph && <><WorkGraphView graph={graph} source={source} />
       {!sampleData && <ObjectiveDeliveryReport graphID={graph.id} />}</>}
     <h4>Plan revisions</h4>
-    {source.plans.length ? <ul className="plan-revisions">{source.plans.map((plan, index) =>
-      <PlanRevision key={plan.revision} plan={plan} latest={index === 0} source={source} live={!sampleData} />)}</ul>
+    {source.plansLoading ? <p role="status">Loading plan revisions…</p> : source.plans.length
+      ? <ul className="plan-revisions">{source.plans.map((plan, index) =>
+        <PlanRevision key={plan.revision} plan={plan} latest={index === 0} source={source} live={!sampleData} />)}</ul>
       : <p className="work-empty">No plan yet. Propose one to turn this objective into reviewed, integrated work.</p>}
     <h4>{source.plans.length ? 'Propose a new revision' : 'Propose a plan'}</h4>
     <ProposeForm source={source} />

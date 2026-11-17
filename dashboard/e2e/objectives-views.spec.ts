@@ -464,6 +464,28 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await expect(page.getByRole('region', { name: 'Unscheduled' })).toContainText('Document ownership');
 });
 
+test('objective plan options stay available while WorkGraph history is loading', async ({ page }) => {
+  await useLocalSession(page);
+  await page.route('**/api/v1/objectives', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([objectives[0]]),
+  }));
+  let releaseWorkGraphs: (() => void) | undefined;
+  await page.route('**/api/v1/work-graphs', async (route) => {
+    await new Promise<void>((resolve) => { releaseWorkGraphs = resolve; });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  const workGraphRequest = page.waitForRequest('**/api/v1/work-graphs');
+  await page.goto(`http://zenchron.test:${dashboardPort}/?objective=${objectives[0].id}&tab=plan#objectives`);
+  await workGraphRequest;
+
+  await expect(page.getByRole('combobox', { name: 'Repository checkout' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Executable workflow' })).toBeVisible();
+  if (!releaseWorkGraphs) throw new Error('WorkGraph request did not reach its test gate.');
+  releaseWorkGraphs();
+  await expect(page.getByText('No plan yet. Propose one to turn this objective into reviewed, integrated work.'))
+    .toBeVisible();
+});
+
 test('objective create and edit submit the expected API payloads', async ({ page }) => {
   await useLocalSession(page);
   const productID = 'a'.repeat(32);

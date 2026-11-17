@@ -57,6 +57,8 @@ flowchart LR
 - Live shows only control-plane data in the same frame. The KPI row reports the completed count, the completed share,
   and the status counts, without the fixture trend badges and graphics. Table IDs and the detail ID badge show the
   first eight characters of the objective ID.
+- The Live Plan tab keeps repository and workflow selection available while existing WorkGraph and plan history load;
+  those recorded views show their own loading state.
 - Parts of the design the objective API does not hold say so in Live: Approval and Workflows read "Unavailable" in the
   detail panel and "—" in the table; Blockers, Acceptance Criteria, Related PRs, Activity Feed, the Milestones,
   Related PRs, and Activity tabs, Milestone Progress, and the capacity chart show "Unavailable" with the reason; the
