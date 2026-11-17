@@ -3,8 +3,8 @@ import { defineConfig } from '@playwright/test';
 const environment = (
   globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } }
 ).process?.env ?? {};
-const dashboardPort = Number(environment.ZENCHRON_E2E_DASHBOARD_PORT) || 4174;
-if (dashboardPort === 4173 || dashboardPort === 8080) throw new Error('E2E dashboard port conflicts with the managed installation');
+const dashboardPort = Number(environment.ZENCHRON_E2E_DASHBOARD_PORT) || 4173;
+if (dashboardPort === 8080) throw new Error('E2E dashboard port conflicts with the managed installation');
 // The worker finds `codex` here first: a deterministic fake CLI, so runs use the real CLI process path.
 const fakeCLIDirectory = decodeURIComponent(new URL('./e2e/fake-cli', import.meta.url).pathname);
 

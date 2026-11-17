@@ -12,7 +12,7 @@ test('Live reconnect reloads the activated dashboard while preserving its route 
     running_revision: revision, latest_revision: newRevision, state,
     worker_compatible: true, active_runs: 0,
   } }));
-  await page.goto('http://127.0.0.1:4174/?mode=live#settings');
+  await page.goto('http://127.0.0.1:4173/?mode=live#settings');
   await expect(page.getByRole('heading', { name: 'System Update' })).toBeVisible();
   revision = newRevision;
   state = 'active';
@@ -30,7 +30,7 @@ test('Mock Settings does not read managed update status', async ({ page }) => {
     reads++;
     await route.fulfill({ json: { running_revision: oldRevision, state: 'idle', worker_compatible: true, active_runs: 0 } });
   });
-  await page.goto('http://127.0.0.1:4174/?mode=mock#settings');
+  await page.goto('http://127.0.0.1:4173/?mode=mock#settings');
   await expect(page.getByRole('heading', { name: 'System Update' })).toBeVisible();
   expect(reads).toBe(0);
   await expect(page.getByText('Mock status is illustrative; the installed update service is not queried.')).toBeVisible();
