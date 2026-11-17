@@ -74,7 +74,8 @@ type workUnit struct {
 	Inputs         []workerapi.MergeInput `json:"inputs,omitempty"`
 	PullRequestURL string                 `json:"pull_request_url,omitempty"`
 	// Restart asks for a fresh run after an operator retried a failed unit.
-	Restart bool `json:"restart,omitzero"`
+	Restart      bool `json:"restart,omitzero"`
+	RecoveryUsed bool `json:"recovery_used,omitzero"`
 }
 
 // graphMessage is one immutable typed message. Commit is always what the worker observed for the run
