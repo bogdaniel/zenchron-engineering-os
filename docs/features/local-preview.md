@@ -6,6 +6,12 @@
 not start another application stack. Development and browser tests use isolated, short-lived fixtures on port 4174 and
 API/worker port 8083.
 
+Installation checks PATH before replacing an earlier command. It retires only executable binaries whose Go build
+identity belongs to Zenchron Engineering or this repository, preserving a `.legacy` recovery copy before installing
+the stable launcher. An unrelated command that would win PATH is left untouched and blocks installation with its path;
+`zenchron-engineering doctor` reports the canonical entrypoint, resolved command, active revision and shadowing paths.
+The installer never overwrites an arbitrary executable or changes adopted-controller authority records.
+
 The dashboard has one React application. `?mode=mock` selects sample data; `?mode=live` selects the managed API.
 After a trusted-main release activates, the open Live dashboard reloads the versioned dashboard bundle at its current
 URL so its hash route, query mode, cookie session and persisted engineering state remain available.
@@ -31,12 +37,16 @@ running revision.
 
 ```mermaid
 sequenceDiagram
+    participant I as Local installer
     participant GH as Trusted GitHub main
     participant S as Managed supervisor
     participant R as Versioned release store
     participant CP as Control plane
     participant W as Local worker
     participant D as Existing dashboard tab
+    I->>I: Inspect PATH and retire only recognized legacy Zenchron shadows
+    I->>R: Build and verify the initial trusted release
+    I->>S: Install one stable command and one managed LaunchAgent
     GH->>S: New merged main revision
     S->>GH: Verify signature, required checks and merged PR
     S->>R: Fetch exact commit/tree and build isolated artifacts

@@ -23,6 +23,8 @@ import (
 
 const managedLaunchAgentLabel = "com.bogdaniel.zenchron-engineering-os"
 const managedEntrypointMarker = "# managed by Zenchron Engineering OS"
+const legacyZenchronModule = "github.com/bogdaniel/zenchron-engineering"
+const currentZenchronModule = "github.com/bogdaniel/zenchron-engineering-os"
 
 func managedHome() (string, error) {
 	if home := strings.TrimSpace(os.Getenv("ZENCHRON_MANAGED_HOME")); home != "" {
@@ -54,6 +56,13 @@ func managedDataDirectory(home string) (string, error) {
 func installManaged() error {
 	if runtime.GOOS != "darwin" {
 		return errors.New("the managed local installation currently requires macOS LaunchAgents")
+	}
+	canonical, err := localEntrypointPath()
+	if err != nil {
+		return err
+	}
+	if err := validateEntrypointPath(canonical); err != nil {
+		return err
 	}
 	home, err := managedHome()
 	if err != nil {
@@ -168,15 +177,16 @@ func ensureManagedAgent(home, entrypoint string) error {
 }
 
 func installStableEntrypoint(home string) (string, error) {
-	homeDir, err := os.UserHomeDir()
+	path, err := localEntrypointPath()
 	if err != nil {
-		return "", fmt.Errorf("resolve user home: %w", err)
+		return "", err
 	}
-	binDir := filepath.Join(homeDir, ".local", "bin")
-	if err := os.MkdirAll(binDir, 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return "", fmt.Errorf("create local command directory: %w", err)
 	}
-	path := filepath.Join(binDir, "zenchron-engineering")
+	if err := migrateShadowingZenchronCommands(path); err != nil {
+		return "", err
+	}
 	script := "#!/bin/sh\n" + managedEntrypointMarker + "\nset -eu\nroot=" + shellQuote(home) + "\n"
 	script += "revision=$(cat \"$root/active-release\")\n"
 	script += "case \"$revision\" in " + strings.Repeat("[0-9a-f]", 40) + ") ;; *) echo 'invalid Zenchron release pointer' >&2; exit 1 ;; esac\n"
@@ -189,6 +199,14 @@ func installStableEntrypoint(home string) (string, error) {
 		return "", fmt.Errorf("install canonical Zenchron command: %w", err)
 	}
 	return path, nil
+}
+
+func localEntrypointPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home: %w", err)
+	}
+	return filepath.Join(home, ".local", "bin", "zenchron-engineering"), nil
 }
 
 func verifyReplaceableEntrypoint(path string, expected []byte) error {
@@ -210,11 +228,69 @@ func verifyReplaceableEntrypoint(path string, expected []byte) error {
 	}
 	if info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
 		build, err := buildinfo.ReadFile(path)
-		if err == nil && build.Main.Path == "github.com/bogdaniel/zenchron-engineering-os" {
+		if err == nil && isZenchronModule(build.Main.Path) {
 			return nil
 		}
 	}
 	return errors.New("refusing to replace an existing zenchron-engineering command that is not a Zenchron installation")
+}
+
+func isZenchronModule(module string) bool {
+	return module == currentZenchronModule || module == legacyZenchronModule
+}
+
+func migrateShadowingZenchronCommands(canonical string) error {
+	paths, err := shadowingCommandPaths(canonical)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		if isZenchronExecutable(path) {
+			retired := path + ".legacy"
+			if _, err := os.Lstat(retired); err == nil {
+				return fmt.Errorf("cannot migrate stale Zenchron command %s because its recovery copy already exists at %s", path, retired)
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("inspect stale Zenchron recovery path %s: %w", retired, err)
+			}
+			if err := os.Rename(path, retired); err != nil {
+				return fmt.Errorf("retire stale Zenchron command %s: %w", path, err)
+			}
+			continue
+		}
+		return fmt.Errorf("PATH resolves zenchron-engineering to %s before canonical entrypoint %s; refusing to replace an unrelated command", path, canonical)
+	}
+	return nil
+}
+
+func validateEntrypointPath(canonical string) error {
+	paths, err := shadowingCommandPaths(canonical)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		if !isZenchronExecutable(path) {
+			return fmt.Errorf("PATH resolves zenchron-engineering to %s before canonical entrypoint %s; refusing to replace an unrelated command", path, canonical)
+		}
+	}
+	return nil
+}
+
+func shadowingCommandPaths(canonical string) ([]string, error) {
+	paths, err := commandPaths()
+	if err != nil {
+		return nil, err
+	}
+	for index, path := range paths {
+		if path == canonical || sameFile(path, canonical) {
+			return paths[:index], nil
+		}
+	}
+	return paths, nil
+}
+
+func isZenchronExecutable(path string) bool {
+	build, err := buildinfo.ReadFile(path)
+	return err == nil && isZenchronModule(build.Main.Path)
 }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }

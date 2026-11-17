@@ -13,6 +13,7 @@ import (
 func TestStableEntrypointFollowsTwoSuccessiveReleases(t *testing.T) {
 	userHome := t.TempDir()
 	t.Setenv("HOME", userHome)
+	t.Setenv("PATH", filepath.Join(userHome, ".local", "bin")+string(os.PathListSeparator)+"/usr/bin:/bin")
 	managedHome := filepath.Join(userHome, ".config", "Zenchron")
 	first := "0123456789abcdef0123456789abcdef01234567"
 	second := "abcdef0123456789abcdef0123456789abcdef01"
@@ -50,6 +51,7 @@ func TestStableEntrypointRefusesToReplaceUnrelatedCommand(t *testing.T) {
 	userHome := t.TempDir()
 	t.Setenv("HOME", userHome)
 	path := filepath.Join(userHome, ".local", "bin", "zenchron-engineering")
+	t.Setenv("PATH", filepath.Dir(path)+string(os.PathListSeparator)+"/usr/bin:/bin")
 	contents := []byte("#!/bin/sh\necho user command\n")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
@@ -66,9 +68,89 @@ func TestStableEntrypointRefusesToReplaceUnrelatedCommand(t *testing.T) {
 	}
 }
 
+func TestInstallMigratesLegacyCommandBeforeCanonicalEntrypoint(t *testing.T) {
+	userHome := t.TempDir()
+	t.Setenv("HOME", userHome)
+	root := t.TempDir()
+	legacyDirectory := filepath.Join(root, "legacy-bin")
+	canonicalDirectory := filepath.Join(userHome, ".local", "bin")
+	if err := os.MkdirAll(legacyDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacyModule := filepath.Join(root, "legacy-source")
+	if err := os.MkdirAll(legacyModule, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	goMod := "module github.com/bogdaniel/zenchron-engineering\n\ngo 1.23\n"
+	if err := os.WriteFile(filepath.Join(legacyModule, "go.mod"), []byte(goMod), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mainSource := "package main\nfunc main() {}\n"
+	if err := os.WriteFile(filepath.Join(legacyModule, "main.go"), []byte(mainSource), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	legacyCommand := filepath.Join(legacyDirectory, "zenchron-engineering")
+	build := exec.Command("go", "build", "-o", legacyCommand, ".")
+	build.Dir = legacyModule
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build legacy fixture: %v: %s", err, output)
+	}
+	path := strings.Join([]string{legacyDirectory, canonicalDirectory, "/usr/bin", "/bin"}, string(os.PathListSeparator))
+	t.Setenv("PATH", path)
+	managedHome := filepath.Join(userHome, ".config", "Zenchron")
+	entrypoint, err := installStableEntrypoint(managedHome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(legacyCommand); !os.IsNotExist(err) {
+		t.Fatalf("stale PATH command remains at its public name: %v", err)
+	}
+	if _, err := os.Stat(legacyCommand + ".legacy"); err != nil {
+		t.Fatalf("stale command recovery copy was not preserved: %v", err)
+	}
+	resolved, err := exec.LookPath("zenchron-engineering")
+	if err != nil || resolved != entrypoint {
+		t.Fatalf("PATH resolves %q, %v; want canonical entrypoint %q", resolved, err, entrypoint)
+	}
+	if _, err := installStableEntrypoint(managedHome); err != nil {
+		t.Fatalf("repeat installation: %v", err)
+	}
+	if _, err := os.Stat(legacyCommand + ".legacy.legacy"); !os.IsNotExist(err) {
+		t.Fatalf("repeated install created another migration copy: %v", err)
+	}
+}
+
+func TestInstallRefusesUnrelatedEarlierPathCommand(t *testing.T) {
+	userHome := t.TempDir()
+	t.Setenv("HOME", userHome)
+	root := t.TempDir()
+	first := filepath.Join(root, "first")
+	canonicalDirectory := filepath.Join(userHome, ".local", "bin")
+	for _, directory := range []string{first, canonicalDirectory} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shadow := filepath.Join(first, "zenchron-engineering")
+	contents := []byte("#!/bin/sh\necho unrelated\n")
+	if err := os.WriteFile(shadow, contents, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", first+string(os.PathListSeparator)+canonicalDirectory)
+	_, err := installStableEntrypoint(filepath.Join(userHome, "managed"))
+	if err == nil || !strings.Contains(err.Error(), shadow) {
+		t.Fatalf("install error = %v; want explicit unrelated PATH shadow %s", err, shadow)
+	}
+	actual, err := os.ReadFile(shadow)
+	if err != nil || string(actual) != string(contents) {
+		t.Fatalf("unrelated command changed to %q: %v", actual, err)
+	}
+}
+
 func TestStableEntrypointDoesNotFallBackWhenActiveReleaseIsMissing(t *testing.T) {
 	userHome := t.TempDir()
 	t.Setenv("HOME", userHome)
+	t.Setenv("PATH", filepath.Join(userHome, ".local", "bin")+string(os.PathListSeparator)+"/usr/bin:/bin")
 	managedHome := filepath.Join(userHome, ".config", "Zenchron")
 	if err := updater.SetActiveRelease(managedHome, "0123456789abcdef0123456789abcdef01234567"); err != nil {
 		t.Fatal(err)
