@@ -18,6 +18,31 @@ func (transport managedTestTransport) RoundTrip(request *http.Request) (*http.Re
 	return transport(request)
 }
 
+func TestManagedRuntimeStopsSiblingAfterChildFailure(t *testing.T) {
+	workingDirectory := t.TempDir()
+	runtime := &managedRuntime{}
+	var err error
+	runtime.api, err = startManagedChild("/bin/sh", []string{"-c", "exit 7"}, workingDirectory, os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker, err := startManagedChild("/bin/sh", []string{"-c", "exec sleep 30"}, workingDirectory, os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime.worker = worker
+	childErr := <-runtime.api.done
+	if err := runtime.stopAfterChildExit("control plane", childErr); err == nil {
+		t.Fatal("unexpected control-plane exit was not reported")
+	}
+	if runtime.api != nil || runtime.worker != nil {
+		t.Fatalf("managed children remained owned after failure: api=%v worker=%v", runtime.api, runtime.worker)
+	}
+	if worker.command.ProcessState == nil {
+		t.Fatal("sibling worker process was left running")
+	}
+}
+
 func TestReleaseTransitionRequiresSameStateSchemaAndCandidateProtocolPair(t *testing.T) {
 	current := updater.Manifest{StateSchemaVersion: 1, ControlPlaneProtocolVersion: 1, WorkerProtocolVersion: 1}
 	candidate := updater.Manifest{StateSchemaVersion: 1, ControlPlaneProtocolVersion: 2, WorkerProtocolVersion: 2}

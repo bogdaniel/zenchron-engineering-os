@@ -149,9 +149,9 @@ func runManaged() error {
 		case <-ctx.Done():
 			return runtime.stopSafely()
 		case err := <-runtime.api.done:
-			return fmt.Errorf("managed control plane stopped: %w", err)
+			return runtime.stopAfterChildExit("control plane", err)
 		case err := <-runtime.worker.done:
-			return fmt.Errorf("managed local worker stopped: %w", err)
+			return runtime.stopAfterChildExit("local worker", err)
 		case <-checks:
 			if err := runtime.checkAndUpdate(ctx, commit); err != nil {
 				logManagedError(err)
@@ -162,6 +162,13 @@ func runManaged() error {
 			}
 		}
 	}
+}
+
+func (runtime *managedRuntime) stopAfterChildExit(name string, childErr error) error {
+	if childErr == nil {
+		childErr = errors.New("process exited unexpectedly")
+	}
+	return errors.Join(fmt.Errorf("managed %s stopped: %w", name, childErr), runtime.stopChildren())
 }
 
 func (runtime *managedRuntime) startRelease(commit string) error {
