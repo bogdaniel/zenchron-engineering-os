@@ -137,7 +137,7 @@ func runManaged() error {
 	defer signal.Stop(checks)
 	ticker := time.NewTicker(updatePollInterval)
 	defer ticker.Stop()
-	if err := runtime.checkAndUpdate(ctx, commit); err != nil {
+	if err := runtime.checkAndUpdate(ctx, commit, false); err != nil {
 		logManagedError(err)
 	}
 	for {
@@ -152,11 +152,11 @@ func runManaged() error {
 		case err := <-runtime.worker.done:
 			return runtime.stopAfterChildExit("local worker", err)
 		case <-checks:
-			if err := runtime.checkAndUpdate(ctx, commit); err != nil {
+			if err := runtime.checkAndUpdate(ctx, commit, true); err != nil {
 				logManagedError(err)
 			}
 		case <-ticker.C:
-			if err := runtime.checkAndUpdate(ctx, commit); err != nil {
+			if err := runtime.checkAndUpdate(ctx, commit, false); err != nil {
 				logManagedError(err)
 			}
 		}
@@ -222,7 +222,7 @@ func (runtime *managedRuntime) startRelease(commit string) error {
 	return nil
 }
 
-func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current string) error {
+func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current string, explicitRetry bool) error {
 	runtime.status.State, runtime.status.Progress, runtime.status.BlockReason = "checking", "Checking trusted main and required checks", ""
 	runtime.status.LastAttempt = time.Now().UTC()
 	if err := runtime.writeStatus(); err != nil {
@@ -234,6 +234,11 @@ func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current strin
 		return runtime.failUpdate("blocked", "Could not verify trusted main: "+err.Error())
 	}
 	runtime.status.LatestRevision = candidate.Commit
+	if shouldDeferFailedCandidate(runtime.status, candidate.Commit, explicitRetry) {
+		runtime.status.State, runtime.status.Progress = "failed", ""
+		runtime.status.BlockReason = runtime.status.LastFailureReason
+		return runtime.writeStatus()
+	}
 	if candidate.Commit == current {
 		runtime.status.State, runtime.status.Progress = "idle", "Running the latest trusted revision"
 		return runtime.writeStatus()
@@ -308,6 +313,10 @@ func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current strin
 		return runtime.failUpdate("failed", "Could not replace the managed runtime: "+err.Error())
 	}
 	return nil
+}
+
+func shouldDeferFailedCandidate(status updater.Status, candidate string, explicitRetry bool) bool {
+	return !explicitRetry && candidate != "" && candidate == status.LastFailedRevision
 }
 
 func activationCanRollback(home, previous, candidate string) bool {

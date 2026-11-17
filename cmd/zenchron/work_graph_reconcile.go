@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -30,6 +31,9 @@ const (
 // call after any event and after a restart; nothing else moves a graph forward.
 func (store *workGraphStore) reconcileAll() {
 	if store == nil {
+		return
+	}
+	if store.runs != nil && store.runs.isQuiesced() {
 		return
 	}
 	store.mu.Lock()
@@ -206,6 +210,9 @@ func (store *workGraphStore) perform(graph *workGraph, action unitAction, runs m
 	if action.kind != actionStart {
 		run, status, message := store.runs.requeueForUnit(unit.RunIDs[len(unit.RunIDs)-1], action.kind == actionPublish)
 		if status != 0 {
+			if status == http.StatusServiceUnavailable && message == runAdmissionPausedMessage {
+				return false
+			}
 			unit.Failure = "No further pass is possible: " + message + "."
 			return false
 		}
@@ -229,6 +236,9 @@ func (store *workGraphStore) perform(graph *workGraph, action unitAction, runs m
 	}
 	run, status, message := store.runs.enqueue(item)
 	if status != 0 {
+		if status == http.StatusServiceUnavailable && message == runAdmissionPausedMessage {
+			return false
+		}
 		unit.Failure = "Could not queue a run: " + message + "."
 		return false
 	}

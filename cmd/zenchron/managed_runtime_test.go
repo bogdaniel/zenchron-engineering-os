@@ -45,6 +45,21 @@ func TestManagedRuntimeStopsSiblingAfterChildFailure(t *testing.T) {
 	}
 }
 
+func TestFailedCandidateWaitsForExplicitRetryOrNewMain(t *testing.T) {
+	failed := "0123456789abcdef0123456789abcdef01234567"
+	newer := "abcdef0123456789abcdef0123456789abcdef01"
+	status := updater.Status{LastFailedRevision: failed}
+	if !shouldDeferFailedCandidate(status, failed, false) {
+		t.Fatal("automatic poll retried the same failed release")
+	}
+	if shouldDeferFailedCandidate(status, failed, true) {
+		t.Fatal("explicit operator retry was suppressed")
+	}
+	if shouldDeferFailedCandidate(status, newer, false) {
+		t.Fatal("new trusted main was suppressed by an older failure")
+	}
+}
+
 func TestManagedRuntimePreservesCLIChildrenUntilActiveRunsReachSafeBoundary(t *testing.T) {
 	directory := t.TempDir()
 	firstActiveCount := make(chan struct{}, 1)

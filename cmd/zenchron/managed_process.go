@@ -119,7 +119,8 @@ func waitManagedDashboard(client *http.Client) error {
 }
 
 func withEnvironment(environment []string, values map[string]string) []string {
-	result := environment
+	result := make([]string, 0, len(environment)+len(values))
+	result = append(result, environment...)
 	for key, value := range values {
 		result = withoutEnvironment(result, key)
 		result = append(result, key+"="+value)
@@ -128,7 +129,7 @@ func withEnvironment(environment []string, values map[string]string) []string {
 }
 
 func withoutEnvironment(environment []string, key string) []string {
-	result := environment[:0]
+	result := make([]string, 0, len(environment))
 	for _, value := range environment {
 		if !strings.HasPrefix(value, key+"=") {
 			result = append(result, value)

@@ -12,7 +12,15 @@ func TestManagedWorkerReceivesOnlyExecutionCredentials(t *testing.T) {
 		"ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH=/private/app.pem", "ZENCHRON_ACCESS_FILE=/private/access.json",
 		"ZENCHRON_DATA_DIR=/private/state", "ZENCHRON_UPDATE_REPOSITORY=owner/repo",
 	}
+	original := append([]string(nil), base...)
+	api := withEnvironment(base, map[string]string{"ZENCHRON_DATA_DIR": "/private/state"})
 	got := strings.Join(managedWorkerEnvironment(base, "/projects", "0123456789abcdef0123456789abcdef01234567"), "\n")
+	if strings.Join(base, "\n") != strings.Join(original, "\n") {
+		t.Fatal("worker environment composition mutated the supervisor's environment")
+	}
+	if !strings.Contains(strings.Join(api, "\n"), "ZENCHRON_DATA_DIR=/private/state") {
+		t.Fatal("API environment lost its state directory after worker environment composition")
+	}
 	for _, key := range []string{"ZENCHRON_GITHUB_TOKEN", "ZENCHRON_GITHUB_WEBHOOK_SECRET", "ZENCHRON_SESSION_SECRET",
 		"ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", "ZENCHRON_ACCESS_FILE", "ZENCHRON_DATA_DIR", "ZENCHRON_UPDATE_REPOSITORY"} {
 		if strings.Contains(got, key) {

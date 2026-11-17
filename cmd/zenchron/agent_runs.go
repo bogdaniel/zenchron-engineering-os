@@ -17,11 +17,12 @@ import (
 )
 
 const (
-	agentRunLease       = 3 * time.Minute
-	maxAgentRuns        = 200
-	maxAgentRunAttempts = 3
-	maxAgentRunDiffSize = 128 << 10
-	maxIssueContextSize = 12_000
+	agentRunLease             = 3 * time.Minute
+	maxAgentRuns              = 200
+	maxAgentRunAttempts       = 3
+	maxAgentRunDiffSize       = 128 << 10
+	maxIssueContextSize       = 12_000
+	runAdmissionPausedMessage = "run admission is paused for a managed release transition"
 )
 
 // Publication outcomes are separate from the run status and from verification.
@@ -386,7 +387,7 @@ func (store *agentRunStore) enqueue(item agentRun) (agentRun, int, string) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	if store.quiesced {
-		return agentRun{}, http.StatusServiceUnavailable, "run admission is paused for a managed release transition"
+		return agentRun{}, http.StatusServiceUnavailable, runAdmissionPausedMessage
 	}
 	if len(store.items) >= maxAgentRuns {
 		return agentRun{}, http.StatusInsufficientStorage, "agent run history is full"
@@ -397,6 +398,12 @@ func (store *agentRunStore) enqueue(item agentRun) (agentRun, int, string) {
 		return agentRun{}, http.StatusInternalServerError, "could not persist agent run"
 	}
 	return item, 0, ""
+}
+
+func (store *agentRunStore) isQuiesced() bool {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.quiesced
 }
 
 // workerRunsProfile reports whether a worker has the execution provider an agent profile names.

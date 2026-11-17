@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,6 +84,9 @@ func (client gitHubClient) trustedMain(ctx context.Context, repository string) (
 	}
 	var rules branchRules
 	rulesErr := client.getJSON(ctx, base+"/rules/branches/main", &rules)
+	if rulesErr != nil && !githubNotFound(rulesErr) {
+		return updater.Candidate{}, fmt.Errorf("verify main rulesets: %w", rulesErr)
+	}
 	checks := requiredChecks{}
 	for _, rule := range rules {
 		if rule.Type != "required_status_checks" {
@@ -96,15 +101,15 @@ func (client gitHubClient) trustedMain(ctx context.Context, repository string) (
 			}
 		}
 	}
-	if len(checks.Checks) == 0 {
-		var protection struct {
-			Required requiredChecks `json:"required_status_checks"`
-		}
-		if err := client.getJSON(ctx, base+"/branches/main/protection", &protection); err != nil && rulesErr != nil {
-			return updater.Candidate{}, fmt.Errorf("verify main branch protection: %w", err)
-		}
-		checks = protection.Required
+	var protection struct {
+		Required requiredChecks `json:"required_status_checks"`
 	}
+	protectionErr := client.getJSON(ctx, base+"/branches/main/protection", &protection)
+	if protectionErr != nil && !githubNotFound(protectionErr) {
+		return updater.Candidate{}, fmt.Errorf("verify main branch protection: %w", protectionErr)
+	}
+	checks.Contexts = append(checks.Contexts, protection.Required.Contexts...)
+	checks.Checks = append(checks.Checks, protection.Required.Checks...)
 	if err := client.verifyRequiredChecks(ctx, base, candidate.Commit, checks); err != nil {
 		return updater.Candidate{}, err
 	}
@@ -151,64 +156,92 @@ func (client gitHubClient) verifyRequiredChecks(ctx context.Context, base, commi
 		name  string
 		appID int
 	}
-	checks := make(map[checkKey]bool, len(required.Contexts)+len(required.Checks))
+	type checkResult struct {
+		updated time.Time
+		success bool
+	}
+	checks := make(map[checkKey]struct{}, len(required.Contexts)+len(required.Checks))
 	for _, context := range required.Contexts {
-		checks[checkKey{name: context, appID: -1}] = false
+		checks[checkKey{name: context, appID: -1}] = struct{}{}
 	}
 	for _, check := range required.Checks {
-		checks[checkKey{name: check.Context, appID: check.AppID}] = false
+		checks[checkKey{name: check.Context, appID: check.AppID}] = struct{}{}
 	}
 	if len(checks) == 0 {
 		return errors.New("trusted main has no required status checks configured")
 	}
-	var statuses []struct {
-		Context   string    `json:"context"`
-		State     string    `json:"state"`
-		UpdatedAt time.Time `json:"updated_at"`
-	}
-	if err := client.getJSON(ctx, base+"/commits/"+commit+"/statuses", &statuses); err != nil {
-		return fmt.Errorf("read main commit statuses: %w", err)
-	}
-	statusTimes := make(map[checkKey]time.Time)
-	for _, status := range statuses {
-		key := checkKey{name: status.Context, appID: -1}
-		previous, exists := statusTimes[key]
-		if !exists || status.UpdatedAt.After(previous) {
-			statusTimes[key], checks[key] = status.UpdatedAt, status.State == "success"
-		} else if status.UpdatedAt.Equal(previous) && checks[key] != (status.State == "success") {
-			checks[key] = false
+	newest := func(previous checkResult, updated time.Time, success bool) checkResult {
+		if !previous.updated.IsZero() && updated.Before(previous.updated) {
+			return previous
 		}
+		if updated.Equal(previous.updated) && !success {
+			return checkResult{updated: updated}
+		}
+		return checkResult{updated: updated, success: success}
 	}
-	var result struct {
-		CheckRuns []struct {
-			Name       string    `json:"name"`
-			Status     string    `json:"status"`
-			Conclusion string    `json:"conclusion"`
-			UpdatedAt  time.Time `json:"updated_at"`
-			App        struct {
-				ID int `json:"id"`
-			} `json:"app"`
-		} `json:"check_runs"`
-	}
-	if err := client.getJSON(ctx, base+"/commits/"+commit+"/check-runs", &result); err != nil {
-		return fmt.Errorf("read main commit check runs: %w", err)
-	}
-	for _, check := range result.CheckRuns {
-		for key := range checks {
-			if key.name != check.Name || (key.appID != -1 && key.appID != 0 && key.appID != check.App.ID) {
+	// ponytail: caps this commit-scoped verification at 10,000 results; increase only for repositories that exceed it.
+	const pageSize, maxPages = 100, 100
+	statuses := make(map[checkKey]checkResult)
+	for page := 1; page <= maxPages; page++ {
+		var pageStatuses []struct {
+			Context   string    `json:"context"`
+			State     string    `json:"state"`
+			UpdatedAt time.Time `json:"updated_at"`
+		}
+		query := url.Values{"per_page": {strconv.Itoa(pageSize)}, "page": {strconv.Itoa(page)}}
+		if err := client.getJSONQuery(ctx, base+"/commits/"+commit+"/statuses", query, &pageStatuses); err != nil {
+			return fmt.Errorf("read main commit statuses: %w", err)
+		}
+		for _, status := range pageStatuses {
+			key := checkKey{name: status.Context, appID: -1}
+			if _, required := checks[key]; !required {
 				continue
 			}
-			previous, exists := statusTimes[key]
-			success := check.Status == "completed" && check.Conclusion == "success"
-			if !exists || check.UpdatedAt.After(previous) {
-				statusTimes[key], checks[key] = check.UpdatedAt, success
-			} else if check.UpdatedAt.Equal(previous) && checks[key] != success {
-				checks[key] = false
-			}
+			statuses[key] = newest(statuses[key], status.UpdatedAt, status.State == "success")
+		}
+		if len(pageStatuses) < pageSize {
+			break
+		}
+		if page == maxPages {
+			return errors.New("main commit statuses exceeded the bounded pagination limit")
 		}
 	}
-	for key, succeeded := range checks {
-		if !succeeded {
+	runs := make(map[checkKey]checkResult)
+	for page := 1; page <= maxPages; page++ {
+		var pageResult struct {
+			CheckRuns []struct {
+				Name       string    `json:"name"`
+				Status     string    `json:"status"`
+				Conclusion string    `json:"conclusion"`
+				UpdatedAt  time.Time `json:"updated_at"`
+				App        struct {
+					ID int `json:"id"`
+				} `json:"app"`
+			} `json:"check_runs"`
+		}
+		query := url.Values{"per_page": {strconv.Itoa(pageSize)}, "page": {strconv.Itoa(page)}}
+		if err := client.getJSONQuery(ctx, base+"/commits/"+commit+"/check-runs", query, &pageResult); err != nil {
+			return fmt.Errorf("read main commit check runs: %w", err)
+		}
+		for _, check := range pageResult.CheckRuns {
+			for key := range checks {
+				if key.name != check.Name || (key.appID != -1 && key.appID != 0 && key.appID != check.App.ID) {
+					continue
+				}
+				runs[key] = newest(runs[key], check.UpdatedAt, check.Status == "completed" && check.Conclusion == "success")
+			}
+		}
+		if len(pageResult.CheckRuns) < pageSize {
+			break
+		}
+		if page == maxPages {
+			return errors.New("main commit check runs exceeded the bounded pagination limit")
+		}
+	}
+	for key := range checks {
+		status, hasStatus := statuses[key]
+		run, hasRun := runs[key]
+		if (!hasStatus && !hasRun) || (hasStatus && !status.success) || (hasRun && !run.success) {
 			return fmt.Errorf("required main check %q is not successful", key.name)
 		}
 	}
@@ -216,7 +249,11 @@ func (client gitHubClient) verifyRequiredChecks(ctx context.Context, base, commi
 }
 
 func (client gitHubClient) getJSON(ctx context.Context, path string, target any) error {
-	body, err := client.requestBytes(ctx, http.MethodGet, path, "application/vnd.github+json", nil, nil)
+	return client.getJSONQuery(ctx, path, nil, target)
+}
+
+func (client gitHubClient) getJSONQuery(ctx context.Context, path string, query url.Values, target any) error {
+	body, err := client.requestBytes(ctx, http.MethodGet, path, "application/vnd.github+json", query, nil)
 	if err != nil {
 		return err
 	}
@@ -224,4 +261,8 @@ func (client gitHubClient) getJSON(ctx context.Context, path string, target any)
 		return fmt.Errorf("decode GitHub response: %w", err)
 	}
 	return nil
+}
+
+func githubNotFound(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "GitHub returned HTTP 404")
 }

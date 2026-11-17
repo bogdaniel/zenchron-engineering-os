@@ -49,6 +49,34 @@ func TestStableEntrypointFollowsTwoSuccessiveReleases(t *testing.T) {
 	}
 }
 
+func TestLaunchEnvironmentResolvesRelativeStateDirectory(t *testing.T) {
+	workingDirectory := t.TempDir()
+	previousDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(workingDirectory); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previousDirectory); err != nil {
+			t.Error(err)
+		}
+	}()
+	t.Setenv("ZENCHRON_DATA_DIR", "relative-state")
+	environment, err := launchEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.Abs("relative-state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if environment["ZENCHRON_DATA_DIR"] != want {
+		t.Fatalf("LaunchAgent state directory = %q, want %q", environment["ZENCHRON_DATA_DIR"], want)
+	}
+}
+
 func TestStableEntrypointRefusesToReplaceUnrelatedCommand(t *testing.T) {
 	userHome := t.TempDir()
 	t.Setenv("HOME", userHome)

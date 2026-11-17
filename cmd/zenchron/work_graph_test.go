@@ -267,6 +267,41 @@ func TestObjectiveRunsParallelProducersThroughReviewRemediationIntegrationAndOne
 	harness.nothingToClaim()
 }
 
+func TestWorkGraphDefersHandoffAndQueueDuringManagedQuiesce(t *testing.T) {
+	harness := newGraphHarness(t)
+	graph := harness.start(harness.reviewedPlan())
+	producer, secondProducer := harness.claimUnit("api"), harness.claimUnit("ui")
+	harness.store.mu.Lock()
+	harness.store.quiesced = true
+	harness.store.mu.Unlock()
+	harness.handOff(producer, commit(1), "api")
+	harness.handOff(secondProducer, commit(2), "ui")
+	graph = harness.graph()
+	if graph.unit("review-api").Failure != "" || graph.unit("review-api").State == unitFailed {
+		t.Fatalf("quiesce turned a runnable review into a failed unit: %#v", graph.unit("review-api"))
+	}
+	if response := harness.call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", ""); response.Code != http.StatusNoContent {
+		t.Fatalf("quiesced claim returned HTTP %d, want no queued run", response.Code)
+	}
+	harness.store.mu.Lock()
+	harness.store.quiesced = false
+	harness.store.mu.Unlock()
+	harness.claimUnit("review-api")
+}
+
+func TestWorkGraphAdmissionPauseRaceDoesNotFailUnit(t *testing.T) {
+	harness := newGraphHarness(t)
+	graph := harness.start(harness.reviewedPlan())
+	harness.store.mu.Lock()
+	harness.store.quiesced = true
+	harness.store.mu.Unlock()
+	unit := graph.unit("api")
+	harness.store.graphs.perform(&graph, unitAction{key: unit.Key, kind: actionStart}, map[string]agentRun{})
+	if unit.Failure != "" {
+		t.Fatalf("temporary admission pause failed the unit: %q", unit.Failure)
+	}
+}
+
 func TestProducerIsNotCompleteWithoutAnAdmittedHandoff(t *testing.T) {
 	harness := newGraphHarness(t)
 	harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID), unitJSON("integrate", unitIntegrate, "", "api")))

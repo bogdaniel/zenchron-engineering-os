@@ -43,7 +43,7 @@ func TestTrustedMainRequiresProtectionSuccessfulChecksAndMergedPullRequest(t *te
 			if failedCheck {
 				state = "failure"
 			}
-			w.Write([]byte(`[{"context":"ci","state":"` + state + `"}]`))
+			w.Write([]byte(`[{"context":"ci","state":"` + state + `"},{"context":"optional","state":"failure"}]`))
 		case "/repos/owner/repo/commits/" + mainCommit + "/check-runs":
 			w.Write([]byte(`{"check_runs":[{"name":"build","status":"completed","conclusion":"success","app":{"id":17}}]}`))
 		case "/repos/owner/repo/commits/" + mainCommit + "/pulls":
@@ -119,8 +119,10 @@ func TestTrustedMainAcceptsEffectiveRulesetChecksAndRejectsUnsignedCommit(t *tes
 			}
 		case "/repos/owner/repo/rules/branches/main":
 			w.Write([]byte(`[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"build","integration_id":17}]}}]`))
+		case "/repos/owner/repo/branches/main/protection":
+			w.Write([]byte(`{"required_status_checks":{"contexts":["classic"]}}`))
 		case "/repos/owner/repo/commits/" + commit + "/statuses":
-			w.Write([]byte(`[]`))
+			w.Write([]byte(`[{"context":"classic","state":"success"}]`))
 		case "/repos/owner/repo/commits/" + commit + "/check-runs":
 			w.Write([]byte(`{"check_runs":[{"name":"build","status":"completed","conclusion":"success","app":{"id":17}}]}`))
 		case "/repos/owner/repo/commits/" + commit + "/pulls":
@@ -135,6 +137,59 @@ func TestTrustedMainAcceptsEffectiveRulesetChecksAndRejectsUnsignedCommit(t *tes
 	unsigned = true
 	if _, err := client.trustedMain(context.Background(), "owner/repo"); err == nil || !strings.Contains(err.Error(), "signature") {
 		t.Fatalf("trustedMain() error = %v; want unverified signature refusal", err)
+	}
+}
+
+func TestRequiredChecksIgnoreOptionalFailuresAndRejectFailedSameNameRun(t *testing.T) {
+	const base, commit = "/repos/owner/repo", "0123456789abcdef0123456789abcdef01234567"
+	failedRun := false
+	client := updateTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case base + "/commits/" + commit + "/statuses":
+			w.Write([]byte(`[{"context":"ci","state":"success","updated_at":"2026-11-18T10:00:00Z"},{"context":"optional","state":"failure"}]`))
+		case base + "/commits/" + commit + "/check-runs":
+			conclusion := "success"
+			if failedRun {
+				conclusion = "failure"
+			}
+			w.Write([]byte(`{"check_runs":[{"name":"ci","status":"completed","conclusion":"` + conclusion + `","updated_at":"2026-11-18T10:01:00Z","app":{"id":17}}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	required := requiredChecks{Contexts: []string{"ci"}}
+	if err := client.verifyRequiredChecks(context.Background(), base, commit, required); err != nil {
+		t.Fatalf("optional failed status blocked a passing required check: %v", err)
+	}
+	failedRun = true
+	if err := client.verifyRequiredChecks(context.Background(), base, commit, required); err == nil || !strings.Contains(err.Error(), `required main check "ci"`) {
+		t.Fatalf("failed same-name check run was hidden by a passing status: %v", err)
+	}
+}
+
+func TestRequiredChecksReadEveryPage(t *testing.T) {
+	const base, commit = "/repos/owner/repo", "0123456789abcdef0123456789abcdef01234567"
+	client := updateTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("page")
+		switch r.URL.Path {
+		case base + "/commits/" + commit + "/statuses":
+			if page == "1" {
+				w.Write([]byte("[" + strings.TrimSuffix(strings.Repeat(`{"context":"optional","state":"failure"},`, 100), ",") + "]"))
+				return
+			}
+			w.Write([]byte(`[{"context":"ci","state":"success"}]`))
+		case base + "/commits/" + commit + "/check-runs":
+			if page == "1" {
+				w.Write([]byte(`{"check_runs":[` + strings.TrimSuffix(strings.Repeat(`{"name":"optional","status":"completed","conclusion":"failure"},`, 100), ",") + `]}`))
+				return
+			}
+			w.Write([]byte(`{"check_runs":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	if err := client.verifyRequiredChecks(context.Background(), base, commit, requiredChecks{Contexts: []string{"ci"}}); err != nil {
+		t.Fatalf("required check on the second page was not accepted: %v", err)
 	}
 }
 

@@ -356,7 +356,11 @@ func installLaunchAgent(home, entrypoint string) error {
 		return fmt.Errorf("create managed logs directory: %w", err)
 	}
 	plist := filepath.Join(launchDir, managedLaunchAgentLabel+".plist")
-	contents := renderLaunchAgent(entrypoint, userHome, logDir, launchEnvironment())
+	environment, err := launchEnvironment()
+	if err != nil {
+		return err
+	}
+	contents := renderLaunchAgent(entrypoint, userHome, logDir, environment)
 	if err := writeInstallFile(plist, contents, 0o600); err != nil {
 		return fmt.Errorf("write managed LaunchAgent: %w", err)
 	}
@@ -412,7 +416,7 @@ func writePlistValue(body *strings.Builder, value string) {
 	body.WriteString("</string>")
 }
 
-func launchEnvironment() map[string]string {
+func launchEnvironment() (map[string]string, error) {
 	keys := []string{"ZENCHRON_UPDATE_REPOSITORY", "ZENCHRON_DATA_DIR", "ZENCHRON_GITHUB_TOKEN", "ZENCHRON_GITHUB_APP_ID",
 		"ZENCHRON_GITHUB_INSTALLATION_ID", "ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", "ZENCHRON_GITHUB_CLIENT_ID",
 		"ZENCHRON_GITHUB_CLIENT_SECRET", "ZENCHRON_GITHUB_WEBHOOK_SECRET", "ZENCHRON_SESSION_SECRET", "ZENCHRON_GITHUB_ALLOWED_USERS",
@@ -424,14 +428,24 @@ func launchEnvironment() map[string]string {
 	if path == "" {
 		path = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 	}
-	managed, _ := managedHome()
+	managed, err := managedHome()
+	if err != nil {
+		return nil, err
+	}
 	environment := map[string]string{"PATH": path, "ZENCHRON_MANAGED_HOME": managed}
 	for _, key := range keys {
 		if value := os.Getenv(key); value != "" {
 			environment[key] = value
 		}
 	}
-	return environment
+	if path := environment["ZENCHRON_DATA_DIR"]; path != "" && !filepath.IsAbs(path) {
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return nil, fmt.Errorf("resolve managed state directory: %w", err)
+		}
+		environment["ZENCHRON_DATA_DIR"] = absolute
+	}
+	return environment, nil
 }
 
 func writeInstallFile(path string, contents []byte, mode os.FileMode) error {

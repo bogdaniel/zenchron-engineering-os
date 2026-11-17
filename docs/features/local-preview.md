@@ -75,9 +75,12 @@ The installation requires no root privileges, containers or external server. Thi
 macOS LaunchAgents. By default it reuses the existing `<UserConfigDir>/zenchron` durable state directory and keeps
 immutable release artifacts in the separate `<UserConfigDir>/zenchron-installation` directory. An explicit
 `ZENCHRON_DATA_DIR` is preserved in the managed service environment. The installed URL and data directory remain
-stable across releases. The active-release pointer is atomic; the active and previous release are retained for safe
-pre-activation recovery. Mock and Live are UI data modes, not separate processes.
+stable across releases; a relative state path is resolved while installing so LaunchAgent's working directory cannot
+redirect it. The active-release pointer is atomic; the active and previous release are retained for safe pre-activation
+recovery. Mock and Live are UI data modes, not separate processes.
 
 No auto-approval or auto-merge is performed. Manual Check for updates uses the same trust and activation path as the
 periodic poll. An unavailable or unverifiable GitHub state leaves the currently running release in place and reports a
 blocked reason.
+The same failed candidate is not rebuilt on each poll: automatic retries resume when trusted `main` advances, while
+the operator can use Check for updates to retry that exact revision.
