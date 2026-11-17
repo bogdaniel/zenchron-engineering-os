@@ -335,9 +335,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                     if (first) selectObjective(first);
                   }}
                   onSelectionChanged={({ api, source }) => {
-                    // The grid reports its own programmatic selections after a delay. Acting on that report would
-                    // replace an objective chosen in the meantime, so only a person's choice in the grid selects.
-                    if (source === 'api') return;
+                    // Delayed row-data and API reports are not a fresh operator choice.
+                    if (source !== 'rowClicked' && source !== 'checkboxSelected' && source !== 'spaceKey') return;
                     const item = api.getSelectedRows()[0];
                     if (item) selectObjective(item);
                   }}

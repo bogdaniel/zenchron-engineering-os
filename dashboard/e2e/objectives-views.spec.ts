@@ -605,6 +605,8 @@ test('a new objective without a due date stays listed under the initial Live fil
 test('a late grid selection report does not replace the objective being edited', async ({ page }) => {
   await useLocalSession(page);
   const createdID = '5'.repeat(32);
+  const projectID = 'a'.repeat(32);
+  const workflowID = 'b'.repeat(32);
   const persisted: Record<string, unknown>[] = [{ ...objectives[0] }];
   const updatedIDs: string[] = [];
   await page.route('**/api/v1/objectives', async (route) => {
@@ -643,7 +645,7 @@ test('a late grid selection report does not replace the objective being edited',
     due.forEach((report) => report());
     return due.length;
   }, count);
-  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/?project=${projectID}&workflow=${workflowID}&mode=live#objectives`);
 
   // Deliver reports one at a time until the grid has selected its first row; the report of that selection stays queued.
   const selectedRow = page.locator('.objective-grid-wrap [role="row"].ag-row-selected');
@@ -656,9 +658,11 @@ test('a late grid selection report does not replace the objective being edited',
   await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability testing');
   await page.getByRole('button', { name: 'Create objective' }).click();
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability testing55555555');
+  await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.objective-grid-wrap .objective-title-cell').filter({ hasText: 'Expand reliability testing' }))
     .toHaveCount(1);
   expect(await deliverGridReports()).toBeGreaterThan(0);
+  await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
 
   await page.getByRole('button', { name: 'More objective actions' }).click();
   await page.getByRole('menuitem', { name: 'Edit objective' }).click();
