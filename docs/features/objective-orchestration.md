@@ -14,6 +14,7 @@ flowchart LR
   Operator[Operator] --> Plan["Objectives → Plan tab<br/>ObjectivePlanPanel, WorkGraphView"]
   Operator --> Views["Product Workspace, Agents, Reviews<br/>WorkspaceExecution, AgentWorkUnits, RunGraphContext"]
   Plan -->|"GET, POST /api/v1/objectives/{id}/plans"| Plans[orchestration_api.go]
+  Plan -->|"planned workflow and profile links"| Records[Workflows, Agents]
   Plan -->|"POST .../plans/{revision}/approve"| Plans
   Plan -->|"POST /api/v1/work-graphs/{id}/cancel<br/>.../units/{key}/retry<br/>.../decisions/{message}"| Plans
   Views -->|"GET /api/v1/work-graphs"| Plans
@@ -53,6 +54,8 @@ flowchart LR
   Agent Task and Test Generator become producers, Code Reviewer becomes an independent reviewer, and Integrate and
   Publish becomes the existing deterministic integration unit. Unsupported visual nodes remain visible and make the
   workflow invalid for compilation.
+- Plan revisions link to their selected workflow and assigned profiles. Their pinned configuration is labeled as planned;
+  WorkGraph and delivery-report views show the recorded assignments and execution state.
 - The plan stores a private snapshot of each assigned profile and persona. A profile or persona edit between proposal
   and approval makes the proposal stale and approval returns 409. After approval, queued runs and retries use the
   pinned effective configuration. The worker receives only composed instructions and the original profile tool

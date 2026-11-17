@@ -5,8 +5,11 @@ import type { ObjectivePlan, OrchestrationSource } from './orchestration';
 import { useMockOrchestration } from './orchestration-preview-data';
 import { StateBadge, UnitFacts, WorkGraphView } from './WorkGraphView';
 import { ObjectiveDeliveryReport } from './ObjectiveDeliveryReport';
+import { livePageHref } from './livePageHref';
 
-function PlanRevision({ plan, latest, source }: { plan: ObjectivePlan; latest: boolean; source: OrchestrationSource }) {
+function PlanRevision({ plan, latest, source, live }: {
+  plan: ObjectivePlan; latest: boolean; source: OrchestrationSource; live: boolean;
+}) {
   const [error, setError] = useState('');
   const [approving, setApproving] = useState(false);
   async function approve() {
@@ -30,13 +33,15 @@ function PlanRevision({ plan, latest, source }: { plan: ObjectivePlan; latest: b
     {plan.status === 'planning' && <p className="work-unit-reason" role="status">
       A planning agent is reading the repository. The proposal appears here when it finishes.</p>}
     {plan.summary && <p>{plan.summary}</p>}
-    {plan.workflow_id && <p className="work-unit-reason">Compiled from workflow {plan.workflow_id} · version {plan.workflow_version ?? 'unknown'}</p>}
+    {plan.workflow_id && <p className="work-unit-reason">Compiled from workflow {live
+      ? <a href={livePageHref('workflows', { workflow: plan.workflow_id })}>{plan.workflow_id}</a> : plan.workflow_id}
+      {' · version '}{plan.workflow_version ?? 'unknown'}</p>}
     {plan.problems.length > 0 && <ul className="plan-problems" aria-label={`Problems in revision ${plan.revision}`}>
       {plan.problems.map((problem) => <li key={problem}>{problem}</li>)}</ul>}
     {error && <p className="work-unit-failure" role="alert">{error}</p>}
     {plan.units.length > 0 && <ul className="work-units" aria-label={`Units of revision ${plan.revision}`}>
       {plan.units.map((unit) => <li className="work-unit" key={unit.key}>
-        <UnitFacts unit={unit} agent={source.agentNames[unit.agent_id] ?? ''} />
+        <UnitFacts unit={unit} agent={source.agentNames[unit.agent_id] ?? ''} planned live={live} />
         {unit.instructions && <p className="work-unit-reason">{unit.instructions}</p>}
         {unit.acceptance.length > 0 && <ul className="plan-acceptance" aria-label={`Acceptance of ${unit.key}`}>
           {unit.acceptance.map((criterion) => <li key={criterion}>{criterion}</li>)}</ul>}
@@ -116,7 +121,7 @@ export function ObjectivePlanPanel({ objectiveID, productID, sampleData }: {
       {!sampleData && <ObjectiveDeliveryReport graphID={graph.id} />}</>}
     <h4>Plan revisions</h4>
     {source.plans.length ? <ul className="plan-revisions">{source.plans.map((plan, index) =>
-      <PlanRevision key={plan.revision} plan={plan} latest={index === 0} source={source} />)}</ul>
+      <PlanRevision key={plan.revision} plan={plan} latest={index === 0} source={source} live={!sampleData} />)}</ul>
       : <p className="work-empty">No plan yet. Propose one to turn this objective into reviewed, integrated work.</p>}
     <h4>{source.plans.length ? 'Propose a new revision' : 'Propose a plan'}</h4>
     <ProposeForm source={source} />

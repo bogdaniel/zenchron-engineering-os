@@ -29,6 +29,8 @@ flowchart LR
     Start -->|"project/workflow IDs carried to Plan form"| Plans
     Objective -->|"create objective, then select repository and workflow in Plan"| Plans["ObjectivePlanPanel"]
     Plans -->|"POST /api/v1/objectives/{id}/plans"| CP
+    Plans -->|"planned workflow and profile links"| Workflow
+    Plans -->|"planned profile and persona versions"| Agents
     Plans --> Report["ObjectiveDeliveryReport"]
     Report -->|"workflow ID"| Workflow["WorkflowsPage · current saved definition"]
     Report -->|"profile ID"| Agents["AgentsPage · current saved profile"]
@@ -119,6 +121,8 @@ Live:
   recorded workflow version and profile/persona assignments with links to the saved records. Current provider/model
   and profile status are labeled as current configuration, distinct from the executed versions. These relationships
   come from the product's objectives and WorkGraphs; workspace-wide definitions remain available separately.
+- Plan revisions link to their selected workflow and assigned profiles, with profile/persona versions labeled as
+  planned configuration. Cross-page links preserve Live mode on local dashboards.
 - Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, and time-series
   delivery trends. The favorite star and the delivery range are disabled with a reason. Sharing shows the page link
   and says no invitation is sent.

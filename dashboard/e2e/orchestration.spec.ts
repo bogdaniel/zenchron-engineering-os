@@ -80,6 +80,43 @@ async function openPlan(page: Page) {
   return page.getByRole('tabpanel');
 }
 
+for (const viewport of viewports) {
+  test(`plan revisions link planned records without calling them executed (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const workflowID = 'wf-plan';
+    const planned = { ...plan, status: 'proposed', workflow_id: workflowID, workflow_version: 4,
+      units: [{ ...planUnits[0], profile_version: 2, persona_id: 'persona-plan', persona_version: 3 }] };
+    await mockOrchestration(page, { plans: [planned] });
+    await page.route('**/api/v1/workflows', (route) => route.fulfill(json([{ id: workflowID, name: 'Feature delivery',
+      description: '', status: 'draft', version: 5, nodes: [], edges: [], updated_at: now }])));
+    await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
+    await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+
+    const revision = page.locator('.plan-revision').first();
+    await expect(revision.getByRole('link', { name: workflowID })).toHaveAttribute(
+      'href', `/?workflow=${workflowID}&mode=live#workflows`);
+    await expect(revision.getByRole('link', { name: 'Codex engineer' })).toHaveAttribute(
+      'href', `/?profile=${writerID}&mode=live#agents`);
+    await expect(revision).toContainText('Planned profile v2');
+    await expect(revision).toContainText('Planned persona persona-plan · v3');
+    await expect(revision).not.toContainText(/executed (version|profile|persona)/i);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('planned-record-navigation.png'), fullPage: true });
+    await revision.getByRole('link', { name: workflowID }).click();
+    if (viewport.width === 390) {
+      await expect(page.getByRole('img', { name: 'Key workflow stages for Feature delivery; 0 stages summarize 0 components' })).toBeVisible();
+    } else {
+      await expect(page.getByRole('heading', { name: 'Workflow Builder — Feature delivery' })).toBeVisible();
+    }
+    await expect(page).toHaveURL(new RegExp(`workflow=${workflowID}&mode=live#workflows$`));
+    await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
+    await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+    await page.locator('.plan-revision').first().getByRole('link', { name: 'Codex engineer' }).click();
+    await expect(page.locator('.agents-detail-heading')).toContainText('Codex engineer');
+    await expect(page).toHaveURL(new RegExp(`profile=${writerID}&mode=live#agents$`));
+  });
+}
+
 test('plan proposal refuses unknown workflow and unlinked checkout address selections', async ({ page }) => {
   await mockOrchestration(page, {});
   await page.goto(`/?objective=${objectiveID}&tab=plan&project=unlinked&workflow=missing#objectives`);
@@ -202,6 +239,11 @@ test('plan tab reports an empty objective, a failed load, and Mock keeps operati
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
   const mock = page.getByRole('tabpanel');
   await expect(mock).toContainText('Illustrative data: plans are proposed, approved, and executed in Live mode only.');
+  const previewRevision = mock.locator('.plan-revision').first();
+  await expect(previewRevision).toContainText('Compiled from workflow preview-workflow · version 1');
+  await expect(previewRevision.getByRole('link', { name: 'preview-workflow' })).toHaveCount(0);
+  await expect(previewRevision).toContainText('Planned profile v1');
+  await expect(previewRevision.getByRole('link', { name: 'Test Generator' })).toHaveCount(0);
   await expect(mock.getByRole('button', { name: 'Resolve decision' })).toBeDisabled();
   await expect(mock.getByRole('button', { name: 'Cancel work' })).toBeDisabled();
   expect(writes).toEqual([]);
@@ -356,7 +398,7 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(revision.locator(':scope > li')).toHaveCount(4);
   await expect(panel).toContainText(`Compiled from workflow ${created.workflowID} · version ${created.workflowVersion}`);
   await expect(panel).toContainText('Orchestration writer one');
-  await expect(revision).toContainText(`Persona ${created.personaID} · v1`);
+  await expect(revision).toContainText(`Planned persona ${created.personaID} · v1`);
   await panel.getByRole('button', { name: 'Approve plan and start' }).click();
   const units = panel.getByRole('list', { name: 'Work units' });
   await expect(units.getByRole('listitem')).toHaveCount(4);
