@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"slices"
@@ -8,6 +9,9 @@ import (
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
+
+// ponytail: planner guidance caps at 4 KiB to fit the existing 5 KiB run prompt; raise with that prompt budget.
+const maxPlannerWorkflowGuidanceBytes = 4 << 10
 
 func (store *workGraphStore) savedWorkflow(id string) (workflow, bool) {
 	store.workflows.mu.RLock()
@@ -44,6 +48,25 @@ func (store *workGraphStore) validateWorkflow(w http.ResponseWriter, r *http.Req
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"valid": len(problems) == 0, "workflow_id": definition.ID,
 		"workflow_version": definition.Version, "problems": problems})
+}
+
+func plannerWorkflowGuidance(definition workflow) (string, error) {
+	snapshot, err := json.Marshal(struct {
+		ID          string         `json:"id"`
+		Name        string         `json:"name"`
+		Version     int            `json:"version"`
+		Description string         `json:"description"`
+		Nodes       []workflowNode `json:"nodes"`
+		Edges       []workflowEdge `json:"edges"`
+	}{definition.ID, definition.Name, definition.Version, definition.Description, definition.Nodes, definition.Edges})
+	if err != nil {
+		return "", fmt.Errorf("encode workflow guidance: %w", err)
+	}
+	if len(snapshot) > maxPlannerWorkflowGuidanceBytes {
+		return "", fmt.Errorf("workflow definition exceeds the %d-byte planner guidance limit", maxPlannerWorkflowGuidanceBytes)
+	}
+	return "Workflow guidance only; this definition is not a fixed execution contract. Pinned definition:\n" +
+		string(snapshot), nil
 }
 
 // compileWorkflow turns only the WorkGraph-backed nodes into a normal validated objective plan.

@@ -55,7 +55,7 @@ function PlanRevision({ plan, latest, source, live }: {
     {plan.status === 'planning' && <p className="work-unit-reason" role="status">
       A planning agent is reading the repository. The proposal appears here when it finishes.</p>}
     {plan.summary && <p>{plan.summary}</p>}
-    {plan.workflow_id && <p className="work-unit-reason">Compiled from workflow {live
+    {plan.workflow_id && <p className="work-unit-reason">{plan.workflow_mode === 'compiled' ? 'Compiled from workflow ' : plan.workflow_mode === 'guidance' ? 'Guided by workflow ' : 'Workflow execution mode unknown · workflow '}{live
       ? <a href={livePageHref('workflows', { workflow: plan.workflow_id })}>{plan.workflow_id}</a> : plan.workflow_id}
       {' · version '}{plan.workflow_version ?? 'unknown'}</p>}
     {plan.problems.length > 0 && <ul className="plan-problems" aria-label={`Problems in revision ${plan.revision}`}>

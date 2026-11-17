@@ -118,6 +118,7 @@ type workGraph struct {
 	BaseBranch      string         `json:"base_branch"`
 	WorkflowID      string         `json:"workflow_id,omitempty"`
 	WorkflowVersion int            `json:"workflow_version,omitempty"`
+	WorkflowMode    string         `json:"workflow_mode,omitempty"`
 	MaxParallel     int            `json:"max_parallel"`
 	Units           []workUnit     `json:"units"`
 	Messages        []graphMessage `json:"messages"`

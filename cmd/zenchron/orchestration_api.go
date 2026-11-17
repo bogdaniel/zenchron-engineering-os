@@ -108,6 +108,10 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		}
 		definition = &item
 	}
+	if input.Plan != nil && definition != nil {
+		http.Error(w, "manual plans cannot claim a workflow; omit plan to compile it or select planner guidance", http.StatusBadRequest)
+		return
+	}
 	store.mu.Lock()
 	full := len(store.plans[item.ID]) >= maxPlanRevisions
 	store.mu.Unlock()
@@ -130,7 +134,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		plan.planProposal, plan.ProfileSnapshots = *input.Plan, snapshots
-		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, *input.Plan)
+		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, *input.Plan)
 	case input.Plan == nil && input.PlannerAgentID == "" && definition != nil:
 		profiles := store.agentProfiles()
 		proposal, problems := compileWorkflow(*definition, profiles)
@@ -144,9 +148,20 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		plan.planProposal = proposal
-		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, proposal)
+		plan.WorkflowMode = workflowModeCompiled
+		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, proposal)
 	case input.Plan == nil && input.PlannerAgentID != "":
-		run, status, message := store.queuePlanner(item, project, strings.ToLower(input.PlannerAgentID), access.user)
+		guidance := ""
+		if definition != nil {
+			var err error
+			guidance, err = plannerWorkflowGuidance(*definition)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			plan.WorkflowMode = workflowModeGuidance
+		}
+		run, status, message := store.queuePlanner(item, project, strings.ToLower(input.PlannerAgentID), access.user, guidance)
 		if status != 0 {
 			http.Error(w, message, status)
 			return
@@ -175,15 +190,19 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 }
 
 // queuePlanner queues the run in which a read-only agent proposes a plan for the objective.
-func (store *workGraphStore) queuePlanner(item objective, project projectRecord, agentID, user string) (agentRun, int, string) {
+func (store *workGraphStore) queuePlanner(item objective, project projectRecord, agentID, user, workflowGuidance string) (agentRun, int, string) {
 	profile, exists := store.agentProfiles()[agentID]
 	if !exists || profile.Status != "active" || !workerapi.IsCLIProvider(profile.Provider) || slices.Contains(profile.Tools, "code.write") {
 		return agentRun{}, http.StatusConflict, "planner_agent_id must name an active, read-only Codex or Claude Code profile"
 	}
+	prompt := "Plan the engineering work for this objective: " + item.Title
+	if workflowGuidance != "" {
+		prompt += "\n\n" + workflowGuidance
+	}
 	return store.runs.enqueue(agentRun{AgentID: profile.ID, AgentName: profile.Name, ProjectID: project.ID,
 		ProjectName: project.Name, Repository: project.GitRemote, BaseBranch: project.Branch, WorkerID: project.WorkerID,
 		WorkerName: project.WorkerName, Provider: profile.Provider, Profile: &profile, CreatedBy: user,
-		Prompt: truncateUTF8("Plan the engineering work for this objective: "+item.Title, 5000)})
+		Prompt: truncateUTF8(prompt, 5000)})
 }
 
 // executingPlanLocked returns the approved plan of an objective whose graph has not finished.
@@ -226,7 +245,7 @@ func (store *workGraphStore) admitPlansLocked() bool {
 				if len(plan.Problems) > 0 {
 					plan.Status = planInvalid
 				}
-				plan.Hash = planHash(plan.ProjectID, plan.WorkflowID, plan.WorkflowVersion, plan.planProposal)
+				plan.Hash = planHash(plan.ProjectID, plan.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.planProposal)
 			}
 		}
 	}
@@ -287,7 +306,8 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 	graph := &workGraph{ID: graphID, ObjectiveID: item.ID, ObjectiveTitle: item.Title, PlanRevision: plan.Revision,
 		PlanHash: plan.Hash, Revision: 1, Status: graphActive, ProjectID: project.ID, ProjectName: project.Name,
 		Repository: project.GitRemote, WorkerID: project.WorkerID, WorkerName: project.WorkerName, BaseBranch: project.Branch,
-		WorkflowID: plan.WorkflowID, WorkflowVersion: plan.WorkflowVersion, MaxParallel: plan.MaxParallel, Messages: []graphMessage{},
+		WorkflowID: plan.WorkflowID, WorkflowVersion: plan.WorkflowVersion, WorkflowMode: plan.WorkflowMode,
+		MaxParallel: plan.MaxParallel, Messages: []graphMessage{},
 		CreatedBy: access.user, CreatedAt: now, UpdatedAt: now}
 	for _, unit := range plan.Units {
 		graph.Units = append(graph.Units, workUnit{planUnit: unit, AgentName: profiles[unit.AgentID].Name,
