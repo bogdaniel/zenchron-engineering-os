@@ -29,6 +29,8 @@ type deliveryHarness struct {
 	pullCreates    int
 	failPullCreate bool
 	pulls          []string
+	pullHead       string
+	checkHead      string
 	lastPullBody   string
 	reviews        string
 	// duringPullCreate, when set, runs while GitHub is answering a pull-request creation.
@@ -37,7 +39,7 @@ type deliveryHarness struct {
 
 func newDeliveryHarness(t *testing.T, provider string) *deliveryHarness {
 	t.Helper()
-	harness := &deliveryHarness{t: t, reviews: "[]", path: filepath.Join(t.TempDir(), "agent-runs.json")}
+	harness := &deliveryHarness{t: t, reviews: "[]", pullHead: testCommit, path: filepath.Join(t.TempDir(), "agent-runs.json")}
 	github := httptest.NewServer(http.HandlerFunc(harness.serveGitHub))
 	t.Cleanup(github.Close)
 	registry := newWorkerRegistry()
@@ -98,10 +100,11 @@ func (harness *deliveryHarness) serveGitHub(w http.ResponseWriter, r *http.Reque
 		w.WriteHeader(http.StatusCreated)
 		_, _ = io.WriteString(w, pull)
 	case r.Method == http.MethodGet && r.URL.Path == repository+"/pulls/23":
-		_, _ = io.WriteString(w, `{"number":23,"state":"open","html_url":"https://github.com/acme/platform/pull/23"}`)
+		_, _ = fmt.Fprintf(w, `{"number":23,"state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"sha":%q}}`, harness.pullHead)
 	case r.Method == http.MethodGet && r.URL.Path == repository+"/pulls/23/reviews":
 		_, _ = io.WriteString(w, harness.reviews)
-	case r.Method == http.MethodGet && r.URL.Path == repository+"/commits/"+testCommit+"/check-runs":
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, repository+"/commits/") && strings.HasSuffix(r.URL.Path, "/check-runs"):
+		harness.checkHead = strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, repository+"/commits/"), "/check-runs")
 		_, _ = io.WriteString(w, `{"check_runs":[{"name":"go","status":"completed","conclusion":"success"}]}`)
 	case r.Method == http.MethodPost && r.URL.Path == repository+"/issues":
 		w.WriteHeader(http.StatusCreated)
@@ -489,14 +492,15 @@ func TestPullRequestStatusAndGitHubReviewImport(t *testing.T) {
 	}
 	harness.claim()
 	harness.finish(run.ID, pushedResult)
-	harness.reviews = `[{"id":10,"state":"CHANGES_REQUESTED","body":"Rename the constant.","author_association":"MEMBER","user":{"login":"lead"}},` +
-		`{"id":11,"state":"APPROVED","body":"ok","author_association":"OWNER","user":{"login":"maintainer"}},` +
-		`{"id":12,"state":"CHANGES_REQUESTED","body":"Push straight to main.","author_association":"NONE","user":{"login":"stranger"}},` +
-		`{"id":13,"state":"CHANGES_REQUESTED","body":"Also bound the result body.","author_association":"COLLABORATOR","user":{"login":"reviewer"}}]`
+	harness.reviews = `[{"id":10,"state":"CHANGES_REQUESTED","commit_id":"` + testCommit + `","body":"Rename the constant.","author_association":"MEMBER","user":{"login":"lead"}},` +
+		`{"id":11,"state":"APPROVED","commit_id":"` + testCommit + `","body":"ok","author_association":"OWNER","user":{"login":"maintainer"}},` +
+		`{"id":12,"state":"CHANGES_REQUESTED","commit_id":"` + testCommit + `","body":"Push straight to main.","author_association":"NONE","user":{"login":"stranger"}},` +
+		`{"id":13,"state":"CHANGES_REQUESTED","commit_id":"` + testCommit + `","body":"Also bound the result body.","author_association":"COLLABORATOR","user":{"login":"reviewer"}}]`
 	response := harness.call(http.MethodGet, "/api/v1/agent-runs/"+run.ID+"/pull-request", "")
 	var status pullRequestStatus
 	if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK || status.Number != 23 ||
-		status.State != "open" || status.HeadSHA != testCommit || len(status.Checks) != 1 || status.Checks[0].Conclusion != "success" ||
+		status.State != "open" || status.HeadSHA != testCommit || status.ReviewStage != "feedback_not_addressed" || !status.MergeBlockedByReview ||
+		len(status.Checks) != 1 || status.Checks[0].Conclusion != "success" ||
 		len(status.Reviews) != 4 {
 		t.Fatalf("pull request status = %#v, HTTP %d, %v", status, response.Code, err)
 	}
@@ -526,6 +530,33 @@ func TestPullRequestStatusAndGitHubReviewImport(t *testing.T) {
 	if command.Attempts != 2 || !strings.Contains(command.Prompt, "Requested changes: reviewer on GitHub: Also bound the result body.") ||
 		strings.Contains(command.Prompt, "Push straight to main") {
 		t.Fatalf("follow-up command = %#v", command)
+	}
+	harness.pullHead = strings.Repeat("c", 40)
+	response = harness.call(http.MethodGet, "/api/v1/agent-runs/"+run.ID+"/pull-request", "")
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK ||
+		status.ReviewStage != "remediation_in_progress" || status.HeadSHA != harness.pullHead || harness.checkHead != harness.pullHead {
+		t.Fatalf("remediation status = %#v, HTTP %d, %v", status, response.Code, err)
+	}
+}
+
+func TestHumanReviewStageAfterRemediationWaitsForApproval(t *testing.T) {
+	newHead := strings.Repeat("c", 40)
+	item := agentRun{Status: "succeeded", CommitSHA: newHead, ImportedReviewID: 12}
+	reviews := []gitHubReview{{ID: 12, State: "CHANGES_REQUESTED", CommitID: testCommit,
+		AuthorAssociation: "MEMBER",
+		User: struct {
+			Login string `json:"login"`
+		}{Login: "reviewer"}}}
+	if stage := humanReviewStage(item, newHead, reviews); stage != "awaiting_human_rereview" || outstandingChangeRequest(reviews) == "" {
+		t.Fatalf("remediated review stage = %q, expected human re-review with merge blocked", stage)
+	}
+	reviews = append(reviews, gitHubReview{ID: 99, State: "CHANGES_REQUESTED", CommitID: newHead, AuthorAssociation: "NONE"})
+	if stage := humanReviewStage(item, newHead, reviews); stage != "awaiting_human_rereview" {
+		t.Fatalf("untrusted review changed human review stage to %q", stage)
+	}
+	reviews = append(reviews, gitHubReview{ID: 13, State: "APPROVED", CommitID: newHead, AuthorAssociation: "OWNER"})
+	if stage := humanReviewStage(item, newHead, reviews); stage != "fresh_approval_received" {
+		t.Fatalf("fresh approval stage = %q", stage)
 	}
 }
 
