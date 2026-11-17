@@ -17,7 +17,7 @@ flowchart LR
 
 ## Start locally
 
-1. From the repository root, install dashboard dependencies once with `cd dashboard && npm ci`.
+1. From the repository root, install dashboard dependencies once with `(cd dashboard && npm ci)`.
 2. Install and sign in to the Codex CLI or Claude Code CLI on this same machine. The local worker discovers these
    providers when it starts.
 3. Run `./dev.sh` from the repository root. It starts the control plane at `127.0.0.1:8080`, the local worker, and
@@ -27,25 +27,32 @@ flowchart LR
 
 Sources: `README.md`, `dev.sh`, `dashboard/src/main.tsx`, `docs/features/local-preview.md`.
 
-## Create an objective and select workflow guidance
+## Create an objective and propose a plan
 
-1. In **Objectives**, choose **New Objective**, enter a title, and optionally add a description, owner, product, and
-   due date; submit **Create objective**.
-2. Select the objective and open its **Plan** tab.
-3. In **Agents**, create or select an active Codex CLI or Claude Code producer profile with `code.write` permission.
-   Plan execution requires at least one producer that can change the checked-out repository.
-4. In **Propose a plan**, choose an online **Repository checkout** and an active, read-only Codex CLI or Claude Code
-   **Planning agent**. If there is no suitable profile, create one under **Agents** with code-write permission off.
-5. Optionally choose a saved workflow. This gives the planner workflow steps as guidance; workflows do not execute
-   plans. If needed, view or create a saved workflow on **Workflows** first, then return to the objective's Plan tab.
-6. Choose **Propose plan**. When planning completes, inspect the proposal summary, unit order and dependencies,
-   assigned agents, instructions, acceptance criteria, and any listed problems. Only a valid proposed revision can
-   be approved.
+1. In **Live Objectives**, choose **New Objective**, enter a title and optional details, and select **Create objective**.
+   An objective associated with a product offers only its linked repository checkouts in the Plan tab.
+2. In **Agents**, create or select an active Codex CLI or Claude Code **producer profile** with `code.write`. Add
+   an independent read-only reviewer profile if the workflow requires review. Optionally create a reusable persona and
+   bind it to a profile. The control plane validates the assigned profiles and permissions.
+3. If you want a repeatable executable sequence, open **Workflows** in Live, create/save a workflow, configure
+   supported Agent Task/Test Generator, Code Reviewer, and Integrate nodes and their agent assignments, then use
+   **Validate**. Other nodes can remain in saved diagrams but are design-only and cannot be compiled into work.
+4. Return to the objective's **Plan** tab and choose an online **Repository checkout**. Under **Planning strategy**,
+   choose one of:
+   - **Compile a saved workflow**: select an **Executable workflow**. Zenchron deterministically compiles its supported
+     nodes and dependencies into the existing objective plan and WorkUnits; the canvas does not run a second engine.
+   - **Ask a read-only CLI agent to plan**: select an eligible **Planning agent** without `code.write`. Optionally
+     select **Workflow guidance**. The queued planner receives a version-pinned snapshot as guidance, **not** a
+     mandatory execution contract. Definitions exceeding the 4 KiB guidance limit are rejected.
+5. Choose **Propose plan**. Inspect the proposed plan revision, required units/dependencies, assigned agents/personas,
+   instructions, acceptance criteria, and validation problems. Only the latest valid proposed revision can be approved.
+   A proposal compiled from a workflow is labeled `compiled`; one informed by planner guidance is `guidance`.
+   Existing historical records without that mode display it as unknown.
 
 Sources: `dashboard/src/objectives.tsx`, `dashboard/src/ObjectiveDetail.tsx`,
-`dashboard/src/ObjectivePlanPanel.tsx`, `dashboard/src/orchestration.ts`, `cmd/zenchron/orchestration_api.go`,
-`cmd/zenchron/work_graph_context.go`, `docs/features/objective-orchestration.md`,
-`docs/features/workflow-builder.md`.
+`dashboard/src/ObjectivePlanPanel.tsx`, `dashboard/src/orchestration.ts`, `dashboard/src/workflows.tsx`,
+`cmd/zenchron/orchestration_api.go`, `cmd/zenchron/workflow_compile.go`,
+`docs/features/objective-orchestration.md`, `docs/features/workflow-builder.md`.
 
 ## Approve and follow the WorkGraph
 
@@ -58,6 +65,9 @@ Sources: `dashboard/src/objectives.tsx`, `dashboard/src/ObjectiveDetail.tsx`,
 3. If a unit is blocked on a person, read its decision request and submit a resolution. Retry is available for failed
    units; **Cancel work** cancels an unfinished graph. Handoffs, findings, and decisions appear in the graph's message
    list.
+   For an approved graph, choose **View delivery report** under **Delivery evidence** in the Plan tab to inspect
+   recorded executions, reviews, decisions, usage, missing measurements, and the observed PR link; **Export JSON**
+   downloads the same typed report. A PR link alone does not prove external merge status.
 4. To inspect the local API's graph data directly, `GET /api/v1/work-graphs` lists graphs; plan revisions are served
    by `GET /api/v1/objectives/{id}/plans`.
 
