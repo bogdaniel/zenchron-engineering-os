@@ -27,7 +27,7 @@ const pullRequest = (number: number, title: string, author: string, head: string
   draft,
   updated_at: '2025-01-21T10:24:00Z',
   user: { login: author },
-  head: { ref: head },
+  head: { ref: head, sha: 'a'.repeat(40) },
   base: { ref: 'main' },
 });
 
@@ -199,7 +199,7 @@ export function useMockReviews(): ReviewsSource {
     createPullRequest: (title, branch) => {
       const number = Math.max(...items.map((item) => item.number), 4827) + 1;
       setItems((current) => [{ ...reviewPreviewPullRequests[0]!, number, title, draft: true,
-        updated_at: reviewPreviewProject.last_seen, user: { login: 'Alex Chen' }, head: { ref: branch },
+        updated_at: reviewPreviewProject.last_seen, user: { login: 'Alex Chen' }, head: { ref: branch, sha: 'a'.repeat(40) },
         body: 'Illustrative pull request created in the local preview.' }, ...current]);
       setStatus(number, 'draft');
       return number;
