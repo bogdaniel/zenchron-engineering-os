@@ -602,6 +602,31 @@ test('a new objective without a due date stays listed under the initial Live fil
   await expect(objectiveRows).toHaveCount(2);
 });
 
+for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: 'mobile', width: 390, height: 844 }]) {
+test(`switching Objectives from Mock to Live resets the due-date filter (${viewport.name})`, async ({ page }) => {
+  await useLocalSession(page);
+  await page.setViewportSize(viewport);
+  await page.route('**/api/v1/objectives', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([{
+      ...objectives[3], product: 'Unassigned',
+    }]),
+  }));
+  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
+
+  const dueQuarter = page.getByRole('combobox', { name: 'Filter by due quarter' });
+  await expect(dueQuarter).toHaveValue('This Quarter');
+  await page.getByRole('radiogroup', { name: 'Data mode' }).getByText('Live').click();
+
+  await expect(page).toHaveURL(/\?mode=live#objectives$/);
+  await expect(dueQuarter).toHaveValue('All due dates');
+  await expect(page.locator('.objective-grid-wrap .objective-title-cell').filter({ hasText: 'Document ownership' }))
+    .toBeVisible();
+  await page.getByRole('radiogroup', { name: 'Data mode' }).getByText('Mock').click();
+  await expect(dueQuarter).toHaveValue('This Quarter');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+}
+
 test('a late grid selection report does not replace the objective being edited', async ({ page }) => {
   await useLocalSession(page);
   const createdID = '5'.repeat(32);

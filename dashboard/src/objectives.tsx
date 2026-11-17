@@ -107,6 +107,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dueQuarter, setDueQuarter] = useState<'this' | 'last' | 'all'>(sampleData ? 'this' : 'all');
+  useEffect(() => setDueQuarter(sampleData ? 'this' : 'all'), [sampleData]);
   const [section, setSection] = useState<'objectives' | 'planning' | 'roadmap'>('objectives');
   const [view, setView] = useState<'kanban' | 'table' | 'cards'>('table');
   const [objectiveGridApi, setObjectiveGridApi] = useState<GridApi<Objective> | null>(null);
