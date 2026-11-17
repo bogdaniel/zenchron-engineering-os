@@ -2,6 +2,7 @@ import { Button } from '@mantine/core';
 import { useLiveOrchestration } from './orchestration';
 import { useMockOrchestration } from './orchestration-preview-data';
 import { WorkGraphView } from './WorkGraphView';
+import { livePageHref } from './livePageHref';
 
 /** The work graphs of a product's objectives. Mock shows the one sample graph. */
 export function WorkspaceExecution({ objectiveIDs, sampleData }: { objectiveIDs: string[]; sampleData: boolean }) {
@@ -16,6 +17,22 @@ export function WorkspaceExecution({ objectiveIDs, sampleData }: { objectiveIDs:
     No objective of this product has an approved plan. Propose one under Objectives → Plan.</p>;
   return <div className="workspace-execution">
     {source.readOnlyReason && <p className="work-unit-reason">{source.readOnlyReason}</p>}
-    {graphs.map((graph) => <div key={graph.id}><h3>{graph.objective_title}</h3><WorkGraphView graph={graph} source={source} /></div>)}
+    {graphs.map((graph) => <div key={graph.id}>
+      <h3>{sampleData ? graph.objective_title : <a href={livePageHref('objectives', { objective: graph.objective_id, tab: 'plan' })}>
+        {graph.objective_title}</a>}</h3>
+      {!sampleData && <div aria-label={`Execution configuration for ${graph.objective_title}`}>
+        {graph.workflow_id && <p>Workflow <a href={livePageHref('workflows', { workflow: graph.workflow_id })}>
+          {graph.workflow_id}</a> · executed version {graph.workflow_version ?? 'unknown'}</p>}
+        <ul>{graph.units.filter((unit) => unit.agent_id).map((unit) => {
+          const profile = source.options.agents.find((agent) => agent.id === unit.agent_id);
+          return <li key={unit.key}><a href={livePageHref('agents', { profile: unit.agent_id })}>
+            {unit.agent_name || unit.agent_id}</a> · recorded profile v{unit.profile_version ?? 'unknown'}
+            {unit.persona_id && <> · persona {unit.persona_id} v{unit.persona_version ?? 'unknown'}</>}
+            {profile && <> · current configuration: {profile.provider} / {profile.model} · {profile.status}</>}
+          </li>;
+        })}</ul>
+      </div>}
+      <WorkGraphView graph={graph} source={source} />
+    </div>)}
   </div>;
 }

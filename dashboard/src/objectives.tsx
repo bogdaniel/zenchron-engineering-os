@@ -95,7 +95,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [createOpen, setCreateOpen] = useState(() => new URLSearchParams(window.location.search).get('create') === '1');
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [detailTab, setDetailTab] = useState<ObjectiveDetailTab>('overview');
+  const [detailTab, setDetailTab] = useState<ObjectiveDetailTab>(() =>
+    new URLSearchParams(window.location.search).get('tab') === 'plan' ? 'plan' : 'overview');
   const [selectedID, setSelectedID] = useState<string | null>(() => new URLSearchParams(window.location.search).get('objective'));
   const selectedIDRef = useRef(selectedID);
   selectedIDRef.current = selectedID;
@@ -140,7 +141,14 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     setCreating(true);
     setSubmitError('');
     try {
-      selectObjective(await source.create(objectiveInputSchema.parse(values)));
+      const created = await source.create(objectiveInputSchema.parse(values));
+      selectObjective(created);
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('workflow') || url.searchParams.has('project')) {
+        url.searchParams.set('objective', created.id);
+        url.searchParams.set('tab', 'plan');
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+      }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Could not create the objective.');
       return;
@@ -148,6 +156,9 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
       setCreating(false);
     }
     setActionNotice(`Objective created${source.savedSuffix}`);
+    if (new URLSearchParams(window.location.search).has('workflow') || new URLSearchParams(window.location.search).has('project')) {
+      setDetailTab('plan');
+    }
     createForm.reset();
     createForm.setFieldValue('product_id', '');
     setCreateOpen(false);

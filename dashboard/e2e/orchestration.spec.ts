@@ -80,6 +80,50 @@ async function openPlan(page: Page) {
   return page.getByRole('tabpanel');
 }
 
+for (const viewport of viewports) {
+  test(`plan revisions link planned records without calling them executed (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const workflowID = 'wf-plan';
+    const planned = { ...plan, status: 'proposed', workflow_id: workflowID, workflow_version: 4,
+      units: [{ ...planUnits[0], profile_version: 2, persona_id: 'persona-plan', persona_version: 3 }] };
+    await mockOrchestration(page, { plans: [planned] });
+    await page.route('**/api/v1/workflows', (route) => route.fulfill(json([{ id: workflowID, name: 'Feature delivery',
+      description: '', status: 'draft', version: 5, nodes: [], edges: [], updated_at: now }])));
+    await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
+    await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+
+    const revision = page.locator('.plan-revision').first();
+    await expect(revision.getByRole('link', { name: workflowID })).toHaveAttribute(
+      'href', `/?workflow=${workflowID}&mode=live#workflows`);
+    await expect(revision.getByRole('link', { name: 'Codex engineer' })).toHaveAttribute(
+      'href', `/?profile=${writerID}&mode=live#agents`);
+    await expect(revision).toContainText('Planned profile v2');
+    await expect(revision).toContainText('Planned persona persona-plan · v3');
+    await expect(revision).not.toContainText(/executed (version|profile|persona)/i);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('planned-record-navigation.png'), fullPage: true });
+    await revision.getByRole('link', { name: workflowID }).click();
+    if (viewport.width === 390) {
+      await expect(page.getByRole('img', { name: 'Key workflow stages for Feature delivery; 0 stages summarize 0 components' })).toBeVisible();
+    } else {
+      await expect(page.getByRole('heading', { name: 'Workflow Builder — Feature delivery' })).toBeVisible();
+    }
+    await expect(page).toHaveURL(new RegExp(`workflow=${workflowID}&mode=live#workflows$`));
+    await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
+    await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+    await page.locator('.plan-revision').first().getByRole('link', { name: 'Codex engineer' }).click();
+    await expect(page.locator('.agents-detail-heading')).toContainText('Codex engineer');
+    await expect(page).toHaveURL(new RegExp(`profile=${writerID}&mode=live#agents$`));
+  });
+}
+
+test('plan proposal refuses unknown workflow and unlinked checkout address selections', async ({ page }) => {
+  await mockOrchestration(page, {});
+  await page.goto(`/?objective=${objectiveID}&tab=plan&project=unlinked&workflow=missing#objectives`);
+  await expect(page.getByRole('button', { name: 'Propose plan', exact: true })).toBeDisabled();
+  await expect(page.getByRole('combobox', { name: 'Repository checkout' })).toBeVisible();
+});
+
 const noHorizontalScroll = (page: Page) => page.evaluate(() =>
   document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
@@ -190,6 +234,21 @@ test('plan tab reports an empty objective, a failed load, and Mock keeps operati
   await expect(panel.getByRole('alert')).toHaveText('Could not load the plan and its work graph.');
   await expect(panel.getByRole('button', { name: 'Retry loading the plan' })).toBeVisible();
 
+  await mockOrchestration(page, {});
+  let planStatus = 500;
+  let planRequests = 0;
+  await page.route(`**/api/v1/objectives/${objectiveID}/plans`, async (route) => {
+    planRequests += 1;
+    await route.fulfill(planStatus === 200 ? json([]) : { status: 500, body: 'plans unavailable' });
+  });
+  panel = await openPlan(page);
+  await expect(panel.getByRole('alert')).toHaveText('Could not load the plan and its work graph.');
+  const failedPlanRequests = planRequests;
+  planStatus = 200;
+  await panel.getByRole('button', { name: 'Retry loading the plan' }).click();
+  await expect.poll(() => planRequests).toBeGreaterThan(failedPlanRequests);
+  await expect(panel).toContainText('No plan yet. Propose one to turn this objective into reviewed, integrated work.');
+
   // Mock shows sample data and sends nothing.
   const writes: string[] = [];
   page.on('request', (request) => { if (request.method() !== 'GET') writes.push(request.url()); });
@@ -197,6 +256,11 @@ test('plan tab reports an empty objective, a failed load, and Mock keeps operati
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
   const mock = page.getByRole('tabpanel');
   await expect(mock).toContainText('Illustrative data: plans are proposed, approved, and executed in Live mode only.');
+  const previewRevision = mock.locator('.plan-revision').first();
+  await expect(previewRevision).toContainText('Compiled from workflow preview-workflow · version 1');
+  await expect(previewRevision.getByRole('link', { name: 'preview-workflow' })).toHaveCount(0);
+  await expect(previewRevision).toContainText('Planned profile v1');
+  await expect(previewRevision.getByRole('link', { name: 'Test Generator' })).toHaveCount(0);
   await expect(mock.getByRole('button', { name: 'Resolve decision' })).toBeDisabled();
   await expect(mock.getByRole('button', { name: 'Cancel work' })).toBeDisabled();
   expect(writes).toEqual([]);
@@ -238,12 +302,37 @@ test('workspace, agents, reviews, and workflows project the same work graph', as
   await expect(context).toContainText('Header row is missing');
 });
 
+for (const viewport of viewports) {
+  test(`product execution links retain workflow and assignment identity (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const configured = { ...graph, workflow_id: 'product-flow', workflow_version: 7,
+      units: graph.units.map((unit) => unit.kind === 'integrate' ? unit
+        : ({ ...unit, profile_version: 2, persona_id: 'product-persona', persona_version: 3 })) };
+    await mockOrchestration(page, { graphs: [configured], plans: [plan] });
+    await page.goto('/#workspace');
+    await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
+    const configuration = page.getByLabel(`Execution configuration for ${objective.title}`);
+    await expect(configuration).toContainText('executed version 7');
+    await expect(configuration).toContainText('recorded profile v2');
+    await expect(configuration).toContainText('persona product-persona v3');
+    await expect(configuration.getByRole('link', { name: 'product-flow' }))
+      .toHaveAttribute('href', '/?workflow=product-flow&mode=live#workflows');
+    await expect(configuration.getByRole('link', { name: 'Codex engineer' }))
+      .toHaveAttribute('href', `/?profile=${writerID}&mode=live#agents`);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('product-execution.png'), fullPage: true });
+    await page.getByRole('heading', { name: objective.title, exact: true }).getByRole('link').click();
+    await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('region', { name: `Work graph for ${objective.title}` })).toBeVisible();
+  });
+}
+
 test('an objective plan approved in the dashboard runs through decision, review, remediation, and integration', async ({ page }, testInfo) => {
   test.setTimeout(240_000);
   await page.setViewportSize(viewports[0]);
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'E2E' })));
   await page.goto('/#objectives');
-  // A persona, profiles, workflow, and objective are created through the real control-plane API.
+  // Seed reusable configuration through real APIs; create and execute the objective from Product Workspace.
   const created = await page.evaluate(async () => {
     const post = async (path: string, body: unknown) => {
       const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -261,8 +350,6 @@ test('an objective plan approved in the dashboard runs through decision, review,
     const projects = await fetch('/api/v1/projects').then((response) => response.json());
     const product = await post('/api/v1/products', { name: 'E2E product', description: '',
       repository_ids: projects.map((project: { id: string }) => project.id) });
-    const objective = await post('/api/v1/objectives', { title: 'Orchestrated export', description: 'Deliver the export.',
-      product_id: product.body.id });
     const workflow = await post('/api/v1/workflows', { name: 'E2E executable flow', description: 'Two producers with review and integration.' });
     const node = (id: string, type: string, label: string, description: string, agentID = '', personaID = '') => ({
       id, type, position: { x: 0, y: 0 }, data: { label, description, agent_id: agentID, persona_id: personaID,
@@ -281,14 +368,33 @@ test('an objective plan approved in the dashboard runs through decision, review,
       }) });
     const savedWorkflow = await saved.json();
     if (persona.status !== 201 || first.status !== 201 || second.status !== 201 || reviewer.status !== 201 ||
-      product.status !== 201 || objective.status !== 201 || workflow.status !== 201 || saved.status !== 200) {
+      product.status !== 201 || workflow.status !== 201 || saved.status !== 200) {
       throw new Error(JSON.stringify({ persona: persona.status, first: first.status, second: second.status,
-        reviewer: reviewer.status, product: product.status, objective: objective.status, workflow: workflow.status,
+        reviewer: reviewer.status, product: product.status, workflow: workflow.status,
         saved: saved.status }));
     }
-    return { objectiveID: objective.body.id as string, workflowID: workflow.body.id as string,
-      workflowVersion: savedWorkflow.version as number, personaID: persona.body.id as string, productID: product.body.id as string };
+    return { objectiveID: '', workflowID: workflow.body.id as string,
+      workflowVersion: savedWorkflow.version as number, personaID: persona.body.id as string, productID: product.body.id as string,
+      writerID: first.body.id as string };
   });
+  await page.goto('/?mode=live#workspace');
+  await page.locator('.workspace-mock-product').filter({ hasText: 'E2E product' }).click();
+  await page.getByRole('combobox', { name: 'Objective repository' }).click();
+  await page.getByRole('option').first().click();
+  await page.getByRole('combobox', { name: 'Objective workflow' }).click();
+  await page.getByRole('option', { name: `E2E executable flow · v${created.workflowVersion}` }).click();
+  await page.getByRole('link', { name: 'Create objective for E2E product' }).click();
+  const objectiveDialog = page.getByRole('dialog');
+  await expect(objectiveDialog.getByRole('combobox', { name: 'Product' })).toHaveValue('E2E product');
+  await objectiveDialog.getByLabel('Objective title').fill('Orchestrated export');
+  await objectiveDialog.getByLabel('Description').fill('Deliver the export.');
+  const savedObjective = page.waitForResponse((response) => response.request().method() === 'POST'
+    && new URL(response.url()).pathname === '/api/v1/objectives');
+  await objectiveDialog.getByRole('button', { name: 'Create objective' }).click();
+  const objectiveResponse = await savedObjective;
+  expect(objectiveResponse.status()).toBe(201);
+  const saved: { id: string } = await objectiveResponse.json();
+  created.objectiveID = saved.id;
   const apiStatus = await page.evaluate(async (id) => Promise.all([
     '/api/v1/work-graphs', `/api/v1/objectives/${id}/plans`, '/api/v1/projects', '/api/v1/products',
   ].map(async (path) => {
@@ -297,6 +403,8 @@ test('an objective plan approved in the dashboard runs through decision, review,
   })), created.objectiveID);
   expect(apiStatus.filter((item) => item.status !== 200), JSON.stringify(apiStatus)).toEqual([]);
 
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
   const workerSnapshot = await page.evaluate(async () => {
     const response = await fetch('/api/v1/workers');
     if (!response.ok) throw new Error(`Worker list failed (${response.status})`);
@@ -307,21 +415,19 @@ test('an objective plan approved in the dashboard runs through decision, review,
       provider.id === 'codex-cli' ? { ...provider, ready: false, reason: 'CLI unavailable in this readiness snapshot' }
         : provider) })) });
   });
-  await page.goto(`/?mode=live&objective=${created.objectiveID}#objectives`);
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
   const panel = page.getByRole('tabpanel');
   const proposeForm = panel.getByRole('form', { name: 'Propose a plan' });
   await expect(proposeForm.getByRole('combobox', { name: 'Repository checkout' })).toBeVisible({ timeout: 30_000 });
-  await proposeForm.getByRole('combobox', { name: 'Repository checkout' }).click();
-  await page.getByRole('option').first().click();
-  await proposeForm.getByRole('combobox', { name: 'Executable workflow' }).click();
-  await page.getByRole('option', { name: `E2E executable flow · v${created.workflowVersion}` }).click();
+  await expect(proposeForm.getByRole('combobox', { name: 'Executable workflow' }))
+    .toHaveValue(`E2E executable flow · v${created.workflowVersion}`);
   await proposeForm.getByRole('button', { name: 'Propose plan' }).click();
   const revision = panel.getByRole('list', { name: 'Units of revision 1' });
   await expect(revision.locator(':scope > li')).toHaveCount(4);
   await expect(panel).toContainText(`Compiled from workflow ${created.workflowID} · version ${created.workflowVersion}`);
   await expect(panel).toContainText('Orchestration writer one');
-  await expect(revision).toContainText(`Persona ${created.personaID} · v1`);
+  await expect(revision).toContainText(`Planned persona ${created.personaID} · v1`);
   const readiness = panel.getByRole('status', { name: 'CLI readiness for revision 1' });
   await expect(readiness).toContainText('codex-cli not ready');
   await expect(readiness).toContainText('runs wait until ready');
@@ -345,10 +451,15 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await report.getByRole('button', { name: 'View delivery report' }).click();
   await expect(report).toContainText('Approved plan revision 1');
   await expect(report).toContainText(`Compiled from workflow ${created.workflowID} · version ${created.workflowVersion}`);
+  await expect(report.getByRole('link', { name: created.workflowID, exact: true }))
+    .toHaveAttribute('href', `/?workflow=${created.workflowID}&mode=live#workflows`);
+  await expect(report.getByRole('link', { name: 'Agent profile', exact: true }).first())
+    .toHaveAttribute('href', `/?profile=${created.writerID}&mode=live#agents`);
   await expect(report).toContainText('E2E CSV specialist v1');
   await expect(report).toContainText('codex-cli');
   await expect(report).toContainText('Worker-reported verification: not_configured');
   await expect(report).toContainText('Unknown evidence: candidate tree SHA, publication authority, current pull request state');
+  await expect(report.locator('a[href$="#reviews"]').first()).toHaveAttribute('href', /^\/\?run=.+&mode=live#reviews$/);
   await expect(report).toContainText('CSV');
   await expect(report).toContainText('GitHub publication is not configured');
   await expect(report).toContainText('Unknown');
@@ -381,4 +492,17 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await noHorizontalScroll(page)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('objective-report-mobile.png'), fullPage: true });
+
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/?mode=live#workspace');
+  await page.locator('.workspace-mock-product').filter({ hasText: 'E2E product' }).click();
+  await expect(page.locator('.workspace-mock-metric.decisions strong')).toHaveText('0');
+  await expect(page.locator('.workspace-mock-card.decisions')).toContainText('E2E: which format?');
+  await expect(page.locator('.workspace-mock-card.decisions')).toContainText('Resolved');
+  await expect(page.locator('.workspace-mock-card.analytics')).toContainText('WorkGraphs1 current');
+  await expect(page.locator('.workspace-mock-metric.delivery strong')).toHaveText('0');
+  await page.screenshot({ path: testInfo.outputPath('workspace-evidence-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await noHorizontalScroll(page)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('workspace-evidence-mobile.png'), fullPage: true });
 });

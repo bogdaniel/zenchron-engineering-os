@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Badge, Button } from '@mantine/core';
 import { z } from 'zod';
-import { workflowProvenance } from './orchestration';
+import { livePageHref } from './livePageHref';
 import './objective-delivery-report.css';
 
 const executionSchema = z.object({
@@ -91,15 +91,15 @@ function ReportDetails({ report }: { report: Report }) {
       {report.approved_plan.approved_by && ` · approved by ${report.approved_plan.approved_by}`}
       {report.approved_plan.approved_at && ` · ${new Date(report.approved_plan.approved_at).toLocaleString()}`}</p>
     <p>{report.approved_plan.summary || 'No plan summary recorded.'}</p>
-    {report.workflow_id && <p><a href="#workflows">{workflowProvenance(report.workflow_mode, report.workflow_id, report.workflow_version)}</a></p>}
+    {report.workflow_id && <p>{report.workflow_mode === 'compiled' ? 'Compiled from workflow ' : report.workflow_mode === 'guidance' ? 'Guided by workflow ' : 'Workflow execution mode unknown · workflow '}<a href={livePageHref('workflows', { workflow: report.workflow_id })}>{report.workflow_id}</a> · version {report.workflow_version ?? 'unknown'}</p>}
     <h5>Executed work units</h5>
     <div className="objective-delivery-units">{report.units.map((unit) => <article key={unit.key}>
       <div className="objective-delivery-unit-title"><b>{unit.key} · {unit.kind}</b><Badge variant="light">{unit.state}</Badge></div>
-      <p>{unit.agent_name || 'Zenchron'}{unit.agent_id && <> · <a href="#agents">Agent profile</a> ({unit.agent_id})</>}
+      <p>{unit.agent_name || 'Zenchron'}{unit.agent_id && <> · <a href={livePageHref('agents', { profile: unit.agent_id })}>Agent profile</a> ({unit.agent_id})</>}
         {unit.candidate && <> · candidate <code>{unit.candidate}</code></>}
         {unit.verdict && <> · verdict {unit.verdict}</>}</p>
       {unit.executions.map((run) => <div className="objective-delivery-run" key={run.run_id}>
-        <span>Run {run.run_id} · {run.status} · {run.attempts} attempt{run.attempts === 1 ? '' : 's'}</span>
+        <span><a href={livePageHref('reviews', { run: run.run_id })}>Run {run.run_id}</a> · {run.status} · {run.attempts} attempt{run.attempts === 1 ? '' : 's'}</span>
         <span>{run.profile_name ? `${run.profile_name} v${run.profile_version ?? 'unknown'}` : 'Zenchron integration'}
           {run.persona_name && ` · ${run.persona_name} v${run.persona_version ?? 'unknown'}`}
           {run.provider && ` · ${run.provider}${run.provider_version ? ` ${run.provider_version}` : ''}`}</span>

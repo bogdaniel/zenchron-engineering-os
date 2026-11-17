@@ -11,24 +11,36 @@ control plane records nothing.
 
 ```mermaid
 flowchart LR
-    Shell["App shell · main.tsx<br/>mode, projects, objectives"] -->|"designPreview, WorkspaceFacts"| Page["WorkspacePage · workspace.tsx<br/>one layout, UI state"]
+    Shell["App shell · main.tsx<br/>mode, projects, objectives, workers"] -->|"designPreview, WorkspaceFacts"| Page["WorkspacePage · workspace.tsx<br/>one layout, UI state"]
     Page -->|"source.view(product, quarter)"| Source{"WorkspaceSource"}
     Source -->|Mock| Mock["useMockWorkspace<br/>workspace-preview-data.tsx · useState"]
     Source -->|Live| Live["useLiveWorkspace<br/>workspaceView.tsx · TanStack Query"]
     Live -->|"GET /api/v1/products"| CP[(Go control plane)]
     Live -->|"GET /api/v1/workflows"| CP
     Live -->|"GET /api/v1/agents"| CP
+    Live -->|"GET /api/v1/personas"| CP
+    Live -->|"GET /api/v1/products/{id}/environment"| CP
     Shell -->|"GET /api/v1/projects · GET /api/v1/objectives"| CP
     Page -->|"Add / Edit product"| Editor["ProductEditor · productEditor.tsx"]
     Editor -->|"source.saveProduct"| Source
     Live -->|"POST /api/v1/products · PUT /api/v1/products/{id}"| CP
     Page -->|"Create objective for selected product"| Objective["ObjectivesPage · product_id prefilled"]
+    Page -->|"linked checkout + saved workflow selection"| Start["WorkspaceObjectiveStart"]
+    Start -->|"project/workflow IDs carried to Plan form"| Plans
     Objective -->|"create objective, then select repository and workflow in Plan"| Plans["ObjectivePlanPanel"]
     Plans -->|"POST /api/v1/objectives/{id}/plans"| CP
+    Plans -->|"planned workflow and profile links"| Workflow
+    Plans -->|"planned profile and persona versions"| Agents
+    Plans --> Report["ObjectiveDeliveryReport"]
+    Report -->|"workflow ID"| Workflow["WorkflowsPage · current saved definition"]
+    Report -->|"profile ID"| Agents["AgentsPage · current saved profile"]
+    Report -->|"run ID"| Reviews["ReviewsPage · run evidence"]
     Mock -->|"add or rename in fixture state"| Tab["This browser tab only"]
     CP --> Store[(products.json)]
     Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
     Execution -->|"GET /api/v1/work-graphs"| CP
+    Execution -->|"recorded workflow/profile IDs and versions"| Report
+    Execution -->|"objective ID · Plan tab"| Plans
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
     Environment --> Store
     Environment --> Graphs[(objectives.json · work-graphs.json)]
@@ -81,16 +93,39 @@ Live:
   linked and is shown as unavailable.
 - "Available Workflows" lists workflow definitions with their version and status. A workflow can be selected in an
   objective's Plan tab, where the saved graph is compiled into inspectable WorkUnits. Workflows remain workspace-wide,
-  not linked to a product. The Templates tab adds agent profiles; linked personas are managed from Agents.
+  not linked to a product. The Templates tab lists agent profiles with their linked persona, provider, model, and
+  current local worker readiness; profile and workflow names open the saved records. Definitions remain workspace-wide,
+  while executed assignments are associated with the product through its objectives and WorkGraphs.
 - In Live, "Create objective" on the selected product opens the existing objective form with that product selected.
+  Optional repository and workflow choices are carried into the Plan tab after creation. Only online linked checkouts
+  are offered; the Plan form checks the selected IDs against its scoped options before enabling proposal. Selecting a
+  saved workflow does not certify it as executable: existing compilation/validation still rejects unsupported semantics.
+- Regression evidence: `orchestration.spec.ts` creates an objective through this Product Workspace entry point,
+  reloads the retained selection, approves the compiled plan, and follows real backend/fake CLI decision, review,
+  remediation and integration through delivery-report JSON export. This is deterministic regression evidence;
+  installed CLI and GitHub publication acceptance is recorded separately.
   The Plan tab then offers only online repository checkouts linked to that product; legacy objectives without a product
   keep the existing all-checkouts choice.
 - The Objectives tab projects each linked objective's current WorkGraph, pending decisions, findings, review and
   integration states, and observed pull-request link from existing product-environment records. Opening an objective
   shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
-- Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, decisions, delivery
-  metrics (card and metric), recent decisions (metric), and all trend graphics. The favorite star and the delivery
-  range are disabled with a reason. Sharing shows the page link and says no invitation is sent.
+- The selected product's environment projection supplies the pending-decision count, decision links, current
+  WorkGraph/handoff/finding counts, and observed PR-link count. These are recorded counts, without a time trend or
+  implied merge state. A failed projection shows an error, and a missing product shows an empty explanation.
+- Delivery report workflow and profile links open the referenced saved record using
+  `/?workflow=<id>&mode=live#workflows` and `/?profile=<id>&mode=live#agents`. The Live mode parameter keeps local
+  navigation from switching to Mock.
+  The report retains the executed versions; the editor shows the current saved configuration.
+- Execution links use `?run=<id>#reviews` to open that run's Evidence tab, including review runs without a diff.
+- Product objective rows and execution headings open that objective's Plan tab. Each historical WorkGraph lists its
+  recorded workflow version and profile/persona assignments with links to the saved records. Current provider/model
+  and profile status are labeled as current configuration, distinct from the executed versions. These relationships
+  come from the product's objectives and WorkGraphs; workspace-wide definitions remain available separately.
+- Plan revisions link to their selected workflow and assigned profiles, with profile/persona versions labeled as
+  planned configuration. Cross-page links preserve Live mode on local dashboards.
+- Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, and time-series
+  delivery trends. The favorite star and the delivery range are disabled with a reason. Sharing shows the page link
+  and says no invitation is sent.
 - While the worker inventory or the product list loads, the directory says so; a failed product list shows "Product
   list unavailable." Fixtures are never used as a fallback.
 

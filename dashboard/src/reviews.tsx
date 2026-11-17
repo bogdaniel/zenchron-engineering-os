@@ -53,10 +53,11 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
   const mock = useMockReviews();
   const live = useLiveReviews(!designPreview, projects, { items: runs, loading: runsLoading, failed: runsFailed });
   const source = designPreview ? mock : live;
-  const [section, setSection] = useState<ReviewSection>('pull-requests');
-  const [activeTab, setActiveTab] = useState<string>('pull-requests');
-  const [detailTab, setDetailTab] = useState<DetailTab>('code-changes');
-  const [selectedRunID, setSelectedRunID] = useState<string | null>(null);
+  const requestedRunID = new URLSearchParams(window.location.search).get('run');
+  const [section, setSection] = useState<ReviewSection>(requestedRunID ? 'local-branches' : 'pull-requests');
+  const [activeTab, setActiveTab] = useState<string>(requestedRunID ? 'local-branches' : 'pull-requests');
+  const [detailTab, setDetailTab] = useState<DetailTab>(requestedRunID ? 'evidence' : 'code-changes');
+  const [selectedRunID, setSelectedRunID] = useState<string | null>(requestedRunID);
   const [selectedNumber, setSelectedNumber] = useState(pullRequestFromAddress);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
@@ -75,14 +76,15 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
   const pullRequest = section === 'pull-requests' ? pick(visiblePullRequests) : undefined;
   const issue = section === 'issues' ? pick(visibleIssues) : undefined;
   const run = section === 'local-branches'
-    ? source.runs.items.find((item) => item.id === selectedRunID) ?? source.runs.items[0] : undefined;
+    ? selectedRunID ? (designPreview ? source.runs.items : runs).find((item) => item.id === selectedRunID)
+      : source.runs.items[0] : undefined;
 
   const liveDiff = useLivePullRequestDiff(!designPreview, source.project?.id, pullRequest?.number);
   const pullRequestDiff = designPreview ? mockPullRequestDiff : liveDiff;
   const runDiff = useQuery({
     queryKey: ['agent-run-diff', section, run?.id, run?.diff_attempt],
     queryFn: () => loadDiff(run!.id),
-    enabled: Boolean(run),
+    enabled: Boolean(run?.diff_available),
   });
   const runStats = useMemo(() => {
     if (!runDiff.data) return undefined;
@@ -169,6 +171,10 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
           <Menu.Dropdown><Menu.Item onClick={resetFilters}>Reset queue filters</Menu.Item></Menu.Dropdown>
         </Menu>
       </nav>
+      {section === 'local-branches' && selectedRunID && !run && <p role={runsLoading ? 'status' : 'alert'}>
+        {runsLoading ? 'Loading the requested run…' : runsFailed ? 'The requested run could not be loaded.'
+          : 'The requested run is unavailable or you do not have access to it.'}
+      </p>}
       <Group
         className={`reviews-workspace${stacked ? ' is-stacked' : ''}`}
         orientation={stacked ? 'vertical' : 'horizontal'}

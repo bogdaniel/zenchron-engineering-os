@@ -18,6 +18,7 @@ import { AgentWorkUnits } from './AgentWorkUnits';
 import { PageHeading } from './PageHeading';
 import { AgentPromptEditor } from './AgentPromptEditor';
 import { RunIssueSelect, runReadiness, type RunWorker } from './agentRunQueue';
+import { profileReadiness } from './agentReadiness';
 import { AgentPromptCardActions } from './AgentPromptCardActions';
 import { AgentsMobileSummary } from './AgentsMobileSummary';
 import {
@@ -79,20 +80,6 @@ const kpiColors = { total: undefined, active: '#16cfcb', runs: undefined, succes
 
 type Worker = RunWorker;
 
-function profileReadiness(agent: Agent, workers: Worker[], persona: AgentPersona | undefined,
-  personasLoading: boolean, preview: boolean) {
-  if (preview) return { label: 'Preview only', note: 'Mock data does not report local CLI readiness.' };
-  if (agent.status !== 'active') return { label: 'Profile disabled', note: 'Enable the profile before assigning work.' };
-  if (agent.persona_id && personasLoading) return { label: 'Checking persona', note: 'Linked persona readiness is loading.' };
-  if (agent.persona_id && persona?.status !== 'active') {
-    return { label: 'Persona unavailable', note: 'The linked persona is missing or disabled.' };
-  }
-  const online = workers.filter((worker) => worker.status === 'online');
-  if (!online.length) return { label: 'No online worker', note: 'No online worker can run this profile.' };
-  const readyWorker = online.find((worker) => worker.providers?.some((provider) => provider.id === agent.provider && provider.ready));
-  return runReadiness(agent.provider, readyWorker ?? online[0]);
-}
-
 function responsibilityEligibility(agent: Agent, kind: 'produce' | 'review' | 'plan', persona?: AgentPersona) {
   if (agent.status !== 'active') return 'Ineligible: profile is disabled.';
   if (!['codex-cli', 'claude-code'].includes(agent.provider)) return 'Ineligible: provider has no CLI adapter.';
@@ -121,7 +108,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   const live = useLiveAgents(!designPreview);
   const source = designPreview ? mock : live;
   const { view, items, runs: runItems } = source;
-  const [selectedID, setSelectedID] = useState<string | null>(null);
+  const [selectedID, setSelectedID] = useState<string | null>(() => new URLSearchParams(window.location.search).get('profile'));
   const [performanceRange, setPerformanceRange] = useState<'Last 7 Days' | 'Last 30 Days'>('Last 30 Days');
   const [detailTab, setDetailTab] = useState<string | null>('overview');
   const [libraryOpen, setLibraryOpen] = useState(false);

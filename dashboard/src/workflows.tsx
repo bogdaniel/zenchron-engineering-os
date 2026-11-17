@@ -144,7 +144,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     setMobileSection(name);
     document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState(() => new URLSearchParams(window.location.search).get('workflow') ?? '');
   const [selectedId, setSelectedId] = useState('');
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const loadedWorkflowId = useRef('');

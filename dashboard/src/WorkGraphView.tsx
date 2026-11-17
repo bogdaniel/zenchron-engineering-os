@@ -3,6 +3,7 @@ import { Badge, Button, Textarea } from '@mantine/core';
 import { IconGitPullRequest } from '@tabler/icons-react';
 import { openDecisions } from './orchestration';
 import type { GraphMessage, OrchestrationSource, PlanUnit, WorkGraph, WorkUnit } from './orchestration';
+import { livePageHref } from './livePageHref';
 import './orchestration.css';
 
 const messageLabels: Record<GraphMessage['type'], string> = {
@@ -16,14 +17,17 @@ export function StateBadge({ state }: { state: string }) {
 }
 
 /** What a unit is, who executes it, and what it waits for. A plan's units have no state yet. */
-export function UnitFacts({ unit, agent }: { unit: PlanUnit; agent: string }) {
+export function UnitFacts({ unit, agent, planned = false, live = false }: {
+  unit: PlanUnit; agent: string; planned?: boolean; live?: boolean;
+}) {
   return <>
     <span className="work-unit-title"><b>{unit.key}</b><span>{unit.title}</span></span>
     <span className="work-unit-meta">
       <span>{unit.kind}</span>
-      <span>{unit.kind === 'integrate' ? 'Zenchron (deterministic merge)' : agent || 'Unassigned'}</span>
-      {unit.profile_version && <span>Profile v{unit.profile_version}</span>}
-      {unit.persona_id && <span>Persona {unit.persona_id} · v{unit.persona_version ?? 'unknown'}</span>}
+      <span>{unit.kind === 'integrate' ? 'Zenchron (deterministic merge)' : planned && live && unit.agent_id
+        ? <a href={livePageHref('agents', { profile: unit.agent_id })}>{agent || unit.agent_id}</a> : agent || 'Unassigned'}</span>
+      {unit.profile_version && <span>{planned ? 'Planned profile' : 'Recorded profile'} v{unit.profile_version}</span>}
+      {unit.persona_id && <span>{planned ? 'Planned persona' : 'Recorded persona'} {unit.persona_id} · v{unit.persona_version ?? 'unknown'}</span>}
       {unit.depends_on.length > 0 && <span>after {unit.depends_on.join(', ')}</span>}
       {unit.capabilities.length > 0 && <span>needs {unit.capabilities.join(', ')}</span>}
     </span>

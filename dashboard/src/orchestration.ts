@@ -153,7 +153,10 @@ export function useLiveOrchestration(enabled: boolean, objectiveID?: string, pro
     graphs: graphs.data ?? [],
     loading: graphs.isLoading,
     failed: graphs.isError,
-    retry: () => void graphs.refetch(),
+    retry: () => {
+      void graphs.refetch();
+      if (objectiveID) void plans.refetch();
+    },
     plans: plans.data ?? [],
     plansLoading: plans.isLoading,
     plansFailed: plans.isError,
