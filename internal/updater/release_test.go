@@ -180,7 +180,19 @@ func TestBuildReleaseStagesExactCommitAndMeasuresEveryArtifact(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	writeTool("go", "while [ \"$#\" -gt 0 ]; do if [ \"$1\" = \"-o\" ]; then shift; printf '#!/bin/sh\\nif [ \\\"$1\\\" = build-info ]; then printf \\\"{\\\\\\\"state_schema_version\\\\\\\":1,\\\\\\\"protocol_version\\\\\\\":1}\\\\n\\\"; fi\\n' > \"$1\"; chmod +x \"$1\"; exit 0; fi; shift; done; exit 1\n")
+	writeTool("go", `output=
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-o" ]; then shift; output=$1; fi
+	shift
+done
+cat > "$output" <<'EOF'
+#!/bin/sh
+if [ "$1" = "build-info" ]; then
+	printf '%s' '{"state_schema_version":1,"protocol_version":1}'
+fi
+EOF
+chmod +x "$output"
+`)
 	writeTool("npm", "if [ \"$1\" = \"run\" ]; then mkdir -p dist/assets; printf '<html>ok</html>' > dist/index.html; printf 'app' > dist/assets/app.js; fi\n")
 	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
 	root := filepath.Join(t.TempDir(), "managed")
