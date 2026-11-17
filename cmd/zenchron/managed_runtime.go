@@ -283,23 +283,8 @@ func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current strin
 			_ = runtime.setQuiesced(false)
 		}
 	}()
-	for {
-		active, err := runtime.activeRunCount(ctx)
-		if err != nil {
-			return runtime.failUpdate("failed", "Could not verify active runs: "+err.Error())
-		}
-		runtime.status.ActiveRuns = active
-		if err := runtime.writeStatus(); err != nil {
-			return err
-		}
-		if active == 0 {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(updateRunPollInterval):
-		}
+	if err := runtime.waitForActiveRuns(ctx); err != nil {
+		return runtime.failUpdate("failed", "Could not wait for active runs to reach a safe boundary: "+err.Error())
 	}
 	if err := verifyCurrentTrustedCandidate(ctx, newGitHubClient(), candidate); err != nil {
 		return runtime.failUpdate("blocked", "Trusted main advanced or became unverifiable while waiting for active runs; the staged release was not activated")
@@ -407,6 +392,27 @@ func (runtime *managedRuntime) activeRunCount(ctx context.Context) (int, error) 
 	return result.ActiveRuns, nil
 }
 
+func (runtime *managedRuntime) waitForActiveRuns(ctx context.Context) error {
+	for {
+		active, err := runtime.activeRunCount(ctx)
+		if err != nil {
+			return err
+		}
+		runtime.status.ActiveRuns = active
+		if err := runtime.writeStatus(); err != nil {
+			return err
+		}
+		if active == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(updateRunPollInterval):
+		}
+	}
+}
+
 func (runtime *managedRuntime) setQuiesced(quiesce bool) error {
 	method, path := http.MethodDelete, "/api/v1/system/update/quiesce"
 	if quiesce {
@@ -433,15 +439,8 @@ func (runtime *managedRuntime) stopSafely() error {
 		if err := runtime.setQuiesced(true); err != nil {
 			return fmt.Errorf("pause run admission before shutdown: %w", err)
 		}
-		for {
-			active, err := runtime.activeRunCount(context.Background())
-			if err != nil {
-				return err
-			}
-			if active == 0 {
-				break
-			}
-			time.Sleep(updateRunPollInterval)
+		if err := runtime.waitForActiveRuns(context.Background()); err != nil {
+			return err
 		}
 	}
 	return runtime.stopChildren()

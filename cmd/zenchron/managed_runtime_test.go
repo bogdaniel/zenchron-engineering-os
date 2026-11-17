@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
 )
@@ -40,6 +42,78 @@ func TestManagedRuntimeStopsSiblingAfterChildFailure(t *testing.T) {
 	}
 	if worker.command.ProcessState == nil {
 		t.Fatal("sibling worker process was left running")
+	}
+}
+
+func TestManagedRuntimePreservesCLIChildrenUntilActiveRunsReachSafeBoundary(t *testing.T) {
+	directory := t.TempDir()
+	firstActiveCount := make(chan struct{}, 1)
+	secondActiveCount := make(chan struct{}, 1)
+	releaseZeroCount := make(chan struct{})
+	activeChecks := 0
+	runtime := &managedRuntime{statusPath: filepath.Join(directory, "system-update.json"), status: updater.Status{State: "waiting_for_runs"},
+		client: &http.Client{Transport: managedTestTransport(func(request *http.Request) (*http.Response, error) {
+			if strings.HasSuffix(request.URL.Path, "/quiesce") {
+				return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody, Header: make(http.Header), Request: request}, nil
+			}
+			activeChecks++
+			if activeChecks == 1 {
+				firstActiveCount <- struct{}{}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"active_runs":1}`)), Header: make(http.Header), Request: request}, nil
+			}
+			secondActiveCount <- struct{}{}
+			<-releaseZeroCount
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"active_runs":0}`)), Header: make(http.Header), Request: request}, nil
+		})}}
+	var err error
+	runtime.api, err = startManagedChild("/bin/sh", []string{"-c", "exec sleep 30"}, directory, os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime.worker, err = startManagedChild("/bin/sh", []string{"-c", "exec sleep 30"}, directory, os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker := runtime.worker
+	defer func() {
+		select {
+		case releaseZeroCount <- struct{}{}:
+		default:
+		}
+		_ = runtime.stopChildren()
+	}()
+
+	stopped := make(chan error, 1)
+	go func() { stopped <- runtime.stopSafely() }()
+	select {
+	case <-firstActiveCount:
+	case <-time.After(5 * time.Second):
+		t.Fatal("managed runtime did not inspect the active run count")
+	}
+	select {
+	case <-secondActiveCount:
+	case err := <-stopped:
+		t.Fatalf("managed runtime stopped before rechecking active runs: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("managed runtime did not recheck active runs")
+	}
+	if worker.command.ProcessState != nil {
+		t.Fatal("worker was stopped while an active CLI run remained")
+	}
+	if err := worker.command.Process.Signal(syscall.Signal(0)); err != nil {
+		t.Fatalf("active CLI child was not preserved at the safe boundary: %v", err)
+	}
+	releaseZeroCount <- struct{}{}
+	select {
+	case err := <-stopped:
+		if err != nil {
+			t.Fatalf("safe managed shutdown failed after active runs drained: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("managed runtime did not stop after the active run count reached zero")
+	}
+	if worker.command.ProcessState == nil {
+		t.Fatal("worker was not stopped after all CLI attempts drained")
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -232,5 +233,27 @@ chmod +x "$output"
 	}
 	if active, err := ActiveRelease(root); err != nil || active != candidate.Commit {
 		t.Fatalf("ActiveRelease() = %q, %v", active, err)
+	}
+}
+
+func TestBuildFailureLeavesCurrentReleaseActive(t *testing.T) {
+	root := t.TempDir()
+	previous := "0123456789abcdef0123456789abcdef01234567"
+	candidate := Candidate{Repository: "owner/repo", Commit: "abcdef0123456789abcdef0123456789abcdef01",
+		Tree: "1234567890abcdef1234567890abcdef12345678"}
+	if err := os.MkdirAll(filepath.Join(root, "releases", previous), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetActiveRelease(root, previous); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := buildReleaseFrom(context.Background(), root, candidate, filepath.Join(root, "missing-source"), ""); err == nil {
+		t.Fatal("release built from a missing source")
+	}
+	if active, err := ActiveRelease(root); err != nil || active != previous {
+		t.Fatalf("failed build changed active release to %q: %v", active, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "releases", candidate.Commit)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed build published a partial candidate release: %v", err)
 	}
 }
