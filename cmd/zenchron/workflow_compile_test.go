@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -101,7 +102,7 @@ func TestSavedWorkflowCompilesToVersionedObjectivePlan(t *testing.T) {
 		return plan
 	}
 	first := propose()
-	if first.WorkflowVersion != definition.Version || len(first.Units) != 3 || first.Units[0].Title != "Implement export" ||
+	if first.WorkflowVersion != definition.Version || first.WorkflowMode != workflowModeCompiled || len(first.Units) != 3 || first.Units[0].Title != "Implement export" ||
 		first.Units[0].AgentID != harness.profile.ID || first.Units[0].Acceptance[0] != "CSV is valid" {
 		t.Fatalf("compiled objective plan = %#v", first)
 	}
@@ -111,6 +112,27 @@ func TestSavedWorkflowCompilesToVersionedObjectivePlan(t *testing.T) {
 	if second.WorkflowVersion != first.WorkflowVersion+1 || second.Hash == first.Hash ||
 		len(second.Units[0].Acceptance) != 2 {
 		t.Fatalf("workflow edit did not change pinned compiled plan: first=%#v second=%#v", first, second)
+	}
+	manual := fmt.Sprintf(`{"project_id":%q,"workflow_id":%q,"plan":{"summary":"unrelated","max_parallel":1,"units":[%s,%s]}}`,
+		testProjectID, definition.ID, unitJSON("manual", unitProduce, harness.profile.ID),
+		unitJSON("integrate", unitIntegrate, "", "manual"))
+	_, response := harness.propose(manual)
+	body, _ := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "manual plans cannot claim a workflow") {
+		t.Fatalf("unrelated manual plan with workflow identity returned HTTP %d: %s", response.StatusCode, body)
+	}
+	plans := decodeList[objectivePlan](t, harness.call(http.MethodGet, "/api/v1/objectives/"+harness.objectiveID+"/plans", ""))
+	if len(plans) != 2 {
+		t.Fatalf("rejected manual workflow claim persisted a plan: %#v", plans)
+	}
+	graph, status := harness.approve(second.Revision)
+	if status != http.StatusCreated || graph.WorkflowMode != workflowModeCompiled || graph.WorkflowVersion != definition.Version {
+		t.Fatalf("compiled workflow graph = HTTP %d %#v", status, graph)
+	}
+	report, _ := harness.deliveryReport(graph.ID)
+	if report.WorkflowMode != workflowModeCompiled {
+		t.Fatalf("compiled workflow report mode = %q", report.WorkflowMode)
 	}
 }
 
@@ -156,5 +178,17 @@ func TestMergeGateRemainsDesignOnly(t *testing.T) {
 		Status: "active", Tools: []string{"code.write"}}}
 	if _, problems := compileWorkflow(definition, agents); !strings.Contains(strings.Join(problems, " "), "design-only") {
 		t.Fatalf("merge-gate should be rejected as design-only; problems = %v", problems)
+	}
+}
+
+func TestPlannerWorkflowGuidanceRejectsOversizedDefinition(t *testing.T) {
+	definition := workflow{ID: "workflow-1", Name: "Large workflow", Version: 1}
+	for index := 0; index < 10; index++ {
+		definition.Nodes = append(definition.Nodes, workflowNode{ID: fmt.Sprintf("node-%d", index), Type: "agent-task",
+			Data: workflowNodeData{Label: fmt.Sprintf("Step %d", index), Description: strings.Repeat("x", 500)}})
+	}
+	if _, err := plannerWorkflowGuidance(definition); err == nil ||
+		!strings.Contains(err.Error(), "planner guidance limit") {
+		t.Fatalf("oversized planner guidance error = %v, want explicit size limit", err)
 	}
 }
