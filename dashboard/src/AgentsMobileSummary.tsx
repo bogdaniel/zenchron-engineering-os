@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   IconArrowUpRight, IconCheck, IconChevronRight, IconCode, IconFlame,
-  IconPlayerPlay, IconPlus, IconRobot, IconShieldCheck,
+  IconPlayerPlay, IconPlus, IconRobot, IconShieldCheck, IconUsers,
 } from '@tabler/icons-react';
 import { Badge } from '@mantine/core';
 import { PanelCard } from './PanelCard';
@@ -12,12 +12,13 @@ import './agents-mobile-preview.css';
 type Section = 'agents' | 'reviews' | 'evidence';
 
 /** The phone-sized Agents landing view: recent runs, pull-request review, and evidence health at a glance. */
-export function AgentsMobileSummary({ dataLabel, summary, onRunAgent, onOpenRunHistory, onOpenReviews }: {
+export function AgentsMobileSummary({ dataLabel, summary, onRunAgent, onOpenRunHistory, onOpenReviews, onManageProfiles }: {
   dataLabel?: string;
   summary: AgentsView['mobile'];
   onRunAgent: () => void;
   onOpenRunHistory: () => void;
   onOpenReviews: () => void;
+  onManageProfiles: () => void;
 }) {
   const [section, setSection] = useState<Section>('agents');
   const { metrics, runs, review, evidence } = summary;
@@ -68,7 +69,9 @@ export function AgentsMobileSummary({ dataLabel, summary, onRunAgent, onOpenRunH
       <div><button type="button" className="run" onClick={onRunAgent}><IconPlayerPlay size={17} />
         <span><b>Run Agent</b><small>Execute an agent now</small></span></button>
         <button type="button" className="review" onClick={onOpenReviews}><IconPlus size={17} />
-          <span><b>New Review</b><small>Review a pull request</small></span><IconArrowUpRight size={12} /></button></div>
+          <span><b>New Review</b><small>Review a pull request</small></span><IconArrowUpRight size={12} /></button>
+        <button type="button" onClick={onManageProfiles}><IconUsers size={17} />
+          <span><b>Manage profiles</b><small>Agents and personas</small></span></button></div>
     </PanelCard>
   </section>;
 }

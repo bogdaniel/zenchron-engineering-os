@@ -101,11 +101,23 @@ type Heartbeat struct {
 }
 
 type AgentProfile struct {
-	Provider     string   `json:"provider"`
-	Model        string   `json:"model"`
-	SystemPrompt string   `json:"system_prompt"`
-	GoalPrompt   string   `json:"goal_prompt"`
-	Tools        []string `json:"tools"`
+	Provider     string        `json:"provider"`
+	Model        string        `json:"model"`
+	SystemPrompt string        `json:"system_prompt"`
+	GoalPrompt   string        `json:"goal_prompt"`
+	Tools        []string      `json:"tools"`
+	Persona      *AgentPersona `json:"persona,omitempty"`
+}
+
+type AgentPersona struct {
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	Role                 string   `json:"role"`
+	Responsibilities     []string `json:"responsibilities"`
+	Instructions         string   `json:"instructions"`
+	Behavior             string   `json:"behavior"`
+	ReviewSpecialization string   `json:"review_specialization"`
+	Version              int      `json:"version"`
 }
 
 type AgentRunCommand struct {

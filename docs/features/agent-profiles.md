@@ -1,8 +1,6 @@
 # Agent profiles
 
-Prototype status: the profile fields, tool allowlist, and versioning describe current implementation only. The agent definition and execution model remain undecided; see [the architecture checkpoint](../architecture/architecture-checkpoint.md).
-
-The Agents workspace stores reusable profile configuration: display name, description, provider and model identifiers,
+The Agents workspace stores reusable execution profiles: display name, description, provider and model identifiers,
 system and goal prompts, enabled state, version, and a small allowlist of repository tools. The profile detail is
 split into Overview, Prompts, Tools & Permissions, and Run History tabs. Version, run count, and success rate come from
 stored profile and run data; model cost stays unavailable until provider usage is recorded. The profile list shows each
@@ -12,7 +10,10 @@ when that profile has no runs. Profiles persist in the
 control-plane state directory and survive restart. The profile list searches saved names, descriptions, providers, and
 model identifiers, and shows up to three allowed tool IDs with a count for any additional tools. The run dialog shows each online project's worker and its reported model-runtime readiness; missing
 status stays unknown, and runs queued on a worker without a configured runtime remain queued. Provider identifiers
-are labels only; credentials are not stored.
+are labels only; credentials are not stored. Reusable personas define role, responsibilities, instructions, behavior
+expectations, and review specialization. Profiles bind to personas by ID. The Agents page can create, edit, duplicate,
+disable, and enable personas and shows the linked persona version on its profile. A persona does not grant tools:
+profile tools and worker sandbox controls remain authoritative.
 
 The page has one layout in both data modes (see [One dashboard, two data modes](../architecture/dashboard-modes.md)).
 The Overview tab shows the profile fields, 30-day performance, numbered prompt previews, Variables & Templates, Tool
@@ -36,6 +37,12 @@ Setting `provider` to `codex-cli` or `claude-code` runs the profile through the 
 queue dialog then reports that CLI's readiness and can start the run from a GitHub issue. See
 [Issue to pull request](issue-to-pull-request.md).
 
+When a WorkGraph plan is proposed, its assigned profile and persona IDs and versions are pinned with an effective
+configuration snapshot. Approval rejects a stale proposal. After approval, queued runs and retries use that snapshot
+even if a profile or persona is edited; stored run evidence preserves provider, model, prompts, tools, and persona
+version. CLI prompt order is persona instructions, profile system prompt, profile goal prompt, task, then Zenchron's
+operating contract. Tool permissions are passed separately and cannot be expanded by prompt text.
+
 ## Feature diagram
 
 ```mermaid
@@ -44,7 +51,8 @@ flowchart LR
     Dashboard[Agents workspace<br/>Overview, Prompts, Tools, Run History] -->|GET, POST, PUT /api/v1/agents| API[Go control plane]
     Dashboard -->|GET /api/v1/workers · runtime readiness| API
     Dashboard -->|Queue agent run| Runs[Agent run API]
-    API --> Store[(Versioned agents.json snapshot)]
+    Dashboard -->|GET /api/v1/personas · POST · PUT| API
+    API --> Store[(agents.json<br/>profiles and personas)]
     Runs --> RunStore[(Versioned agent-runs.json snapshot)]
     Dashboard -->|Run history, metrics, and 30-day trend| Runs
     Tools[Profile tool allowlist] --> Store
@@ -60,6 +68,8 @@ flowchart LR
 - `GET /api/v1/agents` lists profiles.
 - `POST /api/v1/agents` creates an active profile.
 - `PUT /api/v1/agents/{id}` replaces editable profile fields, increments its version, and updates its timestamp.
+- `GET /api/v1/personas`, `POST /api/v1/personas`, and `PUT /api/v1/personas/{id}` list and version persona
+  definitions. A duplicate is independent. Disabled personas cannot be newly bound or pass plan validation.
 - Supported tool identifiers: `code.search`, `code.write`, `docs.search`, `git.diff`, `git.read`, and `tests.run`.
 
 The API validates field lengths and rejects unknown JSON fields, duplicate tools, and unsupported tool identifiers.
@@ -67,6 +77,10 @@ The API validates field lengths and rejects unknown JSON fields, duplicate tools
 ## Verification
 
 - `go test ./cmd/zenchron` covers profile validation, create/update behavior, and persistence through control-plane restart.
+- `TestPersonasPersistVersionsAndBindToProfiles`, `TestAgentProfileRejectsMissingOrDisabledPersona`, and
+  `TestPlanPinsProfileConfigurationAndRejectsStaleApproval` cover persona persistence, validation, and pinning.
+- `cd dashboard && npm run test:e2e -- e2e/z_agents.spec.ts --grep 'Live personas persist'` exercises persona CRUD and
+  profile binding against the isolated real control plane.
 - `cd dashboard && npm run test:e2e -- e2e/z_agents.spec.ts` checks runtime readiness, profile search and edits, and a
   completed worker run against a loopback model stub; local preview checks cover filters, sorting, and actions
   without API calls.

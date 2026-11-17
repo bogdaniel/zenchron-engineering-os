@@ -8,10 +8,11 @@ import {
 } from '@tabler/icons-react';
 
 export const nodeTypes = [
-  'trigger', 'planner', 'agent-router', 'agent-task', 'code-reviewer', 'test-generator',
+  'trigger', 'planner', 'agent-router', 'agent-task', 'code-reviewer', 'test-generator', 'integrate',
   'coverage-analyzer', 'human-approval', 'merge-gate', 'publish-report', 'condition', 'loop',
 ] as const;
-export const nodeDataSchema = z.object({ label: z.string(), description: z.string() });
+export const nodeDataSchema = z.object({ label: z.string(), description: z.string(), agent_id: z.string().optional(),
+  persona_id: z.string().optional(), acceptance: z.array(z.string()).optional() });
 export const nodeSchema = z.object({
   id: z.string(), type: z.enum(nodeTypes),
   position: z.object({ x: z.number(), y: z.number() }), data: nodeDataSchema,
@@ -63,8 +64,8 @@ export const mobileOverviewStages: {
     position: { x: 162, y: 62 }, previewIcon: IconMessage2,
   },
   {
-    id: 'merge', label: 'Merge', description: 'Gated release', kind: 'merge-gate',
-    types: ['human-approval', 'merge-gate', 'publish-report'], position: { x: 216, y: 36 },
+    id: 'merge', label: 'Integration', description: 'Review and publish', kind: 'integrate',
+    types: ['integrate', 'human-approval', 'merge-gate', 'publish-report'], position: { x: 216, y: 36 },
     previewIcon: IconGitBranch,
   },
 ];
@@ -104,6 +105,7 @@ export const components = [
   ['Quality & Validation', 'coverage-analyzer', 'Coverage Analyzer'],
   ['Control & Human-in-the-loop', 'human-approval', 'Human Approval'],
   ['Control & Human-in-the-loop', 'merge-gate', 'Merge Gate'],
+  ['Integrations', 'integrate', 'Integrate and publish'],
   ['Control & Human-in-the-loop', 'condition', 'Condition'],
   ['Control & Human-in-the-loop', 'loop', 'Loop'],
   ['Integrations', 'publish-report', 'Publish Report'],
@@ -119,6 +121,7 @@ export const workflowNodeIcons: Record<ComponentType, typeof IconRoute> = {
   'coverage-analyzer': IconChartBar,
   'human-approval': IconUserCheck,
   'merge-gate': IconGitMerge,
+  integrate: IconGitMerge,
   'publish-report': IconFileText,
   condition: IconGitBranch,
   loop: IconRepeat,
@@ -129,7 +132,7 @@ export const defaultDescriptions: Record<ComponentType, string> = {
   'agent-router': 'Route work to specialized agents', 'agent-task': 'Run a configured agent',
   'code-reviewer': 'Review changes and report findings', 'test-generator': 'Generate and run focused tests',
   'coverage-analyzer': 'Analyze test coverage', 'human-approval': 'Request reviewer approval',
-  'merge-gate': 'Apply repository and policy checks', condition: 'Continue when conditions pass',
+  'merge-gate': 'Design-only: policy gates are not executable', integrate: 'Integrate reviewed candidates and publish a pull request', condition: 'Design-only: conditions are not executable',
   loop: 'Repeat for each item', 'publish-report': 'Publish a release report',
 };
 
@@ -172,11 +175,20 @@ export function mobileWorkflowGraph(workflow: Workflow, designPreview = false, m
     stageByNode.set(node.id, stage);
   }
   const configuredStages = new Set(stageByNode.values());
-  const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id));
+  const hasIntegrate = workflow.nodes.some((node) => node.type === 'integrate');
+  const hasUnsupportedNodes = workflow.nodes.some((node) => !['trigger', 'agent-task', 'test-generator', 'code-reviewer', 'integrate'].includes(node.type));
+  const stages = mobileOverviewStages.filter(({ id }) => configuredStages.has(id)).map((stage) => {
+    if (designPreview || stage.id !== 'merge') return stage;
+    if (hasIntegrate && hasUnsupportedNodes) return { ...stage, label: 'Needs validation', description: 'Unsupported workflow nodes cannot execute.' };
+    if (hasIntegrate) return stage;
+    return { ...stage, label: 'Design-only', description: 'Unsupported workflow nodes cannot execute.', kind: 'merge-gate' as const };
+  });
   const nodes: WorkflowNode[] = stages.map(({ id, label, description, kind, previewIcon, position }) => ({
     id, type: 'workflow', position: mobile ? position : designPreviewPositions[id] ?? position,
     data: {
-      kind, label, previewIcon,
+      previewIcon,
+      kind: designPreview && id === 'merge' ? 'merge-gate' : kind,
+      label: designPreview && id === 'merge' ? 'Merge' : label,
       description: designPreview && id === 'trigger' ? 'Objective updated'
         : designPreview && id === 'merge' ? 'To trusted-main' : description,
     },

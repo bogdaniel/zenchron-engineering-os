@@ -224,6 +224,9 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
           onAction={() => setActiveTab('Objectives')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Objectives'}>
           {objectiveList.note ? <Note note={objectiveList.note} /> : <ObjectiveRows rows={objectiveList.rows} />}
+          {!designPreview && selected && <a className="workspace-mock-card-action workspace-mock-objective-create"
+            href={`/?create=1&product_id=${encodeURIComponent(selected.id)}#objectives`}
+            aria-label={`Create objective for ${selected.name}`}>＋ Create objective</a>}
           {/* The Objectives tab also shows how each objective is being executed: units, handoffs, findings, decisions, PR. */}
           {activeTab === 'Objectives' && <WorkspaceExecution sampleData={designPreview} objectiveIDs={facts.objectives
             ?.filter((objective) => objective.product_id === selected?.id).map((objective) => objective.id) ?? []} />}

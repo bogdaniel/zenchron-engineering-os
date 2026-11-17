@@ -17,7 +17,10 @@ flowchart LR
   Plan -->|"POST .../plans/{revision}/approve"| Plans
   Plan -->|"POST /api/v1/work-graphs/{id}/cancel<br/>.../units/{key}/retry<br/>.../decisions/{message}"| Plans
   Views -->|"GET /api/v1/work-graphs"| Plans
-  Plans --> Validate[orchestration_plan.go<br/>problems]
+  Plans -->|workflow mode compiled| Compiler[workflow_compile.go]
+  Plans -->|workflow mode guidance, version-pinned prompt| Planner[read-only planner run]
+  Compiler --> Validate[orchestration_plan.go<br/>problems]
+  Validate -->|profile/persona versions and private prompt snapshots| Pins[Approved plan revision]
   Plans --> Graphs[(work-graphs.json<br/>plans, graphs, messages)]
   Graphs <--> Reconcile["work_graph_reconcile.go<br/>admit, frontier, project"]
   Reconcile -->|enqueue, requeueForUnit, cancelRun| Runs[(agent-runs.json<br/>the only queue)]
@@ -42,8 +45,27 @@ flowchart LR
 - `POST /api/v1/objectives/{id}/plans` records a new revision. The body names an online `project_id`, an optional
   `workflow_id`, and either a `plan` or a `planner_agent_id`. A planner must be an active Codex or Claude Code profile
   without `code.write`; it runs as an ordinary read-only run and its typed result is the proposal.
+- A supplied manual plan cannot claim a saved workflow. Selecting a workflow with no planner compiles its saved,
+  versioned definition into WorkUnits. Selecting a workflow with a planner instead pins the complete saved definition
+  into that planner run's prompt as guidance; the planner still proposes the actual WorkUnits. Plans, WorkGraphs and
+  delivery reports distinguish `compiled` from `guidance`. Legacy records without a mode are displayed as unknown.
+  Planner guidance is limited to 4 KiB so it fits the existing bounded run prompt; larger definitions are rejected.
+- When an objective belongs to a product, the dashboard limits repository choices to that product's linked checkouts
+  with an online worker. Legacy objectives without a product keep the existing all-checkouts selection.
 - A plan has 1 to 8 units of kind `produce`, `review`, or `integrate`, each with a key, title, instructions, acceptance
-  criteria, dependencies, and capabilities, and `max_parallel` from 1 to 4 (default 2).
+  criteria, dependencies, capabilities, and (for agent units) profile and persona IDs and versions; `max_parallel`
+  ranges from 1 to 4 (default 2).
+- A workflow plan is compiled from its saved, versioned definition. Supported nodes produce normal WorkUnits:
+  Agent Task and Test Generator become producers, Code Reviewer becomes an independent reviewer, and Integrate and
+  Publish becomes the existing deterministic integration unit. Unsupported visual nodes remain visible and make the
+  workflow invalid for compilation.
+- The plan stores a private snapshot of each assigned profile and persona. A profile or persona edit between proposal
+  and approval makes the proposal stale and approval returns 409. After approval, queued runs and retries use the
+  pinned effective configuration. The worker receives only composed instructions and the original profile tool
+  allowlist; persona text cannot grant tools or weaken sandbox controls.
+- In Live Objectives, the plan shows current CLI readiness for each assigned profile on the selected repository's
+  worker. An unavailable CLI does not invalidate a structurally valid plan; its durable run stays queued until that
+  worker reports the required provider ready. Planner runs show the same readiness before submission.
 - A plan is refused, with every problem listed, when: a key is malformed or repeated; a dependency is unknown or forms
   a cycle; there is no produce unit or not exactly one integrate unit; a produce unit never reaches the integrate unit; a produce unit
   builds on more than one produce unit; a produce unit's profile is missing, disabled, has no CLI adapter, cannot
@@ -125,7 +147,8 @@ flowchart LR
 - Product Workspace shows the graphs of the selected product's objectives on its Objectives tab. Agents lists the units
   assigned to the selected profile. Reviews labels a unit's run with its objective and unit and, for the integration
   run, shows the combined commits, review verdicts, and findings.
-- Workflows states that the canvas does not execute and that a plan can name a workflow as guidance.
+- Workflow Builder validates saved definitions and Objective Workspace compiles them into the same WorkGraph plan.
+  It does not run a second workflow engine.
 - Mock mode shows one sample graph with every operation disabled and sends nothing.
 
 ## Configuration

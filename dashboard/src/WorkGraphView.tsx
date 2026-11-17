@@ -22,6 +22,8 @@ export function UnitFacts({ unit, agent }: { unit: PlanUnit; agent: string }) {
     <span className="work-unit-meta">
       <span>{unit.kind}</span>
       <span>{unit.kind === 'integrate' ? 'Zenchron (deterministic merge)' : agent || 'Unassigned'}</span>
+      {unit.profile_version && <span>Profile v{unit.profile_version}</span>}
+      {unit.persona_id && <span>Persona {unit.persona_id} · v{unit.persona_version ?? 'unknown'}</span>}
       {unit.depends_on.length > 0 && <span>after {unit.depends_on.join(', ')}</span>}
       {unit.capabilities.length > 0 && <span>needs {unit.capabilities.join(', ')}</span>}
     </span>

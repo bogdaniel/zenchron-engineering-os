@@ -108,21 +108,23 @@ type workGraph struct {
 	PlanRevision   int    `json:"plan_revision"`
 	PlanHash       string `json:"plan_hash"`
 	// Revision counts every persisted change to the graph.
-	Revision    int            `json:"revision"`
-	Status      string         `json:"status"`
-	ProjectID   string         `json:"project_id"`
-	ProjectName string         `json:"project_name"`
-	Repository  string         `json:"repository,omitempty"`
-	WorkerID    string         `json:"worker_id"`
-	WorkerName  string         `json:"worker_name"`
-	BaseBranch  string         `json:"base_branch"`
-	WorkflowID  string         `json:"workflow_id,omitempty"`
-	MaxParallel int            `json:"max_parallel"`
-	Units       []workUnit     `json:"units"`
-	Messages    []graphMessage `json:"messages"`
-	CreatedBy   string         `json:"created_by,omitempty"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
+	Revision        int            `json:"revision"`
+	Status          string         `json:"status"`
+	ProjectID       string         `json:"project_id"`
+	ProjectName     string         `json:"project_name"`
+	Repository      string         `json:"repository,omitempty"`
+	WorkerID        string         `json:"worker_id"`
+	WorkerName      string         `json:"worker_name"`
+	BaseBranch      string         `json:"base_branch"`
+	WorkflowID      string         `json:"workflow_id,omitempty"`
+	WorkflowVersion int            `json:"workflow_version,omitempty"`
+	WorkflowMode    string         `json:"workflow_mode,omitempty"`
+	MaxParallel     int            `json:"max_parallel"`
+	Units           []workUnit     `json:"units"`
+	Messages        []graphMessage `json:"messages"`
+	CreatedBy       string         `json:"created_by,omitempty"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
 }
 
 // workGraphStore owns plans and WorkGraphs. It never executes anything: it creates and requeues runs in

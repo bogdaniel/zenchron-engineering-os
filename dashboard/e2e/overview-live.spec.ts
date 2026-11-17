@@ -58,13 +58,14 @@ test('dashboard displays the connected control plane and local worker', async ({
   await expect(workflowSummary).toContainText('Run agents');
   await expect(workflowSummary).toContainText('Run test suite');
   await expect(workflowSummary).toContainText('AI + human review');
-  await expect(workflowSummary).toContainText('Gated release');
-  await expect(page.locator('.workflow-overview-actions .muted-tag')).toHaveText('Execution unavailable');
+  await expect(workflowSummary).toContainText('Design-only');
+  await expect(workflowSummary).toContainText('Unsupported workflow nodes cannot execute.');
+  await expect(page.locator('.workflow-overview-actions .muted-tag')).toHaveText('Use in Objective plan');
   await expect(page.locator('.workflow-overview-actions .preview-running-badge')).toHaveCount(0);
   await expect(page.locator('.workflow-panel .shared-panel-heading p')).toHaveText(/ · (draft|active)$/);
-  await expect(page.getByRole('link', { name: 'View Runs' })).toHaveAttribute('href', '#workflows');
+  await expect(page.getByRole('link', { name: 'Open Objectives' })).toHaveAttribute('href', '#objectives');
   await page.getByRole('button', { name: 'Workflow options' }).click();
-  await expect(page.getByRole('menu')).toContainText(/9 components · \d+ connections · runner not connected/);
+  await expect(page.getByRole('menu')).toContainText(/9 components · \d+ connections · run through an Objective WorkGraph/);
   await expect(page.getByRole('menuitem', { name: 'Open workflow editor' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('.app-shell')).toHaveClass(/sample-data/);

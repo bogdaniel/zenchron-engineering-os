@@ -13,7 +13,7 @@ const paletteCategoryTypes: Record<PaletteCategory, Set<ComponentType>> = {
   Agents: new Set<ComponentType>(['planner', 'agent-router', 'agent-task', 'code-reviewer', 'test-generator', 'coverage-analyzer']),
   Actions: new Set<ComponentType>(['trigger', 'condition', 'loop', 'merge-gate']),
   Control: new Set<ComponentType>(['human-approval', 'merge-gate', 'condition', 'loop']),
-  Integrations: new Set<ComponentType>(['publish-report']),
+  Integrations: new Set<ComponentType>(['integrate', 'publish-report']),
 };
 export const customBlock = { type: 'agent-task', label: 'Custom Block' } as const;
 type AddComponent = (type: ComponentType, label: string) => void;

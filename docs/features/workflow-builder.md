@@ -6,9 +6,9 @@ component properties, graph validation, and save. **Mock** (local addresses only
 with its illustrative run, schedules, permissions, and settings. See `docs/architecture/dashboard-modes.md` for the
 mode rules.
 
-The control plane stores a workflow's name, description, status, version, and graph. It does not execute, schedule,
-version, or share workflows, so in Live every part of the design that needs those says "Unavailable" or is empty, and
-its controls are disabled with the reason. Nothing in Live simulates a run.
+The control plane stores versioned workflow definitions and validates which nodes can compile into the existing
+objective plan and WorkGraph. The canvas does not run a separate workflow engine: Objective Workspace compiles a saved
+workflow into the same plan that is inspected, approved, and executed by WorkGraph.
 
 ## Feature diagram
 
@@ -21,6 +21,7 @@ flowchart LR
     Hook -->|GET /api/v1/workflows| API[Go control plane]
     Hook -->|POST /api/v1/workflows| API
     Hook -->|"PUT /api/v1/workflows/{id}"| API
+    Hook -->|"POST /api/v1/workflows/{id}/validate"| API
     API --> Validate[Validate node types and edge references]
     Validate --> Store[(Versioned JSON snapshot)]
     Page --> Menu["Workflow menu (version badge)<br/>switch · New workflow · version history · Auto layout"]
@@ -29,10 +30,13 @@ flowchart LR
     Menu -->|Auto layout| ELK["ELK layered layout<br/>compact card sizes"]
     ELK --> Canvas
     Canvas -->|select| Inspector["Inspector<br/>name · description · delete · WorkflowNodeSettings"]
-    Page --> RunPreview["Run Preview · WorkflowRun.tsx<br/>Mock: fixture timeline · Live: execution unavailable"]
+    Page --> RunPreview["Run Preview · WorkflowRun.tsx<br/>Mock: fixture timeline · Live: select workflow in Objective Plan"]
     Page --> Phone["Phone run detail · WorkflowPhoneRunCards<br/>six stages from the saved graph"]
     Page --> Sections["WorkflowSections.tsx<br/>Runs · Versions · Schedules · Permissions · Settings"]
     Sections -->|"Live: Save Settings (name, description, status)"| Hook
+    Page -->|"Select workflow for objective"| Objective[ObjectivePlanPanel]
+    Objective -->|"POST /api/v1/objectives/{id}/plans"| Compiler[workflow_compile.go]
+    Compiler -->|typed produce, review, integrate plan| WorkGraph[Existing WorkGraph]
 ```
 
 ## Behavior
@@ -55,8 +59,8 @@ flowchart LR
   selection to the Agent Router or deletes the component with its connectors; closing the inspector gives the canvas
   its width, and selecting a node opens it again. Opening a workflow selects its Agent Router; a graph without one
   opens unselected.
-- Validate checks that the graph has a Trigger and that every edge joins existing nodes. A failed validation, save,
-  layout, or fullscreen request is shown in the alert colour and wraps instead of being clipped.
+- Validate calls the control plane and shows typed compiler problems. A failed validation, save, layout, or fullscreen
+  request is shown in the alert colour and wraps instead of being clipped.
 - The `react-resizable-panels` separator adjusts the canvas and Run Preview heights with the pointer or arrow keys.
 - On phones the page is the run-detail view: back / brand / overflow header, the four in-page tabs, the six-stage
   overview graph, and the Run Status, Task Progress, and Approvals cards. The builder toolbar, section tabs, editor,
@@ -69,15 +73,22 @@ flowchart LR
 - Save sends `PUT /api/v1/workflows/{id}` with the name, description, status, nodes, and edges, and confirms with the
   new version. "New workflow…" sends `POST /api/v1/workflows` and opens the result; a rejected create is reported in
   the dialog, a rejected save in the Execution Flow card or the section note.
+- A new Live workflow starts with Trigger, Agent Task, and Integrate and publish nodes. Agent Task, Test Generator,
+  and Code Reviewer nodes compile to produce/review WorkUnits; Integrate is the existing deterministic WorkGraph
+  integration unit. Agent and persona assignments, dependencies, acceptance criteria, workflow ID, and version flow
+  into the proposed plan. The plan is inspected and approved in Objectives.
+- Planner, Agent Router, Coverage Analyzer, Human Approval, Merge Gate, Publish Report, Condition, and Loop are
+  design-only. Saved legacy definitions remain readable and editable; validation explains that unsupported nodes
+  cannot execute. They are not silently removed or mapped to other behavior.
 - A saved graph is arranged by ELK when it opens, using the compact card sizes from 1051px up and the full cards
   below. Auto-layout preserves model order, so Code Reviewer stays above Test Generator and Coverage Analyzer.
 - The Settings tab edits the saved name, description, and status in the General card; "Save Settings" is the same
   save. Repository, target branch, execution limits, connected services, and notifications are Unavailable.
 - The version badge reads `v<version> (<Status>)`. Versions lists the one saved version with its save time; there is
   nothing to compare, restore, or publish.
-- Run and Publish are disabled ("Runner not connected", "Workflow publishing is not connected"). Run Preview says
-  execution is unavailable and gives the graph's component and connection counts; its tabs and the Simulate Run switch
-  are disabled. No component carries a passed-step marker.
+- The canvas Run action remains unavailable because plans are approved from Objectives. The Run Preview makes no
+  claim that a workflow ran; it directs the user to compile the workflow in an Objective plan. WorkGraph run history
+  remains visible from Objectives and Product Workspace.
 - The inspector's Prompt, Variables, and Advanced tabs are disabled; Routing Parameters, Budgets & Limits, Retry
   Rules, and Execution Conditions read Unavailable because only a component's name and description are stored.
 - Runs, Schedules, and Permissions show their headings with "Unavailable" values, an empty state that gives the reason,
@@ -102,16 +113,15 @@ flowchart LR
 
 ### Control plane
 
-- The control plane returns a starter PR review and release graph with parallel Code Reviewer, Test Generator, and
-  Coverage Analyzer branches. Node type, node and edge counts, IDs, labels, positions, status, and edge references
-  are validated before saving; saving increments the version.
-- Workflow definitions survive API restarts through an atomic versioned JSON snapshot. The control plane does not
-  execute workflows.
+- Existing seeded design graphs remain stored; unsupported nodes are identified as design-only during validation.
+- Workflow definitions survive API restarts through an atomic versioned JSON snapshot. The compiler creates ordinary
+  plan units and records the selected workflow ID and version in the approved plan and WorkGraph.
 
 ## Outstanding
 
-- Workflow execution, run history, schedules, per-workflow permissions, version history, publishing, and component
-  settings beyond name and description have no API; their parts of the page stay Unavailable in Live.
+- Workflow execution is through Objective plans and WorkGraph; direct canvas execution, schedules, per-workflow
+  permissions, historical workflow versions, publishing, and component settings beyond supported assignments and
+  acceptance criteria are not implemented.
 - The workflow menu is a plain list without a filter field.
 - On phones a workflow cannot be switched or edited; the page shows the first saved workflow's run detail.
 

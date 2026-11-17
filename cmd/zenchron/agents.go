@@ -12,17 +12,19 @@ import (
 )
 
 type agentProfile struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Description  string    `json:"description"`
-	Provider     string    `json:"provider"`
-	Model        string    `json:"model"`
-	Status       string    `json:"status"`
-	SystemPrompt string    `json:"system_prompt"`
-	GoalPrompt   string    `json:"goal_prompt"`
-	Tools        []string  `json:"tools"`
-	Version      int       `json:"version"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID              string        `json:"id"`
+	Name            string        `json:"name"`
+	Description     string        `json:"description"`
+	Provider        string        `json:"provider"`
+	Model           string        `json:"model"`
+	Status          string        `json:"status"`
+	SystemPrompt    string        `json:"system_prompt"`
+	GoalPrompt      string        `json:"goal_prompt"`
+	Tools           []string      `json:"tools"`
+	PersonaID       string        `json:"persona_id,omitempty"`
+	PersonaSnapshot *agentPersona `json:"persona_snapshot,omitempty"`
+	Version         int           `json:"version"`
+	UpdatedAt       time.Time     `json:"updated_at"`
 	// CreatedBy is the GitHub login that created the profile under an access policy. Every signed-in
 	// user may read and run a profile; only its creator or an administrator may change it.
 	CreatedBy string `json:"created_by,omitempty"`
@@ -37,26 +39,29 @@ type agentProfileInput struct {
 	SystemPrompt string   `json:"system_prompt"`
 	GoalPrompt   string   `json:"goal_prompt"`
 	Tools        []string `json:"tools"`
+	PersonaID    string   `json:"persona_id,omitempty"`
 }
 
 type agentProfileStore struct {
-	mu    sync.RWMutex
-	items map[string]agentProfile
-	path  string
+	mu       sync.RWMutex
+	items    map[string]agentProfile
+	personas map[string]agentPersona
+	path     string
 }
 
 const maxAgentTools = 6
 
 func newAgentProfileStore() *agentProfileStore {
-	return &agentProfileStore{items: make(map[string]agentProfile)}
+	return &agentProfileStore{items: make(map[string]agentProfile), personas: make(map[string]agentPersona)}
 }
 
 func openAgentProfileStore(path string) (*agentProfileStore, error) {
 	store := newAgentProfileStore()
 	store.path = path
 	var state struct {
-		Version int                     `json:"version"`
-		Items   map[string]agentProfile `json:"items"`
+		Version  int                     `json:"version"`
+		Items    map[string]agentProfile `json:"items"`
+		Personas map[string]agentPersona `json:"personas,omitempty"`
 	}
 	exists, err := loadStateFile(path, &state)
 	if err != nil {
@@ -68,12 +73,21 @@ func openAgentProfileStore(path string) (*agentProfileStore, error) {
 	if state.Version != stateFileVersion || state.Items == nil {
 		return nil, fmt.Errorf("load agent profiles: unsupported or invalid state")
 	}
+	if state.Personas == nil {
+		state.Personas = make(map[string]agentPersona)
+	}
+	for id, item := range state.Personas {
+		if id != item.ID || !validStoredPersona(item) {
+			return nil, fmt.Errorf("load agent profiles: invalid persona record %q", id)
+		}
+	}
 	for id, item := range state.Items {
-		if id != item.ID || !validStoredAgentProfile(item) {
+		if id != item.ID || !validStoredAgentProfile(item) || item.PersonaID != "" && state.Personas[item.PersonaID].ID == "" {
 			return nil, fmt.Errorf("load agent profiles: invalid record %q", id)
 		}
 	}
 	store.items = state.Items
+	store.personas = state.Personas
 	return store, nil
 }
 
@@ -82,9 +96,10 @@ func (store *agentProfileStore) persistLocked() error {
 		return nil
 	}
 	return writeStateFile(store.path, struct {
-		Version int                     `json:"version"`
-		Items   map[string]agentProfile `json:"items"`
-	}{stateFileVersion, store.items})
+		Version  int                     `json:"version"`
+		Items    map[string]agentProfile `json:"items"`
+		Personas map[string]agentPersona `json:"personas,omitempty"`
+	}{stateFileVersion, store.items, store.personas})
 }
 
 func validStoredAgentProfile(item agentProfile) bool {
@@ -150,6 +165,10 @@ func (store *agentProfileStore) create(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !store.validPersonaBinding(profile.PersonaID) {
+		http.Error(w, "persona_id must name an active saved persona", http.StatusBadRequest)
+		return
+	}
 	idBytes := make([]byte, 16)
 	if _, err := rand.Read(idBytes); err != nil {
 		http.Error(w, "could not create agent profile id", http.StatusInternalServerError)
@@ -160,6 +179,11 @@ func (store *agentProfileStore) create(w http.ResponseWriter, r *http.Request) {
 	profile.CreatedBy = accessFor(r).user
 	profile.UpdatedAt = time.Now().UTC()
 	store.mu.Lock()
+	if !store.personaBindingValidLocked(profile.PersonaID) {
+		store.mu.Unlock()
+		http.Error(w, "persona_id must name an active saved persona", http.StatusBadRequest)
+		return
+	}
 	store.items[profile.ID] = profile
 	if err := store.persistLocked(); err != nil {
 		delete(store.items, profile.ID)
@@ -180,6 +204,10 @@ func (store *agentProfileStore) update(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !store.validPersonaBinding(profile.PersonaID) {
+		http.Error(w, "persona_id must name an active saved persona", http.StatusBadRequest)
+		return
+	}
 	id := strings.ToLower(r.PathValue("id"))
 	decoded, err := hex.DecodeString(id)
 	if err != nil || len(decoded) != 16 {
@@ -198,6 +226,11 @@ func (store *agentProfileStore) update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "only the profile's creator or an administrator can change it", http.StatusForbidden)
 		return
 	}
+	if !store.personaBindingValidLocked(profile.PersonaID) {
+		store.mu.Unlock()
+		http.Error(w, "persona_id must name an active saved persona", http.StatusBadRequest)
+		return
+	}
 	profile.ID, profile.CreatedBy = id, previous.CreatedBy
 	profile.Version = previous.Version + 1
 	profile.UpdatedAt = time.Now().UTC()
@@ -212,12 +245,63 @@ func (store *agentProfileStore) update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, profile)
 }
 
+func (store *agentProfileStore) validPersonaBinding(id string) bool {
+	if id == "" {
+		return true
+	}
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	return store.personaBindingValidLocked(id)
+}
+
+func (store *agentProfileStore) personaBindingValidLocked(id string) bool {
+	if id == "" {
+		return true
+	}
+	persona, exists := store.personas[id]
+	return exists && persona.Status == "active"
+}
+
+func (store *agentProfileStore) snapshot(profile agentProfile) agentProfile {
+	profile.Tools = append([]string{}, profile.Tools...)
+	if profile.PersonaID == "" {
+		return profile
+	}
+	store.mu.RLock()
+	persona, exists := store.personas[profile.PersonaID]
+	store.mu.RUnlock()
+	if exists {
+		persona.Responsibilities = append([]string{}, persona.Responsibilities...)
+		profile.PersonaSnapshot = &persona
+	}
+	return profile
+}
+
+func (store *agentProfileStore) activeSnapshot(profile agentProfile) (agentProfile, bool) {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	if profile.Status != "active" {
+		return agentProfile{}, false
+	}
+	if profile.PersonaID != "" {
+		persona, exists := store.personas[profile.PersonaID]
+		if !exists || persona.Status != "active" {
+			return agentProfile{}, false
+		}
+		persona.Responsibilities = append([]string{}, persona.Responsibilities...)
+		profile.PersonaSnapshot = &persona
+	}
+	profile.Tools = append([]string{}, profile.Tools...)
+	return profile, true
+}
+
 func (input agentProfileInput) profile(w http.ResponseWriter) (agentProfile, bool) {
 	profile := agentProfile{
 		Name: strings.TrimSpace(input.Name), Description: strings.TrimSpace(input.Description),
 		Provider: strings.TrimSpace(input.Provider), Model: strings.TrimSpace(input.Model),
 		Status: input.Status, SystemPrompt: strings.TrimSpace(input.SystemPrompt),
 		GoalPrompt: strings.TrimSpace(input.GoalPrompt), Tools: append([]string{}, input.Tools...),
+		PersonaID: strings.ToLower(strings.TrimSpace(input.PersonaID)),
 	}
 	if profile.Status == "" {
 		profile.Status = "active"

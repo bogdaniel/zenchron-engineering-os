@@ -232,7 +232,7 @@ export function ObjectiveDetail({ item, source, sampleData, tab, editing, notice
       onEditing(false);
       onNotice(`Objective updated${source.savedSuffix}`);
     }} /> : tab === 'overview' ? <ObjectiveOverview item={item} details={details} onTab={onTab} />
-      : tab === 'plan' ? <ObjectivePlanPanel objectiveID={item.id} sampleData={sampleData} />
+      : tab === 'plan' ? <ObjectivePlanPanel objectiveID={item.id} productID={item.product_id} sampleData={sampleData} />
       : <ObjectiveTabPanel tab={tab} details={details} />}
   </div>;
 }

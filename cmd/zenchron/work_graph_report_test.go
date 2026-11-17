@@ -67,7 +67,8 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	report, body := harness.deliveryReport(started.ID)
 	if report.GraphID != started.ID || report.ObjectiveID != harness.objectiveID || report.ObjectiveTitle != "Ship usage export" ||
 		report.PlanRevision != 1 || report.Status != graphCompleted || before.Status != graphCompleted ||
-		report.PullRequestURL != "https://github.com/acme/platform/pull/23" {
+		report.PullRequestURL != "https://github.com/acme/platform/pull/23" || report.ApprovedPlan.Revision != 1 ||
+		report.ApprovedPlan.Status != planApproved || report.ApprovedPlan.ApprovedBy == "" {
 		t.Fatalf("report identity = %s", body)
 	}
 	measured := report.Measurements
@@ -83,7 +84,9 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 		t.Fatalf("wall_clock_seconds = %v for a graph created %s and updated %s", measured.WallClockSeconds, before.CreatedAt, before.UpdatedAt)
 	}
 	if measured.InputTokens == nil || *measured.InputTokens != 150 || measured.OutputTokens == nil || *measured.OutputTokens != 25 ||
-		measured.CostUSD == nil || *measured.CostUSD != 0.5 || !slices.Equal(measured.Unknown, []string{supervisionMinutes}) {
+		measured.CostUSD == nil || *measured.CostUSD != 0.5 || measured.HumanActionsComplete ||
+		!slices.Equal(measured.Unknown, []string{"cost_usd_for_some_runs", "input_tokens_for_some_runs",
+			"output_tokens_for_some_runs", supervisionMinutes, "unrecorded_human_actions"}) {
 		t.Fatalf("usage and unknown measurements = %s", body)
 	}
 	apiUnit, uiUnit, review := reportedUnit(t, report, "api"), reportedUnit(t, report, "ui"), reportedUnit(t, report, "review-api")
@@ -92,9 +95,19 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 		!slices.Equal(apiUnit.Providers, []string{workerapi.ProviderCodex}) {
 		t.Fatalf("api unit = %#v", apiUnit)
 	}
+	if len(apiUnit.Executions) != 1 || apiUnit.Executions[0].ProfileID != harness.profile.ID ||
+		apiUnit.Executions[0].ProfileVersion != harness.profile.Version || apiUnit.Executions[0].CandidateCommit != commit(3) ||
+		len(report.Handoffs) == 0 || len(report.Outstanding) != 0 {
+		t.Fatalf("execution provenance, handoffs, or outstanding steps = report unit %#v, handoffs %#v, outstanding %#v",
+			apiUnit, report.Handoffs, report.Outstanding)
+	}
 	if !slices.Equal(uiUnit.Providers, []string{workerapi.ProviderCodex + " 1.2.3"}) || review.Verdict != "accept" ||
+		len(uiUnit.Executions) != 1 || uiUnit.Executions[0].Verification != workerapi.VerificationPassed ||
 		len(review.RunIDs) != 2 || review.Attempts != 2 || !slices.Equal(review.Providers, []string{workerapi.ProviderCodex}) {
 		t.Fatalf("ui unit = %#v, review unit = %#v", uiUnit, review)
+	}
+	if !slices.Equal(report.UnknownEvidence, []string{"candidate_tree_sha", "publication_authority", "pull_request_external_state"}) {
+		t.Fatalf("unrecorded evidence = %v", report.UnknownEvidence)
 	}
 
 	// Reading the report changed nothing about the graph.
@@ -133,6 +146,8 @@ func TestWorkGraphReportOmitsWhatWasNotRecorded(t *testing.T) {
 	}
 	measured := report.Measurements
 	unknown := []string{"cost_usd", "input_tokens", "output_tokens", supervisionMinutes, "wall_clock_seconds"}
+	unknown = append(unknown, "unrecorded_human_actions")
+	slices.Sort(unknown)
 	if !slices.Equal(measured.Unknown, unknown) {
 		t.Fatalf("unknown = %v, want %v", measured.Unknown, unknown)
 	}

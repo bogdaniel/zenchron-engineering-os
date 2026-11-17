@@ -5,7 +5,19 @@ const agentToolSchema = z.enum(['code.search', 'code.write', 'docs.search', 'git
 export const agentSchema = z.object({
   id: z.string(), name: z.string(), description: z.string(), provider: z.string(), model: z.string(),
   status: z.enum(['active', 'disabled']), system_prompt: z.string(), goal_prompt: z.string(),
-  tools: z.array(agentToolSchema), version: z.number(), updated_at: z.string(),
+  tools: z.array(agentToolSchema), persona_id: z.string().optional(), version: z.number(), updated_at: z.string(),
+});
+export const agentPersonaSchema = z.object({
+  id: z.string(), name: z.string(), role: z.string(), responsibilities: z.array(z.string()), instructions: z.string(),
+  behavior: z.string(), review_specialization: z.string(), status: z.enum(['active', 'disabled']),
+  version: z.number(), updated_at: z.string(),
+});
+export const agentPersonasSchema = z.array(agentPersonaSchema);
+export const agentPersonaInputSchema = z.object({
+  name: z.string().trim().min(1, 'Add a persona name').max(100),
+  role: z.string().trim().min(1, 'Add a role').max(200), responsibilities: z.array(z.string().trim().min(1).max(500)).max(10),
+  instructions: z.string().max(20_000), behavior: z.string().max(5_000), review_specialization: z.string().max(2_000),
+  status: z.enum(['active', 'disabled']),
 });
 export const agentRunSchema = z.object({
   id: z.string(), agent_id: z.string(), agent_name: z.string(), project_id: z.string(), project_name: z.string(),
@@ -35,6 +47,7 @@ export const agentInputSchema = z.object({
   status: z.enum(['active', 'disabled']),
   system_prompt: z.string().max(20_000),
   goal_prompt: z.string().max(5_000),
+  persona_id: z.string().optional().default(''),
   tools: z.array(agentToolSchema),
 });
 export const runInputSchema = z.object({
@@ -43,6 +56,8 @@ export const runInputSchema = z.object({
   issue_number: z.number().int().positive().optional(),
 }).refine((input) => input.prompt !== '' || input.issue_number !== undefined, { path: ['prompt'], message: 'Add a task prompt or choose an issue' });
 export type Agent = z.infer<typeof agentSchema>;
+export type AgentPersona = z.infer<typeof agentPersonaSchema>;
+export type AgentPersonaInput = z.infer<typeof agentPersonaInputSchema>;
 export type AgentRun = z.infer<typeof agentRunSchema>;
 export type AgentInput = z.infer<typeof agentInputSchema>;
 export type RunInput = z.infer<typeof runInputSchema>;
@@ -56,8 +71,17 @@ export const toolOptions = [
 
 export const blankProfile: AgentInput = {
   name: '', description: '', provider: '', model: '', status: 'active',
-  system_prompt: '', goal_prompt: '', tools: [],
+  system_prompt: '', goal_prompt: '', persona_id: '', tools: [],
 };
+export const blankPersona: AgentPersonaInput = {
+  name: '', role: '', responsibilities: [], instructions: '', behavior: '', review_specialization: '', status: 'active',
+};
+
+export async function loadPersonas(): Promise<AgentPersona[]> {
+  const response = await fetch('/api/v1/personas');
+  if (!response.ok) throw new Error(`Could not load personas (${response.status})`);
+  return agentPersonasSchema.parse(await response.json());
+}
 
 export async function loadAgents(): Promise<Agent[]> {
   const response = await fetch('/api/v1/agents');

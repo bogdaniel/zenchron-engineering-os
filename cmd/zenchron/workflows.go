@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -26,8 +27,11 @@ type workflowPosition struct {
 }
 
 type workflowNodeData struct {
-	Label       string `json:"label"`
-	Description string `json:"description"`
+	Label       string   `json:"label"`
+	Description string   `json:"description"`
+	AgentID     string   `json:"agent_id,omitempty"`
+	PersonaID   string   `json:"persona_id,omitempty"`
+	Acceptance  []string `json:"acceptance,omitempty"`
 }
 
 type workflowNode struct {
@@ -197,9 +201,11 @@ func (store *workflowStore) create(w http.ResponseWriter, r *http.Request) {
 		Status: "draft", Version: 1, UpdatedAt: now, CreatedBy: accessFor(r).user,
 		Nodes: []workflowNode{
 			{ID: "trigger", Type: "trigger", Data: workflowNodeData{Label: "Trigger", Description: "Start this workflow"}},
-			{ID: "planner", Type: "planner", Data: workflowNodeData{Label: "Planner", Description: "Plan the work"}},
+			{ID: "task", Type: "agent-task", Data: workflowNodeData{Label: "Implement objective", Description: "Complete the assigned objective"}},
+			{ID: "integrate", Type: "integrate", Data: workflowNodeData{Label: "Integrate and publish", Description: "Integrate the reviewed candidates"}},
 		},
-		Edges: []workflowEdge{{ID: "e-trigger-planner", Source: "trigger", Target: "planner"}},
+		Edges: []workflowEdge{{ID: "e-trigger-task", Source: "trigger", Target: "task"},
+			{ID: "e-task-integrate", Source: "task", Target: "integrate"}},
 	}
 	store.mu.Lock()
 	store.items[item.ID] = item
@@ -279,6 +285,10 @@ func validateWorkflowGraph(nodes []workflowNode, edges []workflowEdge) bool {
 	for _, node := range nodes {
 		if node.ID == "" || len(node.ID) > 64 || !validWorkflowNodeType(node.Type) ||
 			len(strings.TrimSpace(node.Data.Label)) == 0 || len(node.Data.Label) > 100 || len(node.Data.Description) > 500 ||
+			len(node.Data.AgentID) > 32 || node.Data.AgentID != "" && !validHexID(node.Data.AgentID) ||
+			len(node.Data.PersonaID) > 32 || node.Data.PersonaID != "" && !validHexID(node.Data.PersonaID) ||
+			len(node.Data.Acceptance) > maxUnitAcceptance || slices.ContainsFunc(node.Data.Acceptance,
+			func(value string) bool { return strings.TrimSpace(value) == "" || len(value) > 300 }) ||
 			math.Abs(node.Position.X) > 1_000_000 || math.Abs(node.Position.Y) > 1_000_000 {
 			return false
 		}
@@ -313,7 +323,7 @@ func validateWorkflowGraph(nodes []workflowNode, edges []workflowEdge) bool {
 func validWorkflowNodeType(nodeType string) bool {
 	switch nodeType {
 	case "trigger", "planner", "agent-router", "agent-task", "code-reviewer", "test-generator",
-		"coverage-analyzer", "human-approval", "merge-gate", "publish-report", "condition", "loop":
+		"coverage-analyzer", "human-approval", "merge-gate", "integrate", "publish-report", "condition", "loop":
 		return true
 	default:
 		return false

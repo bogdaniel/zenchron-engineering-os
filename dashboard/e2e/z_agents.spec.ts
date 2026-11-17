@@ -123,6 +123,60 @@ test('Agents populated desktop layout matches the reference panel geometry', asy
   expect(compact['.agents-content-grid'].bottom).toBeLessThanOrEqual(749);
 });
 
+test('Live personas persist through create, edit, duplicate, disable, and profile binding', async ({ page }) => {
+  const personaName = `CSV specialist ${Date.now()}`;
+  await authenticateLocalSession(page);
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/?mode=live#agents');
+  await page.getByRole('button', { name: 'Personas', exact: true }).click();
+  const personas = page.getByRole('dialog', { name: 'Agent personas' });
+  await personas.getByRole('button', { name: 'Create persona' }).click();
+  const editor = page.getByRole('dialog', { name: 'Create persona' });
+  await editor.getByLabel('Persona name').fill(personaName);
+  await editor.getByLabel('Role').fill('Implement reliable CSV exports');
+  await editor.getByLabel('Instructions').fill('Keep exports compatible.');
+  await editor.getByRole('button', { name: 'Create persona' }).click();
+  await expect(editor).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Create Agent' }).click();
+  const createProfile = page.getByRole('dialog', { name: 'Create agent profile' });
+  await createProfile.getByLabel('Profile name').fill('CSV engineer');
+  await createProfile.getByLabel('Description').fill('Implements CSV features.');
+  await createProfile.getByLabel('Provider identifier').fill('codex-cli');
+  await createProfile.getByLabel('Model identifier').fill('default');
+  await createProfile.getByRole('combobox', { name: 'Linked persona' }).click();
+  await page.getByRole('option', { name: `${personaName} · v1`, exact: true }).click();
+  await createProfile.getByLabel('Write files in isolated branch').check();
+  await createProfile.getByRole('button', { name: 'Create profile' }).click();
+  await expect(page.getByRole('heading', { name: 'CSV engineer' })).toBeVisible();
+  await expect(page.locator('.agents-profile-summary')).toContainText(`${personaName} · v1 · active`);
+  await expect(page.locator('.agents-profile-summary')).toContainText('codex-cli ready');
+  const eligibility = page.getByLabel('Responsibility eligibility');
+  await expect(eligibility).toContainText('CLI readiness: playwright-worker reports codex-cli');
+  await expect(eligibility).toContainText('Produce: Eligible by configured tools.');
+  await expect(eligibility).toContainText('Review: Ineligible: profile may write code.');
+
+  await page.getByRole('button', { name: 'Personas', exact: true }).click();
+  const row = page.locator('.persona-list-row').filter({ hasText: personaName }).first();
+  await expect(row).toContainText('v1 · active');
+  await row.getByRole('button', { name: 'Edit' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit persona' });
+  await edit.getByLabel('Instructions').fill('Preserve CSV compatibility and headers.');
+  await edit.getByRole('button', { name: 'Save persona' }).click();
+  await expect(edit).toHaveCount(0);
+  await expect(page.locator('.agents-profile-summary')).toContainText(`${personaName} · v2 · active`);
+
+  await page.getByRole('button', { name: 'Personas', exact: true }).click();
+  const updated = page.locator('.persona-list-row').filter({ hasText: personaName }).first();
+  await expect(updated).toContainText('v2 · active');
+  await updated.getByRole('button', { name: 'Duplicate' }).click();
+  await expect(page.locator('.persona-list-row').filter({ hasText: `${personaName} Copy` })).toContainText('v1 · active');
+  await updated.getByRole('button', { name: 'Disable' }).click();
+  await expect(updated).toContainText('v3 · disabled');
+  await updated.getByRole('button', { name: 'Enable' }).click();
+  await expect(updated).toContainText('v4 · active');
+});
+
 test('Agents layout fits tablet and phone widths without panel overlap', async ({ page }) => {
   await authenticateLocalSession(page);
   // The approved layout stacks the profile list above the detail panel below 1260px.

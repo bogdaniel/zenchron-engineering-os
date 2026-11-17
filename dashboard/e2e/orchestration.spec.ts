@@ -54,6 +54,8 @@ const agents = [
     system_prompt: '', goal_prompt: '', tools: ['git.diff'], version: 1, updated_at: now },
 ];
 const projects = [{ id: projectID, name: 'platform', branch: 'main', git_remote: 'github.com/acme/platform', worker_id: workerID,
+  worker_name: 'dev-laptop', last_seen: now, worker_status: 'online' },
+{ id: '8a'.repeat(16), name: 'unrelated', branch: 'main', git_remote: 'github.com/acme/unrelated', worker_id: workerID,
   worker_name: 'dev-laptop', last_seen: now, worker_status: 'online' }];
 
 /** A signed-in dashboard whose API is answered here, so each state can be shown exactly. */
@@ -129,7 +131,8 @@ for (const viewport of viewports) {
 test('plan revisions show planning, invalid problems, and a refused approval; proposing names a planner and workflow', async ({ page }) => {
   await page.setViewportSize(viewports[0]);
   const revisions = [
-    { ...plan, revision: 3, status: 'proposed', graph_id: undefined, approved_by: undefined },
+    { ...plan, revision: 3, status: 'proposed', graph_id: undefined, approved_by: undefined,
+      workflow_id: 'wf-1', workflow_version: 1, workflow_mode: 'guidance' },
     { objective_id: objectiveID, revision: 2, status: 'invalid', project_id: projectID, units: null, created_at: now,
       problems: ['unit "check" reviews code but "Codex engineer" may write code; assign a read-only profile'] },
     { objective_id: objectiveID, revision: 1, status: 'planning', project_id: projectID, units: null, created_at: now },
@@ -147,6 +150,7 @@ test('plan revisions show planning, invalid problems, and a refused approval; pr
     body: 'this objective already has a plan executing; cancel its work graph before approving a changed plan' }));
   const panel = await openPlan(page);
 
+  await expect(panel).toContainText('Guided by workflow wf-1 · version 1');
   await expect(panel.getByRole('list', { name: 'Units of revision 3' }).getByRole('listitem').first()).toContainText('GET /usage returns totals');
   await expect(panel.getByRole('list', { name: 'Units of revision 3' })).toContainText('needs code.write');
   await expect(panel.getByRole('list', { name: 'Units of revision 3' })).toContainText('after api');
@@ -159,12 +163,16 @@ test('plan revisions show planning, invalid problems, and a refused approval; pr
   const form = panel.getByRole('form', { name: 'Propose a plan' });
   await expect(form.getByRole('button', { name: 'Propose plan' })).toBeDisabled();
   await form.getByRole('combobox', { name: 'Repository checkout' }).click();
+  await expect(page.getByRole('option', { name: 'platform · main' })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'unrelated · main' })).toHaveCount(0);
   await page.getByRole('option', { name: 'platform · main' }).click();
+  await form.getByRole('combobox', { name: 'Planning strategy' }).click();
+  await page.getByRole('option', { name: 'Ask a read-only CLI agent to plan' }).click();
   await form.getByRole('combobox', { name: 'Planning agent' }).click();
   // Only the read-only profile may plan.
   await expect(page.getByRole('option', { name: 'Codex engineer' })).toHaveCount(0);
   await page.getByRole('option', { name: 'Claude reviewer' }).click();
-  await form.getByRole('combobox', { name: 'Workflow (optional guidance)' }).click();
+  await form.getByRole('combobox', { name: 'Workflow guidance (optional)' }).click();
   await page.getByRole('option', { name: 'Feature delivery' }).click();
   await form.getByRole('button', { name: 'Propose plan' }).click();
   await expect(form.getByRole('alert')).toHaveText('planner_agent_id must name an active, read-only Codex or Claude Code profile');
@@ -230,54 +238,147 @@ test('workspace, agents, reviews, and workflows project the same work graph', as
   await expect(context).toContainText('Header row is missing');
 });
 
-test('an objective plan approved in the dashboard runs through decision, review, remediation, and integration', async ({ page }) => {
+test('an objective plan approved in the dashboard runs through decision, review, remediation, and integration', async ({ page }, testInfo) => {
   test.setTimeout(240_000);
   await page.setViewportSize(viewports[0]);
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'E2E' })));
   await page.goto('/#objectives');
-  // The plan is submitted through the API; everything after it happens in the page and on the real worker.
+  // A persona, profiles, workflow, and objective are created through the real control-plane API.
   const created = await page.evaluate(async () => {
     const post = async (path: string, body: unknown) => {
       const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       return { status: response.status, body: await response.json() };
     };
-    const profile = (name: string, tools: string[]) => post('/api/v1/agents', { name, provider: 'codex-cli', model: 'default', tools });
-    const [first, second, reviewer] = await Promise.all([profile('Orchestration writer one', ['code.write']),
+    const persona = await post('/api/v1/personas', { name: 'E2E CSV specialist', role: 'Implement CSV exports',
+      responsibilities: ['Build compatible exports'], instructions: 'Keep CSV headers stable.', behavior: 'Be precise.',
+      review_specialization: '', status: 'active' });
+    const profile = (name: string, tools: string[], personaID = '') => post('/api/v1/agents', {
+      name, provider: 'codex-cli', model: 'default', tools, persona_id: personaID,
+      system_prompt: `System prompt for ${name}.`, goal_prompt: 'Complete the assigned work.',
+    });
+    const [first, second, reviewer] = await Promise.all([profile('Orchestration writer one', ['code.write'], persona.body.id),
       profile('Orchestration writer two', ['code.write']), profile('Orchestration reviewer', ['git.diff'])]);
-    const objective = await post('/api/v1/objectives', { title: 'Orchestrated export', description: 'Deliver the export.' });
     const projects = await fetch('/api/v1/projects').then((response) => response.json());
-    const unit = (key: string, kind: string, instructions: string, agent: string, depends_on: string[]) => ({ key, kind,
-      title: `Unit ${key}`, instructions, acceptance: [`${key} is done`], depends_on, capabilities: [], agent_id: agent });
-    const plan = await post(`/api/v1/objectives/${objective.body.id}/plans`, { project_id: projects[0].id, plan: {
-      summary: 'Two producers, one review, one integration.', max_parallel: 2, units: [
-        unit('api', 'produce', 'E2E: ask for a decision', first.body.id, []),
-        unit('ui', 'produce', 'Write the page.', second.body.id, []),
-        unit('review-ui', 'review', 'E2E: block this review', reviewer.body.id, ['ui']),
-        unit('integrate', 'integrate', '', '', ['api', 'review-ui']),
-      ] } });
-    return { objectiveID: objective.body.id as string, planStatus: plan.status };
+    const product = await post('/api/v1/products', { name: 'E2E product', description: '',
+      repository_ids: projects.map((project: { id: string }) => project.id) });
+    const objective = await post('/api/v1/objectives', { title: 'Orchestrated export', description: 'Deliver the export.',
+      product_id: product.body.id });
+    const workflow = await post('/api/v1/workflows', { name: 'E2E executable flow', description: 'Two producers with review and integration.' });
+    const node = (id: string, type: string, label: string, description: string, agentID = '', personaID = '') => ({
+      id, type, position: { x: 0, y: 0 }, data: { label, description, agent_id: agentID, persona_id: personaID,
+        acceptance: type === 'integrate' ? [] : [`${label} is done`] },
+    });
+    const nodes = [node('trigger', 'trigger', 'Start', 'Start the objective'),
+      node('api', 'agent-task', 'API producer', 'E2E: ask for a decision', first.body.id, persona.body.id),
+      node('ui', 'test-generator', 'UI producer', 'Write the page.', second.body.id),
+      node('review-ui', 'code-reviewer', 'Independent review', 'E2E: block this review', reviewer.body.id),
+      node('integrate', 'integrate', 'Integrate', 'Combine reviewed candidates')];
+    const edges = [['trigger', 'api'], ['trigger', 'ui'], ['ui', 'review-ui'], ['api', 'integrate'],
+      ['review-ui', 'integrate']].map(([source, target], index) => ({ id: `e${index}`, source, target, label: '' }));
+    const saved = await fetch(`/api/v1/workflows/${workflow.body.id}`, { method: 'PUT',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        name: workflow.body.name, description: workflow.body.description, status: workflow.body.status, nodes, edges,
+      }) });
+    const savedWorkflow = await saved.json();
+    if (persona.status !== 201 || first.status !== 201 || second.status !== 201 || reviewer.status !== 201 ||
+      product.status !== 201 || objective.status !== 201 || workflow.status !== 201 || saved.status !== 200) {
+      throw new Error(JSON.stringify({ persona: persona.status, first: first.status, second: second.status,
+        reviewer: reviewer.status, product: product.status, objective: objective.status, workflow: workflow.status,
+        saved: saved.status }));
+    }
+    return { objectiveID: objective.body.id as string, workflowID: workflow.body.id as string,
+      workflowVersion: savedWorkflow.version as number, personaID: persona.body.id as string, productID: product.body.id as string };
   });
-  expect(created.planStatus).toBe(201);
+  const apiStatus = await page.evaluate(async (id) => Promise.all([
+    '/api/v1/work-graphs', `/api/v1/objectives/${id}/plans`, '/api/v1/projects', '/api/v1/products',
+  ].map(async (path) => {
+    const response = await fetch(path);
+    return { path, status: response.status, body: await response.text() };
+  })), created.objectiveID);
+  expect(apiStatus.filter((item) => item.status !== 200), JSON.stringify(apiStatus)).toEqual([]);
 
-  await page.goto(`/?objective=${created.objectiveID}#objectives`);
+  const workerSnapshot = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/workers');
+    if (!response.ok) throw new Error(`Worker list failed (${response.status})`);
+    return response.json() as Promise<{ providers?: { id: string; ready: boolean; reason?: string }[] }[]>;
+  });
+  await page.route('**/api/v1/workers', async (route) => {
+    await route.fulfill({ json: workerSnapshot.map((worker) => ({ ...worker, providers: worker.providers?.map((provider) =>
+      provider.id === 'codex-cli' ? { ...provider, ready: false, reason: 'CLI unavailable in this readiness snapshot' }
+        : provider) })) });
+  });
+  await page.goto(`/?mode=live&objective=${created.objectiveID}#objectives`);
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
   const panel = page.getByRole('tabpanel');
-  await expect(panel.getByRole('list', { name: 'Units of revision 1' }).locator(':scope > li')).toHaveCount(4);
+  const proposeForm = panel.getByRole('form', { name: 'Propose a plan' });
+  await expect(proposeForm.getByRole('combobox', { name: 'Repository checkout' })).toBeVisible({ timeout: 30_000 });
+  await proposeForm.getByRole('combobox', { name: 'Repository checkout' }).click();
+  await page.getByRole('option').first().click();
+  await proposeForm.getByRole('combobox', { name: 'Executable workflow' }).click();
+  await page.getByRole('option', { name: `E2E executable flow · v${created.workflowVersion}` }).click();
+  await proposeForm.getByRole('button', { name: 'Propose plan' }).click();
+  const revision = panel.getByRole('list', { name: 'Units of revision 1' });
+  await expect(revision.locator(':scope > li')).toHaveCount(4);
+  await expect(panel).toContainText(`Compiled from workflow ${created.workflowID} · version ${created.workflowVersion}`);
   await expect(panel).toContainText('Orchestration writer one');
+  await expect(revision).toContainText(`Persona ${created.personaID} · v1`);
+  const readiness = panel.getByRole('status', { name: 'CLI readiness for revision 1' });
+  await expect(readiness).toContainText('codex-cli not ready');
+  await expect(readiness).toContainText('runs wait until ready');
   await panel.getByRole('button', { name: 'Approve plan and start' }).click();
   const units = panel.getByRole('list', { name: 'Work units' });
   await expect(units.getByRole('listitem')).toHaveCount(4);
   await expect(units.getByRole('listitem').nth(3)).toContainText('waiting');
 
   // From here the worker must forward typed results: the producer asks, a person answers in the page.
-  const form = panel.getByRole('form', { name: 'Decision for api' });
-  await expect(form).toContainText('E2E: which format?', { timeout: 90_000 });
-  await form.getByRole('button', { name: 'CSV' }).click();
-  await form.getByRole('button', { name: 'Resolve decision' }).click();
+  const decisionForm = panel.getByRole('form', { name: 'Decision for step-1' });
+  await expect(decisionForm).toContainText('E2E: which format?', { timeout: 90_000 });
+  await decisionForm.getByRole('button', { name: 'CSV' }).click();
+  await decisionForm.getByRole('button', { name: 'Resolve decision' }).click();
   const messages = panel.getByRole('list', { name: 'Handoffs, findings, and decisions' });
   await expect(messages).toContainText('by local operator');
   await expect(messages).toContainText('E2E finding', { timeout: 120_000 });
   await expect(panel.getByRole('region', { name: 'Work graph for Orchestrated export' })).toContainText('4 of 4 units done', { timeout: 180_000 });
   await expect(units.getByRole('listitem').nth(2)).toContainText('verdict: accept');
   await expect(units.getByRole('listitem').nth(3)).toContainText('GitHub publication is not configured');
+  const report = panel.getByRole('region', { name: 'Objective delivery report' });
+  await report.getByRole('button', { name: 'View delivery report' }).click();
+  await expect(report).toContainText('Approved plan revision 1');
+  await expect(report).toContainText(`Compiled from workflow ${created.workflowID} · version ${created.workflowVersion}`);
+  await expect(report).toContainText('E2E CSV specialist v1');
+  await expect(report).toContainText('codex-cli');
+  await expect(report).toContainText('Worker-reported verification: not_configured');
+  await expect(report).toContainText('Unknown evidence: candidate tree SHA, publication authority, current pull request state');
+  await expect(report).toContainText('CSV');
+  await expect(report).toContainText('GitHub publication is not configured');
+  await expect(report).toContainText('Unknown');
+  await page.evaluate(() => {
+    const createObjectURL = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (blob: Blob) => {
+      void blob.text().then((content) => {
+        (window as typeof window & { __deliveryExport?: string }).__deliveryExport = content;
+      });
+      return createObjectURL(blob);
+    };
+  });
+  const [download] = await Promise.all([page.waitForEvent('download'),
+    report.getByRole('button', { name: 'Export JSON' }).click()]);
+  expect(download.suggestedFilename()).toMatch(/^zenchron-delivery-[a-f0-9]{32}\.json$/);
+  const exported = await page.evaluate(async () => {
+    const getExport = () => (window as typeof window & { __deliveryExport?: string }).__deliveryExport;
+    for (let attempt = 0; attempt < 20 && !getExport(); attempt++) await new Promise((resolve) => setTimeout(resolve, 10));
+    return getExport();
+  });
+  if (!exported) throw new Error('Delivery JSON export did not create a download payload');
+  const delivery = JSON.parse(exported) as { workflow_id: string; workflow_mode: string; unknown_evidence: string[];
+    units: { executions: { verification?: string }[] }[] };
+  expect(delivery.workflow_id).toBe(created.workflowID);
+  expect(delivery.workflow_mode).toBe('compiled');
+  expect(delivery.unknown_evidence).toContain('candidate_tree_sha');
+  expect(delivery.units.flatMap((unit) => unit.executions).some((run) => run.verification === 'not_configured')).toBe(true);
+  expect(exported).not.toContain('system_prompt');
+  await page.screenshot({ path: testInfo.outputPath('objective-report-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await noHorizontalScroll(page)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('objective-report-mobile.png'), fullPage: true });
 });

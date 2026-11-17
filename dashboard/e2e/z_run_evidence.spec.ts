@@ -313,6 +313,7 @@ test('Reviews evidence imports GitHub change requests and retries a failed pull 
 test('the Mock and Live switch selects the data source, keeps the page, and stays in the address', async ({ page, baseURL }) => {
   const local = new URL(baseURL!);
   local.hostname = '127.0.0.1';
+  const projectRequests: string[] = [];
   await mockWorkspace(page, { providerReady: true });
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([evidenceRun])));
   await page.route(`**/api/v1/agent-runs/${runID}/diff`, (route) => route.fulfill(json({ run_id: runID, diff: '', truncated: false })));
@@ -338,11 +339,32 @@ test('the Mock and Live switch selects the data source, keeps the page, and stay
   await expect(page.locator('.agents-preview-notice')).toHaveText('ILLUSTRATIVE DATA');
   // Projects has no fixtures: Mock says the inventory is Live-only instead of showing an empty one.
   await page.goto(`${local.origin}/?mode=mock#projects`);
+  await page.route('**/api/v1/**', (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (/^\/api\/v1\/(projects|agent-runs|worktrees)(\/|$)/.test(path)) {
+      projectRequests.push(`${request.method()} ${path}`);
+    }
+    return route.fallback();
+  });
+  await page.clock.install();
+  projectRequests.length = 0;
+  await page.reload();
   await expect(page.locator('.projects-live-badge')).toHaveText('No sample data');
   await expect(page.getByRole('heading', { name: 'Live data only' })).toBeVisible();
+  await page.clock.fastForward(4_000);
+  expect(projectRequests).toEqual([]);
   await page.goto(`${local.origin}/?mode=live#projects`);
   await expect(page.locator('.projects-live-badge')).toHaveText(/Worker inventory · live/i);
   await expect(page.getByRole('gridcell', { name: 'platform' })).toBeVisible();
+  await expect.poll(() => projectRequests).toEqual(expect.arrayContaining([
+    'GET /api/v1/projects', 'GET /api/v1/agent-runs',
+  ]));
+  projectRequests.length = 0;
+  await page.goto(`${local.origin}/?mode=mock#projects`);
+  await expect(page.getByRole('heading', { name: 'Live data only' })).toBeVisible();
+  await page.clock.fastForward(4_000);
+  expect(projectRequests).toEqual([]);
   // Off a local address there is no selector and no Mock, whatever the address says.
   await page.goto(`${baseURL}/?mode=mock#agents`);
   await expect(page.getByRole('heading', { name: 'Agent Profiles (1)' })).toBeVisible();

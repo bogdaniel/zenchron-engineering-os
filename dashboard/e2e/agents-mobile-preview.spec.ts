@@ -39,6 +39,10 @@ test('Agents phone preview matches the compact mobile reference and keeps profil
   await expect(page.getByRole('tab', { name: 'Run History' })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('button', { name: '← Agents & Reviews' }).click();
   await expect(page.locator('.agents-mobile-preview')).toBeVisible();
+  await page.getByRole('button', { name: /Manage profiles/ }).click();
+  await expect(page.locator('.agents-preview-main')).toBeVisible();
+  await page.getByRole('button', { name: '← Agents & Reviews' }).click();
+  await expect(page.locator('.agents-mobile-preview')).toBeVisible();
 });
 
 test('Agents phone dashboard tabs and quick actions respond locally', async ({ page }) => {

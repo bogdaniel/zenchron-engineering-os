@@ -36,6 +36,9 @@ const (
 	planInvalid    = "invalid"
 	planApproved   = "approved"
 	planSuperseded = "superseded"
+
+	workflowModeCompiled = "compiled"
+	workflowModeGuidance = "guidance"
 )
 
 var unitKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -51,7 +54,10 @@ type planUnit struct {
 	// Capabilities are the agent tools the responsibility needs; the assigned profile must offer them.
 	Capabilities []string `json:"capabilities"`
 	// AgentID is the agent profile assigned to the unit. The integrate unit has none.
-	AgentID string `json:"agent_id,omitempty"`
+	AgentID        string `json:"agent_id,omitempty"`
+	ProfileVersion int    `json:"profile_version,omitempty"`
+	PersonaID      string `json:"persona_id,omitempty"`
+	PersonaVersion int    `json:"persona_version,omitempty"`
 }
 
 // planProposal is the part of a plan a planner model or an operator writes. Nothing in it executes
@@ -70,8 +76,11 @@ type objectivePlan struct {
 	Status      string `json:"status"`
 	ProjectID   string `json:"project_id"`
 	// Repository is the repository of the project when the plan was proposed; reading the plan needs a grant for it.
-	Repository string `json:"repository,omitempty"`
-	WorkflowID string `json:"workflow_id,omitempty"`
+	Repository       string                  `json:"repository,omitempty"`
+	WorkflowID       string                  `json:"workflow_id,omitempty"`
+	WorkflowVersion  int                     `json:"workflow_version,omitempty"`
+	WorkflowMode     string                  `json:"workflow_mode,omitempty"`
+	ProfileSnapshots map[string]agentProfile `json:"profile_snapshots,omitempty"`
 	// Hash identifies the plan's content, so an unchanged plan is recognized and not approved twice.
 	Hash string `json:"hash,omitempty"`
 	// Problems says why a proposal is invalid.
@@ -228,6 +237,14 @@ func assignmentProblem(unit planUnit, agents map[string]agentProfile, writes boo
 		return "is assigned to an agent profile that does not exist"
 	case profile.Status != "active":
 		return fmt.Sprintf("is assigned to the disabled agent profile %q", profile.Name)
+	case profile.PersonaID != "" && (profile.PersonaSnapshot == nil || profile.PersonaSnapshot.Status != "active"):
+		return fmt.Sprintf("is assigned to %q, whose linked persona is unavailable", profile.Name)
+	case unit.ProfileVersion != 0 && unit.ProfileVersion != profile.Version:
+		return fmt.Sprintf("is assigned to %q at profile version %d, current version is %d", profile.Name, unit.ProfileVersion, profile.Version)
+	case unit.PersonaID != profile.PersonaID:
+		return fmt.Sprintf("is assigned to %q with persona %q, expected %q", profile.Name, profile.PersonaID, unit.PersonaID)
+	case unit.PersonaVersion != 0 && (profile.PersonaSnapshot == nil || unit.PersonaVersion != profile.PersonaSnapshot.Version):
+		return fmt.Sprintf("is assigned to %q at persona version %d, current version differs", profile.Name, unit.PersonaVersion)
 	case !workerapi.IsCLIProvider(profile.Provider):
 		return fmt.Sprintf("is assigned to %q, whose provider has no execution adapter", profile.Name)
 	case writes && !slices.Contains(profile.Tools, "code.write"):
@@ -241,6 +258,44 @@ func assignmentProblem(unit planUnit, agents map[string]agentProfile, writes boo
 		}
 	}
 	return ""
+}
+
+func pinPlanProfiles(proposal *planProposal, profiles map[string]agentProfile) (map[string]agentProfile, []string) {
+	snapshots := make(map[string]agentProfile)
+	var problems []string
+	for index := range proposal.Units {
+		unit := &proposal.Units[index]
+		if unit.Kind == unitIntegrate {
+			continue
+		}
+		profile, exists := profiles[unit.AgentID]
+		if !exists {
+			continue
+		}
+		if unit.ProfileVersion != 0 && unit.ProfileVersion != profile.Version {
+			problems = append(problems, fmt.Sprintf("unit %q refers to stale profile version %d; current version is %d", unit.Key, unit.ProfileVersion, profile.Version))
+		}
+		if unit.PersonaID != "" && unit.PersonaID != profile.PersonaID {
+			problems = append(problems, fmt.Sprintf("unit %q refers to persona %q, but profile %q is bound to %q", unit.Key, unit.PersonaID, profile.Name, profile.PersonaID))
+		}
+		if unit.PersonaVersion != 0 && (profile.PersonaSnapshot == nil || unit.PersonaVersion != profile.PersonaSnapshot.Version) {
+			problems = append(problems, fmt.Sprintf("unit %q refers to a stale persona version", unit.Key))
+		}
+		unit.ProfileVersion, unit.PersonaID = profile.Version, profile.PersonaID
+		if profile.PersonaSnapshot != nil {
+			unit.PersonaVersion = profile.PersonaSnapshot.Version
+		} else {
+			unit.PersonaVersion = 0
+		}
+		profile.Tools = slices.Clone(profile.Tools)
+		if profile.PersonaSnapshot != nil {
+			persona := *profile.PersonaSnapshot
+			persona.Responsibilities = slices.Clone(persona.Responsibilities)
+			profile.PersonaSnapshot = &persona
+		}
+		snapshots[profile.ID] = profile
+	}
+	return snapshots, problems
 }
 
 // dependencyCycle returns the keys of units that can never start because their dependencies form a
@@ -272,13 +327,15 @@ func reaches(units map[string]planUnit, from, target string) bool {
 }
 
 // planHash identifies what a plan would execute and where.
-func planHash(projectID, workflowID string, proposal planProposal) string {
+func planHash(projectID, workflowID string, workflowVersion int, workflowMode string, proposal planProposal) string {
 	// Encoding plain strings, integers, and slices cannot fail.
 	data, _ := json.Marshal(struct {
-		ProjectID  string       `json:"project_id"`
-		WorkflowID string       `json:"workflow_id"`
-		Proposal   planProposal `json:"proposal"`
-	}{projectID, workflowID, proposal})
+		ProjectID       string       `json:"project_id"`
+		WorkflowID      string       `json:"workflow_id"`
+		WorkflowVersion int          `json:"workflow_version"`
+		WorkflowMode    string       `json:"workflow_mode,omitempty"`
+		Proposal        planProposal `json:"proposal"`
+	}{projectID, workflowID, workflowVersion, workflowMode, proposal})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }
