@@ -232,6 +232,21 @@ test('plan tab reports an empty objective, a failed load, and Mock keeps operati
   await expect(panel.getByRole('alert')).toHaveText('Could not load the plan and its work graph.');
   await expect(panel.getByRole('button', { name: 'Retry loading the plan' })).toBeVisible();
 
+  await mockOrchestration(page, {});
+  let planStatus = 500;
+  let planRequests = 0;
+  await page.route(`**/api/v1/objectives/${objectiveID}/plans`, async (route) => {
+    planRequests += 1;
+    await route.fulfill(planStatus === 200 ? json([]) : { status: 500, body: 'plans unavailable' });
+  });
+  panel = await openPlan(page);
+  await expect(panel.getByRole('alert')).toHaveText('Could not load the plan and its work graph.');
+  const failedPlanRequests = planRequests;
+  planStatus = 200;
+  await panel.getByRole('button', { name: 'Retry loading the plan' }).click();
+  await expect.poll(() => planRequests).toBeGreaterThan(failedPlanRequests);
+  await expect(panel).toContainText('No plan yet. Propose one to turn this objective into reviewed, integrated work.');
+
   // Mock shows sample data and sends nothing.
   const writes: string[] = [];
   page.on('request', (request) => { if (request.method() !== 'GET') writes.push(request.url()); });
