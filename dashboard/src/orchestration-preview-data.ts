@@ -44,7 +44,7 @@ const sampleGraph: WorkGraph = {
 
 const samplePlan: ObjectivePlan = { objective_id: sampleObjectiveID, revision: 1, status: 'approved', project_id: 'preview-project',
   summary: 'Two independent producers, a review of the API change, then one integrated pull request.', max_parallel: 2,
-  workflow_id: 'preview-workflow', workflow_version: 1,
+  workflow_id: 'preview-workflow', workflow_version: 1, workflow_mode: 'compiled',
   units: sampleUnits, problems: [], graph_id: sampleGraph.id, created_at: at, approved_by: 'Ravi Kumar' };
 
 /** Sample plans and one sample work graph. Mock performs no operations, so every control is off with the reason. */
