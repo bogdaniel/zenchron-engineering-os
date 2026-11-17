@@ -113,10 +113,24 @@ func (store *workGraphStore) admit(graph *workGraph, unit *workUnit, runs map[st
 		}
 	case unit.Kind == unitIntegrate:
 		store.admitIntegration(graph, unit, run, result, origin)
+	case unit.Kind == unitReview && run.Status != "succeeded":
+		failure := cmp.Or(run.Error, "The reviewer invocation failed ("+run.TerminationReason+").")
+		if reviewInvocationRecoverable(run) && !unit.RecoveryUsed && run.BaseCommit == graph.unit(unit.DependsOn[0]).Candidate &&
+			len(unit.RunIDs) < maxUnitRuns {
+			unit.RecoveryUsed = true
+			graph.add(graphMessage{Type: messageStateUpdate, From: unit.Key, RunID: run.ID, Attempt: run.Attempts,
+				Commit: run.BaseCommit, Body: "Reviewer invocation failed (" + failure +
+					"); retrying once with the assigned reviewer against the same candidate."})
+			return
+		}
+		unit.Failure = failure
+		if reviewInvocationRecoverable(run) && !unit.RecoveryUsed && len(unit.RunIDs) >= maxUnitRuns {
+			unit.Failure += fmt.Sprintf(" The one recovery was not attempted because the %d-run stage budget was exhausted.", maxUnitRuns)
+		}
 	case run.Status != "succeeded":
 		unit.Failure = cmp.Or(run.Error, "The run failed.")
 	case unit.Kind == unitReview:
-		graph.admitReview(unit, run, result, err, origin, store.fileOwners(graph, runs))
+		graph.admitReview(unit, run, result, err, unit.RecoveryUsed, origin, store.fileOwners(graph, runs))
 	default:
 		graph.admitProduction(unit, run, result, err, origin)
 	}
@@ -168,7 +182,7 @@ func (graph *workGraph) admitProduction(unit *workUnit, run agentRun, result uni
 // commit as the base of the review run, so a verdict on a candidate that has since changed is discarded
 // and can never approve the newer code. Findings go to the unit that owns the affected work.
 func (graph *workGraph) admitReview(
-	unit *workUnit, run agentRun, result unitResult, err error, origin graphMessage, owners map[string]string,
+	unit *workUnit, run agentRun, result unitResult, err error, recoveryUsed bool, origin graphMessage, owners map[string]string,
 ) {
 	target := graph.unit(unit.DependsOn[0])
 	origin.Commit = run.BaseCommit
@@ -183,7 +197,17 @@ func (graph *workGraph) admitReview(
 	case run.BaseCommit != target.Candidate:
 		note("Discarded a review of a candidate that is no longer current.")
 	case err != nil || result.Review == nil:
-		note("Discarded a review without an admissible verdict: " + cmp.Or(errorText(err), "no review was reported") + ".")
+		failure := "Reviewer invocation did not produce an admissible verdict: " + cmp.Or(errorText(err), "no review was reported") + "."
+		if !recoveryUsed && len(unit.RunIDs) < maxUnitRuns {
+			unit.RecoveryUsed = true
+			note(failure + " Retrying once with the assigned reviewer against the same candidate.")
+			return
+		}
+		unit.Failure = failure
+		if !recoveryUsed && len(unit.RunIDs) >= maxUnitRuns {
+			unit.Failure += fmt.Sprintf(" The one recovery was not attempted because the %d-run stage budget was exhausted.", maxUnitRuns)
+		}
+		note(failure)
 	case result.Review.Verdict == "accept":
 		unit.Verdict = "accept"
 		note("Accepted candidate " + shortCommit(run.BaseCommit) + ".")
@@ -197,6 +221,20 @@ func (graph *workGraph) admitReview(
 			graph.add(message)
 		}
 	}
+}
+
+func reviewInvocationRecoverable(run agentRun) bool {
+	switch run.TerminationReason {
+	case workerapi.TerminationProviderExit, workerapi.TerminationWallClock, workerapi.TerminationInactivity,
+		workerapi.TerminationToolTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func reviewRecoveryUsed(unit *workUnit, runs map[string]agentRun) bool {
+	return slices.ContainsFunc(unit.RunIDs, func(id string) bool { return runs[id].ReviewRecovery })
 }
 
 // findingOwner routes a finding to the produce unit responsible for it: the reviewed producer, the

@@ -89,6 +89,8 @@ type agentRun struct {
 	// GraphID and UnitKey name the WorkUnit this run executes; both are empty for a run started directly.
 	GraphID string `json:"graph_id,omitempty"`
 	UnitKey string `json:"unit_key,omitempty"`
+	// ReviewRecovery marks the one automatic same-assignment retry allowed after an invocation failure.
+	ReviewRecovery bool `json:"review_recovery,omitempty"`
 	// Merge makes this an integration run that combines admitted candidates instead of starting a provider.
 	Merge []workerapi.MergeInput `json:"merge,omitempty"`
 	// Result is the typed result reported by attempt ResultAttempt; the WorkGraph admits it.

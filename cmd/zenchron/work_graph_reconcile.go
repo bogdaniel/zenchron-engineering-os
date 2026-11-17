@@ -117,6 +117,7 @@ func (graph *workGraph) adopt(runs map[string]agentRun) {
 	for _, run := range orphans {
 		unit := graph.unit(run.UnitKey)
 		unit.RunIDs, unit.Seen, unit.Restart = append(unit.RunIDs, run.ID), len(graph.Messages), false
+		unit.RecoveryUsed = unit.RecoveryUsed || run.ReviewRecovery
 		if unit.Kind == unitReview {
 			// The adopted run is a new round; the verdict of the round before it no longer counts.
 			unit.Verdict = ""
@@ -222,6 +223,9 @@ func (store *workGraphStore) perform(graph *workGraph, action unitAction, runs m
 	if failure != "" {
 		unit.Failure = failure
 		return false
+	}
+	if unit.Kind == unitReview && unit.RecoveryUsed && !reviewRecoveryUsed(unit, runs) {
+		item.ReviewRecovery = true
 	}
 	run, status, message := store.runs.enqueue(item)
 	if status != 0 {
