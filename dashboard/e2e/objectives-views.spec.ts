@@ -624,11 +624,13 @@ test('a late grid selection report does not replace the objective being edited',
     if (!await selectedRow.count()) expect(await deliverGridReports(1)).toBe(1);
     await expect(selectedRow).toHaveCount(1, { timeout: 250 });
   }).toPass();
-  // No due date keeps the new objective out of the "This Quarter" rows, so the grid cannot select it.
+  // Leave the async selection report queued while creating an undated objective.
   await page.getByRole('button', { name: 'New Objective' }).click();
   await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability testing');
   await page.getByRole('button', { name: 'Create objective' }).click();
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability testing55555555');
+  await expect(page.locator('.objective-grid-wrap .objective-title-cell').filter({ hasText: 'Expand reliability testing' }))
+    .toHaveCount(1);
   expect(await deliverGridReports()).toBeGreaterThan(0);
 
   await page.getByRole('button', { name: 'More objective actions' }).click();
@@ -660,11 +662,22 @@ test('Objectives in Live uses the approved layout with honest unavailable parts'
   await expect(metrics.nth(1)).toContainText('Objective Success Rate0%');
   await expect(metrics.nth(2)).toContainText('4');
   await expect(page.locator('.objective-metric-trend')).toHaveCount(0);
-  await expect(page.locator('.objective-preview-layout .objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(2);
+  const objectiveRows = page.locator('.objective-preview-layout .objective-grid-wrap [role="row"]:has([role="gridcell"])');
+  const dueQuarter = page.getByRole('combobox', { name: 'Filter by due quarter' });
+  await expect(dueQuarter).toHaveValue('All due dates');
+  await expect(objectiveRows).toHaveCount(4);
+  await dueQuarter.click();
+  await page.getByRole('option', { name: 'This Quarter' }).click();
+  await expect(objectiveRows).toHaveCount(2);
+  await dueQuarter.click();
+  await page.getByRole('option', { name: 'Last Quarter' }).click();
+  await expect(objectiveRows).toHaveCount(1);
+  await dueQuarter.click();
+  await page.getByRole('option', { name: 'All due dates' }).click();
   await expect(page.locator('.objective-grid-wrap .objective-title-cell small').first()).toHaveText('11111111');
   await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="approval"]').first()).toHaveText('—');
   await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="workflow_count"]').first()).toHaveText('—');
-  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 1–2 of 2 objectives');
+  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 1–4 of 4 objectives');
   await expect(page.getByRole('textbox', { name: 'Search objectives' })).toBeVisible();
   await expect(page.locator('.objective-capacity')).toContainText('Unavailable: the control plane does not record when objectives were planned or completed.');
   await expect(page.locator('.objective-capacity-chart')).toHaveCount(0);
