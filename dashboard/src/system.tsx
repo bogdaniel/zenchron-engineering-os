@@ -3,6 +3,8 @@ import {
   IconBell, IconBrandOpenai, IconBuilding, IconChevronDown, IconCloud, IconDatabase, IconDots, IconExternalLink, IconEye,
   IconHistory, IconKey, IconSettings, IconShieldCheck, IconUsers,
 } from '@tabler/icons-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
 import { useState, type ReactNode } from 'react';
 import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
@@ -17,6 +19,7 @@ type SystemSection = 'integrations' | 'settings';
 interface SystemPageProps extends SystemFacts {
   section: SystemSection;
   designPreview?: boolean;
+  canManageUpdates: boolean;
 }
 
 const noActionsReason = 'Not available from the control plane';
@@ -54,7 +57,67 @@ function AuditTable({ events, className }: { events: string[][]; className?: str
 // A controller value longer than this does not fit beside its label and is laid out below it.
 const longControllerValue = 40;
 
-export function SystemPage({ section, designPreview = false, ...facts }: SystemPageProps) {
+const updateStatusSchema = z.object({
+  running_revision: z.string(), latest_revision: z.string().optional(),
+  state: z.string(), progress: z.string().optional(), worker_compatible: z.boolean(), active_runs: z.number(),
+  block_reason: z.string().optional(), last_attempt: z.string().optional(),
+  last_success: z.string().optional(), last_success_revision: z.string().optional(),
+  last_failure: z.string().optional(), last_failed_revision: z.string().optional(), last_failure_reason: z.string().optional(),
+});
+
+function SystemUpdatePanel({ designPreview, canManage }: { designPreview: boolean; canManage: boolean }) {
+  const queryClient = useQueryClient();
+  const status = useQuery({ queryKey: ['system-update'], enabled: !designPreview,
+    queryFn: async () => {
+      const response = await fetch('/api/v1/system/update');
+      if (!response.ok) throw new Error((await response.text()).trim() || `Update status failed: ${response.status}`);
+      return updateStatusSchema.parse(await response.json());
+    },
+    refetchInterval: (query) => ['checking', 'building', 'verifying', 'waiting_for_runs', 'activating'].includes(query.state.data?.state ?? '') ? 2000 : false,
+  });
+  const check = useMutation({ mutationFn: async () => {
+    const response = await fetch('/api/v1/system/update/check', { method: 'POST' });
+    if (!response.ok) throw new Error((await response.text()).trim() || `Update request failed: ${response.status}`);
+  }, onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['system-update'] }) });
+  const sample: z.infer<typeof updateStatusSchema> | undefined = designPreview ? {
+    running_revision: '872f90b', latest_revision: '872f90b', state: 'idle', worker_compatible: true, active_runs: 0,
+  } : status.data;
+  const unavailable = designPreview ? 'Mock status is illustrative; the installed update service is not queried.'
+    : status.error instanceof Error ? status.error.message : status.isLoading ? 'Loading managed update status…' : undefined;
+  const label = sample?.state.replaceAll('_', ' ') ?? 'Unavailable';
+  const revision = (value?: string) => value ? value.slice(0, 12) : 'Unavailable';
+  const lastSuccess = sample?.last_success
+    ? `Last successful update: ${new Date(sample.last_success).toLocaleString()} · ${revision(sample.last_success_revision)}`
+    : 'No successful update recorded.';
+  const lastFailure = sample?.last_failure
+    ? `Last failed update: ${new Date(sample.last_failure).toLocaleString()} · ${revision(sample.last_failed_revision)}`
+    : 'No failed update recorded.';
+
+  return <PanelCard className="system-update-panel" withBorder>
+    <div className="system-update-heading"><div><h2>System Update</h2><p>Managed control plane, worker and dashboard release</p></div>
+      <Badge className="system-update-state" variant="light">{label}</Badge></div>
+    <dl className="system-update-facts">
+      <div><dt>Running revision</dt><dd>{revision(sample?.running_revision)}</dd></div>
+      <div><dt>Latest trusted revision</dt><dd>{revision(sample?.latest_revision)}</dd></div>
+      <div><dt>Active runs</dt><dd>{sample?.active_runs ?? 'Unavailable'}</dd></div>
+      <div><dt>Worker compatibility</dt><dd>{sample ? sample.worker_compatible ? 'Compatible' : 'Blocked' : 'Unavailable'}</dd></div>
+    </dl>
+    {sample?.progress && <p role="status">{sample.progress}</p>}
+    {sample?.block_reason && <p className="system-update-error" role="alert">{sample.block_reason}</p>}
+    {unavailable && <p className={status.error ? 'system-update-error' : ''} role={status.error ? 'alert' : undefined}>{unavailable}</p>}
+    {check.error instanceof Error && <p className="system-update-error" role="alert">{check.error.message}</p>}
+    <p className="system-update-last">{lastSuccess}</p>
+    <p className="system-update-last">{lastFailure}</p>
+    {sample?.last_failure_reason && <p role="alert">{sample.last_failure_reason}</p>}
+    <div className="system-update-actions">
+      <Button variant="default" disabled={!canManage || designPreview || !sample || check.isPending}
+        title={canManage ? undefined : 'Only the local operator can request updates'}
+        onClick={() => check.mutate()}>{sample?.state === 'failed' ? 'Retry' : 'Check for updates'}</Button>
+    </div>
+  </PanelCard>;
+}
+
+export function SystemPage({ section, designPreview = false, canManageUpdates, ...facts }: SystemPageProps) {
   const mock = useMockSystem();
   const source = designPreview ? mock : liveSystemSource(facts);
   const [auditOpen, setAuditOpen] = useState(false);
@@ -101,6 +164,7 @@ export function SystemPage({ section, designPreview = false, ...facts }: SystemP
       </Modal>
 
       <SystemWorkspace section={section} source={source} onShowAudit={() => setAuditOpen(true)} />
+      {section === 'settings' && <SystemUpdatePanel designPreview={designPreview} canManage={canManageUpdates} />}
     </section>
   );
 }

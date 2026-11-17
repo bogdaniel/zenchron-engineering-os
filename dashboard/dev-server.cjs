@@ -27,4 +27,4 @@ const server = createServer({
   }],
 });
 
-server.listen(Number(process.env.ZENCHRON_DASHBOARD_PORT) || 4173, '127.0.0.1');
+server.listen(Number(process.env.ZENCHRON_DASHBOARD_PORT) || 4174, '127.0.0.1');

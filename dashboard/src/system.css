@@ -166,6 +166,17 @@
 .system-add-integration b, .system-add-integration small { display: block; }
 .system-add-integration b { font-size: 10px; font-weight: 600; }
 .system-add-integration small { margin-top: 3px; color: #8e899e; font-size: 9px; }
+.system-update-panel { margin-top: 12px; padding: 16px; }
+.system-update-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.system-update-state { flex: 0 0 auto; max-width: 45%; height: auto; min-height: 22px; white-space: normal; text-align: center; line-height: 1.2; }
+.system-update-heading h2 { margin: 0; font-size: var(--panel-heading-size); font-weight: var(--panel-heading-weight); }
+.system-update-heading p, .system-update-last { margin: 4px 0 0; color: #aaa4bb; font-size: var(--panel-description-size); }
+.system-update-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.system-update-facts div { min-width: 0; padding: 10px; border: 1px solid #2e2b40; border-radius: 8px; background: #12121d; }
+.system-update-facts dt { color: #aaa4bb; font-size: var(--panel-description-size); }
+.system-update-facts dd { overflow-wrap: anywhere; margin: 5px 0 0; font-size: var(--page-description-size); font-weight: 600; }
+.system-update-panel > p { margin: 7px 0; color: #aaa4bb; font-size: var(--panel-description-size); overflow-wrap: anywhere; }
+.system-update-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
 @media (min-width: 1351px) {
   .system-service-card { padding: 12px; }
 }
@@ -191,4 +202,5 @@
   }
   .system-add-integration { grid-column: auto; }
   .system-service-card { min-height: 92px; }
+  .system-update-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

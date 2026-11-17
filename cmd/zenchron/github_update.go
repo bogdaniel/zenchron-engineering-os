@@ -1,0 +1,227 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
+)
+
+type trustedBranch struct {
+	Name   string `json:"name"`
+	Commit struct {
+		SHA    string `json:"sha"`
+		Commit struct {
+			Tree struct {
+				SHA string `json:"sha"`
+			} `json:"tree"`
+		} `json:"commit"`
+	} `json:"commit"`
+}
+
+type requiredChecks struct {
+	Contexts []string `json:"contexts"`
+	Checks   []struct {
+		Context string `json:"context"`
+		AppID   int    `json:"app_id"`
+	} `json:"checks"`
+}
+
+type branchRules []struct {
+	Type       string `json:"type"`
+	Parameters struct {
+		RequiredStatusChecks []struct {
+			Context       string `json:"context"`
+			IntegrationID int    `json:"integration_id"`
+		} `json:"required_status_checks"`
+	} `json:"parameters"`
+}
+
+func (client gitHubClient) trustedMain(ctx context.Context, repository string) (updater.Candidate, error) {
+	candidate := updater.Candidate{Repository: repository}
+	if err := updater.ValidateRepository(repository); err != nil {
+		return updater.Candidate{}, err
+	}
+	if !client.authConfigured() {
+		return updater.Candidate{}, errors.New("GitHub authentication is required to verify protected main")
+	}
+	base := "/repos/" + repository
+	var branch trustedBranch
+	if err := client.getJSON(ctx, base+"/branches/main", &branch); err != nil {
+		return updater.Candidate{}, fmt.Errorf("read trusted main: %w", err)
+	}
+	if branch.Name != "main" || branch.Commit.SHA == "" || branch.Commit.Commit.Tree.SHA == "" {
+		return updater.Candidate{}, errors.New("GitHub returned an incomplete main revision")
+	}
+	candidate.Commit, candidate.Tree = strings.ToLower(branch.Commit.SHA), strings.ToLower(branch.Commit.Commit.Tree.SHA)
+	if err := candidate.Validate(); err != nil {
+		return updater.Candidate{}, fmt.Errorf("GitHub returned an invalid main revision: %w", err)
+	}
+	var commit struct {
+		SHA    string `json:"sha"`
+		Commit struct {
+			Tree struct {
+				SHA string `json:"sha"`
+			} `json:"tree"`
+			Verification struct {
+				Verified bool `json:"verified"`
+			} `json:"verification"`
+		} `json:"commit"`
+	}
+	if err := client.getJSON(ctx, base+"/commits/"+candidate.Commit, &commit); err != nil {
+		return updater.Candidate{}, fmt.Errorf("verify main commit metadata: %w", err)
+	}
+	if strings.ToLower(commit.SHA) != candidate.Commit || strings.ToLower(commit.Commit.Tree.SHA) != candidate.Tree ||
+		!commit.Commit.Verification.Verified {
+		return updater.Candidate{}, errors.New("GitHub cannot verify the exact main commit, tree and signature")
+	}
+	var rules branchRules
+	rulesErr := client.getJSON(ctx, base+"/rules/branches/main", &rules)
+	checks := requiredChecks{}
+	for _, rule := range rules {
+		if rule.Type != "required_status_checks" {
+			continue
+		}
+		for _, check := range rule.Parameters.RequiredStatusChecks {
+			if check.Context != "" {
+				checks.Checks = append(checks.Checks, struct {
+					Context string `json:"context"`
+					AppID   int    `json:"app_id"`
+				}{Context: check.Context, AppID: check.IntegrationID})
+			}
+		}
+	}
+	if len(checks.Checks) == 0 {
+		var protection struct {
+			Required requiredChecks `json:"required_status_checks"`
+		}
+		if err := client.getJSON(ctx, base+"/branches/main/protection", &protection); err != nil && rulesErr != nil {
+			return updater.Candidate{}, fmt.Errorf("verify main branch protection: %w", err)
+		}
+		checks = protection.Required
+	}
+	if err := client.verifyRequiredChecks(ctx, base, candidate.Commit, checks); err != nil {
+		return updater.Candidate{}, err
+	}
+	var pulls []struct {
+		MergedAt *string `json:"merged_at"`
+		Base     struct {
+			Ref string `json:"ref"`
+		} `json:"base"`
+	}
+	if err := client.getJSON(ctx, base+"/commits/"+candidate.Commit+"/pulls", &pulls); err != nil {
+		return updater.Candidate{}, fmt.Errorf("verify merged pull request for main: %w", err)
+	}
+	for _, pull := range pulls {
+		if pull.MergedAt != nil && pull.Base.Ref == "main" {
+			return candidate, nil
+		}
+	}
+	return updater.Candidate{}, errors.New("trusted main revision is not associated with a merged PR targeting main")
+}
+
+func verifyCurrentTrustedCandidate(ctx context.Context, client gitHubClient, candidate updater.Candidate) error {
+	latest, err := client.trustedMain(ctx, candidate.Repository)
+	if err != nil {
+		return fmt.Errorf("trusted main is no longer verifiable: %w", err)
+	}
+	if latest.Commit != candidate.Commit || latest.Tree != candidate.Tree {
+		return errors.New("trusted main advanced during release preparation")
+	}
+	return nil
+}
+
+func (client gitHubClient) gitFetchCredential(ctx context.Context) (string, error) {
+	if client.token != "" {
+		return client.token, nil
+	}
+	if client.appAuth == nil || !client.appAuth.configured() {
+		return "", errors.New("GitHub authentication is required to fetch the trusted source")
+	}
+	return client.appAuth.accessToken(ctx, client)
+}
+
+func (client gitHubClient) verifyRequiredChecks(ctx context.Context, base, commit string, required requiredChecks) error {
+	type checkKey struct {
+		name  string
+		appID int
+	}
+	checks := make(map[checkKey]bool, len(required.Contexts)+len(required.Checks))
+	for _, context := range required.Contexts {
+		checks[checkKey{name: context, appID: -1}] = false
+	}
+	for _, check := range required.Checks {
+		checks[checkKey{name: check.Context, appID: check.AppID}] = false
+	}
+	if len(checks) == 0 {
+		return errors.New("trusted main has no required status checks configured")
+	}
+	var statuses []struct {
+		Context   string    `json:"context"`
+		State     string    `json:"state"`
+		UpdatedAt time.Time `json:"updated_at"`
+	}
+	if err := client.getJSON(ctx, base+"/commits/"+commit+"/statuses", &statuses); err != nil {
+		return fmt.Errorf("read main commit statuses: %w", err)
+	}
+	statusTimes := make(map[checkKey]time.Time)
+	for _, status := range statuses {
+		key := checkKey{name: status.Context, appID: -1}
+		previous, exists := statusTimes[key]
+		if !exists || status.UpdatedAt.After(previous) {
+			statusTimes[key], checks[key] = status.UpdatedAt, status.State == "success"
+		} else if status.UpdatedAt.Equal(previous) && checks[key] != (status.State == "success") {
+			checks[key] = false
+		}
+	}
+	var result struct {
+		CheckRuns []struct {
+			Name       string    `json:"name"`
+			Status     string    `json:"status"`
+			Conclusion string    `json:"conclusion"`
+			UpdatedAt  time.Time `json:"updated_at"`
+			App        struct {
+				ID int `json:"id"`
+			} `json:"app"`
+		} `json:"check_runs"`
+	}
+	if err := client.getJSON(ctx, base+"/commits/"+commit+"/check-runs", &result); err != nil {
+		return fmt.Errorf("read main commit check runs: %w", err)
+	}
+	for _, check := range result.CheckRuns {
+		for key := range checks {
+			if key.name != check.Name || (key.appID != -1 && key.appID != 0 && key.appID != check.App.ID) {
+				continue
+			}
+			previous, exists := statusTimes[key]
+			success := check.Status == "completed" && check.Conclusion == "success"
+			if !exists || check.UpdatedAt.After(previous) {
+				statusTimes[key], checks[key] = check.UpdatedAt, success
+			} else if check.UpdatedAt.Equal(previous) && checks[key] != success {
+				checks[key] = false
+			}
+		}
+	}
+	for key, succeeded := range checks {
+		if !succeeded {
+			return fmt.Errorf("required main check %q is not successful", key.name)
+		}
+	}
+	return nil
+}
+
+func (client gitHubClient) getJSON(ctx context.Context, path string, target any) error {
+	body, err := client.requestBytes(ctx, http.MethodGet, path, "application/vnd.github+json", nil, nil)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(body, target); err != nil {
+		return fmt.Errorf("decode GitHub response: %w", err)
+	}
+	return nil
+}
