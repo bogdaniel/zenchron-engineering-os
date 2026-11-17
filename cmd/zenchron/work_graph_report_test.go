@@ -102,8 +102,12 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 			apiUnit, report.Handoffs, report.Outstanding)
 	}
 	if !slices.Equal(uiUnit.Providers, []string{workerapi.ProviderCodex + " 1.2.3"}) || review.Verdict != "accept" ||
+		len(uiUnit.Executions) != 1 || uiUnit.Executions[0].Verification != workerapi.VerificationPassed ||
 		len(review.RunIDs) != 2 || review.Attempts != 2 || !slices.Equal(review.Providers, []string{workerapi.ProviderCodex}) {
 		t.Fatalf("ui unit = %#v, review unit = %#v", uiUnit, review)
+	}
+	if !slices.Equal(report.UnknownEvidence, []string{"candidate_tree_sha", "publication_authority", "pull_request_external_state"}) {
+		t.Fatalf("unrecorded evidence = %v", report.UnknownEvidence)
 	}
 
 	// Reading the report changed nothing about the graph.

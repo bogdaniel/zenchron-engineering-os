@@ -57,6 +57,9 @@ flowchart LR
   and approval makes the proposal stale and approval returns 409. After approval, queued runs and retries use the
   pinned effective configuration. The worker receives only composed instructions and the original profile tool
   allowlist; persona text cannot grant tools or weaken sandbox controls.
+- In Live Objectives, the plan shows current CLI readiness for each assigned profile on the selected repository's
+  worker. An unavailable CLI does not invalidate a structurally valid plan; its durable run stays queued until that
+  worker reports the required provider ready. Planner runs show the same readiness before submission.
 - A plan is refused, with every problem listed, when: a key is malformed or repeated; a dependency is unknown or forms
   a cycle; there is no produce unit or not exactly one integrate unit; a produce unit never reaches the integrate unit; a produce unit
   builds on more than one produce unit; a produce unit's profile is missing, disabled, has no CLI adapter, cannot

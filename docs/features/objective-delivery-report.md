@@ -32,8 +32,12 @@ flowchart LR
   run's provider and, when recorded, a space and its provider version.
 - `approved_plan` records the approved revision, content hash, summary, approver, and approval time. Workflow identity
   and version come from the compiled plan and graph. Each execution reports the recorded profile and persona IDs,
-  names and versions, provider, candidate commit, review verdict, publication state, PR link, attempts, and failures.
+  names and versions, provider, candidate commit, worker-reported verification, review verdict, publication state, PR
+  link, attempts, and failures. Verification belongs to that run; it is not an independent assurance record.
   Handoffs, decisions and unresolved steps are shown from immutable WorkGraph messages and state.
+- `unknown_evidence` names evidence the current records cannot establish: candidate tree SHA, publication authority,
+  and current pull request state. A PR URL or recorded publication result does not establish whether GitHub still
+  considers the PR open, merged, or closed.
 - Top-level `measurements` contains:
   - `unit_count`: number of units.
   - `run_count`: number of all run ids, including ids without a stored run.

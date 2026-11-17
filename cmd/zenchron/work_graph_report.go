@@ -25,6 +25,7 @@ type deliveryReport struct {
 	Decisions       []reportDecision     `json:"decisions"`
 	Outstanding     []reportOutstanding  `json:"outstanding_steps"`
 	Measurements    deliveryMeasurements `json:"measurements"`
+	UnknownEvidence []string             `json:"unknown_evidence"`
 	PullRequestURL  string               `json:"pull_request_url,omitempty"`
 }
 
@@ -64,6 +65,7 @@ type reportExecution struct {
 	PersonaVersion  int    `json:"persona_version,omitempty"`
 	Provider        string `json:"provider,omitempty"`
 	ProviderVersion string `json:"provider_version,omitempty"`
+	Verification    string `json:"verification,omitempty"`
 	Attempts        int    `json:"attempts"`
 	CandidateCommit string `json:"candidate_commit,omitempty"`
 	ReviewVerdict   string `json:"review_verdict,omitempty"`
@@ -126,7 +128,8 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	report := deliveryReport{GraphID: graph.ID, ObjectiveID: graph.ObjectiveID, ObjectiveTitle: graph.ObjectiveTitle,
 		PlanRevision: graph.PlanRevision, WorkflowID: graph.WorkflowID, WorkflowVersion: graph.WorkflowVersion,
 		Status: graph.Status, Units: make([]reportUnit, 0, len(graph.Units)), Handoffs: []reportHandoff{},
-		Decisions: []reportDecision{}, Outstanding: []reportOutstanding{}}
+		Decisions: []reportDecision{}, Outstanding: []reportOutstanding{},
+		UnknownEvidence: []string{"candidate_tree_sha", "publication_authority", "pull_request_external_state"}}
 	if plan != nil {
 		report.ApprovedPlan = reportPlan{Revision: plan.Revision, Status: plan.Status, Hash: plan.Hash, Summary: plan.Summary,
 			ApprovedBy: plan.ApprovedBy, ApprovedAt: plan.ApprovedAt}
@@ -190,7 +193,8 @@ func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecut
 		}
 		execution := reportExecution{RunID: id, Status: run.Status, Attempts: run.Attempts,
 			CandidateCommit: run.CommitSHA, Provider: run.Provider, ProviderVersion: run.ProviderVersion,
-			Publication: run.Publication, PullRequestURL: run.PullRequestURL, FailureRecorded: run.Error != ""}
+			Verification: run.Verification, Publication: run.Publication, PullRequestURL: run.PullRequestURL,
+			FailureRecorded: run.Error != ""}
 		if run.Profile != nil {
 			execution.ProfileID, execution.ProfileName, execution.ProfileVersion = run.Profile.ID, run.Profile.Name, run.Profile.Version
 			if persona := run.Profile.PersonaSnapshot; persona != nil {

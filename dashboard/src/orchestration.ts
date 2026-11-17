@@ -4,6 +4,8 @@ import { loadAgents, loadPersonas } from './agentsData';
 import type { Agent, AgentPersona } from './agentsData';
 import { loadProducts } from './productEditor';
 import { projectsSchema } from './projects';
+import { workerProvidersSchema } from './agentRunQueue';
+import type { RunWorker } from './agentRunQueue';
 import { loadWorkflows } from './workflowModel';
 
 // The control plane encodes an empty Go slice as null.
@@ -43,6 +45,9 @@ const planSchema = z.object({
   max_parallel: z.number().optional().default(0), units: list(planUnitSchema), problems: list(z.string()),
   graph_id: z.string().optional(), created_at: z.string(), approved_by: z.string().optional(),
 });
+const workersSchema = z.array(z.object({
+  id: z.string(), name: z.string(), status: z.enum(['online', 'offline']), providers: workerProvidersSchema,
+}));
 export const workGraphsSchema = z.array(graphSchema);
 export const plansSchema = z.array(planSchema);
 export type WorkGraph = z.infer<typeof graphSchema>;
@@ -51,6 +56,7 @@ export type PlanUnit = z.infer<typeof planUnitSchema>;
 export type GraphMessage = z.infer<typeof messageSchema>;
 export type ObjectivePlan = z.infer<typeof planSchema>;
 type Option = { value: string; label: string };
+type ProjectOption = Option & { workerID: string };
 
 /** Plans, work graphs, and the operations on them. Mock and Live each provide one; Mock has no operations. */
 export type OrchestrationSource = {
@@ -62,7 +68,9 @@ export type OrchestrationSource = {
   plans: ObjectivePlan[];
   plansLoading: boolean;
   plansFailed: boolean;
-  options: { projects: Option[]; projectNotice?: string; planners: Option[]; workflows: Option[]; agents: Agent[]; personas: AgentPersona[] };
+  options: { projects: ProjectOption[]; projectWorkerIDs: Record<string, string>; projectNotice?: string;
+    planners: Option[]; workflows: Option[]; agents: Agent[]; personas: AgentPersona[];
+    agentsLoading: boolean; workers: RunWorker[]; workersFailed: boolean; workersLoading: boolean };
   agentNames: Record<string, string>;
   /** Why operations are off; empty where they are available. */
   readOnlyReason: string;
@@ -114,6 +122,8 @@ export function useLiveOrchestration(enabled: boolean, objectiveID?: string, pro
   const agents = useQuery({ queryKey: ['agents'], queryFn: loadAgents, enabled });
   const personas = useQuery({ queryKey: ['personas'], queryFn: loadPersonas, enabled });
   const workflows = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows, enabled });
+  const workers = useQuery({ queryKey: ['local-workers'], enabled, refetchInterval: 5_000,
+    queryFn: () => load('/api/v1/workers', workersSchema, 'local workers') });
   const change = async (path: string, body?: unknown) => {
     await send(path, body);
     await Promise.all([queryClient.invalidateQueries({ queryKey: ['work-graphs'] }),
@@ -139,7 +149,9 @@ export function useLiveOrchestration(enabled: boolean, objectiveID?: string, pro
     plansLoading: plans.isLoading,
     plansFailed: plans.isError,
     options: {
-      projects: availableProjects.map((project) => ({ value: project.id, label: `${project.name} · ${project.branch}` })),
+      projects: availableProjects.map((project) => ({ value: project.id,
+        label: `${project.name} · ${project.branch}`, workerID: project.worker_id })),
+      projectWorkerIDs: Object.fromEntries((projects.data ?? []).map((project) => [project.id, project.worker_id])),
       projectNotice,
       // A planner only reads: a profile that may write code is refused by the control plane.
       planners: (agents.data ?? []).filter((agent) => agent.status === 'active' && cliProviders.includes(agent.provider)
@@ -148,7 +160,8 @@ export function useLiveOrchestration(enabled: boolean, objectiveID?: string, pro
         .map((agent) => ({ value: agent.id, label: `${agent.name} · ${agent.provider} · ${agent.model}${agent.persona_id
           ? ` · ${personas.data?.find((persona) => persona.id === agent.persona_id)?.name ?? 'persona'}` : ''}` })),
       workflows: (workflows.data ?? []).map((workflow) => ({ value: workflow.id, label: `${workflow.name} · v${workflow.version}` })),
-      agents: agents.data ?? [], personas: personas.data ?? [],
+      agents: agents.data ?? [], personas: personas.data ?? [], workers: workers.data ?? [],
+      agentsLoading: agents.isLoading, workersFailed: workers.isError, workersLoading: workers.isLoading,
     },
     agentNames: Object.fromEntries((agents.data ?? []).map((agent) => {
       const persona = personas.data?.find((item) => item.id === agent.persona_id);

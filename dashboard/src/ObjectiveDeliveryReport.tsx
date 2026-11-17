@@ -9,7 +9,8 @@ const executionSchema = z.object({
   profile_version: z.number().optional(), persona_id: z.string().optional(), persona_name: z.string().optional(),
   persona_version: z.number().optional(), provider: z.string().optional(), provider_version: z.string().optional(),
   attempts: z.number(), candidate_commit: z.string().optional(), review_verdict: z.string().optional(),
-  publication: z.string().optional(), pull_request_url: z.string().optional(), failure_recorded: z.boolean().optional(),
+  verification: z.string().optional(), publication: z.string().optional(), pull_request_url: z.string().optional(),
+  failure_recorded: z.boolean().optional(),
 });
 const reportSchema = z.object({
   graph_id: z.string(), objective_id: z.string(), objective_title: z.string(), plan_revision: z.number(),
@@ -30,9 +31,15 @@ const reportSchema = z.object({
     human_actions_complete: z.boolean(), max_concurrency: z.number(), wall_clock_seconds: z.number().optional(),
     input_tokens: z.number().optional(), output_tokens: z.number().optional(), cost_usd: z.number().optional(),
     runs_with_usage: z.number(), runs_with_cost: z.number(), unknown: z.array(z.string()) }),
+  unknown_evidence: z.array(z.string()).default([]),
   pull_request_url: z.string().optional(),
 });
 type Report = z.infer<typeof reportSchema>;
+const unknownEvidenceLabels: Record<string, string> = {
+  candidate_tree_sha: 'candidate tree SHA',
+  publication_authority: 'publication authority',
+  pull_request_external_state: 'current pull request state',
+};
 
 async function loadReport(graphID: string): Promise<Report> {
   const response = await fetch(`/api/v1/work-graphs/${graphID}/report`);
@@ -94,6 +101,7 @@ function ReportDetails({ report }: { report: Report }) {
         <span>{run.profile_name ? `${run.profile_name} v${run.profile_version ?? 'unknown'}` : 'Zenchron integration'}
           {run.persona_name && ` · ${run.persona_name} v${run.persona_version ?? 'unknown'}`}
           {run.provider && ` · ${run.provider}${run.provider_version ? ` ${run.provider_version}` : ''}`}</span>
+        <span>Worker-reported verification: {run.verification || 'Not run'}</span>
         {run.candidate_commit && <span>Commit <code>{run.candidate_commit}</code></span>}
         {run.review_verdict && <span>Review verdict: {run.review_verdict}</span>}
         {run.publication && <span>Publication state: {run.publication}</span>}
@@ -112,6 +120,9 @@ function ReportDetails({ report }: { report: Report }) {
       Decision: {decision.question} · {decision.resolution ? `resolved by ${decision.resolved_by}: ${decision.resolution}` : 'outstanding'}
     </p>)}
     {!report.handoffs.length && !report.decisions.length && <p>No handoffs or human decisions were recorded.</p>}
+    {report.unknown_evidence.length > 0 && <p className="objective-delivery-unknown">
+      Unknown evidence: {report.unknown_evidence.map((item) => unknownEvidenceLabels[item] ?? item).join(', ')}.
+    </p>}
     {report.outstanding_steps.length > 0 && <><h5>Outstanding steps</h5><ul>{report.outstanding_steps.map((step) =>
       <li key={step.key}>{step.key} · {step.state}{step.reason && ` · ${step.reason}`}</li>)}</ul></>}
     <h5>Recorded measurements</h5>

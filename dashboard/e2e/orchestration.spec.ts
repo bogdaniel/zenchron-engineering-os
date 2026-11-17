@@ -295,6 +295,16 @@ test('an objective plan approved in the dashboard runs through decision, review,
   })), created.objectiveID);
   expect(apiStatus.filter((item) => item.status !== 200), JSON.stringify(apiStatus)).toEqual([]);
 
+  const workerSnapshot = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/workers');
+    if (!response.ok) throw new Error(`Worker list failed (${response.status})`);
+    return response.json() as Promise<{ providers?: { id: string; ready: boolean; reason?: string }[] }[]>;
+  });
+  await page.route('**/api/v1/workers', async (route) => {
+    await route.fulfill({ json: workerSnapshot.map((worker) => ({ ...worker, providers: worker.providers?.map((provider) =>
+      provider.id === 'codex-cli' ? { ...provider, ready: false, reason: 'CLI unavailable in this readiness snapshot' }
+        : provider) })) });
+  });
   await page.goto(`/?mode=live&objective=${created.objectiveID}#objectives`);
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
   const panel = page.getByRole('tabpanel');
@@ -310,6 +320,9 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(panel).toContainText(`Compiled from workflow ${created.workflowID} · version ${created.workflowVersion}`);
   await expect(panel).toContainText('Orchestration writer one');
   await expect(revision).toContainText(`Persona ${created.personaID} · v1`);
+  const readiness = panel.getByRole('status', { name: 'CLI readiness for revision 1' });
+  await expect(readiness).toContainText('codex-cli not ready');
+  await expect(readiness).toContainText('runs wait until ready');
   await panel.getByRole('button', { name: 'Approve plan and start' }).click();
   const units = panel.getByRole('list', { name: 'Work units' });
   await expect(units.getByRole('listitem')).toHaveCount(4);
@@ -331,6 +344,8 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(report).toContainText('Approved plan revision 1');
   await expect(report).toContainText('E2E CSV specialist v1');
   await expect(report).toContainText('codex-cli');
+  await expect(report).toContainText('Worker-reported verification: not_configured');
+  await expect(report).toContainText('Unknown evidence: candidate tree SHA, publication authority, current pull request state');
   await expect(report).toContainText('CSV');
   await expect(report).toContainText('GitHub publication is not configured');
   await expect(report).toContainText('Unknown');
@@ -352,7 +367,11 @@ test('an objective plan approved in the dashboard runs through decision, review,
     return getExport();
   });
   if (!exported) throw new Error('Delivery JSON export did not create a download payload');
-  expect(JSON.parse(exported).workflow_id).toBe(created.workflowID);
+  const delivery = JSON.parse(exported) as { workflow_id: string; unknown_evidence: string[];
+    units: { executions: { verification?: string }[] }[] };
+  expect(delivery.workflow_id).toBe(created.workflowID);
+  expect(delivery.unknown_evidence).toContain('candidate_tree_sha');
+  expect(delivery.units.flatMap((unit) => unit.executions).some((run) => run.verification === 'not_configured')).toBe(true);
   expect(exported).not.toContain('system_prompt');
   await page.screenshot({ path: testInfo.outputPath('objective-report-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
