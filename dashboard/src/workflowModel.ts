@@ -219,7 +219,7 @@ export function workflowGraph(workflow: Workflow) {
   const kinds = new Map(workflow.nodes.map((node) => [node.id, node.type]));
   return {
     nodes: workflow.nodes.map((node) => ({
-      ...node, type: 'workflow', data: { ...node.data, kind: node.type },
+      ...node, type: 'workflow', ariaLabel: node.data.label, data: { ...node.data, kind: node.type },
     })),
     edges: workflow.edges.map((edge) => ({
       ...edge, type: 'smoothstep', animated: false,
