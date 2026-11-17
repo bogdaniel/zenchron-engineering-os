@@ -147,7 +147,7 @@ export function ObjectivePlanPanel({ objectiveID, productID, sampleData }: {
     <Button size="xs" variant="subtle" onClick={source.retry}>Retry loading the plan</Button></div>;
   return <div className="work-panel" role="tabpanel">
     {source.readOnlyReason && <p className="work-unit-reason">{source.readOnlyReason}</p>}
-    {source.loading && <p role="status">Loading existing work…</p>}
+    {(source.loading || source.plansLoading) && <p role="status">Loading existing work…</p>}
     {graph && <><WorkGraphView graph={graph} source={source} />
       {!sampleData && <ObjectiveDeliveryReport graphID={graph.id} />}</>}
     <h4>Plan revisions</h4>

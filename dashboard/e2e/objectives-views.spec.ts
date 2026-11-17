@@ -393,6 +393,11 @@ test('objective quarter filter and table, cards, and Kanban views share records'
 
   await expect(page.getByRole('button', { name: 'Table', pressed: true })).toBeVisible();
   const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
+  const dueQuarter = page.getByRole('combobox', { name: 'Filter by due quarter' });
+  await expect(dueQuarter).toHaveValue('All due dates');
+  await expect(objectiveRows).toHaveCount(4);
+  await dueQuarter.click();
+  await page.getByRole('option', { name: 'This Quarter' }).click();
   await expect(objectiveRows).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Filter by owner' }).click();
   await page.getByRole('option', { name: 'Alex Chen' }).click();
@@ -416,10 +421,10 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="title"]').first()).toHaveCSS('font-size', '11px');
   await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="status"]').first()).toHaveCSS('font-size', '11.5px');
   await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').first()).toHaveCSS('font-size', '8.5px');
-  await page.getByRole('combobox', { name: 'Filter by due quarter' }).click();
+  await dueQuarter.click();
   await page.getByRole('option', { name: 'All due dates' }).click();
   await expect(objectiveRows).toHaveCount(4);
-  await page.getByRole('combobox', { name: 'Filter by due quarter' }).click();
+  await dueQuarter.click();
   await page.getByRole('option', { name: 'This Quarter' }).click();
   await expect(objectiveRows).toHaveCount(2);
 
@@ -457,6 +462,28 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await expect(page.getByRole('region', { name: '2026 Q3' })).toContainText('Complete migration');
   await expect(page.getByRole('region', { name: '2026 Q4' })).toContainText('Ship API v2');
   await expect(page.getByRole('region', { name: 'Unscheduled' })).toContainText('Document ownership');
+});
+
+test('objective plan options stay available while WorkGraph history is loading', async ({ page }) => {
+  await useLocalSession(page);
+  await page.route('**/api/v1/objectives', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([objectives[0]]),
+  }));
+  let releaseWorkGraphs: (() => void) | undefined;
+  await page.route('**/api/v1/work-graphs', async (route) => {
+    await new Promise<void>((resolve) => { releaseWorkGraphs = resolve; });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  const workGraphRequest = page.waitForRequest('**/api/v1/work-graphs');
+  await page.goto(`http://zenchron.test:${dashboardPort}/?objective=${objectives[0].id}&tab=plan#objectives`);
+  await workGraphRequest;
+
+  await expect(page.getByRole('combobox', { name: 'Repository checkout' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Executable workflow' })).toBeVisible();
+  if (!releaseWorkGraphs) throw new Error('WorkGraph request did not reach its test gate.');
+  releaseWorkGraphs();
+  await expect(page.getByText('No plan yet. Propose one to turn this objective into reviewed, integrated work.'))
+    .toBeVisible();
 });
 
 test('objective create and edit submit the expected API payloads', async ({ page }) => {
@@ -539,9 +566,72 @@ test('objective create and edit submit the expected API payloads', async ({ page
   await expect(page.locator('.objective-action-notice')).toHaveText('Objective updated');
 });
 
+test('a new objective without a due date stays listed under the initial Live filter', async ({ page }) => {
+  await useLocalSession(page);
+  const persisted: Record<string, unknown>[] = [{ ...objectives[0] }];
+  const createdPayloads: unknown[] = [];
+  await page.route('**/api/v1/objectives', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(persisted) });
+      return;
+    }
+    const payload = route.request().postDataJSON();
+    createdPayloads.push(payload);
+    const created = { ...payload, id: '5'.repeat(32), product: 'Unassigned', status: 'in_progress',
+      progress: 0, created_at: '2026-11-04T12:00:00Z', updated_at: '2026-11-04T12:00:00Z' };
+    persisted.push(created);
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(created) });
+  });
+  await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+
+  const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
+  await expect(objectiveRows).toHaveCount(1);
+  await page.getByRole('button', { name: 'New Objective' }).click();
+  await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability testing');
+  await page.getByRole('button', { name: 'Create objective' }).click();
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability testing55555555');
+  expect(createdPayloads).toEqual([{
+    title: 'Expand reliability testing', description: '', owner: '', product_id: '', due_date: '',
+  }]);
+
+  // The due-quarter filter is left at its initial value: an undated objective must not need "All due dates" chosen.
+  await expect(objectiveRows.filter({ hasText: 'Expand reliability testing' })).toBeVisible();
+  await expect(objectiveRows.filter({ hasText: 'Ship API v2' })).toBeVisible();
+  await expect(objectiveRows).toHaveCount(2);
+});
+
+for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: 'mobile', width: 390, height: 844 }]) {
+test(`switching Objectives from Mock to Live resets the due-date filter (${viewport.name})`, async ({ page }) => {
+  await useLocalSession(page);
+  await page.setViewportSize(viewport);
+  await page.route('**/api/v1/objectives', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([{
+      ...objectives[3], product: 'Unassigned',
+    }]),
+  }));
+  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
+
+  const dueQuarter = page.getByRole('combobox', { name: 'Filter by due quarter' });
+  await expect(dueQuarter).toHaveValue('This Quarter');
+  await page.getByRole('radiogroup', { name: 'Data mode' }).getByText('Live').click();
+
+  await expect(page).toHaveURL(/\?mode=live#objectives$/);
+  await expect(dueQuarter).toHaveValue('All due dates');
+  await expect(page.locator('.objective-grid-wrap .objective-title-cell').filter({ hasText: 'Document ownership' }))
+    .toBeVisible();
+  await page.getByRole('radiogroup', { name: 'Data mode' }).getByText('Mock').click();
+  await expect(dueQuarter).toHaveValue('This Quarter');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+}
+
 test('a late grid selection report does not replace the objective being edited', async ({ page }) => {
   await useLocalSession(page);
   const createdID = '5'.repeat(32);
+  const projectID = 'a'.repeat(32);
+  const workflowID = 'b'.repeat(32);
   const persisted: Record<string, unknown>[] = [{ ...objectives[0] }];
   const updatedIDs: string[] = [];
   await page.route('**/api/v1/objectives', async (route) => {
@@ -580,7 +670,7 @@ test('a late grid selection report does not replace the objective being edited',
     due.forEach((report) => report());
     return due.length;
   }, count);
-  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/?project=${projectID}&workflow=${workflowID}&mode=live#objectives`);
 
   // Deliver reports one at a time until the grid has selected its first row; the report of that selection stays queued.
   const selectedRow = page.locator('.objective-grid-wrap [role="row"].ag-row-selected');
@@ -588,12 +678,16 @@ test('a late grid selection report does not replace the objective being edited',
     if (!await selectedRow.count()) expect(await deliverGridReports(1)).toBe(1);
     await expect(selectedRow).toHaveCount(1, { timeout: 250 });
   }).toPass();
-  // No due date keeps the new objective out of the "This Quarter" rows, so the grid cannot select it.
+  // Leave the async selection report queued while creating an undated objective.
   await page.getByRole('button', { name: 'New Objective' }).click();
   await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability testing');
   await page.getByRole('button', { name: 'Create objective' }).click();
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability testing55555555');
+  await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.objective-grid-wrap .objective-title-cell').filter({ hasText: 'Expand reliability testing' }))
+    .toHaveCount(1);
   expect(await deliverGridReports()).toBeGreaterThan(0);
+  await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
 
   await page.getByRole('button', { name: 'More objective actions' }).click();
   await page.getByRole('menuitem', { name: 'Edit objective' }).click();
@@ -624,11 +718,23 @@ test('Objectives in Live uses the approved layout with honest unavailable parts'
   await expect(metrics.nth(1)).toContainText('Objective Success Rate0%');
   await expect(metrics.nth(2)).toContainText('4');
   await expect(page.locator('.objective-metric-trend')).toHaveCount(0);
-  await expect(page.locator('.objective-preview-layout .objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(2);
-  await expect(page.locator('.objective-grid-wrap .objective-title-cell small').first()).toHaveText('11111111');
-  await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="approval"]').first()).toHaveText('—');
-  await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="workflow_count"]').first()).toHaveText('—');
-  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 1–2 of 2 objectives');
+  const objectiveRows = page.locator('.objective-preview-layout .objective-grid-wrap [role="row"]:has([role="gridcell"])');
+  const dueQuarter = page.getByRole('combobox', { name: 'Filter by due quarter' });
+  await expect(dueQuarter).toHaveValue('All due dates');
+  await expect(objectiveRows).toHaveCount(4);
+  await dueQuarter.click();
+  await page.getByRole('option', { name: 'This Quarter' }).click();
+  await expect(objectiveRows).toHaveCount(2);
+  await dueQuarter.click();
+  await page.getByRole('option', { name: 'Last Quarter' }).click();
+  await expect(objectiveRows).toHaveCount(1);
+  await dueQuarter.click();
+  await page.getByRole('option', { name: 'All due dates' }).click();
+  const shipRow = objectiveRows.filter({ hasText: 'Ship API v2' });
+  await expect(shipRow.locator('.objective-title-cell small')).toHaveText('11111111');
+  await expect(shipRow.locator('.ag-cell[col-id="approval"]')).toHaveText('—');
+  await expect(shipRow.locator('.ag-cell[col-id="workflow_count"]')).toHaveText('—');
+  await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 1–4 of 4 objectives');
   await expect(page.getByRole('textbox', { name: 'Search objectives' })).toBeVisible();
   await expect(page.locator('.objective-capacity')).toContainText('Unavailable: the control plane does not record when objectives were planned or completed.');
   await expect(page.locator('.objective-capacity-chart')).toHaveCount(0);
@@ -692,6 +798,6 @@ test('Objectives in Live reports failed loads and saves without showing fixtures
 
   listStatus = 200;
   await page.getByRole('button', { name: 'Retry loading objectives' }).click();
-  await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(2);
+  await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(4);
   await expect(page.locator('.objective-detail-head h3')).toContainText('Ship API v2');
 });

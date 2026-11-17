@@ -47,7 +47,8 @@ flowchart LR
   The table's delayed report of a selection the page made itself is ignored, so it cannot replace an objective that
   was created or chosen in the meantime and send a later edit to a different objective.
 - The dashboard searches title, description, owner, and product, and filters by product, owner, status, and due-date
-  quarter. The default is This Quarter; All due dates includes unscheduled objectives.
+  quarter. Switching modes resets this filter to the mode default: Mock uses This Quarter, and Live uses All due dates
+  so unscheduled objectives stay visible. Both modes can select This Quarter, Last Quarter, or All due dates.
 - The table uses a numbered footer pager that stays in sync with AG Grid, six rows to a page, in both modes.
 - The Objective, Planning, and Roadmap tabs sit in a separate toolbar above the table card, with the table and capacity
   chart kept as distinct cards below it.
@@ -56,6 +57,8 @@ flowchart LR
 - Live shows only control-plane data in the same frame. The KPI row reports the completed count, the completed share,
   and the status counts, without the fixture trend badges and graphics. Table IDs and the detail ID badge show the
   first eight characters of the objective ID.
+- The Live Plan tab keeps repository and workflow selection available while existing WorkGraph and plan history load;
+  those recorded views show their own loading state.
 - Parts of the design the objective API does not hold say so in Live: Approval and Workflows read "Unavailable" in the
   detail panel and "—" in the table; Blockers, Acceptance Criteria, Related PRs, Activity Feed, the Milestones,
   Related PRs, and Activity tabs, Milestone Progress, and the capacity chart show "Unavailable" with the reason; the

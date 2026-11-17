@@ -106,7 +106,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [productFilter, setProductFilter] = useState('all');
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dueQuarter, setDueQuarter] = useState<'this' | 'last' | 'all'>('this');
+  const [dueQuarter, setDueQuarter] = useState<'this' | 'last' | 'all'>(sampleData ? 'this' : 'all');
+  useEffect(() => setDueQuarter(sampleData ? 'this' : 'all'), [sampleData]);
   const [section, setSection] = useState<'objectives' | 'planning' | 'roadmap'>('objectives');
   const [view, setView] = useState<'kanban' | 'table' | 'cards'>('table');
   const [objectiveGridApi, setObjectiveGridApi] = useState<GridApi<Objective> | null>(null);
@@ -335,9 +336,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
                     if (first) selectObjective(first);
                   }}
                   onSelectionChanged={({ api, source }) => {
-                    // The grid reports its own programmatic selections after a delay. Acting on that report would
-                    // replace an objective chosen in the meantime, so only a person's choice in the grid selects.
-                    if (source === 'api') return;
+                    // Delayed row-data and API reports are not a fresh operator choice.
+                    if (source !== 'rowClicked' && source !== 'checkboxSelected' && source !== 'spaceKey') return;
                     const item = api.getSelectedRows()[0];
                     if (item) selectObjective(item);
                   }}
