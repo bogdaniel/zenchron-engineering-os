@@ -5,7 +5,6 @@ import { openDecisions, workGraphsSchema } from './orchestration';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
 import { livePageHref } from './livePageHref';
-import './overview.css';
 
 async function loadWorkGraphs() {
   const response = await fetch('/api/v1/work-graphs');
@@ -22,6 +21,7 @@ export function ActionRequired() {
     unit: decision.from,
     href: livePageHref('objectives', { objective: graph.objective_id, tab: 'plan', graph_id: graph.id, decision: decision.id }),
   })));
+  if (!graphs.isError && actions.length === 0) return null;
 
   return <section className="action-required-region" aria-label="Action Required">
     <PanelCard className="panel action-required-panel" withBorder>
@@ -30,10 +30,9 @@ export function ActionRequired() {
     {graphs.isLoading ? <p role="status">Checking for human decisions…</p>
       : graphs.isError ? <div role="alert"><p>{graphs.error.message}</p>
         <Button size="xs" variant="default" onClick={() => void graphs.refetch()}>Retry</Button></div>
-        : actions.length ? <ul className="action-required-list">{actions.map((action) => <li key={action.id}>
+        : <ul className="action-required-list">{actions.map((action) => <li key={action.id}>
           <a href={action.href}><b>{action.objective}</b><span>Decision requested by {action.unit}</span></a>
-        </li>)}</ul>
-          : <p>No governed decisions are waiting.</p>}
+        </li>)}</ul>}
     </PanelCard>
   </section>;
 }

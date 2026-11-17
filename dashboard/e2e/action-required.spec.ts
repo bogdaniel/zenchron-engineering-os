@@ -54,14 +54,14 @@ for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: '
   });
 }
 
-test('Action Required reports an empty and unavailable queue honestly', async ({ page }) => {
+test('Action Required omits an empty queue and reports an unavailable queue honestly', async ({ page }) => {
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
   await page.route('**/api/v1/work-graphs', (route) => route.fulfill(json([])));
   await page.goto('/?mode=live#overview');
-  const queue = page.getByRole('region', { name: 'Action Required' });
-  await expect(queue).toContainText('No governed decisions are waiting.');
+  await expect(page.getByRole('region', { name: 'Action Required' })).toHaveCount(0);
   await page.route('**/api/v1/work-graphs', (route) => route.fulfill({ status: 503, body: 'temporarily unavailable' }));
   await page.reload();
+  const queue = page.getByRole('region', { name: 'Action Required' });
   await expect(queue).toContainText('WorkGraph actions unavailable (503)');
   await expect(queue.getByRole('button', { name: 'Retry' })).toBeVisible();
 });
