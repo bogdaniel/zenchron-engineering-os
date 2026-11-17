@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -186,6 +188,59 @@ func TestCommandPathDiagnosticFindsEarlierShadowingExecutable(t *testing.T) {
 	resolved, err := exec.LookPath("zenchron-engineering")
 	if err != nil || resolved != paths[0] {
 		t.Fatalf("PATH resolves %q, %v; want earlier stale entry %q", resolved, err, paths[0])
+	}
+}
+
+func TestDoctorReportsShadowingCommandAndDoesNotPass(t *testing.T) {
+	userHome := t.TempDir()
+	t.Setenv("HOME", userHome)
+	managedHome := filepath.Join(userHome, "managed")
+	t.Setenv("ZENCHRON_MANAGED_HOME", managedHome)
+	first := filepath.Join(userHome, "stale-bin")
+	canonical := filepath.Join(userHome, ".local", "bin")
+	for _, directory := range []string{first, canonical} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shadow := filepath.Join(first, "zenchron-engineering")
+	for _, path := range []string{shadow, filepath.Join(canonical, "zenchron-engineering")} {
+		if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	revision := "0123456789abcdef0123456789abcdef01234567"
+	if err := updater.SetActiveRelease(managedHome, revision); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", first+string(os.PathListSeparator)+canonical+string(os.PathListSeparator)+"/usr/bin:/bin")
+	previousArgs := os.Args
+	os.Args = []string{"zenchron-engineering", "doctor"}
+	defer func() { os.Args = previousArgs }()
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousStdout := os.Stdout
+	os.Stdout = writer
+	doctorErr := run()
+	_ = writer.Close()
+	os.Stdout = previousStdout
+	defer reader.Close()
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		Resolved  string   `json:"resolved_entrypoint"`
+		Reaches   bool     `json:"reaches_active"`
+		Shadowing []string `json:"shadowing_entries"`
+	}
+	if err := json.Unmarshal(output, &report); err != nil {
+		t.Fatalf("doctor output %q is not JSON: %v", output, err)
+	}
+	if doctorErr == nil || report.Resolved != shadow || report.Reaches || len(report.Shadowing) != 1 || report.Shadowing[0] != shadow {
+		t.Fatalf("doctor result = %#v, error %v; expected the winning shadow to be reported as unhealthy", report, doctorErr)
 	}
 }
 
