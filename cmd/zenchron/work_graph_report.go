@@ -18,6 +18,7 @@ type deliveryReport struct {
 	PlanRevision    int                  `json:"plan_revision"`
 	WorkflowID      string               `json:"workflow_id,omitempty"`
 	WorkflowVersion int                  `json:"workflow_version,omitempty"`
+	WorkflowMode    string               `json:"workflow_mode,omitempty"`
 	Status          string               `json:"status"`
 	ApprovedPlan    reportPlan           `json:"approved_plan"`
 	Units           []reportUnit         `json:"units"`
@@ -127,7 +128,8 @@ type deliveryMeasurements struct {
 func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *objectivePlan) deliveryReport {
 	report := deliveryReport{GraphID: graph.ID, ObjectiveID: graph.ObjectiveID, ObjectiveTitle: graph.ObjectiveTitle,
 		PlanRevision: graph.PlanRevision, WorkflowID: graph.WorkflowID, WorkflowVersion: graph.WorkflowVersion,
-		Status: graph.Status, Units: make([]reportUnit, 0, len(graph.Units)), Handoffs: []reportHandoff{},
+		WorkflowMode: graph.WorkflowMode,
+		Status:       graph.Status, Units: make([]reportUnit, 0, len(graph.Units)), Handoffs: []reportHandoff{},
 		Decisions: []reportDecision{}, Outstanding: []reportOutstanding{},
 		UnknownEvidence: []string{"candidate_tree_sha", "publication_authority", "pull_request_external_state"}}
 	if plan != nil {

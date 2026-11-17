@@ -36,12 +36,14 @@ const graphSchema = z.object({
   revision: z.number(), status: z.enum(['active', 'blocked', 'completed', 'failed', 'cancelled']),
   project_name: z.string(), base_branch: z.string(), workflow_id: z.string().optional(), max_parallel: z.number(),
   workflow_version: z.number().optional(),
+  workflow_mode: z.enum(['compiled', 'guidance']).optional(),
   units: list(unitSchema), messages: list(messageSchema), created_at: z.string(), updated_at: z.string(),
 });
 const planSchema = z.object({
   objective_id: z.string(), revision: z.number(),
   status: z.enum(['planning', 'proposed', 'invalid', 'approved', 'superseded']),
   project_id: z.string(), workflow_id: z.string().optional(), workflow_version: z.number().optional(), summary: z.string().optional().default(''),
+  workflow_mode: z.enum(['compiled', 'guidance']).optional(),
   max_parallel: z.number().optional().default(0), units: list(planUnitSchema), problems: list(z.string()),
   graph_id: z.string().optional(), created_at: z.string(), approved_by: z.string().optional(),
 });
@@ -55,6 +57,13 @@ export type WorkUnit = z.infer<typeof unitSchema>;
 export type PlanUnit = z.infer<typeof planUnitSchema>;
 export type GraphMessage = z.infer<typeof messageSchema>;
 export type ObjectivePlan = z.infer<typeof planSchema>;
+
+export function workflowProvenance(mode: WorkGraph['workflow_mode'] | ObjectivePlan['workflow_mode'], id: string, version?: number) {
+  const identity = `workflow ${id} · version ${version ?? 'unknown'}`;
+  if (mode === 'compiled') return `Compiled from ${identity}`;
+  if (mode === 'guidance') return `Guided by ${identity}`;
+  return `Workflow ${id} · version ${version ?? 'unknown'} · execution mode unknown`;
+}
 type Option = { value: string; label: string };
 type ProjectOption = Option & { workerID: string };
 

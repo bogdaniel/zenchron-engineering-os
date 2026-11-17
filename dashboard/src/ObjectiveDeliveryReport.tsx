@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Badge, Button } from '@mantine/core';
 import { z } from 'zod';
+import { workflowProvenance } from './orchestration';
 import './objective-delivery-report.css';
 
 const executionSchema = z.object({
@@ -14,7 +15,8 @@ const executionSchema = z.object({
 });
 const reportSchema = z.object({
   graph_id: z.string(), objective_id: z.string(), objective_title: z.string(), plan_revision: z.number(),
-  workflow_id: z.string().optional(), workflow_version: z.number().optional(), status: z.string(),
+  workflow_id: z.string().optional(), workflow_version: z.number().optional(),
+  workflow_mode: z.enum(['compiled', 'guidance']).optional(), status: z.string(),
   approved_plan: z.object({ revision: z.number(), status: z.string(), hash: z.string(), summary: z.string(),
     approved_by: z.string().optional(), approved_at: z.string().optional() }),
   units: z.array(z.object({ key: z.string(), kind: z.string(), agent_id: z.string().optional(), agent_name: z.string(),
@@ -89,7 +91,7 @@ function ReportDetails({ report }: { report: Report }) {
       {report.approved_plan.approved_by && ` · approved by ${report.approved_plan.approved_by}`}
       {report.approved_plan.approved_at && ` · ${new Date(report.approved_plan.approved_at).toLocaleString()}`}</p>
     <p>{report.approved_plan.summary || 'No plan summary recorded.'}</p>
-    {report.workflow_id && <p>Workflow <a href="#workflows">{report.workflow_id}</a> · version {report.workflow_version ?? 'unknown'}</p>}
+    {report.workflow_id && <p><a href="#workflows">{workflowProvenance(report.workflow_mode, report.workflow_id, report.workflow_version)}</a></p>}
     <h5>Executed work units</h5>
     <div className="objective-delivery-units">{report.units.map((unit) => <article key={unit.key}>
       <div className="objective-delivery-unit-title"><b>{unit.key} · {unit.kind}</b><Badge variant="light">{unit.state}</Badge></div>

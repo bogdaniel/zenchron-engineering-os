@@ -36,6 +36,9 @@ const (
 	planInvalid    = "invalid"
 	planApproved   = "approved"
 	planSuperseded = "superseded"
+
+	workflowModeCompiled = "compiled"
+	workflowModeGuidance = "guidance"
 )
 
 var unitKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -76,6 +79,7 @@ type objectivePlan struct {
 	Repository       string                  `json:"repository,omitempty"`
 	WorkflowID       string                  `json:"workflow_id,omitempty"`
 	WorkflowVersion  int                     `json:"workflow_version,omitempty"`
+	WorkflowMode     string                  `json:"workflow_mode,omitempty"`
 	ProfileSnapshots map[string]agentProfile `json:"profile_snapshots,omitempty"`
 	// Hash identifies the plan's content, so an unchanged plan is recognized and not approved twice.
 	Hash string `json:"hash,omitempty"`
@@ -323,14 +327,15 @@ func reaches(units map[string]planUnit, from, target string) bool {
 }
 
 // planHash identifies what a plan would execute and where.
-func planHash(projectID, workflowID string, workflowVersion int, proposal planProposal) string {
+func planHash(projectID, workflowID string, workflowVersion int, workflowMode string, proposal planProposal) string {
 	// Encoding plain strings, integers, and slices cannot fail.
 	data, _ := json.Marshal(struct {
 		ProjectID       string       `json:"project_id"`
 		WorkflowID      string       `json:"workflow_id"`
 		WorkflowVersion int          `json:"workflow_version"`
+		WorkflowMode    string       `json:"workflow_mode,omitempty"`
 		Proposal        planProposal `json:"proposal"`
-	}{projectID, workflowID, workflowVersion, proposal})
+	}{projectID, workflowID, workflowVersion, workflowMode, proposal})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }

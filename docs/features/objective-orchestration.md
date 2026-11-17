@@ -17,7 +17,8 @@ flowchart LR
   Plan -->|"POST .../plans/{revision}/approve"| Plans
   Plan -->|"POST /api/v1/work-graphs/{id}/cancel<br/>.../units/{key}/retry<br/>.../decisions/{message}"| Plans
   Views -->|"GET /api/v1/work-graphs"| Plans
-  Plans -->|workflow_id and saved version| Compiler[workflow_compile.go]
+  Plans -->|workflow mode compiled| Compiler[workflow_compile.go]
+  Plans -->|workflow mode guidance, version-pinned prompt| Planner[read-only planner run]
   Compiler --> Validate[orchestration_plan.go<br/>problems]
   Validate -->|profile/persona versions and private prompt snapshots| Pins[Approved plan revision]
   Plans --> Graphs[(work-graphs.json<br/>plans, graphs, messages)]
@@ -44,6 +45,11 @@ flowchart LR
 - `POST /api/v1/objectives/{id}/plans` records a new revision. The body names an online `project_id`, an optional
   `workflow_id`, and either a `plan` or a `planner_agent_id`. A planner must be an active Codex or Claude Code profile
   without `code.write`; it runs as an ordinary read-only run and its typed result is the proposal.
+- A supplied manual plan cannot claim a saved workflow. Selecting a workflow with no planner compiles its saved,
+  versioned definition into WorkUnits. Selecting a workflow with a planner instead pins the complete saved definition
+  into that planner run's prompt as guidance; the planner still proposes the actual WorkUnits. Plans, WorkGraphs and
+  delivery reports distinguish `compiled` from `guidance`. Legacy records without a mode are displayed as unknown.
+  Planner guidance is limited to 4 KiB so it fits the existing bounded run prompt; larger definitions are rejected.
 - When an objective belongs to a product, the dashboard limits repository choices to that product's linked checkouts
   with an online worker. Legacy objectives without a product keep the existing all-checkouts selection.
 - A plan has 1 to 8 units of kind `produce`, `review`, or `integrate`, each with a key, title, instructions, acceptance

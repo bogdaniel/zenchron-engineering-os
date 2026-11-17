@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Select } from '@mantine/core';
-import { graphOfObjective, useLiveOrchestration } from './orchestration';
+import { graphOfObjective, useLiveOrchestration, workflowProvenance } from './orchestration';
 import type { ObjectivePlan, OrchestrationSource } from './orchestration';
 import { runReadiness } from './agentRunQueue';
 import { useMockOrchestration } from './orchestration-preview-data';
@@ -52,7 +52,7 @@ function PlanRevision({ plan, latest, source }: { plan: ObjectivePlan; latest: b
     {plan.status === 'planning' && <p className="work-unit-reason" role="status">
       A planning agent is reading the repository. The proposal appears here when it finishes.</p>}
     {plan.summary && <p>{plan.summary}</p>}
-    {plan.workflow_id && <p className="work-unit-reason">Compiled from workflow {plan.workflow_id} · version {plan.workflow_version ?? 'unknown'}</p>}
+    {plan.workflow_id && <p className="work-unit-reason">{workflowProvenance(plan.workflow_mode, plan.workflow_id, plan.workflow_version)}</p>}
     {plan.problems.length > 0 && <ul className="plan-problems" aria-label={`Problems in revision ${plan.revision}`}>
       {plan.problems.map((problem) => <li key={problem}>{problem}</li>)}</ul>}
     {readinessChecking && <p className="work-unit-reason" role="status">Checking current CLI readiness for assigned profiles…</p>}
