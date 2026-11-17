@@ -539,6 +539,42 @@ test('objective create and edit submit the expected API payloads', async ({ page
   await expect(page.locator('.objective-action-notice')).toHaveText('Objective updated');
 });
 
+test('a new objective without a due date stays listed under the initial Live filter', async ({ page }) => {
+  await useLocalSession(page);
+  const persisted: Record<string, unknown>[] = [{ ...objectives[0] }];
+  const createdPayloads: unknown[] = [];
+  await page.route('**/api/v1/objectives', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(persisted) });
+      return;
+    }
+    const payload = route.request().postDataJSON();
+    createdPayloads.push(payload);
+    const created = { ...payload, id: '5'.repeat(32), product: 'Unassigned', status: 'in_progress',
+      progress: 0, created_at: '2026-11-04T12:00:00Z', updated_at: '2026-11-04T12:00:00Z' };
+    persisted.push(created);
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(created) });
+  });
+  await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+
+  const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
+  await expect(objectiveRows).toHaveCount(1);
+  await page.getByRole('button', { name: 'New Objective' }).click();
+  await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability testing');
+  await page.getByRole('button', { name: 'Create objective' }).click();
+  await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability testing55555555');
+  expect(createdPayloads).toEqual([{
+    title: 'Expand reliability testing', description: '', owner: '', product_id: '', due_date: '',
+  }]);
+
+  // The due-quarter filter is left at its initial value: an undated objective must not need "All due dates" chosen.
+  await expect(objectiveRows.filter({ hasText: 'Expand reliability testing' })).toBeVisible();
+  await expect(objectiveRows.filter({ hasText: 'Ship API v2' })).toBeVisible();
+  await expect(objectiveRows).toHaveCount(2);
+});
+
 test('a late grid selection report does not replace the objective being edited', async ({ page }) => {
   await useLocalSession(page);
   const createdID = '5'.repeat(32);
