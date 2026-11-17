@@ -257,9 +257,9 @@ for (const viewport of viewports) {
     await expect(configuration).toContainText('recorded profile v2');
     await expect(configuration).toContainText('persona product-persona v3');
     await expect(configuration.getByRole('link', { name: 'product-flow' }))
-      .toHaveAttribute('href', '?workflow=product-flow#workflows');
+      .toHaveAttribute('href', '/?workflow=product-flow&mode=live#workflows');
     await expect(configuration.getByRole('link', { name: 'Codex engineer' }))
-      .toHaveAttribute('href', `?profile=${writerID}#agents`);
+      .toHaveAttribute('href', `/?profile=${writerID}&mode=live#agents`);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('product-execution.png'), fullPage: true });
     await page.getByRole('heading', { name: objective.title, exact: true }).getByRole('link').click();
@@ -377,12 +377,12 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await report.getByRole('button', { name: 'View delivery report' }).click();
   await expect(report).toContainText('Approved plan revision 1');
   await expect(report.getByRole('link', { name: created.workflowID, exact: true }))
-    .toHaveAttribute('href', `?workflow=${created.workflowID}#workflows`);
+    .toHaveAttribute('href', `/?workflow=${created.workflowID}&mode=live#workflows`);
   await expect(report.getByRole('link', { name: 'Agent profile', exact: true }).first())
-    .toHaveAttribute('href', `?profile=${created.writerID}#agents`);
+    .toHaveAttribute('href', `/?profile=${created.writerID}&mode=live#agents`);
   await expect(report).toContainText('E2E CSV specialist v1');
   await expect(report).toContainText('codex-cli');
-  await expect(report.locator('a[href$="#reviews"]').first()).toHaveAttribute('href', /^\?run=.+#reviews$/);
+  await expect(report.locator('a[href$="#reviews"]').first()).toHaveAttribute('href', /^\/\?run=.+&mode=live#reviews$/);
   await expect(report).toContainText('CSV');
   await expect(report).toContainText('GitHub publication is not configured');
   await expect(report).toContainText('Unknown');

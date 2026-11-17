@@ -166,7 +166,7 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(page.locator('.workspace-mock-card.analytics')).toContainText('WorkGraphs1 current');
   await expect(page.locator('.workspace-mock-card.analytics')).toContainText('Findings2 recorded');
   await expect(page.locator('.workspace-mock-card.decisions').getByRole('link', { name: 'Publish the revised export?' }))
-    .toHaveAttribute('href', `?objective=${'1'.repeat(32)}&tab=plan#objectives`);
+    .toHaveAttribute('href', `/?objective=${'1'.repeat(32)}&tab=plan&mode=live#objectives`);
   await page.screenshot({ path: testInfo.outputPath('workspace-environment-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
@@ -199,7 +199,7 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(page.getByRole('heading', { name: 'Workflows and Agent Profiles (2)' })).toBeVisible();
   await expect(page.locator('.workspace-mock-card.linked-workflows')).toContainText('Code ReviewerReview specialist · codex-cli · gpt-6.1-solcodex-cli ready');
   await expect(page.locator('.workspace-mock-card.linked-workflows').getByRole('link', { name: 'Code Reviewer' }))
-    .toHaveAttribute('href', `?profile=${'d'.repeat(32)}#agents`);
+    .toHaveAttribute('href', `/?profile=${'d'.repeat(32)}&mode=live#agents`);
   await page.screenshot({ path: testInfo.outputPath('workspace-profiles-desktop.png'), fullPage: true });
   await sections.getByRole('button', { name: 'Overview' }).click();
   await page.locator('.workspace-mock-card.people').getByRole('button', { name: /Manage/ }).click();
@@ -242,6 +242,20 @@ test('Live Product Workspace rejects another product’s execution projection', 
     .toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.workspace-mock-metric.delivery strong')).toHaveText('Unavailable');
   await expect(page.locator('.workspace-mock')).not.toContainText('Other product decision');
+});
+
+test('local Live product navigation stays Live when opening objective creation', async ({ page }, testInfo) => {
+  await useLiveFixtures(page);
+  const localURL = new URL(testInfo.project.use.baseURL!);
+  localURL.hostname = '127.0.0.1';
+  localURL.search = '?mode=live';
+  localURL.hash = '#workspace';
+  await page.goto(localURL.toString());
+  await expect(page.getByRole('link', { name: 'Create objective for Nova Platform' })).toBeVisible();
+  await page.getByRole('link', { name: 'Create objective for Nova Platform' }).click();
+  await expect(page).toHaveURL(/mode=live.*#objectives$/);
+  await expect(page.getByRole('dialog', { name: 'New objective' }).getByRole('combobox', { name: 'Product' }))
+    .toHaveValue('Nova Platform');
 });
 
 test('Live Product Workspace explains unavailable profile configuration', async ({ page }, testInfo) => {

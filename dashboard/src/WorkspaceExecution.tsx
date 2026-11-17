@@ -2,6 +2,7 @@ import { Button } from '@mantine/core';
 import { useLiveOrchestration } from './orchestration';
 import { useMockOrchestration } from './orchestration-preview-data';
 import { WorkGraphView } from './WorkGraphView';
+import { livePageHref } from './livePageHref';
 
 /** The work graphs of a product's objectives. Mock shows the one sample graph. */
 export function WorkspaceExecution({ objectiveIDs, sampleData }: { objectiveIDs: string[]; sampleData: boolean }) {
@@ -17,14 +18,14 @@ export function WorkspaceExecution({ objectiveIDs, sampleData }: { objectiveIDs:
   return <div className="workspace-execution">
     {source.readOnlyReason && <p className="work-unit-reason">{source.readOnlyReason}</p>}
     {graphs.map((graph) => <div key={graph.id}>
-      <h3>{sampleData ? graph.objective_title : <a href={`?objective=${encodeURIComponent(graph.objective_id)}&tab=plan#objectives`}>
+      <h3>{sampleData ? graph.objective_title : <a href={livePageHref('objectives', { objective: graph.objective_id, tab: 'plan' })}>
         {graph.objective_title}</a>}</h3>
       {!sampleData && <div aria-label={`Execution configuration for ${graph.objective_title}`}>
-        {graph.workflow_id && <p>Workflow <a href={`?workflow=${encodeURIComponent(graph.workflow_id)}#workflows`}>
+        {graph.workflow_id && <p>Workflow <a href={livePageHref('workflows', { workflow: graph.workflow_id })}>
           {graph.workflow_id}</a> · executed version {graph.workflow_version ?? 'unknown'}</p>}
         <ul>{graph.units.filter((unit) => unit.agent_id).map((unit) => {
           const profile = source.options.agents.find((agent) => agent.id === unit.agent_id);
-          return <li key={unit.key}><a href={`?profile=${encodeURIComponent(unit.agent_id)}#agents`}>
+          return <li key={unit.key}><a href={livePageHref('agents', { profile: unit.agent_id })}>
             {unit.agent_name || unit.agent_id}</a> · recorded profile v{unit.profile_version ?? 'unknown'}
             {unit.persona_id && <> · persona {unit.persona_id} v{unit.persona_version ?? 'unknown'}</>}
             {profile && <> · current configuration: {profile.provider} / {profile.model} · {profile.status}</>}

@@ -3,6 +3,7 @@ import { Select } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { loadWorkflows } from './workflowModel';
 import type { Project } from './projects';
+import { livePageHref } from './livePageHref';
 
 /** Carries product configuration into the existing objective and plan flow. */
 export function WorkspaceObjectiveStart({ productID, productName, projects }: {
@@ -23,6 +24,6 @@ export function WorkspaceObjectiveStart({ productID, productName, projects }: {
       value={workflowID} onChange={setWorkflowID} disabled={workflows.isLoading || workflows.isError} />
     {workflows.isError && <p role="alert">Workflow definitions could not be loaded.</p>}
     <a className="workspace-mock-card-action workspace-mock-objective-create"
-      href={`/?${parameters}#objectives`} aria-label={`Create objective for ${productName}`}>＋ Create objective</a>
+      href={livePageHref('objectives', parameters)} aria-label={`Create objective for ${productName}`}>＋ Create objective</a>
   </div>;
 }

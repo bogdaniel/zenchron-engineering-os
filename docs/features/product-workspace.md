@@ -110,8 +110,10 @@ Live:
 - The selected product's environment projection supplies the pending-decision count, decision links, current
   WorkGraph/handoff/finding counts, and observed PR-link count. These are recorded counts, without a time trend or
   implied merge state. A failed projection shows an error, and a missing product shows an empty explanation.
-- Delivery report workflow and profile links open the referenced saved record using `?workflow=<id>#workflows` and
-  `?profile=<id>#agents`. The report retains the executed versions; the editor shows the current saved configuration.
+- Delivery report workflow and profile links open the referenced saved record using
+  `/?workflow=<id>&mode=live#workflows` and `/?profile=<id>&mode=live#agents`. The Live mode parameter keeps local
+  navigation from switching to Mock.
+  The report retains the executed versions; the editor shows the current saved configuration.
 - Execution links use `?run=<id>#reviews` to open that run's Evidence tab, including review runs without a diff.
 - Product objective rows and execution headings open that objective's Plan tab. Each historical WorkGraph lists its
   recorded workflow version and profile/persona assignments with links to the saved records. Current provider/model

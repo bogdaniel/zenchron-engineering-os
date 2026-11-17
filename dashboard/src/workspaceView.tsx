@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { loadAgents, loadPersonas } from './agentsData';
 import { profileReadiness } from './agentReadiness';
+import { livePageHref } from './livePageHref';
 import type { RunWorker } from './agentRunQueue';
 import type { Objective } from './objectives';
 import { loadProducts, productSchema } from './productEditor';
@@ -194,7 +195,7 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
   const openObjectives = productObjectives.filter((objective) => objective.status !== 'completed');
   const objectiveRow = (objective: Objective): WorkspaceObjectiveRow => ({
     title: objective.title,
-    href: `?objective=${encodeURIComponent(objective.id)}&tab=plan#objectives`,
+    href: livePageHref('objectives', { objective: objective.id, tab: 'plan' }),
     detail: `${statusLabel(objective.status)} · ${objective.owner || 'No owner'}`,
     progress: objective.progress,
     done: objective.status === 'completed',
@@ -270,7 +271,7 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
     releases: { rows: [], note: missing('release streams are not recorded by the control plane.') },
     decisions: { rows: environment?.decisions.map((item) => ({ name: item.question,
       state: item.resolved_by ? 'Resolved' : 'Pending',
-      href: `?objective=${encodeURIComponent(item.objective_id)}&tab=plan#objectives` })) ?? [],
+      href: livePageHref('objectives', { objective: item.objective_id, tab: 'plan' }) })) ?? [],
       note: environmentNote ?? (environment?.decisions.length ? undefined : { text: 'No decisions recorded in current WorkGraphs.' }) },
     delivery: { ranges: [], metrics: () => [
       ['WorkGraphs', String(graphCount), 'current'], ['PR links', String(pullRequestCount), 'observed'],
@@ -306,7 +307,7 @@ export function useLiveWorkspace(enabled: boolean, facts: WorkspaceFacts, select
   });
   const definitions = {
     workflows: workflows.data?.map((workflow) => ({ name: workflow.name, state: workflow.status,
-      detail: `Workflow v${workflow.version}`, href: `?workflow=${encodeURIComponent(workflow.id)}#workflows` })) ?? [],
+      detail: `Workflow v${workflow.version}`, href: livePageHref('workflows', { workflow: workflow.id }) })) ?? [],
     workflowsNote: workflows.isError ? failed('Workflow definitions unavailable.')
       : workflows.isLoading ? { text: 'Loading workflow definitions…' } : undefined,
     agents: agents.isError ? [{ name: 'Agent profiles', state: unavailable }]
@@ -318,7 +319,7 @@ export function useLiveWorkspace(enabled: boolean, facts: WorkspaceFacts, select
           : profileReadiness(agent, facts.workers ?? [], persona, personas.isLoading, false, facts.workersLoading);
         return { name: agent.name, state: readiness.label, note: readiness.note,
           detail: `${persona?.name ?? (agent.persona_id ? 'Persona unavailable' : 'No persona')} · ${agent.provider} · ${agent.model}`,
-          href: `?profile=${encodeURIComponent(agent.id)}#agents` };
+          href: livePageHref('agents', { profile: agent.id }) };
       }) ?? [],
   };
 
