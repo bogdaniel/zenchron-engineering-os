@@ -393,6 +393,11 @@ test('objective quarter filter and table, cards, and Kanban views share records'
 
   await expect(page.getByRole('button', { name: 'Table', pressed: true })).toBeVisible();
   const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
+  const dueQuarter = page.getByRole('combobox', { name: 'Filter by due quarter' });
+  await expect(dueQuarter).toHaveValue('All due dates');
+  await expect(objectiveRows).toHaveCount(4);
+  await dueQuarter.click();
+  await page.getByRole('option', { name: 'This Quarter' }).click();
   await expect(objectiveRows).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Filter by owner' }).click();
   await page.getByRole('option', { name: 'Alex Chen' }).click();
@@ -416,10 +421,10 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="title"]').first()).toHaveCSS('font-size', '11px');
   await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="status"]').first()).toHaveCSS('font-size', '11.5px');
   await expect(page.locator('.objective-grid-wrap .ag-header-cell-text').first()).toHaveCSS('font-size', '8.5px');
-  await page.getByRole('combobox', { name: 'Filter by due quarter' }).click();
+  await dueQuarter.click();
   await page.getByRole('option', { name: 'All due dates' }).click();
   await expect(objectiveRows).toHaveCount(4);
-  await page.getByRole('combobox', { name: 'Filter by due quarter' }).click();
+  await dueQuarter.click();
   await page.getByRole('option', { name: 'This Quarter' }).click();
   await expect(objectiveRows).toHaveCount(2);
 
@@ -674,9 +679,10 @@ test('Objectives in Live uses the approved layout with honest unavailable parts'
   await expect(objectiveRows).toHaveCount(1);
   await dueQuarter.click();
   await page.getByRole('option', { name: 'All due dates' }).click();
-  await expect(page.locator('.objective-grid-wrap .objective-title-cell small').first()).toHaveText('11111111');
-  await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="approval"]').first()).toHaveText('—');
-  await expect(page.locator('.objective-grid-wrap .ag-cell[col-id="workflow_count"]').first()).toHaveText('—');
+  const shipRow = objectiveRows.filter({ hasText: 'Ship API v2' });
+  await expect(shipRow.locator('.objective-title-cell small')).toHaveText('11111111');
+  await expect(shipRow.locator('.ag-cell[col-id="approval"]')).toHaveText('—');
+  await expect(shipRow.locator('.ag-cell[col-id="workflow_count"]')).toHaveText('—');
   await expect(page.locator('.objective-preview-pagination')).toContainText('Showing 1–4 of 4 objectives');
   await expect(page.getByRole('textbox', { name: 'Search objectives' })).toBeVisible();
   await expect(page.locator('.objective-capacity')).toContainText('Unavailable: the control plane does not record when objectives were planned or completed.');
@@ -741,6 +747,6 @@ test('Objectives in Live reports failed loads and saves without showing fixtures
 
   listStatus = 200;
   await page.getByRole('button', { name: 'Retry loading objectives' }).click();
-  await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(2);
+  await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(4);
   await expect(page.locator('.objective-detail-head h3')).toContainText('Ship API v2');
 });
