@@ -160,7 +160,8 @@ for (const viewport of viewports) {
       { sequence: 4, attempt: 2, at: now, kind: 'status', message: 'Publication: published https://github.com/acme/platform/pull/23' },
     ])));
     await page.route(`**/api/v1/agent-runs/${runID}/pull-request`, (route) => route.fulfill(json({
-      number: 23, url: 'https://github.com/acme/platform/pull/23', state: 'open', merged: false, head_sha: 'a'.repeat(40),
+      number: 23, url: 'https://github.com/acme/platform/pull/23', state: viewport.name === 'desktop' ? 'closed' : 'open',
+      merged: viewport.name === 'desktop', head_sha: 'a'.repeat(40),
       checks: [{ name: 'go', status: 'completed', conclusion: 'success' }, { name: 'dashboard', status: 'in_progress', conclusion: '' }],
       reviews: [
         { id: 900, state: 'COMMENTED', user: { login: 'colleague' }, body: '', submitted_at: now },
@@ -175,6 +176,7 @@ for (const viewport of viewports) {
       ['Issue', '#7 Bound the claim response body'], ['Provider', 'codex-cli 0.167.0'], ['Worker', 'dev-laptop'],
       ['Base commit', 'bbbbbbbbbbbb'], ['Result commit', 'aaaaaaaaaaaa'], ['Execution', 'Completed'],
       ['Verification', 'Passed'], ['Publication', 'Pull request published'], ['Pull request', '#23 on GitHub'],
+      ['Pull request status', viewport.name === 'desktop' ? 'Merged' : 'Open'],
       ['Usage', '706,042 input · 6,570 output tokens'],
       ['Review and CI', '1 check running · changes requested by maintainer'],
     ]) {

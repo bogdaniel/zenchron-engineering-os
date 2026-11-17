@@ -1,4 +1,5 @@
 import { Button, Switch } from '@mantine/core';
+import { useState } from 'react';
 import {
   IconAlertTriangle, IconDownload, IconFileText, IconGitBranch, IconGitMerge, IconLock, IconMinus, IconPlus, IconShieldCheck,
 } from '@tabler/icons-react';
@@ -25,6 +26,18 @@ export function ReviewSummary({ source, context, copy, view, status, pullRequest
   onOpenConversations: () => void;
   onMessage: (message: string) => void;
 }) {
+  const [mergePending, setMergePending] = useState(false);
+  const merge = async () => {
+    if (!pullRequest || !source.merge || mergePending) return;
+    setMergePending(true);
+    try {
+      onMessage(await source.merge(pullRequest));
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : 'GitHub could not merge this pull request.');
+    } finally {
+      setMergePending(false);
+    }
+  };
   return <PanelCard className="reviews-summary" withBorder>
     <PanelHeading className="reviews-panel-heading" title="Review Summary" description={context} actions={<IconShieldCheck size={17} />} />
     <GitHubMarkdown className="reviews-summary-copy reviews-markdown" value={copy} />
@@ -53,9 +66,10 @@ export function ReviewSummary({ source, context, copy, view, status, pullRequest
         }}>{status?.value === 'changes-requested' ? 'Changes requested' : 'Request changes'}</Button>}
         {issue && <Button variant="default" onClick={onOpenConversations}>Add comment</Button>}
       </div>
-      <Button className="reviews-merge-button" disabled={!source.merge || !pullRequest} fullWidth
-        title={source.merge ? undefined : 'Merging is done on GitHub; the control plane has no merge operation'}
-        onClick={() => pullRequest && source.merge && onMessage(source.merge(pullRequest))}>{view.mergeLabel}</Button>
+      <Button className="reviews-merge-button" disabled={!source.merge || !pullRequest || mergePending}
+        loading={mergePending} fullWidth
+        title={source.merge ? undefined : 'Merging is done on GitHub; this view does not provide a merge operation'}
+        onClick={() => void merge()}>{view.mergeLabel}</Button>
       <Button variant="default" disabled={!source.exportEvidence || !pullRequest} fullWidth
         title={source.exportEvidence ? undefined : 'The control plane holds no evidence bundle for GitHub items'}
         onClick={() => pullRequest && source.exportEvidence?.(pullRequest)}><IconDownload size={14} /> Export evidence</Button>

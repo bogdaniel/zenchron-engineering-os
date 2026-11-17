@@ -10,7 +10,7 @@ const githubItem = z.object({
   updated_at: z.string(), user: z.object({ login: z.string() }),
 });
 const pullRequestSchema = z.array(githubItem.extend({
-  draft: z.boolean(), head: z.object({ ref: z.string() }), base: z.object({ ref: z.string() }),
+  draft: z.boolean(), head: z.object({ ref: z.string(), sha: z.string().optional() }), base: z.object({ ref: z.string() }),
 }));
 const issueSchema = z.array(githubItem.extend({ labels: z.array(z.object({ name: z.string() })) }));
 const diffSchema = z.object({ run_id: z.string(), diff: z.string(), truncated: z.boolean() });
@@ -19,6 +19,7 @@ const reviewResultSchema = z.object({
   agent_run_linked: z.boolean().optional(), agent_run_queued: z.boolean().optional(),
   feedback_sync_error: z.string().optional(),
 });
+const mergeResultSchema = z.object({ commit_sha: z.string(), head_sha: z.string(), message: z.string() });
 export type GitHubPullRequest = z.infer<typeof pullRequestSchema>[number];
 export type GitHubIssue = z.infer<typeof issueSchema>[number];
 export type ReviewSection = 'pull-requests' | 'issues' | 'local-branches';
@@ -124,7 +125,7 @@ export type ReviewsSource = {
   /** Approve and merge return the confirmation to show. */
   approve?: (pullRequest: GitHubPullRequest) => string;
   requestChanges?: (pullRequest: GitHubPullRequest) => void;
-  merge?: (pullRequest: GitHubPullRequest) => string;
+  merge?: (pullRequest: GitHubPullRequest) => string | Promise<string>;
   exportEvidence?: (pullRequest: GitHubPullRequest) => void;
   bookmarks?: { has: (number: number) => boolean; toggle: (number: number) => void };
   autoMerge?: { checked: boolean; set: (checked: boolean) => void };
@@ -256,5 +257,15 @@ export function useLiveReviews(
         return `Issue ${state} on GitHub.`;
       },
     },
+    merge: project ? (pullRequest) => {
+      if (!pullRequest.head.sha) throw new Error('GitHub did not provide the pull request head SHA; refresh before merging.');
+      return sendJSON(`/api/v1/projects/${project.id}/pull-requests/${pullRequest.number}/merge`, 'POST',
+        { head_sha: pullRequest.head.sha }, 'GitHub pull request merge failed')
+        .then(async (response) => {
+          const result = mergeResultSchema.parse(await response.json());
+          await queryClient.invalidateQueries();
+          return `PR #${pullRequest.number} merged at ${result.commit_sha.slice(0, 12)}.`;
+        });
+    } : undefined,
   };
 }

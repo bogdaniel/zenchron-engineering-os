@@ -23,6 +23,45 @@ test('Reviews replaces the loading overlay after an empty GitHub response', asyn
   await expect(page.locator('.reviews-grid-wrap')).not.toContainText('Loading GitHub items');
 });
 
+test('Live Reviews merges the exact inspected pull request head through the control plane', async ({ page }) => {
+  const projectID = 'fedcbafedcbafedcbafedcbafedcbafe';
+  const headSHA = '0123456789abcdef0123456789abcdef01234567';
+  const commitSHA = 'abcdef0123456789abcdef0123456789abcdef01';
+  let mergeRequest: { head_sha: string } | undefined;
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }) }));
+  await page.route('**/api/v1/projects', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([{
+      id: projectID, name: 'Nova Platform', branch: 'main', git_remote: 'github.com/acme/platform',
+      worker_id: '0123456789abcdef0123456789abcdef', worker_name: 'Mac', last_seen: new Date().toISOString(),
+      worker_status: 'online',
+    }]),
+  }));
+  await page.route(`**/api/v1/projects/${projectID}/pull-requests`, (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([{
+      number: 42, title: 'Reviewed change', state: 'open', html_url: 'https://github.com/acme/platform/pull/42',
+      body: 'Ready for review.', draft: false, updated_at: new Date().toISOString(), user: { login: 'maya' },
+      head: { ref: 'feature/reviewed-change', sha: headSHA }, base: { ref: 'main' },
+    }]),
+  }));
+  await page.route(`**/api/v1/projects/${projectID}/issues`, (route) => route.fulfill({ status: 200, body: '[]' }));
+  await page.route(`**/api/v1/projects/${projectID}/pull-requests/42/diff`, (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ diff: '' }),
+  }));
+  await page.route(`**/api/v1/projects/${projectID}/pull-requests/42/merge`, async (route) => {
+    mergeRequest = route.request().postDataJSON() as { head_sha: string };
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      status: 'merged', head_sha: headSHA, commit_sha: commitSHA, message: 'Pull Request successfully merged',
+    }) });
+  });
+  await page.goto('/?mode=live#reviews');
+  const merge = page.getByRole('button', { name: 'Merge to protected branch' });
+  await expect(merge).toBeEnabled();
+  await merge.click();
+  await expect(page.locator('.reviews-preview-action-message')).toHaveText(`PR #42 merged at ${commitSHA.slice(0, 12)}.`);
+  expect(mergeRequest).toEqual({ head_sha: headSHA });
+});
+
 test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ page }) => {
   await page.setViewportSize({ width: 1512, height: 874 });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',

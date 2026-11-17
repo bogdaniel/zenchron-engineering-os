@@ -118,6 +118,8 @@ export function RunEvidence({ run }: { run: EvidenceRun }) {
   const reviews: Review[] = pullRequest.data?.reviews?.map((review) => ({ id: review.id, state: review.state, author: review.user.login }))
     ?? run.github_reviews ?? [];
   const received = new Map((run.github_reviews ?? []).map((review) => [review.id, review]));
+  if (pullRequest.data) facts.push(['Pull request status', pullRequest.data.merged ? 'Merged'
+    : pullRequest.data.state === 'open' ? 'Open' : 'Closed without merge']);
   if (run.pull_request_number !== undefined) facts.push(['Review and CI', outstanding(checks, reviews)]);
   const queryClient = useQueryClient();
   const followUp = useMutation({
