@@ -246,14 +246,8 @@ func migrateShadowingZenchronCommands(canonical string) error {
 	}
 	for _, path := range paths {
 		if isZenchronExecutable(path) {
-			retired := path + ".legacy"
-			if _, err := os.Lstat(retired); err == nil {
-				return fmt.Errorf("cannot migrate stale Zenchron command %s because its recovery copy already exists at %s", path, retired)
-			} else if !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("inspect stale Zenchron recovery path %s: %w", retired, err)
-			}
-			if err := os.Rename(path, retired); err != nil {
-				return fmt.Errorf("retire stale Zenchron command %s: %w", path, err)
+			if err := retireZenchronCommand(path); err != nil {
+				return err
 			}
 			continue
 		}
@@ -271,8 +265,44 @@ func validateEntrypointPath(canonical string) error {
 		if !isZenchronExecutable(path) {
 			return fmt.Errorf("PATH resolves zenchron-engineering to %s before canonical entrypoint %s; refusing to replace an unrelated command", path, canonical)
 		}
+		if err := validateStaleCommandRecoveryPath(path); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func retireZenchronCommand(path string) error {
+	retired := path + ".legacy"
+	if err := validateStaleCommandRecoveryPath(path); err != nil {
+		return err
+	}
+	if sameFile(path, retired) {
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("finish retiring stale Zenchron command %s: %w", path, err)
+		}
+		return nil
+	}
+	if err := os.Link(path, retired); err != nil {
+		return fmt.Errorf("preserve stale Zenchron command %s before migration: %w", path, err)
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("recovery copy is preserved at %s but stale command %s remains: %w", retired, path, err)
+	}
+	return nil
+}
+
+func validateStaleCommandRecoveryPath(path string) error {
+	retired := path + ".legacy"
+	if _, err := os.Lstat(retired); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("inspect stale Zenchron recovery path %s: %w", retired, err)
+	}
+	if sameFile(path, retired) {
+		return nil
+	}
+	return fmt.Errorf("cannot migrate stale Zenchron command %s because its recovery path already exists at %s", path, retired)
 }
 
 func shadowingCommandPaths(canonical string) ([]string, error) {

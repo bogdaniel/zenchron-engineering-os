@@ -92,13 +92,30 @@ func TestInstallMigratesLegacyCommandBeforeCanonicalEntrypoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	legacyCommand := filepath.Join(legacyDirectory, "zenchron-engineering")
+	path := strings.Join([]string{legacyDirectory, canonicalDirectory, "/usr/bin", "/bin"}, string(os.PathListSeparator))
 	build := exec.Command("go", "build", "-o", legacyCommand, ".")
 	build.Dir = legacyModule
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build legacy fixture: %v: %s", err, output)
 	}
-	path := strings.Join([]string{legacyDirectory, canonicalDirectory, "/usr/bin", "/bin"}, string(os.PathListSeparator))
 	t.Setenv("PATH", path)
+	recoveryCopy := legacyCommand + ".legacy"
+	copyContents := []byte("preexisting recovery data")
+	if err := os.WriteFile(recoveryCopy, copyContents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateEntrypointPath(canonicalDirectory + string(os.PathSeparator) + "zenchron-engineering"); err == nil {
+		t.Fatal("installer accepted a conflicting legacy recovery path")
+	}
+	if contents, err := os.ReadFile(recoveryCopy); err != nil || string(contents) != string(copyContents) {
+		t.Fatalf("existing recovery data changed to %q: %v", contents, err)
+	}
+	if err := os.Remove(recoveryCopy); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(legacyCommand, recoveryCopy); err != nil {
+		t.Fatal(err)
+	}
 	managedHome := filepath.Join(userHome, ".config", "Zenchron")
 	entrypoint, err := installStableEntrypoint(managedHome)
 	if err != nil {
@@ -107,7 +124,7 @@ func TestInstallMigratesLegacyCommandBeforeCanonicalEntrypoint(t *testing.T) {
 	if _, err := os.Stat(legacyCommand); !os.IsNotExist(err) {
 		t.Fatalf("stale PATH command remains at its public name: %v", err)
 	}
-	if _, err := os.Stat(legacyCommand + ".legacy"); err != nil {
+	if _, err := os.Stat(recoveryCopy); err != nil {
 		t.Fatalf("stale command recovery copy was not preserved: %v", err)
 	}
 	resolved, err := exec.LookPath("zenchron-engineering")
