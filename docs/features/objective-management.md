@@ -47,7 +47,8 @@ flowchart LR
   The table's delayed report of a selection the page made itself is ignored, so it cannot replace an objective that
   was created or chosen in the meantime and send a later edit to a different objective.
 - The dashboard searches title, description, owner, and product, and filters by product, owner, status, and due-date
-  quarter. The default is This Quarter; All due dates includes unscheduled objectives.
+  quarter. Mock defaults to This Quarter; Live defaults to All due dates so unscheduled objectives stay visible. Both
+  modes can select This Quarter, Last Quarter, or All due dates.
 - The table uses a numbered footer pager that stays in sync with AG Grid, six rows to a page, in both modes.
 - The Objective, Planning, and Roadmap tabs sit in a separate toolbar above the table card, with the table and capacity
   chart kept as distinct cards below it.
