@@ -66,7 +66,7 @@ export function ReviewSummary({ source, context, copy, view, status, pullRequest
         }}>{status?.value === 'changes-requested' ? 'Changes requested' : 'Request changes'}</Button>}
         {issue && <Button variant="default" onClick={onOpenConversations}>Add comment</Button>}
       </div>
-      <Button className="reviews-merge-button" disabled={!source.merge || !pullRequest || mergePending}
+      <Button className="reviews-merge-button" disabled={!source.merge || !pullRequest?.head.sha || mergePending}
         loading={mergePending} fullWidth
         title={source.merge ? undefined : 'Merging is done on GitHub; this view does not provide a merge operation'}
         onClick={() => void merge()}>{view.mergeLabel}</Button>
