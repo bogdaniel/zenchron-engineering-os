@@ -6,10 +6,11 @@ does not display this report.
 
 ## Open the graph and request its report
 
-In the dashboard, open **Objectives**, select an objective, and open **Plan**. The Plan panel shows the graph's
-status, unit states, run counts, candidates, verdicts, messages, and any pull request link. It shows the number of
+In the dashboard, switch to **Live** mode, open **Objectives**, select an objective, and open **Plan**. The Plan panel
+shows the graph's status, unit states, run counts, candidates, verdicts, messages, and any pull request link. It shows the number of
 runs for each unit, not their IDs. This view loads graphs from
-`GET /api/v1/work-graphs` and polls while the panel is open.
+`GET /api/v1/work-graphs` and polls while the panel is open. That graph-list request reconciles unfinished graphs and may
+update their stored state.
 
 For the delivery report, use the same control-plane session or local access mode to make an authorized request:
 
@@ -17,7 +18,8 @@ For the delivery report, use the same control-plane session or local access mode
 GET /api/v1/work-graphs/{id}/report
 ```
 
-Replace `{id}` with the graph ID from the `id` field of `GET /api/v1/work-graphs`. The report endpoint returns
+Match the selected objective to its graph in `GET /api/v1/work-graphs`, then use the newest graph for that objective.
+Replace `{id}` with that graph’s `id` field. The report endpoint returns
 `404` both for an unknown graph and for a graph the caller cannot read. Reading the report does not reconcile the
 graph or persist changes. Worker credentials do not grant access to it.
 
@@ -56,7 +58,7 @@ time, or pull request merge status.
 flowchart LR
   Operator[Operator] -->|Objectives, select objective, Plan tab| Dashboard[ObjectivePlanPanel and WorkGraphView]
   Dashboard -->|GET /api/v1/work-graphs| List[orchestration_api.go listGraphs]
-  Operator -->|GET /api/v1/work-graphs/{id}/report| Handler[orchestration_api.go reportGraph]
+  Operator -->|"GET /api/v1/work-graphs/{id}/report"| Handler[orchestration_api.go reportGraph]
   Handler -->|visibility and repository grant| Access{Readable graph?}
   Access -->|No: 404| NotFound[Not found]
   Access -->|Yes| Report[work_graph_report.go]

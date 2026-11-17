@@ -8,11 +8,11 @@ The steps below describe the local development setup in this checkout.
 ```mermaid
 flowchart LR
     Operator[Operator] -->|Open local dashboard in Live mode| UI[Objectives page · #objectives]
-    UI -->|POST /api/v1/objectives/{id}/plans| API[Local control plane]
-    UI -->|POST /api/v1/objectives/{id}/plans/{revision}/approve| API
+    UI -->|"POST /api/v1/objectives/{id}/plans"| API[Local control plane]
+    UI -->|"POST /api/v1/objectives/{id}/plans/{revision}/approve"| API
     API -->|Queue planning and unit runs| Runs[(Agent runs)]
     Worker[Local worker] -->|Claim and report runs| API
-    API -->|GET /api/v1/objectives/{id}/plans<br/>GET /api/v1/work-graphs| UI
+    API -->|"GET /api/v1/objectives/{id}/plans<br/>GET /api/v1/work-graphs"| UI
 ```
 
 ## Start locally
@@ -32,11 +32,13 @@ Sources: `README.md`, `dev.sh`, `dashboard/src/main.tsx`, `docs/features/local-p
 1. In **Objectives**, choose **New Objective**, enter a title, and optionally add a description, owner, product, and
    due date; submit **Create objective**.
 2. Select the objective and open its **Plan** tab.
-3. In **Propose a plan**, choose an online **Repository checkout** and an active, read-only Codex CLI or Claude Code
+3. In **Agents**, create or select an active Codex CLI or Claude Code producer profile with `code.write` permission.
+   Plan execution requires at least one producer that can change the checked-out repository.
+4. In **Propose a plan**, choose an online **Repository checkout** and an active, read-only Codex CLI or Claude Code
    **Planning agent**. If there is no suitable profile, create one under **Agents** with code-write permission off.
-4. Optionally choose a saved workflow. This gives the planner workflow steps as guidance; workflows do not execute
+5. Optionally choose a saved workflow. This gives the planner workflow steps as guidance; workflows do not execute
    plans. If needed, view or create a saved workflow on **Workflows** first, then return to the objective's Plan tab.
-5. Choose **Propose plan**. When planning completes, inspect the proposal summary, unit order and dependencies,
+6. Choose **Propose plan**. When planning completes, inspect the proposal summary, unit order and dependencies,
    assigned agents, instructions, acceptance criteria, and any listed problems. Only a valid proposed revision can
    be approved.
 
@@ -67,7 +69,8 @@ Sources: `dashboard/src/ObjectivePlanPanel.tsx`, `dashboard/src/WorkGraphView.ts
 
 The existing focused checks cover the end-to-end dashboard flow and the control-plane lifecycle:
 
-- `cd dashboard && npm run test:e2e -- e2e/orchestration.spec.ts`
+- `(cd dashboard && ZENCHRON_E2E_DASHBOARD_PORT=4174 npm run test:e2e -- e2e/orchestration.spec.ts)`
+  Choose an unused port; this prevents Playwright from reusing a running dashboard and writing into its local data.
 - `go test ./cmd/zenchron -run 'TestObjectiveRunsParallelProducersThroughReviewRemediationIntegrationAndOnePullRequest|TestDecisionRequestBlocksItsUnitUntilAPersonResolvesIt' -count=1`
 
 These commands are listed with orchestration coverage in `docs/features/objective-orchestration.md`; they were not run
