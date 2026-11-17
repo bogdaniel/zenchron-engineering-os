@@ -121,8 +121,7 @@ func runManaged() error {
 	}
 	if runtime.status.State == "activating" && runtime.status.LatestRevision == commit {
 		if err := runtime.activateRelease(commit); err != nil {
-			active, pointerErr := updater.ActiveRelease(home)
-			if pointerErr != nil || active == commit {
+			if !activationCanRollback(home, runtime.status.RunningRevision, commit) {
 				return fmt.Errorf("release activation crossed its durable boundary; recovery is required: %w", err)
 			}
 			if stopErr := runtime.stopChildren(); stopErr != nil {
@@ -309,6 +308,11 @@ func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current strin
 		return runtime.failUpdate("failed", "Could not replace the managed runtime: "+err.Error())
 	}
 	return nil
+}
+
+func activationCanRollback(home, previous, candidate string) bool {
+	active, err := updater.ActiveRelease(home)
+	return err == nil && previous != "" && previous != candidate && active == previous
 }
 
 func releaseTransitionCompatibility(current, candidate updater.Manifest) error {

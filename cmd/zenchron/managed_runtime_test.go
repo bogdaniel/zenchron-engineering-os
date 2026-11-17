@@ -134,6 +134,56 @@ func TestReleaseTransitionRequiresSameStateSchemaAndCandidateProtocolPair(t *tes
 	}
 }
 
+func TestActivationRollbackStopsAtDurablePointerBoundary(t *testing.T) {
+	root := t.TempDir()
+	previous := "0123456789abcdef0123456789abcdef01234567"
+	candidate := "abcdef0123456789abcdef0123456789abcdef01"
+	if err := updater.SetActiveRelease(root, previous); err != nil {
+		t.Fatal(err)
+	}
+	if !activationCanRollback(root, previous, candidate) {
+		t.Fatal("pre-activation pointer did not permit recovery to the previous release")
+	}
+	if err := updater.SetActiveRelease(root, candidate); err != nil {
+		t.Fatal(err)
+	}
+	if activationCanRollback(root, previous, candidate) {
+		t.Fatal("release pointer crossed its durable boundary but rollback remained allowed")
+	}
+	if err := updater.SetActiveRelease(root, "123456789abcdef0123456789abcdef012345678"); err != nil {
+		t.Fatal(err)
+	}
+	if activationCanRollback(root, previous, candidate) {
+		t.Fatal("unexpected active release was treated as a safe rollback boundary")
+	}
+	if activationCanRollback(filepath.Join(root, "missing"), previous, candidate) {
+		t.Fatal("missing active pointer was treated as permission to roll back")
+	}
+}
+
+func TestPreActivationRecoveryRestoresPreviousPointerAndFailureStatus(t *testing.T) {
+	root := t.TempDir()
+	previous := "0123456789abcdef0123456789abcdef01234567"
+	candidate := "abcdef0123456789abcdef0123456789abcdef01"
+	statusPath := filepath.Join(root, "data", "system-update.json")
+	runtime := &managedRuntime{home: root, statusPath: statusPath,
+		status: updater.Status{RunningRevision: previous, LatestRevision: candidate, State: "activating"}}
+	if err := updater.SetActiveRelease(root, previous); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.restorePreviousRelease(errors.New("candidate failed before health proof")); err == nil {
+		t.Fatal("recovery unexpectedly exec'd a missing previous binary")
+	}
+	if active, err := updater.ActiveRelease(root); err != nil || active != previous {
+		t.Fatalf("recovery active release = %q, %v", active, err)
+	}
+	status, err := updater.ReadStatus(statusPath)
+	if err != nil || status.State != "failed" || status.LastFailedRevision != candidate ||
+		!strings.Contains(status.LastFailureReason, "candidate failed before health proof") {
+		t.Fatalf("recovery status = %#v, %v", status, err)
+	}
+}
+
 func TestReleasePointerAdvancesOnlyAfterDashboardProof(t *testing.T) {
 	root := t.TempDir()
 	old := "0123456789abcdef0123456789abcdef01234567"
