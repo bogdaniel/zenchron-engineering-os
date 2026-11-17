@@ -146,22 +146,23 @@ func TestReleasePointerAdvancesOnlyAfterDashboardProof(t *testing.T) {
 	if err := updater.SetActiveRelease(root, old); err != nil {
 		t.Fatal(err)
 	}
-	makeRuntime := func(statusCode int) *managedRuntime {
+	makeRuntime := func(statusCode, admissionStatus int, status updater.Status) *managedRuntime {
 		return &managedRuntime{home: root, statusPath: filepath.Join(root, "data", "system-update.json"),
-			status:          updater.Status{RunningRevision: old, LatestRevision: candidate, State: "activating"},
+			status:          status,
 			supervisorToken: "test-supervisor", client: &http.Client{Transport: managedTestTransport(func(request *http.Request) (*http.Response, error) {
 				if request.Method == http.MethodDelete {
 					if request.Header.Get("X-Zenchron-Supervisor-Token") != "test-supervisor" {
 						return nil, errors.New("missing supervisor authentication")
 					}
-					return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody, Header: make(http.Header), Request: request}, nil
+					return &http.Response{StatusCode: admissionStatus, Body: http.NoBody, Header: make(http.Header), Request: request}, nil
 				}
 				header := make(http.Header)
 				header.Set("Content-Type", "text/html")
 				return &http.Response{StatusCode: statusCode, Body: io.NopCloser(strings.NewReader("<html>zenchron</html>")), Header: header, Request: request}, nil
 			})}}
 	}
-	failed := makeRuntime(http.StatusServiceUnavailable)
+	initial := updater.Status{RunningRevision: old, LatestRevision: candidate, State: "activating"}
+	failed := makeRuntime(http.StatusServiceUnavailable, http.StatusNoContent, initial)
 	if err := failed.activateRelease(candidate); err == nil {
 		t.Fatal("activation accepted an unavailable dashboard")
 	}
@@ -171,7 +172,7 @@ func TestReleasePointerAdvancesOnlyAfterDashboardProof(t *testing.T) {
 	if failed.status.State != "activating" {
 		t.Fatalf("failed dashboard proof claimed state %q", failed.status.State)
 	}
-	ready := makeRuntime(http.StatusOK)
+	ready := makeRuntime(http.StatusOK, http.StatusNoContent, initial)
 	if err := ready.activateRelease(candidate); err != nil {
 		t.Fatal(err)
 	}
@@ -183,5 +184,33 @@ func TestReleasePointerAdvancesOnlyAfterDashboardProof(t *testing.T) {
 	}
 	if persisted, err := updater.ReadStatus(ready.statusPath); err != nil || persisted.State != "active" {
 		t.Fatalf("persisted activation = %#v, %v", persisted, err)
+	}
+	if err := updater.SetActiveRelease(root, old); err != nil {
+		t.Fatal(err)
+	}
+	interrupted := makeRuntime(http.StatusOK, http.StatusInternalServerError, initial)
+	if err := updater.WriteStatus(interrupted.statusPath, initial); err != nil {
+		t.Fatal(err)
+	}
+	if err := interrupted.activateRelease(candidate); err == nil {
+		t.Fatal("activation reported success after run admission failed to reopen")
+	}
+	if active, err := updater.ActiveRelease(root); err != nil || active != candidate {
+		t.Fatalf("post-pointer activation failure rolled back to %q: %v", active, err)
+	}
+	persisted, err := updater.ReadStatus(interrupted.statusPath)
+	if err != nil || persisted.State != "activating" || persisted.LastSuccessRevision != "" {
+		t.Fatalf("post-pointer failure claimed successful activation: %#v, %v", persisted, err)
+	}
+	recovered, err := updater.ReadStatus(interrupted.statusPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted := makeRuntime(http.StatusOK, http.StatusNoContent, recovered)
+	if err := restarted.activateRelease(candidate); err != nil {
+		t.Fatalf("activation retry after pointer advance: %v", err)
+	}
+	if status, err := updater.ReadStatus(restarted.statusPath); err != nil || status.State != "active" || status.RunningRevision != candidate {
+		t.Fatalf("recovered activation state = %#v, %v", status, err)
 	}
 }
