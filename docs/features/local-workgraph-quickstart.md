@@ -69,6 +69,7 @@ Sources: `dashboard/src/ObjectivePlanPanel.tsx`, `dashboard/src/WorkGraphView.ts
 
 The existing focused checks cover the end-to-end dashboard flow and the control-plane lifecycle:
 
+- `(cd dashboard && npx playwright install chromium)` (once per machine)
 - `(cd dashboard && ZENCHRON_E2E_DASHBOARD_PORT=4174 npm run test:e2e -- e2e/orchestration.spec.ts)`
   Choose an unused port; this prevents Playwright from reusing a running dashboard and writing into its local data.
 - `go test ./cmd/zenchron -run 'TestObjectiveRunsParallelProducersThroughReviewRemediationIntegrationAndOnePullRequest|TestDecisionRequestBlocksItsUnitUntilAPersonResolvesIt' -count=1`
