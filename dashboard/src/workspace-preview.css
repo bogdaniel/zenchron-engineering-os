@@ -108,6 +108,8 @@
 .workspace-mock-tabs button { display: flex; min-width: 103px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 0; border-radius: 7px; color: #d9d4e2; background: transparent; font-size: 10px; }
 .workspace-mock-tabs button.active { color: #fff; background: linear-gradient(105deg, #6738a5, #442566); }
 .workspace-mock-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: 174px 166px; gap: 8px; }
+.workspace-live-grid.overview { grid-template-rows: minmax(174px, auto) minmax(166px, auto); }
+.workspace-live-grid.overview > .workspace-mock-card { height: auto; }
 .workspace-mock-card { min-width: 0; height: 100%; padding: 8px; overflow: hidden; border: 1px solid #302b45; border-radius: 9px; background: #151420; }
 .workspace-mock-card.roadmap { grid-column: span 8; }
 .workspace-mock-card.objectives { grid-column: span 4; }
@@ -171,9 +173,16 @@
 .workspace-mock-list > div > span:last-child:not(.workspace-mock-run) { color: #aaa5b5; }
 .workspace-mock-list > div > em { padding: 2px 6px; border-radius: 8px; color: #c9c1d3; background: #29263a; font-size: 8px; font-style: normal; }
 .workspace-mock-list.status-list { gap: 6px; }
+.workspace-mock-list.status-list b small { display: block; overflow: hidden; color: #aaa4b7; font-size: 8px; font-weight: 400; text-overflow: ellipsis; }
+.workspace-mock-list.status-list b a { color: inherit; }
 .workspace-mock-state { min-height: 15px; padding: 0 5px; border: 0; border-radius: 8px; color: #3cdaa1; background: #14392e; font-size: 8px; text-transform: none; }
 .workspace-mock-state.scheduled, .workspace-mock-state.pending, .workspace-mock-state.draft,
-.workspace-mock-state.loading, .workspace-mock-state.unavailable { color: #e8bb56; background: #392b13; }
+.workspace-mock-state.loading, .workspace-mock-state.unavailable,
+.workspace-mock-state.no-online-worker, .workspace-mock-state.persona-unavailable,
+.workspace-mock-state.persona-data-unavailable, .workspace-mock-state.profile-disabled,
+.workspace-mock-state.cannot-run, .workspace-mock-state.codex-cli-not-ready,
+.workspace-mock-state.claude-code-not-ready, .workspace-mock-state.checking-worker,
+.workspace-mock-state.checking-persona { color: #e8bb56; background: #392b13; }
 .workspace-mock-state.in-progress, .workspace-mock-state.agent-profile { color: #a9d4ff; background: #152f51; }
 .workspace-mock-list.files { gap: 6px; }
 .workspace-mock-list.files > div > span { display: grid; width: 16px; place-items: center; color: #c898ff; }
@@ -190,6 +199,7 @@
 .workspace-mock-list.release-list .mantine-Progress-section { background: #2ecb92; }
 .workspace-mock-list.release-list .release-progress-label { color: #c4bdcf; font-size: 8px; text-align: right; white-space: nowrap; }
 .workspace-mock-list.decision-list { gap: 5px; }
+.workspace-mock-list.decision-list b a { color: inherit; }
 .workspace-mock-list.decision-list > div > svg { flex: 0 0 auto; color: #c4a0f4; }
 .workspace-mock-list.decision-list > div > small { color: #aaa4b7; font-size: 8px; white-space: nowrap; }
 .workspace-mock-range { display: flex; align-items: center; gap: 4px; padding: 4px 7px; border: 1px solid #38324b; border-radius: 7px; color: #d8d1e1; background: transparent; font: inherit; cursor: pointer; }

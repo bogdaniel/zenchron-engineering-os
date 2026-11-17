@@ -15,6 +15,7 @@ import type { ProductInput } from './productEditor';
 import { useMockWorkspace } from './workspace-preview-data';
 import { useLiveWorkspace } from './workspaceView';
 import { WorkspaceExecution } from './WorkspaceExecution';
+import { WorkspaceObjectiveStart } from './WorkspaceObjectiveStart';
 import type { WorkspaceFacts, WorkspaceNote, WorkspaceObjectiveRow, WorkspaceStatusRow } from './workspaceView';
 import './workspace-preview.css';
 
@@ -54,24 +55,26 @@ function ObjectiveRows({ rows }: { rows: WorkspaceObjectiveRow[] }) {
   return <div className="workspace-mock-objectives">{rows.map((row) => <div key={row.title}>
     <span className={`workspace-mock-objective-status${row.done ? ' done' : ''}`} role="img"
       aria-label={row.done ? 'Completed objective' : 'Open objective'}>{row.done ? '✓' : ''}</span>
-    <RowTitle title={row.title} detail={row.detail} />
+    {row.href ? <a href={row.href}><RowTitle title={row.title} detail={row.detail} /></a>
+      : <RowTitle title={row.title} detail={row.detail} />}
     <Progress value={row.progress} size="xs" color="teal.5" /><small>{`${row.progress}%`}</small>
   </div>)}</div>;
 }
 
 function StatusRows({ rows }: { rows: WorkspaceStatusRow[] }) {
-  return <div className="workspace-mock-list status-list">{rows.map(({ name, state }) => <div key={`${name}-${state}`}>
-    <span className="workspace-mock-run"><IconPlayerPlay size={12} fill="currentColor" /></span><b>{name}</b>
-    <Badge className={`workspace-mock-state ${stateClass(state)}`} variant="light">{state}</Badge>
+  return <div className="workspace-mock-list status-list">{rows.map(({ name, state, detail, href, note }) => <div key={`${name}-${href ?? state}`}>
+    <span className="workspace-mock-run"><IconPlayerPlay size={12} fill="currentColor" /></span>
+    <b>{href ? <a href={href}>{name}</a> : name}{detail && <small>{detail}</small>}</b>
+    <Badge className={`workspace-mock-state ${stateClass(state)}`} variant="light" title={note}>{state}</Badge>
   </div>)}</div>;
 }
 
 export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePageProps) {
+  const [selectedID, setSelectedID] = useState('');
   const mock = useMockWorkspace();
-  const live = useLiveWorkspace(!designPreview, facts);
+  const live = useLiveWorkspace(!designPreview, facts, selectedID);
   const source = designPreview ? mock : live;
   const [search, setSearch] = useState('');
-  const [selectedID, setSelectedID] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('Overview');
   const [roadmapView, setRoadmapView] = useState<'Roadmap' | 'Timeline'>('Roadmap');
@@ -182,7 +185,8 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
             {metrics.delivery.bars && <svg className="workspace-mock-delivery-bars" viewBox="0 0 58 30" role="img" aria-label="Delivery metrics trend">
               {metrics.delivery.bars.map((height, index) => <rect key={index} x={index * 9} y={30 - height} width="5" height={height} />)}
             </svg>}</span>} />
-        <MetricCard className="workspace-mock-metric decisions" label="Recent Decisions" value={metrics.decisions.value} icon={<IconHistory size={14} />}
+        <MetricCard className="workspace-mock-metric decisions" label={designPreview ? 'Recent Decisions' : 'Pending Decisions'}
+          value={metrics.decisions.value} icon={<IconHistory size={14} />}
           trend={<IconStack2 className="workspace-mock-decisions-mark" size={34} aria-hidden="true" />}
           detail={metrics.decisions.detail} />
       </div>
@@ -196,7 +200,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
         </button>)}
       </nav>
 
-      <div className={`workspace-mock-grid ${activeTab.toLowerCase()}`}>
+      <div className={`workspace-mock-grid ${activeTab.toLowerCase()}${designPreview ? '' : ' workspace-live-grid'}`}>
         <Card className="roadmap" title="Product Roadmap" description="Strategic delivery plan and key milestones" icon={<IconMap2 size={15} />}
           hidden={activeTab !== 'Overview' && activeTab !== 'Objectives'}
           action={<span className="workspace-mock-roadmap-tabs">
@@ -224,9 +228,9 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
           onAction={() => setActiveTab('Objectives')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Objectives'}>
           {objectiveList.note ? <Note note={objectiveList.note} /> : <ObjectiveRows rows={objectiveList.rows} />}
-          {!designPreview && selected && <a className="workspace-mock-card-action workspace-mock-objective-create"
-            href={`/?create=1&product_id=${encodeURIComponent(selected.id)}#objectives`}
-            aria-label={`Create objective for ${selected.name}`}>＋ Create objective</a>}
+          {!designPreview && selected && <WorkspaceObjectiveStart key={selected.id} productID={selected.id}
+            productName={selected.name} projects={(source.repositories ?? []).filter((project) =>
+              source.editable(selected.id)?.repository_ids.includes(project.id))} />}
           {/* The Objectives tab also shows how each objective is being executed: units, handoffs, findings, decisions, PR. */}
           {activeTab === 'Objectives' && <WorkspaceExecution sampleData={designPreview} objectiveIDs={facts.objectives
             ?.filter((objective) => objective.product_id === selected?.id).map((objective) => objective.id) ?? []} />}
@@ -244,7 +248,8 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
         <Card className="linked-workflows" title={workflowList.title}
           icon={<IconHierarchy size={15} />} action="View All" onAction={() => setActiveTab('Templates')}
           hidden={activeTab !== 'Overview' && activeTab !== 'Repos' && activeTab !== 'Templates'}>
-          {workflowList.note ? <Note note={workflowList.note} /> : <StatusRows rows={workflowList.rows} />}
+          {workflowList.note && <Note note={workflowList.note} />}
+          {workflowList.rows.length > 0 && <StatusRows rows={workflowList.rows} />}
         </Card>
         <Card className="files" title="Design / Docs / Files" icon={<IconFileText size={15} />} action="View All"
           onAction={() => setActiveTab('Files')}
@@ -270,18 +275,20 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
           <IconCube className={`workspace-mock-release-icon ${tone}`} size={16} /><b>{name}</b><Badge className={`workspace-mock-state ${stateClass(state)}`} variant="light">{state}</Badge><small>{version}</small>
           <Progress value={progress} size="xs" color={tone === 'green' ? 'teal.5' : tone === 'blue' ? 'blue.5' : 'violet.5'} /><small className="release-progress-label">{`${progress}%`}</small></div>)}</div>}
       </Card>
-      <Card className="decisions" title="Recent Decisions" icon={<IconHistory size={15} />} action="View All"
+        <Card className="decisions" title={designPreview ? 'Recent Decisions' : 'Objective Decisions'} icon={<IconHistory size={15} />} action="View All"
         onAction={() => setActiveTab('Decisions')}
         hidden={activeTab !== 'Overview' && activeTab !== 'Decisions'}>
-        {decisions.note ? <Note note={decisions.note} /> : <div className="workspace-mock-list decision-list">{decisions.rows.map(({ name, state, time }) => <div key={name}>
-          <IconFileText size={13} /><b>{name}</b><Badge className={`workspace-mock-state ${stateClass(state)}`} variant="light">{state}</Badge><small>{time}</small></div>)}</div>}
+        {decisions.note ? <Note note={decisions.note} /> : <div className="workspace-mock-list decision-list">{decisions.rows.map(({ name, state, time, href }) => <div key={name}>
+          <IconFileText size={13} /><b>{href ? <a href={href}>{name}</a> : name}</b>
+          <Badge className={`workspace-mock-state ${stateClass(state)}`} variant="light">{state}</Badge>{time && <small>{time}</small>}</div>)}</div>}
       </Card>
       <Card className="analytics" title="Delivery Metrics" icon={<IconChartBar size={15} />}
         hidden={activeTab !== 'Overview'}
         action={<Menu position="bottom-end" withinPortal>
           <Menu.Target><button className="workspace-mock-range" type="button" aria-label="Choose delivery metrics time range"
-            disabled={!delivery.ranges.length} title={delivery.ranges.length ? undefined : delivery.note?.text}>
-            {delivery.ranges.length ? deliveryRange : 'No history'}<IconChevronDown size={11} /></button></Menu.Target>
+            disabled={!delivery.ranges.length} title={delivery.ranges.length ? undefined
+              : delivery.note?.text ?? 'No time-series delivery data is recorded.'}>
+            {delivery.ranges.length ? deliveryRange : 'No time trend'}<IconChevronDown size={11} /></button></Menu.Target>
           <Menu.Dropdown>{delivery.ranges.map((range) => <Menu.Item key={range} onClick={() => setDeliveryRange(range)}>{range}</Menu.Item>)}</Menu.Dropdown>
         </Menu>}>
         {delivery.note ? <Note note={delivery.note} /> : <div className="workspace-mock-analytics">

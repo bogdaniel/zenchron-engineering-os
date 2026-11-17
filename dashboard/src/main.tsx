@@ -286,6 +286,8 @@ function App() {
               projectsError={projects.isError}
               objectivesLoading={objectives.isLoading}
               objectivesError={objectives.isError}
+              workers={workers.data}
+              workersLoading={workers.isLoading}
             />
           ) : activePage === 'objectives' ? <ObjectivesPage sampleData={previewPage} /> : ['integrations', 'settings'].includes(activePage) ? (
             <SystemPage

@@ -9,7 +9,8 @@ const unit = (key: string, kind: PlanUnit['kind'], title: string, agent_id: stri
   capabilities: kind === 'produce' ? ['code.write'] : [], agent_id });
 
 const sampleUnits = [
-  unit('api', 'produce', 'Expose run usage over the API', 'preview-test-generator', [], ['GET /usage returns totals per run']),
+  { ...unit('api', 'produce', 'Expose run usage over the API', 'preview-test-generator', [], ['GET /usage returns totals per run']),
+    profile_version: 1, persona_id: 'preview-persona', persona_version: 1 },
   unit('ui', 'produce', 'Show usage on the run page', 'preview-release-manager', [], ['Usage is visible at 390px wide']),
   unit('review-api', 'review', 'Review the API change', 'preview-code-reviewer', ['api'], []),
   unit('integrate', 'integrate', 'Combine and publish', '', ['review-api', 'ui'], ['Verification passes on the combined change']),
@@ -43,6 +44,7 @@ const sampleGraph: WorkGraph = {
 
 const samplePlan: ObjectivePlan = { objective_id: sampleObjectiveID, revision: 1, status: 'approved', project_id: 'preview-project',
   summary: 'Two independent producers, a review of the API change, then one integrated pull request.', max_parallel: 2,
+  workflow_id: 'preview-workflow', workflow_version: 1,
   units: sampleUnits, problems: [], graph_id: sampleGraph.id, created_at: at, approved_by: 'Ravi Kumar' };
 
 /** Sample plans and one sample work graph. Mock performs no operations, so every control is off with the reason. */

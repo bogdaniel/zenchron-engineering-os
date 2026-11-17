@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { loadAgents } from './agentsData';
+import { z } from 'zod';
+import { loadAgents, loadPersonas } from './agentsData';
+import { profileReadiness } from './agentReadiness';
+import { livePageHref } from './livePageHref';
+import type { RunWorker } from './agentRunQueue';
 import type { Objective } from './objectives';
 import { loadProducts, productSchema } from './productEditor';
 import type { Product, ProductInput } from './productEditor';
@@ -12,9 +16,9 @@ export type WorkspaceProduct = { id: string; name: string; summary: string; stat
 export type WorkspaceRoadmapRow = {
   name: string; status: string; tone: string; detail?: string; bar?: { left: string; width: string };
 };
-export type WorkspaceObjectiveRow = { title: string; detail?: string; progress: number; done: boolean };
+export type WorkspaceObjectiveRow = { title: string; detail?: string; progress: number; done: boolean; href?: string };
 export type WorkspaceRepositoryRow = { name: string; detail?: string; branch: string };
-export type WorkspaceStatusRow = { name: string; state: string };
+export type WorkspaceStatusRow = { name: string; state: string; detail?: string; href?: string; note?: string };
 
 /** Display values for the selected product, in the same shape for Mock and Live. */
 export type WorkspaceView = {
@@ -53,7 +57,7 @@ export type WorkspaceView = {
     note?: WorkspaceNote;
   };
   releases: { rows: { name: string; state: string; version: string; progress: number; tone: string }[]; note?: WorkspaceNote };
-  decisions: { rows: { name: string; state: string; time: string }[]; note?: WorkspaceNote };
+  decisions: { rows: { name: string; state: string; time?: string; href?: string }[]; note?: WorkspaceNote };
   delivery: {
     ranges: string[];
     metrics: (range: string) => [label: string, value: string, delta: string][];
@@ -89,6 +93,8 @@ export interface WorkspaceFacts {
   projectsError: boolean;
   objectivesLoading: boolean;
   objectivesError: boolean;
+  workers?: RunWorker[];
+  workersLoading?: boolean;
 }
 
 const unavailable = 'Unavailable';
@@ -102,6 +108,22 @@ const statusTones: Record<Objective['status'], string> = {
 };
 const missing = (what: string): WorkspaceNote => ({ text: `${unavailable}: ${what}` });
 const failed = (text: string): WorkspaceNote => ({ text, alert: true });
+const environmentSchema = z.object({
+  product_id: z.string(),
+  objectives: z.array(z.object({ graph_id: z.string().optional(), graph_status: z.string().optional(),
+    findings: z.number().int().nonnegative().optional(), handoffs: z.number().int().nonnegative().optional(),
+    pull_request_url: z.string().optional() })),
+  decisions: z.array(z.object({ objective_id: z.string(), question: z.string(), resolved_by: z.string().optional() })),
+});
+type WorkspaceEnvironment = z.infer<typeof environmentSchema>;
+
+async function loadEnvironment(productID: string): Promise<WorkspaceEnvironment> {
+  const response = await fetch(`/api/v1/products/${encodeURIComponent(productID)}/environment`);
+  if (!response.ok) throw new Error(`Could not load product execution (${response.status})`);
+  const environment = environmentSchema.parse(await response.json());
+  if (environment.product_id !== productID) throw new Error('Product execution response does not match the selected product');
+  return environment;
+}
 
 function statusLabel(status: string) {
   const text = status.replace('_', ' ');
@@ -166,13 +188,14 @@ function liveRoadmap(objectives: Objective[], quarter: string | undefined, now: 
 
 function liveView(product: Product | undefined, quarter: string | undefined, facts: WorkspaceFacts, definitions: {
   workflows: WorkspaceStatusRow[]; workflowsNote?: WorkspaceNote; agents: WorkspaceStatusRow[];
-}): WorkspaceView {
+}, environment: WorkspaceEnvironment | undefined, environmentNote: WorkspaceNote | undefined): WorkspaceView {
   const { projects, objectives, projectsLoading, projectsError, objectivesLoading, objectivesError } = facts;
   const health = product ? productHealth(product, projects) : { label: unavailable, online: 0, total: 0, healthy: false };
   const productObjectives = objectives?.filter((objective) => objective.product_id === product?.id) ?? [];
   const openObjectives = productObjectives.filter((objective) => objective.status !== 'completed');
   const objectiveRow = (objective: Objective): WorkspaceObjectiveRow => ({
     title: objective.title,
+    href: livePageHref('objectives', { objective: objective.id, tab: 'plan' }),
     detail: `${statusLabel(objective.status)} · ${objective.owner || 'No owner'}`,
     progress: objective.progress,
     done: objective.status === 'completed',
@@ -189,6 +212,11 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
   }) ?? [];
   const hiddenRepositories = repositoryRows.length - overviewRowLimit;
   const templateRows = [...definitions.workflows, ...definitions.agents];
+  const graphCount = environment?.objectives.filter((item) => item.graph_id).length ?? 0;
+  const pullRequestCount = environment?.objectives.filter((item) => item.pull_request_url).length ?? 0;
+  const pendingDecisions = environment?.decisions.filter((item) => !item.resolved_by).length ?? 0;
+  const findingCount = environment?.objectives.reduce((count, item) => count + (item.findings ?? 0), 0) ?? 0;
+  const handoffCount = environment?.objectives.reduce((count, item) => count + (item.handoffs ?? 0), 0) ?? 0;
 
   return {
     name: product?.name ?? 'No product selected',
@@ -202,8 +230,8 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
         badge: health.healthy ? '✓ Healthy' : product ? health.label : 'No product selected', healthy: health.healthy },
       initiatives: { label: 'Open Objectives', caption: 'Assigned to this product',
         value: objectivesLoading ? 'Loading' : objectivesError ? unavailable : String(openObjectives.length) },
-      delivery: { value: unavailable, caption: 'No PR or run history' },
-      decisions: { value: unavailable, detail: 'Not recorded' },
+      delivery: { value: environment ? String(pullRequestCount) : unavailable, caption: 'Observed feature PR links' },
+      decisions: { value: environment ? String(pendingDecisions) : unavailable, detail: 'Pending in current WorkGraphs' },
     },
     roadmap: { ...roadmap,
       note: objectivesError ? failed('Objective roadmap unavailable.')
@@ -233,7 +261,7 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
       title: definitions.workflowsNote ? 'Available Workflows' : `Available Workflows (${definitions.workflows.length})`,
       rows: definitions.workflows.slice(0, overviewRowLimit),
       note: definitions.workflowsNote ?? (definitions.workflows.length ? undefined : { text: 'No workflow definitions saved.' }),
-      templatesTitle: `Workflow and Agent Templates (${templateRows.length})`,
+      templatesTitle: `Workflows and Agent Profiles (${templateRows.length})`,
       templateRows,
       templatesNote: definitions.workflowsNote ?? (templateRows.length ? undefined : { text: 'No definitions saved.' }),
     },
@@ -241,8 +269,14 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
     stakeholders: { title: 'Stakeholders', rows: [], note: missing('workspace membership and roles are not configured.'),
       manageNote: 'Workspace membership and roles are not configured in the control plane, so there is nothing to manage yet.' },
     releases: { rows: [], note: missing('release streams are not recorded by the control plane.') },
-    decisions: { rows: [], note: missing('decisions require linked review and audit records, which are not available yet.') },
-    delivery: { ranges: [], metrics: () => [], note: missing('delivery metrics require PR and run history.') },
+    decisions: { rows: environment?.decisions.map((item) => ({ name: item.question,
+      state: item.resolved_by ? 'Resolved' : 'Pending',
+      href: livePageHref('objectives', { objective: item.objective_id, tab: 'plan' }) })) ?? [],
+      note: environmentNote ?? (environment?.decisions.length ? undefined : { text: 'No decisions recorded in current WorkGraphs.' }) },
+    delivery: { ranges: [], metrics: () => [
+      ['WorkGraphs', String(graphCount), 'current'], ['PR links', String(pullRequestCount), 'observed'],
+      ['Findings', String(findingCount), 'recorded'], ['Handoffs', String(handoffCount), 'recorded'],
+    ], note: environmentNote },
   };
 }
 
@@ -250,11 +284,15 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
  * The Live source: products, workflow definitions, and agent profiles from the API, joined with the shell's project
  * and objective queries. Queries are disabled in Mock so the fixtures never touch the control plane.
  */
-export function useLiveWorkspace(enabled: boolean, facts: WorkspaceFacts): WorkspaceSource {
+export function useLiveWorkspace(enabled: boolean, facts: WorkspaceFacts, selectedProductID: string): WorkspaceSource {
   const queryClient = useQueryClient();
   const products = useQuery({ queryKey: ['products'], queryFn: loadProducts, enabled });
+  const environmentID = products.data?.find((item) => item.id === selectedProductID)?.id ?? products.data?.[0]?.id;
+  const environment = useQuery({ queryKey: ['product-environment', environmentID],
+    queryFn: () => loadEnvironment(environmentID!), enabled: enabled && Boolean(environmentID) });
   const workflows = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows, enabled });
   const agents = useQuery({ queryKey: ['agents'], queryFn: loadAgents, enabled });
+  const personas = useQuery({ queryKey: ['personas'], queryFn: loadPersonas, enabled });
   const save = useMutation({
     mutationFn: async ({ input, productID }: { input: ProductInput; productID?: string }) => {
       const response = await fetch(productID ? `/api/v1/products/${productID}` : '/api/v1/products', {
@@ -268,12 +306,21 @@ export function useLiveWorkspace(enabled: boolean, facts: WorkspaceFacts): Works
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
   });
   const definitions = {
-    workflows: workflows.data?.map((workflow) => ({ name: workflow.name, state: workflow.status })) ?? [],
+    workflows: workflows.data?.map((workflow) => ({ name: workflow.name, state: workflow.status,
+      detail: `Workflow v${workflow.version}`, href: livePageHref('workflows', { workflow: workflow.id }) })) ?? [],
     workflowsNote: workflows.isError ? failed('Workflow definitions unavailable.')
       : workflows.isLoading ? { text: 'Loading workflow definitions…' } : undefined,
     agents: agents.isError ? [{ name: 'Agent profiles', state: unavailable }]
       : agents.isLoading ? [{ name: 'Agent profiles', state: 'Loading' }]
-      : agents.data?.map((agent) => ({ name: agent.name, state: 'Agent profile' })) ?? [],
+      : agents.data?.map((agent) => {
+        const persona = personas.data?.find((item) => item.id === agent.persona_id);
+        const readiness = personas.isError && agent.persona_id
+          ? { label: 'Persona data unavailable', note: 'Could not check the linked persona.' }
+          : profileReadiness(agent, facts.workers ?? [], persona, personas.isLoading, false, facts.workersLoading);
+        return { name: agent.name, state: readiness.label, note: readiness.note,
+          detail: `${persona?.name ?? (agent.persona_id ? 'Persona unavailable' : 'No persona')} · ${agent.provider} · ${agent.model}`,
+          href: livePageHref('agents', { profile: agent.id }) };
+      }) ?? [],
   };
 
   return {
@@ -287,7 +334,15 @@ export function useLiveWorkspace(enabled: boolean, facts: WorkspaceFacts): Works
       : products.isLoading ? { text: 'Loading products…' }
       : products.data?.length ? undefined : { text: 'No products yet. Add a product to group repositories.' },
     statuses: ['All', 'Healthy', 'Offline', noRepositories, unavailable],
-    view: (productID, quarter) => liveView(products.data?.find((product) => product.id === productID), quarter, facts, definitions),
+    view: (productID, quarter) => {
+      const product = products.data?.find((item) => item.id === productID);
+      const selectedEnvironment = !environment.isError && environment.data?.product_id === product?.id
+        ? environment.data : undefined;
+      const environmentNote = !product ? { text: 'Add a product to see execution evidence.' }
+        : environment.isError ? failed('Product execution evidence unavailable.')
+        : selectedEnvironment ? undefined : { text: 'Loading product execution evidence…' };
+      return liveView(product, quarter, facts, definitions, selectedEnvironment, environmentNote);
+    },
     favorites: [],
     editable: (productID) => products.data?.find((product) => product.id === productID),
     repositories: facts.projects ?? [],

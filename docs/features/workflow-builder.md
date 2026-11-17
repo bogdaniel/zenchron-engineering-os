@@ -130,6 +130,7 @@ flowchart LR
 ```sh
 go test ./cmd/zenchron -run 'TestWorkflow|TestPersistentMuxRestoresObjectivesAndWorkflows' -count=1
 cd dashboard && npm run test:e2e -- e2e/workflows-live.spec.ts
+cd dashboard && npm run test:e2e -- e2e/workflow-builder-plan.spec.ts
 cd dashboard && npm run test:e2e -- e2e/workflows.spec.ts
 cd dashboard && npm run test:e2e -- e2e/workflow-mobile-preview.spec.ts
 ```
@@ -137,5 +138,7 @@ cd dashboard && npm run test:e2e -- e2e/workflow-mobile-preview.spec.ts
 `workflows-live.spec.ts` covers the frame in Live against the test control plane: the workflow menu, the automatic
 layout, honest unavailable parts on every tab, add, rename, delete, drag placement, save and its request body,
 create, the Settings rename, resizing, and the phone view; and, with stubbed responses, failed loads, an empty list,
-and rejected saves and creates. `workflows.spec.ts` and `workflow-mobile-preview.spec.ts` cover the same frame in Mock
-with local-only actions and no workflow requests.
+and rejected saves and creates. `workflow-builder-plan.spec.ts` configures an assignment and acceptance criterion in
+the visual builder, saves and validates it against the control plane, then confirms the selected objective plan retains
+the workflow version, profile, persona, and acceptance criterion. `workflows.spec.ts` and
+`workflow-mobile-preview.spec.ts` cover the same frame in Mock with local-only actions and no workflow requests.

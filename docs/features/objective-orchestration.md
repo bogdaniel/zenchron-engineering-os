@@ -14,6 +14,8 @@ flowchart LR
   Operator[Operator] --> Plan["Objectives → Plan tab<br/>ObjectivePlanPanel, WorkGraphView"]
   Operator --> Views["Product Workspace, Agents, Reviews<br/>WorkspaceExecution, AgentWorkUnits, RunGraphContext"]
   Plan -->|"GET, POST /api/v1/objectives/{id}/plans"| Plans[orchestration_api.go]
+  Plan -->|"GET /api/v1/workers<br/>current CLI readiness"| Readiness[Linked worker provider status]
+  Plan -->|"planned workflow and profile links"| Records[Workflows, Agents]
   Plan -->|"POST .../plans/{revision}/approve"| Plans
   Plan -->|"POST /api/v1/work-graphs/{id}/cancel<br/>.../units/{key}/retry<br/>.../decisions/{message}"| Plans
   Views -->|"GET /api/v1/work-graphs"| Plans
@@ -53,6 +55,8 @@ flowchart LR
   Agent Task and Test Generator become producers, Code Reviewer becomes an independent reviewer, and Integrate and
   Publish becomes the existing deterministic integration unit. Unsupported visual nodes remain visible and make the
   workflow invalid for compilation.
+- Plan revisions link to their selected workflow and assigned profiles. Their pinned configuration is labeled as planned;
+  WorkGraph and delivery-report views show the recorded assignments and execution state.
 - The plan stores a private snapshot of each assigned profile and persona. A profile or persona edit between proposal
   and approval makes the proposal stale and approval returns 409. After approval, queued runs and retries use the
   pinned effective configuration. The worker receives only composed instructions and the original profile tool
@@ -60,6 +64,8 @@ flowchart LR
 - In Live Objectives, the plan shows current CLI readiness for each assigned profile on the selected repository's
   worker. An unavailable CLI does not invalidate a structurally valid plan; its durable run stays queued until that
   worker reports the required provider ready. Planner runs show the same readiness before submission.
+- The Plan tab keeps repository and workflow choices available while saved graph and plan history load; those
+  histories display their own loading state.
 - A plan is refused, with every problem listed, when: a key is malformed or repeated; a dependency is unknown or forms
   a cycle; there is no produce unit or not exactly one integrate unit; a produce unit never reaches the integrate unit; a produce unit
   builds on more than one produce unit; a produce unit's profile is missing, disabled, has no CLI adapter, cannot
