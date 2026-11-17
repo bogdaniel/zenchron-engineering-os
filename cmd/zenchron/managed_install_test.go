@@ -29,6 +29,9 @@ func TestStableEntrypointFollowsTwoSuccessiveReleases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if repeated, err := installStableEntrypoint(managedHome); err != nil || repeated != entrypoint {
+		t.Fatalf("repeated installation changed the entrypoint: %q, %v", repeated, err)
+	}
 	for _, revision := range []string{first, second} {
 		if err := updater.SetActiveRelease(managedHome, revision); err != nil {
 			t.Fatal(err)
@@ -40,6 +43,26 @@ func TestStableEntrypointFollowsTwoSuccessiveReleases(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(userHome, ".local", "bin", "zenchron-engineering")); err != nil {
 		t.Fatalf("stable public entrypoint missing: %v", err)
+	}
+}
+
+func TestStableEntrypointRefusesToReplaceUnrelatedCommand(t *testing.T) {
+	userHome := t.TempDir()
+	t.Setenv("HOME", userHome)
+	path := filepath.Join(userHome, ".local", "bin", "zenchron-engineering")
+	contents := []byte("#!/bin/sh\necho user command\n")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, contents, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := installStableEntrypoint(filepath.Join(userHome, "managed")); err == nil {
+		t.Fatal("installer replaced an unrelated existing command")
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil || string(actual) != string(contents) {
+		t.Fatalf("unrelated command changed to %q: %v", actual, err)
 	}
 }
 

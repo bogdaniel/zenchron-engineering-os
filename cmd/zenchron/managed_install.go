@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"debug/buildinfo"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -20,6 +22,7 @@ import (
 )
 
 const managedLaunchAgentLabel = "com.bogdaniel.zenchron-engineering-os"
+const managedEntrypointMarker = "# managed by Zenchron Engineering OS"
 
 func managedHome() (string, error) {
 	if home := strings.TrimSpace(os.Getenv("ZENCHRON_MANAGED_HOME")); home != "" {
@@ -174,14 +177,44 @@ func installStableEntrypoint(home string) (string, error) {
 		return "", fmt.Errorf("create local command directory: %w", err)
 	}
 	path := filepath.Join(binDir, "zenchron-engineering")
-	script := "#!/bin/sh\nset -eu\nroot=" + shellQuote(home) + "\n"
+	script := "#!/bin/sh\n" + managedEntrypointMarker + "\nset -eu\nroot=" + shellQuote(home) + "\n"
 	script += "revision=$(cat \"$root/active-release\")\n"
 	script += "case \"$revision\" in " + strings.Repeat("[0-9a-f]", 40) + ") ;; *) echo 'invalid Zenchron release pointer' >&2; exit 1 ;; esac\n"
 	script += "exec \"$root/releases/$revision/bin/zenchron\" \"$@\"\n"
-	if err := writeInstallFile(path, []byte(script), 0o700); err != nil {
+	contents := []byte(script)
+	if err := verifyReplaceableEntrypoint(path, contents); err != nil {
+		return "", err
+	}
+	if err := writeInstallFile(path, contents, 0o700); err != nil {
 		return "", fmt.Errorf("install canonical Zenchron command: %w", err)
 	}
 	return path, nil
+}
+
+func verifyReplaceableEntrypoint(path string, expected []byte) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect existing Zenchron command: %w", err)
+	}
+	if info.Mode().IsRegular() && info.Size() <= 4096 {
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read existing Zenchron command: %w", err)
+		}
+		if bytes.Equal(contents, expected) || bytes.Contains(contents, []byte(managedEntrypointMarker)) {
+			return nil
+		}
+	}
+	if info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		build, err := buildinfo.ReadFile(path)
+		if err == nil && build.Main.Path == "github.com/bogdaniel/zenchron-engineering-os" {
+			return nil
+		}
+	}
+	return errors.New("refusing to replace an existing zenchron-engineering command that is not a Zenchron installation")
 }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }
