@@ -150,7 +150,7 @@ func (store *workGraphStore) candidateDiff(graphID string, target *workUnit) str
 }
 
 // plannerContext tells a planning run what it may plan with: the objective, the product, the agent
-// profiles it may assign, an optional workflow as guidance, and the rules its plan is validated against.
+// profiles it may assign, and the rules its plan is validated against. Workflow guidance is pinned in its run prompt.
 func (store *workGraphStore) plannerContext(runID string) string {
 	for objectiveID, plans := range store.plans {
 		for _, plan := range plans {
@@ -163,7 +163,7 @@ func (store *workGraphStore) plannerContext(runID string) string {
 			if objective.Product != "" {
 				context.WriteString("Product: " + objective.Product + "\n")
 			}
-			context.WriteString(store.workflowGuidance(plan.WorkflowID) + "\nAgent profiles you may assign:\n")
+			context.WriteString("\nAgent profiles you may assign:\n")
 			store.agents.mu.RLock()
 			for _, profile := range store.agents.items {
 				if profile.Status == "active" && workerapi.IsCLIProvider(profile.Provider) {
@@ -176,23 +176,6 @@ func (store *workGraphStore) plannerContext(runID string) string {
 		}
 	}
 	return ""
-}
-
-func (store *workGraphStore) workflowGuidance(workflowID string) string {
-	if workflowID == "" {
-		return ""
-	}
-	store.workflows.mu.RLock()
-	defer store.workflows.mu.RUnlock()
-	definition, exists := store.workflows.items[workflowID]
-	if !exists {
-		return ""
-	}
-	guidance := "\nThe user selected the workflow \"" + definition.Name + "\" as guidance for how this kind of work is done. Its steps:\n"
-	for _, node := range definition.Nodes {
-		guidance += "- " + node.Data.Label + ": " + node.Data.Description + "\n"
-	}
-	return guidance
 }
 
 const plannerContract = `

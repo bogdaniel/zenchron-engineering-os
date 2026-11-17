@@ -218,3 +218,80 @@ func TestPlannerRunOnlyProposesAndItsPlanIsValidatedLikeAnyOther(t *testing.T) {
 		t.Fatalf("approval of the planner's plan: HTTP %d %#v", status, graph)
 	}
 }
+
+func TestPlannerReceivesVersionPinnedWorkflowGuidance(t *testing.T) {
+	harness := newGraphHarness(t)
+	created := harness.call(http.MethodPost, "/api/v1/workflows", `{"name":"Planner guidance","description":"Workflow v1"}`)
+	var definition workflow
+	if err := json.NewDecoder(created.Body).Decode(&definition); err != nil || created.Code != http.StatusCreated {
+		t.Fatalf("create workflow: decode error %v, HTTP %d", err, created.Code)
+	}
+	definition.Nodes[1].Data.Description = "Original guidance text"
+	definition.Nodes[1].Data.AgentID = harness.profile.ID
+	definition.Nodes[1].Data.Acceptance = []string{"Preserve this acceptance criterion"}
+	save := func() workflow {
+		body, err := json.Marshal(struct {
+			Name        string         `json:"name"`
+			Description string         `json:"description"`
+			Status      string         `json:"status"`
+			Nodes       []workflowNode `json:"nodes"`
+			Edges       []workflowEdge `json:"edges"`
+		}{definition.Name, definition.Description, definition.Status, definition.Nodes, definition.Edges})
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := harness.call(http.MethodPut, "/api/v1/workflows/"+definition.ID, string(body))
+		var updated workflow
+		if err := json.NewDecoder(response.Body).Decode(&updated); err != nil || response.Code != http.StatusOK {
+			t.Fatalf("save workflow: decode error %v, HTTP %d", err, response.Code)
+		}
+		definition = updated
+		return updated
+	}
+	saved := save()
+	if saved.Version != 2 {
+		t.Fatalf("saved workflow version = %d, want 2", saved.Version)
+	}
+	body := `{"project_id":"` + testProjectID + `","planner_agent_id":"` + harness.reviewer.ID +
+		`","workflow_id":"` + definition.ID + `"}`
+	plan, response := harness.propose(body)
+	if response.StatusCode != http.StatusCreated || plan.Status != planPlanning || plan.WorkflowID != saved.ID ||
+		plan.WorkflowVersion != saved.Version || plan.WorkflowMode != workflowModeGuidance {
+		t.Fatalf("planner with workflow guidance: HTTP %d %#v", response.StatusCode, plan)
+	}
+
+	definition.Nodes[1].Data.Description = "Edited after the planner was queued"
+	definition.Name = "Edited planner guidance"
+	if edited := save(); edited.Version != saved.Version+1 {
+		t.Fatalf("edited workflow version = %d, want %d", edited.Version, saved.Version+1)
+	}
+	command := harness.claim()
+	for _, expected := range []string{"Workflow guidance only", `"id":"` + saved.ID + `"`,
+		`"version":2`, "Original guidance text", "Preserve this acceptance criterion", `"source":"task"`,
+		`"target":"integrate"`} {
+		if !strings.Contains(command.Prompt, expected) {
+			t.Errorf("planner prompt omitted saved workflow detail %q: %s", expected, command.Prompt)
+		}
+	}
+	if strings.Contains(command.Prompt, "Edited after the planner was queued") || strings.Contains(command.Prompt, "Edited planner guidance") {
+		t.Fatalf("planner prompt read a later workflow version: %s", command.Prompt)
+	}
+	valid, _ := json.Marshal(map[string]any{"plan": json.RawMessage(`{"summary":"guided plan","max_parallel":1,"units":[` +
+		unitJSON("api", unitProduce, harness.profile.ID) + `,` +
+		unitJSON("integrate", unitIntegrate, "", "api") + `]}`)})
+	harness.report(command, workerapi.AgentRunResult{Output: "Planned.", Result: string(valid)})
+	plans := decodeList[objectivePlan](t, harness.call(http.MethodGet, "/api/v1/objectives/"+harness.objectiveID+"/plans", ""))
+	if len(plans) != 1 || plans[0].Status != planProposed || plans[0].WorkflowID != saved.ID ||
+		plans[0].WorkflowVersion != saved.Version || plans[0].WorkflowMode != workflowModeGuidance {
+		t.Fatalf("planner proposal lost workflow guidance provenance: %#v", plans)
+	}
+	graph, status := harness.approve(plans[0].Revision)
+	if status != http.StatusCreated || graph.WorkflowID != saved.ID || graph.WorkflowVersion != saved.Version ||
+		graph.WorkflowMode != workflowModeGuidance {
+		t.Fatalf("guided graph lost workflow provenance: HTTP %d %#v", status, graph)
+	}
+	report, _ := harness.deliveryReport(graph.ID)
+	if report.WorkflowMode != workflowModeGuidance || report.WorkflowVersion != saved.Version {
+		t.Fatalf("guided report = mode %q, version %d", report.WorkflowMode, report.WorkflowVersion)
+	}
+}
