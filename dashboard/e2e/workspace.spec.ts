@@ -319,6 +319,27 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.screenshot({ path: testInfo.outputPath('workspace-platform-operator-mobile.png'), fullPage: true });
+
+});
+
+test('Live Product Workspace saves a default workflow and carries it into objective creation', async ({ page }) => {
+  const productWithoutDefault = { ...nova };
+  delete productWithoutDefault.default_workflow_id;
+  const writes = await useLiveFixtures(page, [productWithoutDefault, orion]);
+  await page.goto('/?mode=live#workspace');
+  await page.getByRole('button', { name: 'Product actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit product' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Edit product' });
+  await dialog.getByRole('combobox', { name: 'Default workflow for new objectives' }).click();
+  await page.getByRole('option', { name: 'Release train' }).click();
+  await dialog.getByRole('button', { name: 'Save product' }).click();
+  expect(writes).toEqual([{ method: 'PUT', path: `/api/v1/products/${novaID}`,
+    body: { name: 'Nova Platform', description: 'Developer platform', repository_ids: [projectID],
+      default_workflow_id: 'release' } }]);
+
+  await page.getByRole('link', { name: 'Create objective for Nova Platform' }).click();
+  await expect(page).toHaveURL(/workflow=release/);
 });
 
 test('Live Product Workspace rejects another product’s execution projection', async ({ page }) => {
