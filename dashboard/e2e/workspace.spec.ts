@@ -245,6 +245,52 @@ test('Live Product Workspace rejects another product’s execution projection', 
   await expect(page.locator('.workspace-mock')).not.toContainText('Other product decision');
 });
 
+test('Product Workspace resolves the selected WorkGraph decision through its governed API action', async ({ page }) => {
+  await useLiveFixtures(page);
+  const graphID = 'f'.repeat(32);
+  const objectiveID = '1'.repeat(32);
+  const graph: {
+    id: string; objective_id: string; objective_title: string; plan_revision: number; revision: number;
+    status: string; project_name: string; base_branch: string; max_parallel: number; created_at: string; updated_at: string;
+    units: { key: string; kind: string; title: string; instructions: string; acceptance: string[]; depends_on: string[];
+      capabilities: string[]; agent_id: string; agent_name: string; state: string; reason: string; run_ids: string[] }[];
+    messages: { id: string; type: string; from: string; to: string[]; run_id?: string; attempt?: number; body: string;
+      notes: string[]; created_at: string; resolves?: string; by?: string }[];
+  } = {
+    id: graphID, objective_id: objectiveID, objective_title: 'Ship Platform v3.0', plan_revision: 2,
+    revision: 3, status: 'blocked', project_name: 'nova-platform', base_branch: 'main', max_parallel: 2,
+    created_at: createdAt, updated_at: createdAt,
+    units: [{ key: 'api', kind: 'produce', title: 'Update export', instructions: 'Implement the API change.',
+      acceptance: [], depends_on: [], capabilities: ['code.write'], agent_id: 'd'.repeat(32),
+      agent_name: 'Code Reviewer', state: 'blocked', reason: 'Waiting for the operator decision.', run_ids: ['9'.repeat(32)] }],
+    messages: [{ id: 'decision-1', type: 'decision_request', from: 'api', to: [], run_id: '9'.repeat(32), attempt: 1,
+      body: 'Publish the revised export?', notes: ['publish', 'hold'], created_at: createdAt }],
+  };
+  let action: { method: string; path: string; body: unknown; status?: number } | undefined;
+  await page.route('**/api/v1/work-graphs', (route) => route.fulfill(json([graph])));
+  await page.route('**/api/v1/work-graphs/*/decisions/*', async (route) => {
+    action = { method: route.request().method(), path: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON() };
+    graph.messages = [...graph.messages, { id: 'decision-2', type: 'decision_resolution', from: 'local operator', to: ['api'],
+      resolves: 'decision-1', by: 'Local workspace', body: 'publish', notes: [], created_at: createdAt }];
+    graph.status = 'running';
+    await route.fulfill(json(graph));
+    action.status = 200;
+  });
+
+  await page.goto('/?mode=live#workspace');
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
+  const execution = page.getByRole('region', { name: 'Work graph for Ship Platform v3.0' });
+  const decision = execution.getByRole('form', { name: 'Decision for api' });
+  await expect(decision).toContainText('Publish the revised export?');
+  await decision.getByRole('button', { name: 'publish' }).click();
+  await decision.getByRole('button', { name: 'Resolve decision' }).click();
+  await expect.poll(() => action).toEqual({
+    method: 'POST', path: `/api/v1/work-graphs/${graphID}/decisions/decision-1`,
+    body: { resolution: 'publish' }, status: 200,
+  });
+});
+
 test('local Live product navigation stays Live when opening objective creation', async ({ page }, testInfo) => {
   await useLiveFixtures(page);
   const localURL = new URL(testInfo.project.use.baseURL!);

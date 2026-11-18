@@ -39,6 +39,7 @@ flowchart LR
     CP --> Store[(products.json)]
     Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
     Execution -->|"GET /api/v1/work-graphs"| CP
+    Execution -->|"POST /api/v1/work-graphs/{id}/decisions/{messageID}"| CP
     Execution -->|"recorded workflow/profile IDs and versions"| Report
     Execution -->|"objective ID · Plan tab"| Plans
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
@@ -107,8 +108,9 @@ Live:
   The Plan tab then offers only online repository checkouts linked to that product; legacy objectives without a product
   keep the existing all-checkouts choice.
 - The Objectives tab projects each linked objective's current WorkGraph, pending decisions, findings, review and
-  integration states, and observed pull-request link from existing product-environment records. Opening an objective
-  shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
+  integration states, and observed pull-request link from existing product-environment records. Its WorkGraph view
+  resolves a pending decision against that exact graph and request through the existing governed API action. Opening
+  an objective shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
 - The selected product's environment projection supplies the pending-decision count, decision links, current
   WorkGraph/handoff/finding counts, and observed PR-link count. These are recorded counts, without a time trend or
   implied merge state. A failed projection shows an error, and a missing product shows an empty explanation.
@@ -155,6 +157,10 @@ go test ./cmd/zenchron -run 'TestProducts|TestPersistentMuxRestoresObjectivesAnd
 cd dashboard && npm run test:e2e -- e2e/workspace.spec.ts e2e/workspace-preview.spec.ts
 cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Product Workspace groups live repositories'
 ```
+
+`workspace.spec.ts` checks that an inline Product Workspace decision submits the selected graph ID, request ID, and
+resolution to the existing action endpoint. The multi-WorkUnit provider and publication journey remains partially
+verified; deterministic fake-CLI coverage lives in `orchestration.spec.ts`.
 
 ## Product environment
 
