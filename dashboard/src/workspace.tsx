@@ -103,6 +103,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
   const selected = products.find((product) => product.id === selectedID) ?? products[0];
   const view = source.view(selected?.id, roadmapQuarter);
   const { metrics, roadmap, objectives, repositories, workflows, files, stakeholders, releases, decisions, history, delivery } = view;
+  const visibleTabs = (workspaceFoci[focus].tabs as readonly WorkspaceTab[]).filter((tab) => !designPreview || tab !== 'History');
   const visibleProducts = products.filter((product) => product.name.toLowerCase().includes(search.trim().toLowerCase())
     && (statusFilter === 'All' || product.state === statusFilter));
   const isFavorite = Boolean(selected && source.favorites.includes(selected.id));
@@ -218,7 +219,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
       </div>
 
       <nav className="workspace-mock-tabs" aria-label="Product sections">
-        {(workspaceFoci[focus].tabs as readonly WorkspaceTab[]).map((tab) => <button key={tab} type="button" aria-current={activeTab === tab ? 'page' : undefined}
+        {visibleTabs.map((tab) => <button key={tab} type="button" aria-current={activeTab === tab ? 'page' : undefined}
           onClick={() => setActiveTab(tab)} className={activeTab === tab ? 'active' : ''}>
           {tab === 'Overview' ? <IconHome size={13} /> : tab === 'Objectives' ? <IconTarget size={13} />
             : tab === 'Repos' ? <IconCode size={13} /> : tab === 'Files' ? <IconFolder size={13} />
@@ -317,9 +318,8 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
           <IconFileText size={13} /><b>{href ? <a href={href}>{name}</a> : name}</b>
           <Badge className={`workspace-mock-state ${stateClass(state)}`} variant="light">{state}</Badge>{time && <small>{time}</small>}</div>)}</div>}
       </Card>
-      <Card className="history" title={`WorkGraph History (${history.rows.length})`} icon={<IconHistory size={15} />} action="View All"
-        onAction={() => setActiveTab('History')}
-        hidden={activeTab !== 'Overview' && activeTab !== 'History'}>
+      {!designPreview && <Card className="history" title={`WorkGraph History (${history.rows.length})`} icon={<IconHistory size={15} />} action="View All"
+        onAction={() => setActiveTab('History')} hidden={activeTab !== 'Overview' && activeTab !== 'History'}>
         {history.note ? <Note note={history.note} /> : <div className="workspace-mock-list status-list history-list">
           {(showAll ? history.rows : history.rows.slice(0, 5)).map((item) => <div key={item.id}>
             <IconHistory size={13} aria-hidden="true" />
@@ -327,7 +327,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
             <Badge className={`workspace-mock-state ${stateClass(item.state)}`} variant="light">{item.state}</Badge>
           </div>)}
         </div>}
-      </Card>
+      </Card>}
       <Card className="analytics" title="Delivery Metrics" icon={<IconChartBar size={15} />}
         hidden={cardIsHidden('analytics', ['Overview'])}
         action={<Menu position="bottom-end" withinPortal>
