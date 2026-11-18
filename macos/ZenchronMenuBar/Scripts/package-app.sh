@@ -12,9 +12,13 @@ if [[ -e "$APP_PATH" ]]; then
 fi
 
 swift build --package-path "$PACKAGE_DIR" --configuration release
-mkdir -p "$APP_PATH/Contents/MacOS"
-install -m 755 "$PACKAGE_DIR/.build/release/zenchron-menubar" "$APP_PATH/Contents/MacOS/zenchron-menubar"
-cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
+mkdir -p "$OUTPUT_DIR"
+STAGING_DIR=$(mktemp -d "$OUTPUT_DIR/.zenchron-menubar.XXXXXX")
+trap 'rm -rf -- "$STAGING_DIR"' EXIT
+STAGED_APP="$STAGING_DIR/Zenchron Menu Bar.app"
+mkdir -p "$STAGED_APP/Contents/MacOS"
+install -m 755 "$PACKAGE_DIR/.build/release/zenchron-menubar" "$STAGED_APP/Contents/MacOS/zenchron-menubar"
+cat > "$STAGED_APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -38,7 +42,12 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
-plutil -lint "$APP_PATH/Contents/Info.plist"
-codesign --force --sign - --timestamp=none "$APP_PATH"
-codesign --verify --deep --strict "$APP_PATH"
+plutil -lint "$STAGED_APP/Contents/Info.plist"
+codesign --force --sign - --timestamp=none "$STAGED_APP"
+codesign --verify --deep --strict "$STAGED_APP"
+mv -n "$STAGED_APP" "$APP_PATH"
+if [[ -e "$STAGED_APP" ]]; then
+  printf 'Refusing to replace existing app bundle: %s\n' "$APP_PATH" >&2
+  exit 1
+fi
 printf 'Packaged %s\n' "$APP_PATH"
