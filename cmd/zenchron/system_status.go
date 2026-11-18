@@ -99,7 +99,7 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 			}
 		}
 		for _, message := range graph.Messages {
-			if message.Type == messageDecisionRequest && !resolved[message.ID] {
+			if graph.Status != graphCancelled && message.Type == messageDecisionRequest && !resolved[message.ID] {
 				status.Work.OpenDecisions++
 				status.Work.Decisions = append(status.Work.Decisions, systemStatusDecision{
 					ID: message.ID, GraphID: graph.ID, ObjectiveID: graph.ObjectiveID,
@@ -120,6 +120,7 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 			}
 		}
 	}
+	graphs.mu.Unlock()
 	sort.Slice(status.Work.ActiveGraphLinks, func(i, j int) bool {
 		left, right := status.Work.ActiveGraphLinks[i], status.Work.ActiveGraphLinks[j]
 		if left.updatedAt.Equal(right.updatedAt) {
@@ -140,10 +141,11 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 	if len(status.Work.Decisions) > maxSystemStatusLinks {
 		status.Work.Decisions = status.Work.Decisions[:maxSystemStatusLinks]
 	}
-	graphs.mu.Unlock()
-
 	if path := strings.TrimSpace(os.Getenv("ZENCHRON_UPDATE_STATUS_FILE")); path != "" {
-		if update, err := updater.ReadStatus(path); err == nil {
+		if update, err := updater.ReadStatus(path); err != nil {
+			status.UpdateState = "unavailable"
+			status.UpdateReason = "Updater status is unavailable"
+		} else {
 			status.UpdateState = update.State
 			status.UpdateRevision = update.LatestRevision
 			status.UpdateProgress = update.Progress

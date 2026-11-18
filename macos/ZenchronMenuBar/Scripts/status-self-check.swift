@@ -30,5 +30,12 @@ struct StatusSelfCheck {
             _ = try decodeSystemStatus(wrongHost)
             fatalError("non-canonical dashboard address was accepted")
         } catch is DecodingError {}
+
+        let withFragment = Data(String(decoding: valid, as: UTF8.self)
+            .replacingOccurrences(of: "?mode=live", with: "?mode=live#attacker").utf8)
+        do {
+            _ = try decodeSystemStatus(withFragment)
+            fatalError("dashboard URL fragment was accepted")
+        } catch is DecodingError {}
     }
 }

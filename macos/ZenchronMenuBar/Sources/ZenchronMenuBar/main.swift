@@ -37,6 +37,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var timer: Timer?
     private var status: SystemStatus?
     private var message = "Checking Zenchron…"
+    private var refreshGeneration: UInt64 = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -62,9 +63,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         let interval: TimeInterval = status == nil ? 30 : 15
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
         Task { await refresh() }
     }
 
@@ -95,8 +98,8 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             for decision in status.work.decisions ?? [] {
                 guard let url = status.decisionURL(for: decision) else { continue }
-                let title = decision.objectiveTitle.isEmpty ? "Review decision · \(decision.from)"
-                    : "Decision · \(decision.objectiveTitle)"
+                let context = decision.objectiveTitle.isEmpty ? "decision" : decision.objectiveTitle
+                let title = "Decision · \(context) · \(decision.from) · \(decision.id)"
                 menu.addItem(linkItem(title: title, url: url))
             }
             let actions = [
@@ -141,15 +144,20 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func refresh() async {
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
         do {
             var request = URLRequest(url: statusURL, timeoutInterval: 3)
             request.setValue("http://127.0.0.1:8080", forHTTPHeaderField: "Origin")
             request.cachePolicy = .reloadIgnoringLocalCacheData
             let (data, response) = try await URLSession.shared.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
-            status = try decodeSystemStatus(data)
+            let decoded = try decodeSystemStatus(data)
+            guard generation == refreshGeneration else { return }
+            status = decoded
             message = "Connected"
         } catch {
+            guard generation == refreshGeneration else { return }
             status = nil
             message = "Zenchron disconnected · \(error.localizedDescription)"
         }
@@ -184,6 +192,19 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let process = Process()
         process.executableURL = executable
         process.arguments = ["start"]
+        process.terminationHandler = { [weak self] process in
+            let exitStatus = process.terminationStatus
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard exitStatus == 0 else {
+                    self.message = "Zenchron start failed · exit code \(exitStatus)"
+                    self.refreshMenu()
+                    return
+                }
+                self.message = "Zenchron start command finished · checking status…"
+                await self.refresh()
+            }
+        }
         do {
             try process.run()
             message = "Starting Zenchron…"

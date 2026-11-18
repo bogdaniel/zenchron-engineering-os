@@ -21,16 +21,17 @@ const authSessionCookie = "zenchron_session"
 const oauthStateCookie = "zenchron_oauth_state"
 
 type authConfig struct {
-	clientID     string
-	clientSecret string
-	sessionKey   []byte
-	workerToken  string
-	access       *accessPolicy
-	allowedUsers []string
-	publicURL    *url.URL
-	https        bool
-	githubURL    string
-	githubAPIURL string
+	clientID       string
+	clientSecret   string
+	sessionKey     []byte
+	workerToken    string
+	access         *accessPolicy
+	allowedUsers   []string
+	publicURL      *url.URL
+	https          bool
+	githubURL      string
+	githubAPIURL   string
+	loopbackStatus bool
 }
 
 type authUser struct {
@@ -93,7 +94,7 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/system/status" &&
+		if config != nil && config.loopbackStatus && r.Method == http.MethodGet && r.URL.Path == "/api/v1/system/status" &&
 			isLoopbackRequest(r) && localRequestOrigin(r) {
 			next.ServeHTTP(w, r)
 			return

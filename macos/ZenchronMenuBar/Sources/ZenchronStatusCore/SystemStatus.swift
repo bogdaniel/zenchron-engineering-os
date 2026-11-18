@@ -1,6 +1,8 @@
 import Foundation
 
 public struct SystemStatus: Decodable, Equatable {
+    private static let canonicalDashboardURL = "http://127.0.0.1:8080/?mode=live"
+
     public struct Workers: Decodable, Equatable {
         public let online: Int
         public let total: Int
@@ -110,20 +112,20 @@ public struct SystemStatus: Decodable, Equatable {
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         revision = try values.decodeIfPresent(String.self, forKey: .revision)
-        dashboardURL = try values.decode(URL.self, forKey: .dashboardURL)
+        let rawDashboardURL = try values.decode(String.self, forKey: .dashboardURL)
+        guard rawDashboardURL == Self.canonicalDashboardURL, let parsedDashboardURL = URL(string: rawDashboardURL) else {
+            throw DecodingError.dataCorruptedError(forKey: .dashboardURL, in: values,
+                debugDescription: "status returned a non-canonical dashboard address")
+        }
+        dashboardURL = parsedDashboardURL
         workers = try values.decode(Workers.self, forKey: .workers)
         work = try values.decode(Work.self, forKey: .work)
         updateState = try values.decode(String.self, forKey: .updateState)
         updateRevision = try values.decodeIfPresent(String.self, forKey: .updateRevision)
         updateProgress = try values.decodeIfPresent(String.self, forKey: .updateProgress)
         updateReason = try values.decodeIfPresent(String.self, forKey: .updateReason)
-        guard dashboardURL.scheme == "http", dashboardURL.host == "127.0.0.1",
-              dashboardURL.port == 8080, dashboardURL.path == "/", dashboardURL.query == "mode=live" else {
-            throw DecodingError.dataCorruptedError(forKey: .dashboardURL, in: values,
-                debugDescription: "status returned a non-canonical dashboard address")
-        }
         let validUpdateStates = ["idle", "checking", "building", "verifying", "waiting_for_runs", "activating",
-            "active", "failed", "blocked", "unknown"]
+            "active", "failed", "blocked", "unavailable", "unknown"]
         guard workers.online >= 0, workers.total >= workers.online,
               work.activeGraphs >= 0, work.blockedGraphs >= 0, work.queuedUnits >= 0,
               work.runningUnits >= 0, work.waitingUnits >= 0, work.failedUnits >= 0,

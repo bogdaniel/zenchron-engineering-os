@@ -38,6 +38,8 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 			Status: graphActive, UpdatedAt: time.Now().Add(-time.Minute)},
 		"active-newer": {ID: "active-newer", ObjectiveID: "objective-new", ObjectiveTitle: "Current objective",
 			Status: graphActive, UpdatedAt: time.Now()},
+		"cancelled": {ID: "cancelled", ObjectiveID: "objective-cancelled", Status: graphCancelled,
+			Messages: []graphMessage{{ID: "stale", Type: messageDecisionRequest}}},
 	}}
 	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
 	request.RemoteAddr = "127.0.0.1:4000"
@@ -80,11 +82,17 @@ func TestLocalSystemStatusBoundsAndOrdersActionLinks(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK {
 		t.Fatalf("system status response: decode error %v, HTTP %d", err, response.Code)
 	}
-	if len(status.Work.ActiveGraphLinks) != maxSystemStatusLinks ||
-		status.Work.ActiveGraphLinks[0].GraphID != "graph-11" ||
-		len(status.Work.Decisions) != maxSystemStatusLinks || status.Work.Decisions[0].ID != "decision-graph-11" ||
+	wantGraphIDs := []string{"graph-11", "graph-10", "graph-09", "graph-08", "graph-07"}
+	wantDecisionIDs := []string{"decision-graph-11", "decision-graph-10", "decision-graph-09", "decision-graph-08", "decision-graph-07"}
+	if len(status.Work.ActiveGraphLinks) != maxSystemStatusLinks || len(status.Work.Decisions) != maxSystemStatusLinks ||
 		status.Work.ActiveGraphs != 12 || status.Work.OpenDecisions != 12 {
 		t.Fatalf("bounded links = %#v, want newest %d of 12", status.Work, maxSystemStatusLinks)
+	}
+	for index := range wantGraphIDs {
+		if status.Work.ActiveGraphLinks[index].GraphID != wantGraphIDs[index] || status.Work.Decisions[index].ID != wantDecisionIDs[index] {
+			t.Fatalf("bounded link order at %d = %q, %q", index,
+				status.Work.ActiveGraphLinks[index].GraphID, status.Work.Decisions[index].ID)
+		}
 	}
 }
 
@@ -122,6 +130,25 @@ func TestLocalSystemStatusIncludesRecordedBlockedUpdateReason(t *testing.T) {
 				t.Fatalf("update status = %#v", status)
 			}
 		})
+	}
+}
+
+func TestLocalSystemStatusReportsUnreadableConfiguredUpdaterStatus(t *testing.T) {
+	t.Setenv("ZENCHRON_UPDATE_STATUS_FILE", filepath.Join(t.TempDir(), "missing.json"))
+	graphs := &workGraphStore{graphs: map[string]*workGraph{
+		"active": {ID: "active", ObjectiveID: "objective", Status: graphActive},
+	}}
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+	request.RemoteAddr = "127.0.0.1:4000"
+	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	response := httptest.NewRecorder()
+	writeLocalSystemStatus(response, request, newWorkerRegistry(), graphs)
+	var status systemStatus
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("system status response: decode error %v, HTTP %d", err, response.Code)
+	}
+	if status.UpdateState != "unavailable" || status.UpdateReason != "Updater status is unavailable" || status.Work.ActiveGraphs != 1 {
+		t.Fatalf("unreadable updater status = %#v", status)
 	}
 }
 
@@ -186,5 +213,17 @@ func TestLocalSystemStatusPassesAuthOnlyForSameOriginLoopbackRead(t *testing.T) 
 	server.ServeHTTP(response, request)
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("remote system status HTTP = %d, want session auth %d", response.Code, http.StatusUnauthorized)
+	}
+
+	config := testAuthConfig()
+	config.loopbackStatus = false
+	server = authHandler(newMux(), config)
+	request = httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+	request.RemoteAddr = "127.0.0.1:4000"
+	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("proxied loopback status HTTP = %d, want session auth %d", response.Code, http.StatusUnauthorized)
 	}
 }
