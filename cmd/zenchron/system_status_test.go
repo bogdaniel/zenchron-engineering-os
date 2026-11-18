@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
@@ -24,8 +25,11 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 	}
 	t.Setenv("ZENCHRON_UPDATE_STATUS_FILE", updateFile)
 	registry := newWorkerRegistry()
-	registry.workers["online"] = workerRecord{ID: "online", LastSeen: time.Now()}
-	registry.workers["offline"] = workerRecord{ID: "offline", LastSeen: time.Now().Add(-time.Minute)}
+	registry.workers["online"] = workerRecord{ID: "online", LastSeen: time.Now(), Providers: []workerapi.ProviderStatus{
+		{ID: workerapi.ProviderCodex, Ready: true}, {ID: workerapi.ProviderClaude},
+	}}
+	registry.workers["offline"] = workerRecord{ID: "offline", LastSeen: time.Now().Add(-time.Minute),
+		Providers: []workerapi.ProviderStatus{{ID: workerapi.ProviderCodex, Ready: true}}}
 	graphs := &workGraphStore{graphs: map[string]*workGraph{
 		"graph": {ID: "graph", ObjectiveID: "objective", ObjectiveTitle: "Ship the dashboard",
 			Status: graphBlocked, Units: []workUnit{
@@ -49,7 +53,10 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK {
 		t.Fatalf("system status response: decode error %v, HTTP %d", err, response.Code)
 	}
-	if status.Workers.Online != 1 || status.Workers.Total != 2 || status.Work.ActiveGraphs != 2 ||
+	if status.Workers.Online != 1 || status.Workers.Total != 2 || len(status.Workers.Providers) != 2 ||
+		status.Workers.Providers[0] != (systemStatusProvider{ID: workerapi.ProviderClaude, ReportedWorkers: 1}) ||
+		status.Workers.Providers[1] != (systemStatusProvider{ID: workerapi.ProviderCodex, ReadyWorkers: 1, ReportedWorkers: 1}) ||
+		status.Work.ActiveGraphs != 2 ||
 		status.Work.BlockedGraphs != 1 || status.Work.ActiveGraph == nil ||
 		status.Work.ActiveGraph.GraphID != "active-newer" || status.Work.ActiveGraph.ObjectiveID != "objective-new" ||
 		status.Work.ActiveGraph.ObjectiveTitle != "Current objective" ||
@@ -60,6 +67,21 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 		status.Work.FailedUnits != 1 || status.Work.OpenDecisions != 1 || status.UpdateState != "active" ||
 		status.UpdateRevision != revision || status.UpdateProgress != "Release is active" {
 		t.Fatalf("system status = %#v", status)
+	}
+}
+
+func TestLocalSystemStatusOmitsUnknownProviderReadiness(t *testing.T) {
+	registry := newWorkerRegistry()
+	registry.workers["online"] = workerRecord{ID: "online", LastSeen: time.Now()}
+	response := httptest.NewRecorder()
+	writeLocalSystemStatus(response, localStatusTestRequest(t), registry,
+		newWorkGraphStore(nil, nil, nil, nil))
+	var status systemStatus
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("system status response: decode error %v, HTTP %d", err, response.Code)
+	}
+	if status.Workers.Providers != nil {
+		t.Fatalf("unknown provider readiness was reported as known: %#v", status.Workers.Providers)
 	}
 }
 

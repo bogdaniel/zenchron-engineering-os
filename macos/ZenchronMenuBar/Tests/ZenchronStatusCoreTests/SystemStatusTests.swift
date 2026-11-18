@@ -6,7 +6,9 @@ final class SystemStatusTests: XCTestCase {
     func testDecodesRecordedStatusAndCanonicalDashboardURL() throws {
         let data = Data("""
         {"revision":"abc123","dashboard_url":"http://127.0.0.1:8080/?mode=live",
-         "workers":{"online":1,"total":2},
+         "workers":{"online":1,"total":2,"providers":[
+         {"id":"codex-cli","ready_workers":1,"reported_workers":2},
+         {"id":"claude-code","ready_workers":0,"reported_workers":1}]},
          "work":{"active_graphs":1,"active_graph":{"graph_id":"graph-7","objective_id":"objective-2",
          "objective_title":"Ship the dashboard"},"blocked_graphs":0,"queued_units":2,"running_units":1,
          "active_graph_links":[{"graph_id":"graph-7","objective_id":"objective-2",
@@ -18,6 +20,7 @@ final class SystemStatusTests: XCTestCase {
         """.utf8)
         let status = try decodeSystemStatus(data)
         XCTAssertEqual(status.workers.online, 1)
+        XCTAssertEqual(status.workers.providers?.map(\.readyWorkers), [1, 0])
         XCTAssertEqual(status.work.queuedUnits, 2)
         XCTAssertEqual(status.updateState, "blocked")
         XCTAssertEqual(status.updateRevision, String(repeating: "a", count: 40))
@@ -28,6 +31,17 @@ final class SystemStatusTests: XCTestCase {
             "http://127.0.0.1:8080/?mode=live&objective=objective-2&tab=plan&graph_id=graph-7#objectives")
         XCTAssertEqual(status.work.decisions?.first.flatMap(status.decisionURL(for:))?.absoluteString,
             "http://127.0.0.1:8080/?mode=live&objective=objective-2&tab=plan&graph_id=graph-7&decision=decision-4#objectives")
+    }
+
+    func testRejectsInvalidProviderReadinessCounts() {
+        let data = Data("""
+        {"dashboard_url":"http://127.0.0.1:8080/?mode=live",
+         "workers":{"online":1,"total":1,"providers":[
+         {"id":"codex-cli","ready_workers":2,"reported_workers":1}]},
+         "work":{"active_graphs":0,"blocked_graphs":0,"queued_units":0,"running_units":0,
+         "waiting_units":0,"failed_units":0,"open_decisions":0},"update_state":"unknown"}
+        """.utf8)
+        XCTAssertThrowsError(try decodeSystemStatus(data))
     }
 
     func testRejectsUnexpectedDashboardAddress() {

@@ -100,6 +100,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let status {
             let workers = "Workers · \(status.workers.online) online / \(status.workers.total)"
             menu.addItem(NSMenuItem(title: workers, action: nil, keyEquivalent: ""))
+            if let providers = status.workers.providers {
+                let summary = providers.map { "\($0.id) \($0.readyWorkers)/\($0.reportedWorkers) ready" }
+                    .joined(separator: " · ")
+                menu.addItem(NSMenuItem(title: "Providers · \(summary)", action: nil, keyEquivalent: ""))
+            }
             let work = [
                 "Work · \(status.work.activeGraphs) active · \(status.work.blockedGraphs) blocked",
                 "\(status.work.queuedUnits) queued",

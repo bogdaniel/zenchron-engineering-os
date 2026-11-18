@@ -27,7 +27,8 @@ flowchart LR
 
 ## Behavior
 
-- The menu reports control-plane connectivity and release revision, online worker count, active and blocked graphs,
+- The menu reports control-plane connectivity and release revision, online worker count, provider readiness reported
+  by online workers, active and blocked graphs,
   queued/running/waiting/failed units, pending decisions, and the recorded updater state. When available, it also
   shows the candidate revision and current progress; blocked or failed updates include the recorded reason.
 - When work is active, the menu offers the five most recently updated active WorkGraphs. Each opens its exact

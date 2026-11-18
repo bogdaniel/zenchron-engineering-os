@@ -4,8 +4,21 @@ public struct SystemStatus: Decodable, Equatable {
     public static let canonicalDashboardURL = URL(string: "http://127.0.0.1:8080/?mode=live")!
 
     public struct Workers: Decodable, Equatable {
+        public struct Provider: Decodable, Equatable {
+            public let id: String
+            public let readyWorkers: Int
+            public let reportedWorkers: Int
+
+            enum CodingKeys: String, CodingKey {
+                case id
+                case readyWorkers = "ready_workers"
+                case reportedWorkers = "reported_workers"
+            }
+        }
+
         public let online: Int
         public let total: Int
+        public let providers: [Provider]?
     }
 
     public struct Work: Decodable, Equatable {
@@ -127,6 +140,8 @@ public struct SystemStatus: Decodable, Equatable {
         let validUpdateStates = ["idle", "checking", "building", "verifying", "waiting_for_runs", "activating",
             "active", "failed", "blocked", "unavailable", "unknown"]
         guard workers.online >= 0, workers.total >= workers.online,
+              workers.providers?.allSatisfy({ !$0.id.isEmpty && $0.id.count <= 64 &&
+                  $0.readyWorkers >= 0 && $0.reportedWorkers > 0 && $0.readyWorkers <= $0.reportedWorkers }) ?? true,
               work.activeGraphs >= 0, work.blockedGraphs >= 0, work.queuedUnits >= 0,
               work.runningUnits >= 0, work.waitingUnits >= 0, work.failedUnits >= 0,
               work.openDecisions >= 0, validUpdateStates.contains(updateState),

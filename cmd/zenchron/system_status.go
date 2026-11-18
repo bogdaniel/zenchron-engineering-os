@@ -9,14 +9,16 @@ import (
 	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 type systemStatus struct {
 	Revision     string `json:"revision,omitempty"`
 	DashboardURL string `json:"dashboard_url"`
 	Workers      struct {
-		Online int `json:"online"`
-		Total  int `json:"total"`
+		Online    int                    `json:"online"`
+		Total     int                    `json:"total"`
+		Providers []systemStatusProvider `json:"providers,omitempty"`
 	} `json:"workers"`
 	Work struct {
 		ActiveGraphs     int                    `json:"active_graphs"`
@@ -45,6 +47,12 @@ type systemStatusWorkItem struct {
 	updatedAt      time.Time
 }
 
+type systemStatusProvider struct {
+	ID              string `json:"id"`
+	ReadyWorkers    int    `json:"ready_workers"`
+	ReportedWorkers int    `json:"reported_workers"`
+}
+
 type systemStatusDecision struct {
 	ID             string `json:"id"`
 	GraphID        string `json:"graph_id"`
@@ -69,12 +77,34 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 		DashboardURL: "http://127.0.0.1:8080/?mode=live", UpdateState: "unknown"}
 	registry.mu.RLock()
 	status.Workers.Total = len(registry.workers)
+	providers := make(map[string]systemStatusProvider)
 	for _, worker := range registry.workers {
-		if time.Since(worker.LastSeen) <= workerOnlineWindow {
-			status.Workers.Online++
+		if time.Since(worker.LastSeen) > workerOnlineWindow {
+			continue
+		}
+		status.Workers.Online++
+		seenProviders := make(map[string]bool, len(worker.Providers))
+		for _, provider := range worker.Providers {
+			if !workerapi.IsCLIProvider(provider.ID) || seenProviders[provider.ID] {
+				continue
+			}
+			seenProviders[provider.ID] = true
+			current := providers[provider.ID]
+			current.ID = provider.ID
+			current.ReportedWorkers++
+			if provider.Ready {
+				current.ReadyWorkers++
+			}
+			providers[provider.ID] = current
 		}
 	}
+	for _, provider := range providers {
+		status.Workers.Providers = append(status.Workers.Providers, provider)
+	}
 	registry.mu.RUnlock()
+	sort.Slice(status.Workers.Providers, func(i, j int) bool {
+		return status.Workers.Providers[i].ID < status.Workers.Providers[j].ID
+	})
 
 	graphs.mu.Lock()
 	// ponytail: five links per menu section; add pagination if operators need older items.
