@@ -654,8 +654,14 @@ test('Reports render errors stay inside the page shell and can be retried', asyn
       usage: { input_tokens: 10, output_tokens: 5, cost_usd: 0.25 },
     }]) }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto('/#reports');
+  const localURL = new URL(test.info().project.use.baseURL as string);
+  localURL.hostname = '127.0.0.1';
+  localURL.searchParams.set('mode', 'live');
+  localURL.hash = '#reports';
+  await page.goto(localURL.toString());
   await expect(page.locator('.agent-spend-panel .reports-spend-chart')).toBeVisible();
+  await page.getByRole('combobox', { name: 'Time Range' }).click();
+  await page.getByRole('option', { name: 'Last 90 Days' }).click();
   await page.evaluate(() => {
     const datePrototype = Date.prototype as Date & { originalLocalDate?: Date['toLocaleDateString'] };
     datePrototype.originalLocalDate = Date.prototype.toLocaleDateString;
@@ -673,6 +679,22 @@ test('Reports render errors stay inside the page shell and can be retried', asyn
     const datePrototype = Date.prototype as Date & { originalLocalDate?: Date['toLocaleDateString'] };
     if (datePrototype.originalLocalDate) Date.prototype.toLocaleDateString = datePrototype.originalLocalDate;
   });
+  await page.getByRole('radiogroup', { name: 'Data mode' }).getByText('Mock', { exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Time Range' }).click();
+  await page.getByRole('option', { name: 'Last 90 Days' }).click();
+  await page.evaluate(() => {
+    Date.prototype.toLocaleDateString = () => { throw new Error('forced report render failure'); };
+  });
+  await page.getByRole('button', { name: 'Apply Filters' }).click();
+  await expect(page.getByRole('alert')).toContainText('This page could not be displayed');
+  await page.evaluate(() => {
+    const datePrototype = Date.prototype as Date & { originalLocalDate?: Date['toLocaleDateString'] };
+    if (datePrototype.originalLocalDate) Date.prototype.toLocaleDateString = datePrototype.originalLocalDate;
+  });
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.locator('.agent-spend-panel .reports-spend-chart')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
 });

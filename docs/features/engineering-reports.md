@@ -15,6 +15,7 @@ flowchart LR
     Shell[Dashboard shell] --> PageBoundary[PageErrorBoundary · retryable fallback]
     PageBoundary --> Page[ReportsPage · reports.tsx<br/>one layout]
     PageBoundary -->|render error| Retry[Retry page content]
+    Retry -->|clear error and render selected page| PageBoundary
     Page -->|Mock| MockPreview[mockReports · reports-preview.tsx<br/>fixtures, no requests]
     Page -->|Live| Reports[useLiveReports · reportsView.tsx]
     Reports --> RangeNow[One captured render timestamp]
