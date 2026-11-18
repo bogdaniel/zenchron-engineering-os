@@ -39,6 +39,11 @@ func TestHumanReviewStageAfterRemediationWaitsForApproval(t *testing.T) {
 			decision(20, "APPROVED", newHead, "reviewer-b", 1),
 			decision(21, "CHANGES_REQUESTED", newHead, "reviewer-c", 2),
 		}},
+		{name: "later approval does not clear another reviewer's outstanding request", reviews: []gitHubReview{
+			decision(12, "CHANGES_REQUESTED", testCommit, "reviewer-a", 0),
+			decision(21, "CHANGES_REQUESTED", newHead, "reviewer-c", 1),
+			decision(22, "APPROVED", newHead, "reviewer-b", 2),
+		}},
 		{name: "newer request from the approving reviewer", reviews: []gitHubReview{
 			decision(12, "CHANGES_REQUESTED", testCommit, "reviewer-a", 0),
 			decision(20, "APPROVED", newHead, "reviewer-a", 1),
