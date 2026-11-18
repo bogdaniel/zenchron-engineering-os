@@ -67,7 +67,7 @@ func (store *workGraphStore) listPlans(w http.ResponseWriter, r *http.Request) {
 		return !access.allows(plan.Repository)
 	})
 	for index := range plans {
-		plans[index].ProfileSnapshots = nil
+		plans[index] = publicPlan(plans[index])
 	}
 	slices.Reverse(plans)
 	body := encodeResponse(plans)
@@ -120,6 +120,14 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	}
 	plan := objectivePlan{ObjectiveID: item.ID, ProjectID: project.ID, Repository: project.GitRemote, WorkflowID: input.WorkflowID,
 		Status: planProposed, CreatedBy: access.user, CreatedAt: time.Now().UTC()}
+	if item.ProductID != "" {
+		linkedProduct, exists := store.objectives.products.get(item.ProductID)
+		if !exists {
+			http.Error(w, "the objective's linked product is unavailable", http.StatusConflict)
+			return
+		}
+		plan.ProductContext = linkedProduct.Description
+	}
 	if definition != nil {
 		plan.WorkflowVersion = definition.Version
 	}
@@ -133,7 +141,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		plan.planProposal, plan.ProfileSnapshots = *input.Plan, snapshots
-		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, *input.Plan)
+		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.ProductContext, *input.Plan)
 	case input.Plan == nil && input.PlannerAgentID == "" && definition != nil:
 		profiles := store.agentProfiles()
 		proposal, problems := compileWorkflow(*definition, profiles)
@@ -148,7 +156,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		}
 		plan.planProposal = proposal
 		plan.WorkflowMode = workflowModeCompiled
-		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, proposal)
+		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.ProductContext, proposal)
 	case input.Plan == nil && input.PlannerAgentID != "":
 		guidance := ""
 		if definition != nil {
@@ -185,7 +193,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	plan.ProfileSnapshots = nil
-	writeJSON(w, http.StatusCreated, plan)
+	writeJSON(w, http.StatusCreated, publicPlan(plan))
 }
 
 // queuePlanner queues the run in which a read-only agent proposes a plan for the objective.
@@ -244,7 +252,8 @@ func (store *workGraphStore) admitPlansLocked() bool {
 				if len(plan.Problems) > 0 {
 					plan.Status = planInvalid
 				}
-				plan.Hash = planHash(plan.ProjectID, plan.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.planProposal)
+				plan.Hash = planHash(plan.ProjectID, plan.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode,
+					plan.ProductContext, plan.planProposal)
 			}
 		}
 	}
@@ -349,6 +358,7 @@ func encodeResponse(value any) []byte {
 
 func publicPlan(plan objectivePlan) objectivePlan {
 	plan.ProfileSnapshots = nil
+	plan.ProductContext = ""
 	return plan
 }
 

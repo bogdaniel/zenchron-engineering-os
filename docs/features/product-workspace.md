@@ -29,7 +29,7 @@ flowchart LR
     Start -->|"project/workflow IDs carried to Plan form"| Plans
     Objective -->|"create objective, then select repository and workflow in Plan"| Plans["ObjectivePlanPanel"]
     Plans -->|"POST /api/v1/objectives/{id}/plans"| CP
-    Plans -->|"planned workflow and profile links"| Workflow
+    Plans -->|"planned workflow, profile and product-context snapshots"| Workflow
     Plans -->|"planned profile and persona versions"| Agents
     Plans --> Report["ObjectiveDeliveryReport"]
     Report -->|"workflow ID"| Workflow["WorkflowsPage · current saved definition"]
@@ -47,6 +47,9 @@ flowchart LR
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
     Environment --> Store
     Environment --> Graphs[(objectives.json · work-graphs.json)]
+    Store -->|"read linked product description"| CP
+    CP -->|"snapshot in plan revision and plan hash"| Graphs
+    Graphs -->|"matching objective, revision and hash"| RunContext["planner / WorkUnit runContext"]
     Graphs -->|"frozen workflow/profile/persona revision references"| Environment
     Page -->|"Product actions → Open repository inventory"| Projects["#projects"]
 ```
@@ -145,6 +148,9 @@ Live:
   create Live run links.
 - Plan revisions link to their selected workflow and assigned profiles, with profile/persona versions labeled as
   planned configuration. Cross-page links preserve Live mode on local dashboards.
+- A planner and each WorkUnit receive the linked product description captured when the plan revision was proposed.
+  The snapshot is part of the plan hash and does not change when the current product description is edited; it is
+  passed as user-supplied task data, not as instructions. Unlinked objectives receive no product context.
 - Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, and time-series
   delivery trends. The favorite star and the delivery range are disabled with a reason. Sharing shows the page link
   and says no invitation is sent.
@@ -159,9 +165,10 @@ Live:
   come from current worker inventory; local paths remain on the worker. Only repository names and worker IDs are shared
   with the control plane.
 - New fields are additive: prior profile records without personas and prior plans without configuration snapshots load
-  with their previous behavior. The strict state reader rejects unknown fields, so rolling back after personas or pinned
-  plans have been saved, or after saving a workflow with the `integrate` node, requires restoring pre-upgrade copies of
-  `agents.json`, `work-graphs.json`, and `workflows.json`; retain a local data-directory backup before a downgrade.
+  with their previous behavior. The strict state reader rejects unknown fields, so rolling back after personas, pinned
+  plans, product-context snapshots, or workflows with the `integrate` node have been saved requires restoring
+  pre-upgrade copies of `agents.json`, `work-graphs.json`, and `workflows.json`; retain a local data-directory backup
+  before a downgrade.
 - A worker restart does not erase product configuration. Moving a checkout changes its ID and requires relinking.
 - Objectives link to products by ID. Unlinked and legacy free-text objectives remain visible on the Objectives page.
 - File search, evidence artifacts, decisions, stakeholder membership, release streams, and delivery history require
@@ -197,11 +204,14 @@ with the unit that asked, the question, and who resolved it.
 - Workflow and agent/persona references come from the approved plan snapshot recorded in each WorkGraph. Editing a
   current profile or workflow does not change the historical reference. The product environment does not own product
   defaults or copy configuration contents.
+- A plan revision snapshots the linked product description and includes it in the plan hash. Planning runs and
+  WorkUnit attempts use that same text across retries; editing a product affects only later plan revisions. The text
+  is user-supplied task data and does not grant authority or change the result contract.
 - Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
 - A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
 - Not implemented: product-owned configuration defaults, knowledge entries, promotion between scopes,
   architecture/team references, and cross-product organization knowledge. Those require the established
   authority/context boundaries and are intentionally left for their dependent work.
 
-Verified by `go test ./cmd/zenchron -run TestProductEnvironment -count=1`, including product isolation and history after
-reopening the durable WorkGraph store.
+Verified by `go test ./cmd/zenchron -run 'Test(ProductEnvironment|WorkUnitContextIncludesOnlyItsLinkedProductDescription|PlannerReceivesLinkedProductDescription)' -count=1`,
+including product isolation, historical context across a restart, and product context delivery to planner and WorkUnits.

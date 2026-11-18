@@ -75,6 +75,8 @@ type objectivePlan struct {
 	Revision    int    `json:"revision"`
 	Status      string `json:"status"`
 	ProjectID   string `json:"project_id"`
+	// ProductContext is the linked product description frozen when this plan revision is proposed.
+	ProductContext string `json:"product_context,omitempty"`
 	// Repository is the repository of the project when the plan was proposed; reading the plan needs a grant for it.
 	Repository       string                  `json:"repository,omitempty"`
 	WorkflowID       string                  `json:"workflow_id,omitempty"`
@@ -327,15 +329,16 @@ func reaches(units map[string]planUnit, from, target string) bool {
 }
 
 // planHash identifies what a plan would execute and where.
-func planHash(projectID, workflowID string, workflowVersion int, workflowMode string, proposal planProposal) string {
+func planHash(projectID, workflowID string, workflowVersion int, workflowMode, productContext string, proposal planProposal) string {
 	// Encoding plain strings, integers, and slices cannot fail.
 	data, _ := json.Marshal(struct {
 		ProjectID       string       `json:"project_id"`
 		WorkflowID      string       `json:"workflow_id"`
 		WorkflowVersion int          `json:"workflow_version"`
 		WorkflowMode    string       `json:"workflow_mode,omitempty"`
+		ProductContext  string       `json:"product_context,omitempty"`
 		Proposal        planProposal `json:"proposal"`
-	}{projectID, workflowID, workflowVersion, workflowMode, proposal})
+	}{projectID, workflowID, workflowVersion, workflowMode, productContext, proposal})
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }
