@@ -15,6 +15,8 @@ flowchart LR
   Companion -->|Open selected objective and WorkGraph| Browser
   Companion -->|Open selected human decision| Browser
   Companion -->|Start Zenchron| CLI[Canonical CLI start command]
+  Bundle[package-app.sh · ad-hoc signed app bundle] --> Companion
+  Companion -->|Launch at Login · SMAppService| Settings[macOS Login Items]
 ```
 
 ## Behavior
@@ -36,6 +38,7 @@ flowchart LR
 - When disconnected, the menu shows the disconnected condition and offers **Start Zenchron**, which invokes the
   existing `~/.local/bin/zenchron-engineering start` command. Quit exits only the menu-bar process.
 - A process lock prevents another companion instance for the same user from adding a second icon.
+- **Launch at Login** is opt-in and uses `SMAppService.mainApp`. The menu reflects macOS registration state, directs approval-required cases to System Settings, and reports registration errors. It never starts or stops the engineering services.
 - Status refreshes continue while the menu is tracking and older network responses cannot overwrite a newer refresh.
   Decision rows include requester and decision ID so same-title decisions remain distinguishable.
 
@@ -47,17 +50,20 @@ Requires macOS 13 or newer and the Swift command-line tools:
 swift test --package-path macos/ZenchronMenuBar
 swift build -c release --package-path macos/ZenchronMenuBar
 macos/ZenchronMenuBar/.build/release/zenchron-menubar
+macos/ZenchronMenuBar/Scripts/package-app.sh "$HOME/Applications/builds"
+open "$HOME/Applications/builds/Zenchron Menu Bar.app"
 swiftc macos/ZenchronMenuBar/Sources/ZenchronStatusCore/SystemStatus.swift \
   macos/ZenchronMenuBar/Scripts/status-self-check.swift -o /tmp/zenchron-status-self-check
 /tmp/zenchron-status-self-check
 ```
 
-The app can be quit from its menu. It is not yet installed at a stable managed path or registered to launch at login.
-Registering the current SwiftPM build path would leave a broken login item after the executable moves, so this waits on
-canonical companion packaging.
+The package script refuses to overwrite an existing app bundle and ad-hoc signs the generated `.app`. Move it to a
+stable user-controlled location before enabling Launch at Login; registering a temporary build path would leave a
+broken login item after the bundle moves. Quit exits only the menu-bar process.
 
 ## Limits
 
-This is a partial #387 implementation. It does not yet provide Launch at Login, updater-generation reconnect
-verification, CPU/memory or token/cost telemetry, or a signed `.app` installer. The control-plane API and app
-are macOS-local; CI on non-macOS hosts does not exercise the menu UI. No live restart/wake/update acceptance is claimed.
+This is a partial #387 implementation. The app bundle is locally ad-hoc signed, not Developer ID signed or notarized;
+the feature does not yet install/update a stable managed app path or verify login-item approval, updater-generation
+reconnect, CPU/memory, or token/cost telemetry. The control-plane API and app are macOS-local; CI on non-macOS hosts
+does not exercise the menu UI. No live restart/wake/update acceptance is claimed.

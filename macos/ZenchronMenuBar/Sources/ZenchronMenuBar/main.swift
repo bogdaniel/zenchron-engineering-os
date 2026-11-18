@@ -1,6 +1,7 @@
 import AppKit
 import Darwin
 import Foundation
+import ServiceManagement
 import ZenchronStatusCore
 
 final class InstanceLock {
@@ -37,6 +38,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var timer: Timer?
     private var status: SystemStatus?
     private var message = "Checking Zenchron…"
+    private var launchAtLoginError: String?
     private var refreshGeneration: UInt64 = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -128,6 +130,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             start.target = self
             menu.addItem(start)
         }
+        addLaunchAtLoginItem(to: menu)
         menu.addItem(NSMenuItem.separator())
         let quit = NSMenuItem(title: "Quit Menu Bar App", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
@@ -141,6 +144,42 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let symbol = status == nil ? "exclamationmark.circle.fill" : "circle.fill"
         statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Zenchron status")
         statusItem?.button?.toolTip = status == nil ? "Zenchron disconnected" : "Zenchron connected"
+    }
+
+    private func addLaunchAtLoginItem(to menu: NSMenu) {
+        let service = SMAppService.mainApp
+        let title = service.status == .requiresApproval ? "Approve Launch at Login…"
+            : service.status == .notFound ? "Launch at Login unavailable" : "Launch at Login"
+        let item = NSMenuItem(title: title, action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        item.target = self
+        item.state = service.status == .enabled ? .on : .off
+        item.isEnabled = service.status != .notFound
+        menu.addItem(item)
+        if let launchAtLoginError {
+            menu.addItem(NSMenuItem(title: launchAtLoginError, action: nil, keyEquivalent: ""))
+        }
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        let service = SMAppService.mainApp
+        launchAtLoginError = nil
+        do {
+            switch service.status {
+            case .enabled:
+                try service.unregister()
+                message = "Launch at Login disabled"
+            case .requiresApproval:
+                SMAppService.openSystemSettingsLoginItems()
+                message = "Approve Launch at Login in System Settings"
+            default:
+                try service.register()
+                message = "Launch at Login registered; macOS may require approval"
+            }
+        } catch {
+            let reason = error.localizedDescription.prefix(160)
+            launchAtLoginError = "Launch at Login could not be changed · \(reason)"
+        }
+        refreshMenu()
     }
 
     private func refresh() async {
