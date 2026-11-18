@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge, Button, Textarea } from '@mantine/core';
 import { IconGitPullRequest } from '@tabler/icons-react';
 import { openDecisions } from './orchestration';
@@ -60,6 +60,10 @@ function Decision({ graph, request, source }: { graph: WorkGraph; request: Graph
   const [resolution, setResolution] = useState('');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+  const isRequestedAction = new URLSearchParams(window.location.search).get('decision') === request.id;
+  useEffect(() => {
+    if (isRequestedAction) document.getElementById(`work-decision-${request.id}`)?.querySelector('textarea')?.focus();
+  }, [isRequestedAction, request.id]);
   async function resolve() {
     setSending(true);
     setError('');
@@ -72,7 +76,7 @@ function Decision({ graph, request, source }: { graph: WorkGraph; request: Graph
       setSending(false);
     }
   }
-  return <form className="work-decision" aria-label={`Decision for ${request.from}`}
+  return <form id={`work-decision-${request.id}`} className="work-decision" aria-label={`Decision for ${request.from}`}
     onSubmit={(event) => { event.preventDefault(); void resolve(); }}>
     <b>{request.from} needs a decision</b>
     <p>{request.body}</p>

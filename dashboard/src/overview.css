@@ -84,6 +84,11 @@
 .activity-panel .section-icon { width: 26px; height: 26px; }
 .activity-panel .activity-list { margin-top: 0; }
 .activity-panel .activity-list > div { padding-top: 1px; padding-bottom: 1px; }
+.action-required-region { margin-top: 12px; }
+.action-required-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+.action-required-list a { display: grid; gap: 4px; min-width: 0; padding: 9px 11px; border: 1px solid var(--mantine-color-dark-4); border-radius: 8px; color: var(--mantine-color-text); text-decoration: none; }
+.action-required-list a:hover { border-color: var(--mantine-color-violet-5); }
+.action-required-list span { overflow-wrap: anywhere; color: var(--mantine-color-dimmed); font-size: 11px; }
 .objective-panel, .plan-panel, .agents-panel, .evidence-panel { grid-column: span 3; min-height: 150px; }
 .review-panel { grid-column: span 4; min-height: 230px; }
 .timeline-panel { grid-column: span 5; min-height: 230px; }

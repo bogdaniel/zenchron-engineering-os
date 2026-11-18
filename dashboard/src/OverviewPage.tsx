@@ -10,6 +10,7 @@ import {
 import { MetricCard } from './MetricCard';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
+import { ActionRequired } from './ActionRequired';
 import { WorkflowOverview } from './workflows';
 import { mockOverview } from './overview-preview-data';
 import { useLiveOverview } from './overviewView';
@@ -41,6 +42,8 @@ export function OverviewPage({ sampleData, ...liveData }: OverviewLiveData & { s
         icon={<IconDatabase size={19} />} trend={<span className="mock-budget-summary"><small>{kpis.budget.summary}</small>
           <Progress className="mock-budget-progress" value={kpis.budget.percent} /></span>} />
     </section>
+
+    {!sampleData && <ActionRequired />}
 
     <div className="content-grid overview-design-preview">
       <div className="overview-top-grid">

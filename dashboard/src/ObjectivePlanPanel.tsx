@@ -37,6 +37,12 @@ function PlanRevision({ plan, latest, source, live }: {
     setError('');
     try {
       await source.approve?.(plan.revision);
+      if (live && new URLSearchParams(window.location.search).has('graph_id')) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('graph_id');
+        url.searchParams.delete('decision');
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not approve the plan.');
     } finally {
@@ -141,7 +147,9 @@ export function ObjectivePlanPanel({ objectiveID, productID, sampleData }: {
   const mock = useMockOrchestration(objectiveID);
   const live = useLiveOrchestration(!sampleData, objectiveID, productID);
   const source = sampleData ? mock : live;
-  const graph = graphOfObjective(source.graphs, objectiveID);
+  const requestedGraphID = new URLSearchParams(window.location.search).get('graph_id');
+  const graph = source.graphs.find((item) => item.id === requestedGraphID && item.objective_id === objectiveID)
+    ?? graphOfObjective(source.graphs, objectiveID);
   if (source.failed || source.plansFailed) return <div className="work-panel" role="tabpanel">
     <p role="alert">Could not load the plan and its work graph.</p>
     <Button size="xs" variant="subtle" onClick={source.retry}>Retry loading the plan</Button></div>;

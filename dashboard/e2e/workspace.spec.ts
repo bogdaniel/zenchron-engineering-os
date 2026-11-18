@@ -30,7 +30,8 @@ async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, or
       pull_request_url: 'https://github.com/zenchron/nova-platform/pull/42',
     }] : [],
     decisions: route.request().url().includes(novaID) ? [{
-      objective_id: '1'.repeat(32), question: 'Publish the revised export?', resolved_by: '',
+      graph_id: 'f'.repeat(32), message_id: 'decision-1', objective_id: '1'.repeat(32),
+      question: 'Publish the revised export?', resolved_by: '',
     }] : [],
   })));
   await page.route('**/api/v1/projects', (route) => route.fulfill(json([{
@@ -166,7 +167,7 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(page.locator('.workspace-mock-card.analytics')).toContainText('WorkGraphs1 current');
   await expect(page.locator('.workspace-mock-card.analytics')).toContainText('Findings2 recorded');
   await expect(page.locator('.workspace-mock-card.decisions').getByRole('link', { name: 'Publish the revised export?' }))
-    .toHaveAttribute('href', `/?objective=${'1'.repeat(32)}&tab=plan&mode=live#objectives`);
+    .toHaveAttribute('href', `/?objective=${'1'.repeat(32)}&tab=plan&graph_id=${'f'.repeat(32)}&decision=decision-1&mode=live#objectives`);
   await page.screenshot({ path: testInfo.outputPath('workspace-environment-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);

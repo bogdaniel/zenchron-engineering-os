@@ -42,7 +42,8 @@ func TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions(t *t
 	own, status := environment(alpha)
 	if status != http.StatusOK || own.Name != "alpha" || len(own.Objectives) != 1 || own.Objectives[0].ID != created.ID ||
 		own.Objectives[0].GraphID != graph.ID || own.Objectives[0].PlanRevisions != 1 || own.Objectives[0].Handoffs != 1 ||
-		len(own.Decisions) != 1 || own.Decisions[0].Unit != "api" || own.Decisions[0].ResolvedBy != "" {
+		len(own.Decisions) != 1 || own.Decisions[0].Unit != "api" || own.Decisions[0].ResolvedBy != "" ||
+		own.Decisions[0].GraphStatus != own.Objectives[0].GraphStatus {
 		t.Fatalf("environment of the product = HTTP %d %#v", status, own)
 	}
 	harness.call(http.MethodPost, "/api/v1/work-graphs/"+graph.ID+"/decisions/"+own.Decisions[0].MessageID, `{"resolution":"Comma."}`)
