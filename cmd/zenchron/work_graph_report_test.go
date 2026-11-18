@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
@@ -118,6 +120,18 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	if integration := reportedUnit(t, report, "integrate"); len(integration.Executions) != 1 ||
 		integration.Executions[0].CandidateTree != commit(5) {
 		t.Fatalf("integration tree provenance = %#v", integration.Executions)
+	}
+	original := report
+	harness.restart()
+	replayed, _ := harness.deliveryReport(started.ID)
+	if original.PullRequest != nil {
+		original.PullRequest.ObservedAt = time.Time{}
+	}
+	if replayed.PullRequest != nil {
+		replayed.PullRequest.ObservedAt = time.Time{}
+	}
+	if !reflect.DeepEqual(replayed, original) {
+		t.Fatalf("report after restart = %#v, before restart %#v", replayed, original)
 	}
 
 	// Reading the report changed nothing about the graph.
