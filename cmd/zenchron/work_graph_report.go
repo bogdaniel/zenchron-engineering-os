@@ -69,6 +69,7 @@ type reportExecution struct {
 	Verification    string `json:"verification,omitempty"`
 	Attempts        int    `json:"attempts"`
 	CandidateCommit string `json:"candidate_commit,omitempty"`
+	CandidateTree   string `json:"candidate_tree_sha,omitempty"`
 	ReviewVerdict   string `json:"review_verdict,omitempty"`
 	Publication     string `json:"publication,omitempty"`
 	PullRequestURL  string `json:"pull_request_url,omitempty"`
@@ -144,6 +145,11 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 		attempts = append(attempts, unitAttempts...)
 		summary := summarizeUnit(unit, runs)
 		summary.Executions = summarizeExecutions(unit, runs)
+		if unit.Kind == unitIntegrate && hasCandidateTree(unit, runs) {
+			report.UnknownEvidence = slices.DeleteFunc(report.UnknownEvidence, func(evidence string) bool {
+				return evidence == "candidate_tree_sha"
+			})
+		}
 		report.Units = append(report.Units, summary)
 		if unit.State != unitCompleted {
 			report.Outstanding = append(report.Outstanding, reportOutstanding{Key: unit.Key, State: unit.State,
@@ -186,6 +192,16 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	return report
 }
 
+func hasCandidateTree(unit workUnit, runs map[string]agentRun) bool {
+	for _, id := range unit.RunIDs {
+		run := runs[id]
+		if run.Status == "succeeded" && run.CommitSHA == unit.Candidate && run.CommitTreeSHA != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecution {
 	executions := make([]reportExecution, 0, len(unit.RunIDs))
 	for _, id := range unit.RunIDs {
@@ -194,7 +210,7 @@ func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecut
 			continue
 		}
 		execution := reportExecution{RunID: id, Status: run.Status, Attempts: run.Attempts,
-			CandidateCommit: run.CommitSHA, Provider: run.Provider, ProviderVersion: run.ProviderVersion,
+			CandidateCommit: run.CommitSHA, CandidateTree: run.CommitTreeSHA, Provider: run.Provider, ProviderVersion: run.ProviderVersion,
 			Verification: run.Verification, Publication: run.Publication, PullRequestURL: run.PullRequestURL,
 			FailureRecorded: run.Error != ""}
 		if run.Profile != nil {

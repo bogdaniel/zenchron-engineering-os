@@ -60,7 +60,7 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
 		Verification: workerapi.VerificationPassed, Result: string(merged)})
 	harness.verdict(harness.claimUnit("review-all"), commit(4), `{"review":{"verdict":"accept"}}`)
-	harness.report(harness.claimUnit("integrate"), workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9),
+	harness.report(harness.claimUnit("integrate"), workerapi.AgentRunResult{CommitSHA: commit(4), CommitTreeSHA: commit(5), BaseCommit: commit(9),
 		Output: "Merged.", Verification: workerapi.VerificationPassed, BranchPushed: true, Result: string(merged)})
 
 	before := harness.graph()
@@ -106,13 +106,29 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 		len(review.RunIDs) != 2 || review.Attempts != 2 || !slices.Equal(review.Providers, []string{workerapi.ProviderCodex}) {
 		t.Fatalf("ui unit = %#v, review unit = %#v", uiUnit, review)
 	}
-	if !slices.Equal(report.UnknownEvidence, []string{"candidate_tree_sha", "publication_authority", "pull_request_external_state"}) {
+	if !slices.Equal(report.UnknownEvidence, []string{"publication_authority", "pull_request_external_state"}) {
 		t.Fatalf("unrecorded evidence = %v", report.UnknownEvidence)
+	}
+	if integration := reportedUnit(t, report, "integrate"); len(integration.Executions) != 1 ||
+		integration.Executions[0].CandidateTree != commit(5) {
+		t.Fatalf("integration tree provenance = %#v", integration.Executions)
 	}
 
 	// Reading the report changed nothing about the graph.
 	if after := harness.graph(); after.Revision != before.Revision || !after.UpdatedAt.Equal(before.UpdatedAt) {
 		t.Fatalf("graph moved from revision %d at %s to revision %d at %s", before.Revision, before.UpdatedAt, after.Revision, after.UpdatedAt)
+	}
+	harness.store.graphs.mu.Lock()
+	graph := harness.store.graphs.graphs[started.ID]
+	for index := range graph.Units {
+		if graph.Units[index].Kind == unitIntegrate {
+			graph.Units[index].Candidate = commit(6)
+		}
+	}
+	harness.store.graphs.mu.Unlock()
+	stale, _ := harness.deliveryReport(started.ID)
+	if !slices.Contains(stale.UnknownEvidence, "candidate_tree_sha") {
+		t.Fatalf("tree for another candidate was accepted: %v", stale.UnknownEvidence)
 	}
 }
 

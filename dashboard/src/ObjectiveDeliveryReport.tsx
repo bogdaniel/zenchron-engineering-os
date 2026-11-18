@@ -9,7 +9,7 @@ const executionSchema = z.object({
   run_id: z.string(), status: z.string(), profile_id: z.string().optional(), profile_name: z.string().optional(),
   profile_version: z.number().optional(), persona_id: z.string().optional(), persona_name: z.string().optional(),
   persona_version: z.number().optional(), provider: z.string().optional(), provider_version: z.string().optional(),
-  attempts: z.number(), candidate_commit: z.string().optional(), review_verdict: z.string().optional(),
+  attempts: z.number(), candidate_commit: z.string().optional(), candidate_tree_sha: z.string().optional(), review_verdict: z.string().optional(),
   verification: z.string().optional(), publication: z.string().optional(), pull_request_url: z.string().optional(),
   failure_recorded: z.boolean().optional(),
 });
@@ -105,6 +105,7 @@ function ReportDetails({ report }: { report: Report }) {
           {run.provider && ` · ${run.provider}${run.provider_version ? ` ${run.provider_version}` : ''}`}</span>
         <span>Worker-reported verification: {run.verification || 'Not run'}</span>
         {run.candidate_commit && <span>Commit <code>{run.candidate_commit}</code></span>}
+        {run.candidate_tree_sha && <span>Tree <code>{run.candidate_tree_sha}</code></span>}
         {run.review_verdict && <span>Review verdict: {run.review_verdict}</span>}
         {run.publication && <span>Publication state: {run.publication}</span>}
         {run.pull_request_url && <a href={run.pull_request_url} target="_blank" rel="noreferrer">Open pull request ↗</a>}

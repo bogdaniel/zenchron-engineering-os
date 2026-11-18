@@ -462,7 +462,8 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(report).toContainText('E2E CSV specialist v1');
   await expect(report).toContainText('codex-cli');
   await expect(report).toContainText('Worker-reported verification: not_configured');
-  await expect(report).toContainText('Unknown evidence: candidate tree SHA, publication authority, current pull request state');
+  await expect(report).toContainText('Unknown evidence: publication authority, current pull request state');
+  await expect(report.locator('.objective-delivery-run').filter({ hasText: /Tree/ }).first()).toBeVisible();
   await expect(report.locator('a[href$="#reviews"]').first()).toHaveAttribute('href', /^\/\?run=.+&mode=live#reviews$/);
   await expect(report).toContainText('CSV');
   await expect(report).toContainText('GitHub publication is not configured');
@@ -486,10 +487,12 @@ test('an objective plan approved in the dashboard runs through decision, review,
   });
   if (!exported) throw new Error('Delivery JSON export did not create a download payload');
   const delivery = JSON.parse(exported) as { workflow_id: string; workflow_mode: string; unknown_evidence: string[];
-    units: { executions: { verification?: string }[] }[] };
+    units: { kind: string; executions: { verification?: string; candidate_commit?: string; candidate_tree_sha?: string }[] }[] };
   expect(delivery.workflow_id).toBe(created.workflowID);
   expect(delivery.workflow_mode).toBe('compiled');
-  expect(delivery.unknown_evidence).toContain('candidate_tree_sha');
+  expect(delivery.unknown_evidence).not.toContain('candidate_tree_sha');
+  expect(delivery.units.filter((unit) => unit.kind === 'integrate').flatMap((unit) => unit.executions)
+    .some((run) => run.candidate_commit && run.candidate_tree_sha)).toBe(true);
   expect(delivery.units.flatMap((unit) => unit.executions).some((run) => run.verification === 'not_configured')).toBe(true);
   expect(exported).not.toContain('system_prompt');
   await page.screenshot({ path: testInfo.outputPath('objective-report-desktop.png'), fullPage: true });

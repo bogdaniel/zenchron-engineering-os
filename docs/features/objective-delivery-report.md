@@ -12,6 +12,7 @@ flowchart LR
   Graphs --> Visibility{Objective visible and repository access?}
   Visibility -->|No: 404| NotFound[Not found]
   Visibility -->|Yes| Runs[(agent-runs.json<br/>runs, attempts, usage)]
+  Worker[CLI worker] -->|Recorded commit and tree SHA| Runs
   Graphs --> Compute[work_graph_report.go<br/>pure computation]
   Runs --> Compute
   Compute --> Response[JSON response]
@@ -32,12 +33,15 @@ flowchart LR
   run's provider and, when recorded, a space and its provider version.
 - `approved_plan` records the approved revision, content hash, summary, approver, and approval time. Workflow identity
   and version come from the compiled plan and graph. Each execution reports the recorded profile and persona IDs,
-  names and versions, provider, candidate commit, worker-reported verification, review verdict, publication state, PR
-  link, attempts, and failures. Verification belongs to that run; it is not an independent assurance record.
+  names and versions, provider, candidate commit and its Git tree SHA when reported, worker-reported verification,
+  review verdict, publication state, PR link, attempts, and failures. Tree evidence is considered known only when the
+  successful integration run's tree accompanies the selected candidate commit. Verification belongs to that run; it
+  is not an independent assurance record.
   Handoffs, decisions and unresolved steps are shown from immutable WorkGraph messages and state.
-- `unknown_evidence` names evidence the current records cannot establish: candidate tree SHA, publication authority,
-  and current pull request state. A PR URL or recorded publication result does not establish whether GitHub still
-  considers the PR open, merged, or closed.
+- `unknown_evidence` names evidence the current records cannot establish. Candidate tree SHA remains unknown until a
+  successful integration run records it for the selected candidate. Publication authority and current pull request
+  state remain unknown; a PR URL or recorded publication result does not establish whether GitHub still considers
+  the PR open, merged, or closed.
 - Top-level `measurements` contains:
   - `unit_count`: number of units.
   - `run_count`: number of all run ids, including ids without a stored run.

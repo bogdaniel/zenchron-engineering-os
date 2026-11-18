@@ -203,8 +203,9 @@ func TestCLIRunCommitsVerifiedChangeAndReportsRedactedEvidence(t *testing.T) {
 	}
 	result := harness.result()
 	head := strings.TrimSpace(runGit(t, harness.worktree, "rev-parse", "HEAD"))
+	tree := strings.TrimSpace(runGit(t, harness.worktree, "rev-parse", "HEAD^{tree}"))
 	base := strings.TrimSpace(runGit(t, harness.repository, "rev-parse", "main"))
-	if result.Status != "succeeded" || result.CommitSHA != head || result.BaseCommit != base ||
+	if result.Status != "succeeded" || result.CommitSHA != head || result.CommitTreeSHA != tree || result.BaseCommit != base ||
 		result.Verification != workerapi.VerificationPassed || result.TerminationReason != workerapi.TerminationCompleted ||
 		result.ProviderVersion != "fake 1.0" || result.Usage == nil || result.Usage.InputTokens != 120 ||
 		result.Usage.OutputTokens != 30 || result.Usage.CostUSD != nil || result.BranchPushed ||
@@ -243,7 +244,7 @@ func TestCLIRunVerificationFailureKeepsCommitAndDoesNotPublish(t *testing.T) {
 	}
 	result := harness.result()
 	if result.Status != "failed" || result.Verification != workerapi.VerificationFailed ||
-		result.TerminationReason != workerapi.TerminationVerification || len(result.CommitSHA) != 40 ||
+		result.TerminationReason != workerapi.TerminationVerification || len(result.CommitSHA) != 40 || len(result.CommitTreeSHA) != 40 ||
 		result.BranchPushed || result.BranchPushFailed {
 		t.Fatalf("result = %#v", result)
 	}

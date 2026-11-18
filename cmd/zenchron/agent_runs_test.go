@@ -114,6 +114,11 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid commit id returned HTTP %d", response.Code)
 	}
+	response = call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+first.ID,
+		`{"status":"succeeded","attempts":1,"commit_tree_sha":"`+strings.Repeat("b", 40)+`"}`)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("tree without commit returned HTTP %d", response.Code)
+	}
 	tooLargeDiff, err := json.Marshal(map[string]any{
 		"status": "succeeded", "attempts": 1, "diff": strings.Repeat("x", maxAgentRunDiffSize+1),
 	})
@@ -199,8 +204,9 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 		t.Fatalf("follow-up claim = %#v, decode error = %v, HTTP %d", second, err, response.Code)
 	}
 	commitSHA := strings.Repeat("a", 40)
+	treeSHA := strings.Repeat("c", 40)
 	response = call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+second.ID,
-		`{"status":"succeeded","output":"Review addressed","attempts":2,"commit_sha":"`+commitSHA+`","diff":"diff --git a/README.md b/README.md\n+Addressed\n"}`)
+		`{"status":"succeeded","output":"Review addressed","attempts":2,"commit_sha":"`+commitSHA+`","commit_tree_sha":"`+treeSHA+`","diff":"diff --git a/README.md b/README.md\n+Addressed\n"}`)
 	if response.Code != http.StatusOK {
 		t.Fatalf("finish follow-up returned HTTP %d: %s", response.Code, response.Body.String())
 	}
@@ -218,8 +224,21 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 		t.Fatalf("restored run = %#v, want succeeded with its profile snapshot", restored.items[queued.ID])
 	}
 	if !restored.items[queued.ID].DiffAvailable || restored.items[queued.ID].DiffAttempt != 2 ||
-		len(restored.items[queued.ID].ReviewComments) != 2 || restored.items[queued.ID].CommitSHA != commitSHA {
+		len(restored.items[queued.ID].ReviewComments) != 2 || restored.items[queued.ID].CommitSHA != commitSHA ||
+		restored.items[queued.ID].CommitTreeSHA != treeSHA {
 		t.Fatalf("restored diff metadata = %#v", restored.items[queued.ID])
+	}
+}
+
+func TestAgentRunResultDoesNotCarryTreeAcrossCandidateCommits(t *testing.T) {
+	now := time.Now().UTC()
+	item := agentRun{ID: strings.Repeat("a", 32), WorkerID: testWorkerID, Status: "running", Attempts: 1,
+		LeaseUntil: now.Add(time.Minute), CommitSHA: strings.Repeat("b", 40), CommitTreeSHA: strings.Repeat("c", 40)}
+	status, message := (&agentRunStore{}).applyResult(&item, testWorkerID, workerapi.AgentRunResult{
+		Status: "succeeded", Attempts: 1, CommitSHA: strings.Repeat("d", 40),
+	})
+	if status != 0 || item.CommitSHA != strings.Repeat("d", 40) || item.CommitTreeSHA != "" {
+		t.Fatalf("candidate result = %#v, status %d: %s", item, status, message)
 	}
 }
 

@@ -177,6 +177,7 @@ type AgentRunResult struct {
 	Attempts          int     `json:"attempts"`
 	BaseCommit        string  `json:"base_commit,omitempty"`
 	CommitSHA         string  `json:"commit_sha,omitempty"`
+	CommitTreeSHA     string  `json:"commit_tree_sha,omitempty"`
 	Diff              *string `json:"diff,omitempty"`
 	DiffTruncated     bool    `json:"diff_truncated,omitempty"`
 	BranchPushed      bool    `json:"branch_pushed,omitempty"`
