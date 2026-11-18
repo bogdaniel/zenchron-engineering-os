@@ -47,7 +47,7 @@ flowchart LR
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
     Environment --> Store
     Environment --> Graphs[(objectives.json · work-graphs.json)]
-    Store -->|"read linked product description"| CP
+    Store -->|"read linked product identity and description"| CP
     CP -->|"snapshot in plan revision and plan hash"| Graphs
     Graphs -->|"matching objective, revision and hash"| RunContext["planner / WorkUnit runContext"]
     Graphs -->|"frozen workflow/profile/persona revision references"| Environment

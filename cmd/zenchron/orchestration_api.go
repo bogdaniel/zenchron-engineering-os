@@ -126,7 +126,10 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 			http.Error(w, "the objective's linked product is unavailable", http.StatusConflict)
 			return
 		}
-		plan.ProductContext = linkedProduct.Description
+		plan.ProductContext = "Product: " + linkedProduct.Name
+		if linkedProduct.Description != "" {
+			plan.ProductContext += "\nDescription: " + linkedProduct.Description
+		}
 	}
 	if definition != nil {
 		plan.WorkflowVersion = definition.Version
