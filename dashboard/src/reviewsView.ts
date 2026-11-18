@@ -188,7 +188,7 @@ export function useLiveReviews(
   const pulls = pullRequests.data?.items ?? [];
   const count = (value: number | undefined, query: { isLoading: boolean }) =>
     value ?? (query.isLoading ? '…' : 'Unavailable');
-  const inReview = pulls.filter((item) => liveStatus(item).value === 'open').length;
+  const inReview = pullRequests.data?.items.filter((item) => liveStatus(item).value === 'open').length;
   const localBranches = runs.items.filter((run) => run.diff_available || ['queued', 'running', 'cancelled'].includes(run.status));
   const listing = <T>(query: {
     data?: { items: T[]; complete: boolean }; isLoading: boolean; isError: boolean; isFetching: boolean;
