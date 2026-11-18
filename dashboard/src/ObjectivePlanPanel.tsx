@@ -37,6 +37,12 @@ function PlanRevision({ plan, latest, source, live }: {
     setError('');
     try {
       await source.approve?.(plan.revision);
+      if (live && new URLSearchParams(window.location.search).has('graph_id')) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('graph_id');
+        url.searchParams.delete('decision');
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not approve the plan.');
     } finally {

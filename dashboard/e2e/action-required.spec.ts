@@ -55,13 +55,45 @@ for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: '
 }
 
 test('Action Required omits an empty queue and reports an unavailable queue honestly', async ({ page }) => {
+  let releaseInitialLoad!: () => void;
+  const initialLoad = new Promise<void>((resolve) => { releaseInitialLoad = resolve; });
+  let unavailable = false;
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
-  await page.route('**/api/v1/work-graphs', (route) => route.fulfill(json([])));
+  await page.route('**/api/v1/work-graphs', async (route) => {
+    if (unavailable) return route.fulfill({ status: 503, body: 'temporarily unavailable' });
+    await initialLoad;
+    return route.fulfill(json([]));
+  });
   await page.goto('/?mode=live#overview');
-  await expect(page.getByRole('region', { name: 'Action Required' })).toHaveCount(0);
-  await page.route('**/api/v1/work-graphs', (route) => route.fulfill({ status: 503, body: 'temporarily unavailable' }));
-  await page.reload();
   const queue = page.getByRole('region', { name: 'Action Required' });
+  await expect(queue).toContainText('Checking for human decisions…');
+  releaseInitialLoad();
+  await expect(queue).toHaveCount(0);
+  unavailable = true;
+  await page.reload();
   await expect(queue).toContainText('WorkGraph actions unavailable (503)');
   await expect(queue.getByRole('button', { name: 'Retry' })).toBeVisible();
+});
+
+test('approving a replacement plan clears the stale Action Required graph selection', async ({ page }) => {
+  await useLiveSession(page, [graph(cancelledGraphID, 'api-cancelled', 'Old graph decision', '2026-11-02T00:00:00Z', 'cancelled')]);
+  const plan = { objective_id: objectiveID, revision: 2, status: 'proposed', project_id: 'repository', summary: 'Replacement plan',
+    max_parallel: 1, units: [], problems: [], created_at: '2026-11-03T00:00:00Z' };
+  let graphs = [graph(cancelledGraphID, 'api-cancelled', 'Old graph decision', '2026-11-02T00:00:00Z', 'cancelled')];
+  let plans: unknown[] = [plan];
+  await page.route('**/api/v1/work-graphs', (route) => route.fulfill(json(graphs)));
+  await page.route(`**/api/v1/objectives/${objectiveID}/plans`, (route) => route.fulfill(json(plans)));
+  await page.route(`**/api/v1/objectives/${objectiveID}/plans/2/approve`, (route) => {
+    graphs = [graph(currentGraphID, 'api-replacement', 'Replacement graph decision', '2026-11-04T00:00:00Z', 'active')];
+    plans = [{ ...plan, status: 'approved', graph_id: currentGraphID, approved_by: 'Local operator' }];
+    return route.fulfill(json({ status: 'approved' }));
+  });
+  await page.goto(`/?mode=live&objective=${objectiveID}&tab=plan&graph_id=${cancelledGraphID}&decision=decision-api-cancelled#objectives`);
+  await expect(page.getByRole('form', { name: 'Decision for api-cancelled' })).toContainText('Old graph decision');
+  await page.getByRole('button', { name: 'Approve plan and start' }).click();
+  await expect(page).toHaveURL(new RegExp(`objective=${objectiveID}.*tab=plan`));
+  await expect(page).not.toHaveURL(/graph_id=|decision=/);
+  const messages = page.getByRole('list', { name: 'Handoffs, findings, and decisions' });
+  await expect(messages).toContainText('Replacement graph decision');
+  await expect(messages).not.toContainText('Old graph decision');
 });

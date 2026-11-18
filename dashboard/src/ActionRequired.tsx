@@ -21,7 +21,7 @@ export function ActionRequired() {
     unit: decision.from,
     href: livePageHref('objectives', { objective: graph.objective_id, tab: 'plan', graph_id: graph.id, decision: decision.id }),
   })));
-  if (!graphs.isError && actions.length === 0) return null;
+  if (graphs.isSuccess && actions.length === 0) return null;
 
   return <section className="action-required-region" aria-label="Action Required">
     <PanelCard className="panel action-required-panel" withBorder>

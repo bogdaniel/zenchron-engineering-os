@@ -3,8 +3,9 @@
 The Live Overview lists unresolved typed WorkGraph decision requests from the existing control plane. It omits
 cancelled graphs, reports loading, empty, and unavailable states, and links each row to the specific objective, graph,
 and decision. The destination focuses the existing authorized resolution field; no second authority model or queue is
-stored. Product Workspace decision links use the same exact deep link and label decisions in cancelled graphs as
-cancelled.
+stored. A successful replacement-plan approval clears the old graph and decision from the deep link so the refreshed
+plan view follows the newly approved graph. Product Workspace decision links use the same exact deep link and label
+decisions in cancelled graphs as cancelled.
 
 ## Feature diagram
 
@@ -16,6 +17,9 @@ flowchart LR
     Objective -->|POST /api/v1/work-graphs/{graph}/decisions/{decision}| CP
     Product[Product Workspace] -->|GET /api/v1/products/{id}/environment| CP
     Product -->|exact decision link with graph status| Objective
+    Objective -->|successful plan approval · refresh| CP
+    CP -->|newest objective WorkGraph| Objective
+    Objective -->|clear obsolete graph_id and decision| Link[Current navigation]
     Mock[Mock Overview] -. makes no queue request .-> CP
 ```
 
