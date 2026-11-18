@@ -195,12 +195,7 @@ func installStableEntrypoint(home string) (string, error) {
 	if err := migrateShadowingZenchronCommands(path); err != nil {
 		return "", err
 	}
-	script := "#!/bin/sh\n" + managedEntrypointMarker + "\nset -eu\nroot=" + shellQuote(home) + "\n"
-	script += "revision=$(cat \"$root/active-release\")\n"
-	script += "case \"$revision\" in " + strings.Repeat("[0-9a-f]", 40) + ") ;; *) echo 'invalid Zenchron release pointer' >&2; exit 1 ;; esac\n"
-	script += "export ZENCHRON_MANAGED_HOME=\"$root\"\n"
-	script += "exec \"$root/releases/$revision/bin/zenchron\" \"$@\"\n"
-	contents := []byte(script)
+	contents := managedEntrypointContents(home)
 	if err := verifyReplaceableEntrypoint(path, contents); err != nil {
 		return "", err
 	}
@@ -213,6 +208,15 @@ func installStableEntrypoint(home string) (string, error) {
 		return "", fmt.Errorf("install canonical Zenchron command: %w", err)
 	}
 	return path, nil
+}
+
+func managedEntrypointContents(home string) []byte {
+	script := "#!/bin/sh\n" + managedEntrypointMarker + "\nset -eu\nroot=" + shellQuote(home) + "\n"
+	script += "revision=$(cat \"$root/active-release\")\n"
+	script += "case \"$revision\" in " + strings.Repeat("[0-9a-f]", 40) + ") ;; *) echo 'invalid Zenchron release pointer' >&2; exit 1 ;; esac\n"
+	script += "export ZENCHRON_MANAGED_HOME=\"$root\"\n"
+	script += "exec \"$root/releases/$revision/bin/zenchron\" \"$@\"\n"
+	return []byte(script)
 }
 
 func localEntrypointPath() (string, error) {
@@ -571,6 +575,10 @@ func showManagedDoctor() error {
 			Repository: repository, Commit: active, Tree: readReleaseTree(home, active),
 		}); err != nil {
 			activeErr = fmt.Errorf("active release verification failed: %w", err)
+		} else if info, err := os.Stat(activeBinary); err != nil {
+			activeErr = fmt.Errorf("inspect active release executable: %w", err)
+		} else if info.Mode().Perm()&0o111 == 0 {
+			activeErr = errors.New("active release executable is not executable")
 		}
 	}
 	paths, pathErr := commandPaths()
@@ -584,10 +592,14 @@ func showManagedDoctor() error {
 		}
 		shadowing = append(shadowing, path)
 	}
-	reachesActive := lookupErr == nil && activeErr == nil && sameFile(resolved, canonical)
+	entrypoint, entrypointErr := os.ReadFile(canonical)
+	if entrypointErr == nil && !bytes.Equal(entrypoint, managedEntrypointContents(home)) {
+		entrypointErr = errors.New("canonical Zenchron command does not match the managed launcher")
+	}
+	reachesActive := lookupErr == nil && activeErr == nil && entrypointErr == nil && sameFile(resolved, canonical)
 	report := map[string]any{"canonical_entrypoint": canonical, "resolved_entrypoint": resolved,
 		"active_revision": active, "active_binary": activeBinary, "reaches_active": reachesActive,
-		"shadowing_entries": shadowing}
+		"entrypoint_valid": entrypointErr == nil, "shadowing_entries": shadowing}
 	encoded, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
@@ -598,6 +610,9 @@ func showManagedDoctor() error {
 	}
 	if activeErr != nil {
 		return fmt.Errorf("managed active release is unavailable: %w", activeErr)
+	}
+	if entrypointErr != nil {
+		return fmt.Errorf("canonical Zenchron entrypoint is invalid: %w", entrypointErr)
 	}
 	if !reachesActive {
 		return errors.New("PATH resolves zenchron-engineering to a shadowing entry instead of the canonical release")

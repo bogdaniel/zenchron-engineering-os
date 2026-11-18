@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"os"
@@ -10,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 func TestStableEntrypointFollowsTwoSuccessiveReleases(t *testing.T) {
@@ -221,6 +224,117 @@ func TestStableEntrypointDoesNotFallBackWhenActiveReleaseIsMissing(t *testing.T)
 	}
 }
 
+func TestDoctorRejectsAlteredCanonicalEntrypoint(t *testing.T) {
+	userHome := t.TempDir()
+	t.Setenv("HOME", userHome)
+	managedHome := filepath.Join(userHome, ".config", "Zenchron")
+	t.Setenv("ZENCHRON_MANAGED_HOME", managedHome)
+	t.Setenv("PATH", filepath.Join(userHome, ".local", "bin")+string(os.PathListSeparator)+"/usr/bin:/bin")
+	revision := "0123456789abcdef0123456789abcdef01234567"
+	writeManagedReleaseFixture(t, managedHome, revision)
+	entrypoint, err := installStableEntrypoint(managedHome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, doctorErr := captureDoctorOutput(t)
+	var report struct {
+		Reaches  bool   `json:"reaches_active"`
+		Valid    bool   `json:"entrypoint_valid"`
+		Revision string `json:"active_revision"`
+	}
+	if err := json.Unmarshal(output, &report); err != nil {
+		t.Fatalf("doctor output %q is not JSON: %v", output, err)
+	}
+	if doctorErr != nil || !report.Reaches || !report.Valid || report.Revision != revision {
+		t.Fatalf("doctor result = %#v, error %v; wanted the current managed launcher to be healthy", report, doctorErr)
+	}
+	activeBinary := filepath.Join(managedHome, "releases", revision, "bin", "zenchron")
+	if err := os.Chmod(activeBinary, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output, doctorErr = captureDoctorOutput(t)
+	if err := json.Unmarshal(output, &report); err != nil {
+		t.Fatalf("doctor output %q is not JSON: %v", output, err)
+	}
+	if doctorErr == nil || !strings.Contains(doctorErr.Error(), "not executable") || report.Reaches || !report.Valid {
+		t.Fatalf("doctor result = %#v, error %v; wanted a broken active binary to fail closed", report, doctorErr)
+	}
+	if err := os.Chmod(activeBinary, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(entrypoint, []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	output, doctorErr = captureDoctorOutput(t)
+	if err := json.Unmarshal(output, &report); err != nil {
+		t.Fatalf("doctor output %q is not JSON: %v", output, err)
+	}
+	if doctorErr == nil || !strings.Contains(doctorErr.Error(), "canonical Zenchron entrypoint is invalid") ||
+		report.Reaches || report.Valid || report.Revision != revision {
+		t.Fatalf("doctor result = %#v, error %v; wanted a broken launcher to fail closed", report, doctorErr)
+	}
+}
+
+func writeManagedReleaseFixture(t *testing.T, home, revision string) {
+	t.Helper()
+	tree := "abcdef0123456789abcdef0123456789abcdef01"
+	releaseDir := filepath.Join(home, "releases", revision)
+	artifacts := map[string]string{"bin/zenchron": "control-plane", "bin/zenchron-worker": "worker",
+		"dashboard/index.html": "dashboard"}
+	manifest := updater.Manifest{Repository: "bogdaniel/zenchron-engineering-os", Commit: revision, Tree: tree,
+		StateSchemaVersion: updater.StateSchemaVersion, ControlPlaneProtocolVersion: workerapi.ProtocolVersion,
+		WorkerProtocolVersion: workerapi.ProtocolVersion, Artifacts: make(map[string]string, len(artifacts))}
+	for path, content := range artifacts {
+		fullPath := filepath.Join(releaseDir, path)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(fullPath, []byte(content), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256([]byte(content))
+		manifest.Artifacts[path] = hex.EncodeToString(digest[:])
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(releaseDir, "release.json"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := updater.SetActiveRelease(home, revision); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func captureDoctorOutput(t *testing.T) ([]byte, error) {
+	t.Helper()
+	previousArgs := os.Args
+	os.Args = []string{"zenchron-engineering", "doctor"}
+	defer func() { os.Args = previousArgs }()
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousStdout := os.Stdout
+	os.Stdout = writer
+	defer func() {
+		os.Stdout = previousStdout
+		_ = writer.Close()
+	}()
+	doctorErr := run()
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = previousStdout
+	defer reader.Close()
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return output, doctorErr
+}
+
 func TestCommandPathDiagnosticFindsEarlierShadowingExecutable(t *testing.T) {
 	root := t.TempDir()
 	first, second := filepath.Join(root, "bin-one"), filepath.Join(root, "bin-two")
@@ -269,23 +383,7 @@ func TestDoctorReportsShadowingCommandAndDoesNotPass(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", first+string(os.PathListSeparator)+canonical+string(os.PathListSeparator)+"/usr/bin:/bin")
-	previousArgs := os.Args
-	os.Args = []string{"zenchron-engineering", "doctor"}
-	defer func() { os.Args = previousArgs }()
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	previousStdout := os.Stdout
-	os.Stdout = writer
-	doctorErr := run()
-	_ = writer.Close()
-	os.Stdout = previousStdout
-	defer reader.Close()
-	output, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatal(err)
-	}
+	output, doctorErr := captureDoctorOutput(t)
 	var report struct {
 		Resolved  string   `json:"resolved_entrypoint"`
 		Reaches   bool     `json:"reaches_active"`
