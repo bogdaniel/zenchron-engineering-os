@@ -46,8 +46,20 @@ func TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions(t *t
 		own.Objectives[0].GraphID != graph.ID || own.Objectives[0].PlanRevisions != 1 || own.Objectives[0].Handoffs != 1 ||
 		len(own.Decisions) != 1 || own.Decisions[0].Unit != "api" || own.Decisions[0].ResolvedBy != "" ||
 		len(own.History) != 1 || own.History[0].ID != graph.ID || own.History[0].PlanHash != graph.PlanHash ||
-		own.Decisions[0].GraphStatus != own.Objectives[0].GraphStatus {
+		own.Decisions[0].GraphStatus != own.Objectives[0].GraphStatus || len(own.History[0].Assignments) != 2 ||
+		own.History[0].Assignments[0] != (environmentAssignment{Unit: "api", AgentID: harness.profile.ID,
+			ProfileVersion: harness.profile.Version}) ||
+		own.History[0].Assignments[1] != (environmentAssignment{Unit: "ui", AgentID: harness.second.ID,
+			ProfileVersion: harness.second.Version}) {
 		t.Fatalf("environment of the product = HTTP %d %#v", status, own)
+	}
+	harness.store.agents.mu.Lock()
+	currentProfile := harness.store.agents.items[harness.profile.ID]
+	currentProfile.Version++
+	harness.store.agents.items[harness.profile.ID] = currentProfile
+	harness.store.agents.mu.Unlock()
+	if own, _ = environment(alpha); own.History[0].Assignments[0].ProfileVersion != harness.profile.Version {
+		t.Fatalf("current profile revision rewrote historical assignment = %#v", own.History[0].Assignments)
 	}
 	harness.call(http.MethodPost, "/api/v1/work-graphs/"+graph.ID+"/decisions/"+own.Decisions[0].MessageID, `{"resolution":"Comma."}`)
 	if own, _ = environment(alpha); own.Decisions[0].ResolvedBy != localOperator {
@@ -77,7 +89,8 @@ func TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions(t *t
 	var restored productEnvironment
 	if err := json.NewDecoder(response.Body).Decode(&restored); err != nil || response.Code != http.StatusOK ||
 		len(restored.History) != 2 || restored.History[0].ID != graph.ID || restored.History[1].ID != previous.ID ||
-		restored.History[1].Status != graphCompleted {
+		restored.History[1].Status != graphCompleted || len(restored.History[0].Assignments) != 2 ||
+		restored.History[0].Assignments[0].ProfileVersion != harness.profile.Version {
 		t.Fatalf("restarted product history = HTTP %d %#v, decode error %v", response.Code, restored, err)
 	}
 	// Another product shares the repository but none of the work.

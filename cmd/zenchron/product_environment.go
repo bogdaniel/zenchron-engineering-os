@@ -22,18 +22,31 @@ type productEnvironment struct {
 
 // environmentGraph is a product-scoped reference to a durable execution record, without copying its evidence.
 type environmentGraph struct {
-	ID             string    `json:"id"`
-	ObjectiveID    string    `json:"objective_id"`
-	PlanRevision   int       `json:"plan_revision"`
-	PlanHash       string    `json:"plan_hash"`
-	Revision       int       `json:"revision"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	RunIDs         []string  `json:"run_ids"`
-	Handoffs       int       `json:"handoffs"`
-	Findings       int       `json:"findings"`
-	PullRequestURL string    `json:"pull_request_url,omitempty"`
+	ID              string                  `json:"id"`
+	ObjectiveID     string                  `json:"objective_id"`
+	PlanRevision    int                     `json:"plan_revision"`
+	PlanHash        string                  `json:"plan_hash"`
+	WorkflowID      string                  `json:"workflow_id,omitempty"`
+	WorkflowVersion int                     `json:"workflow_version,omitempty"`
+	WorkflowMode    string                  `json:"workflow_mode,omitempty"`
+	Assignments     []environmentAssignment `json:"assignments"`
+	Revision        int                     `json:"revision"`
+	Status          string                  `json:"status"`
+	CreatedAt       time.Time               `json:"created_at"`
+	UpdatedAt       time.Time               `json:"updated_at"`
+	RunIDs          []string                `json:"run_ids"`
+	Handoffs        int                     `json:"handoffs"`
+	Findings        int                     `json:"findings"`
+	PullRequestURL  string                  `json:"pull_request_url,omitempty"`
+}
+
+// environmentAssignment references the immutable profile and persona revisions captured by a plan unit.
+type environmentAssignment struct {
+	Unit           string `json:"unit"`
+	AgentID        string `json:"agent_id"`
+	ProfileVersion int    `json:"profile_version"`
+	PersonaID      string `json:"persona_id,omitempty"`
+	PersonaVersion int    `json:"persona_version,omitempty"`
 }
 
 // environmentObjective names an objective of the product and where its execution stands.
@@ -95,11 +108,18 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 				continue
 			}
 			reference := environmentGraph{ID: graph.ID, ObjectiveID: objective.ID, PlanRevision: graph.PlanRevision,
-				PlanHash: graph.PlanHash, Revision: graph.Revision, Status: graph.Status, CreatedAt: graph.CreatedAt,
-				UpdatedAt: graph.UpdatedAt, RunIDs: []string{}}
+				PlanHash: graph.PlanHash, WorkflowID: graph.WorkflowID, WorkflowVersion: graph.WorkflowVersion,
+				WorkflowMode: graph.WorkflowMode, Revision: graph.Revision, Status: graph.Status,
+				CreatedAt: graph.CreatedAt, UpdatedAt: graph.UpdatedAt, RunIDs: []string{},
+				Assignments: []environmentAssignment{}}
 			for _, unit := range graph.Units {
 				reference.RunIDs = append(reference.RunIDs, unit.RunIDs...)
 				reference.PullRequestURL = max(reference.PullRequestURL, unit.PullRequestURL)
+				if unit.AgentID != "" {
+					reference.Assignments = append(reference.Assignments, environmentAssignment{Unit: unit.Key,
+						AgentID: unit.AgentID, ProfileVersion: unit.ProfileVersion, PersonaID: unit.PersonaID,
+						PersonaVersion: unit.PersonaVersion})
+				}
 			}
 			for _, message := range graph.Messages {
 				switch message.Type {

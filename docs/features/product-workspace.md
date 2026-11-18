@@ -47,6 +47,7 @@ flowchart LR
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
     Environment --> Store
     Environment --> Graphs[(objectives.json · work-graphs.json)]
+    Graphs -->|"frozen workflow/profile/persona revision references"| Environment
     Page -->|"Product actions → Open repository inventory"| Projects["#projects"]
 ```
 
@@ -181,17 +182,21 @@ verified; deterministic fake-CLI coverage lives in `orchestration.spec.ts`.
 `GET /api/v1/products/{id}/environment` returns the engineering world of one product by reference: its repository
 ids; each objective linked to it with its status, the number of plan revisions, and the id, status, plan revision,
 handoff and finding counts, and pull-request URL of its newest work graph; every visible WorkGraph in newest-first
-history order with its plan hash/revision, graph revision, run IDs, status and timestamps; and every decision asked in
-those graphs with the unit that asked, the question, and who resolved it.
+history order with its plan hash/revision, graph revision, run IDs, status and timestamps, workflow identity/version,
+and each assigned unit's agent profile/persona identity and frozen revision; and every decision asked in those graphs
+with the unit that asked, the question, and who resolved it.
 
 - It is a projection of the product, objective, plan, and work-graph records and stores nothing.
 - Historical work survives a control-plane restart through the existing durable WorkGraph store; history entries
   point to the graph and run records rather than copying their evidence bodies.
+- Workflow and agent/persona references come from the approved plan snapshot recorded in each WorkGraph. Editing a
+  current profile or workflow does not change the historical reference. The product environment does not own product
+  defaults or copy configuration contents.
 - Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
 - A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
-- Not implemented: product-scoped configuration, knowledge entries, promotion between scopes, architecture/team
-  references, and cross-product organization knowledge. Those require the established authority/context boundaries
-  and are intentionally left for their dependent work.
+- Not implemented: product-owned configuration defaults, knowledge entries, promotion between scopes,
+  architecture/team references, and cross-product organization knowledge. Those require the established
+  authority/context boundaries and are intentionally left for their dependent work.
 
 Verified by `go test ./cmd/zenchron -run TestProductEnvironment -count=1`, including product isolation and history after
 reopening the durable WorkGraph store.
