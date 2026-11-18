@@ -21,17 +21,16 @@ const authSessionCookie = "zenchron_session"
 const oauthStateCookie = "zenchron_oauth_state"
 
 type authConfig struct {
-	clientID       string
-	clientSecret   string
-	sessionKey     []byte
-	workerToken    string
-	access         *accessPolicy
-	allowedUsers   []string
-	publicURL      *url.URL
-	https          bool
-	githubURL      string
-	githubAPIURL   string
-	loopbackStatus bool
+	clientID     string
+	clientSecret string
+	sessionKey   []byte
+	workerToken  string
+	access       *accessPolicy
+	allowedUsers []string
+	publicURL    *url.URL
+	https        bool
+	githubURL    string
+	githubAPIURL string
 }
 
 type authUser struct {
@@ -91,11 +90,6 @@ func loadAuthConfig() (*authConfig, bool, error) {
 func authHandler(next http.Handler, config *authConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if managedSupervisorRequest(r) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if config != nil && config.loopbackStatus && r.Method == http.MethodGet && r.URL.Path == "/api/v1/system/status" &&
-			isLoopbackRequest(r) && localRequestOrigin(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -159,6 +153,10 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 			access, status, message := config.authorize(r)
 			if status != 0 {
 				http.Error(w, message, status)
+				return
+			}
+			if r.URL.Path == "/api/v1/system/status" && access.enforced && !access.admin {
+				http.Error(w, "administrator access required", http.StatusForbidden)
 				return
 			}
 			r = withRequestAccess(r, access)

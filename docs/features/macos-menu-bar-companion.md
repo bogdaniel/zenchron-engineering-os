@@ -7,7 +7,8 @@ plane, worker, dashboard, updater, or store. One per-user lock limits the proces
 
 ```mermaid
 flowchart LR
-  Companion[Zenchron menu-bar app] -->|GET /api/v1/system/status<br/>loopback listener + same-origin| API[Managed control plane]
+  Companion[Zenchron menu-bar app] -->|GET /api/v1/system/status| API[Managed control plane]
+  API -->|Signed-in administrator when access policy is enabled| Auth[Existing session and access policy]
   API --> Workers[(Worker registry)]
   API --> Graphs[(WorkGraph store)]
   API --> Update[(Updater status file)]
@@ -28,10 +29,12 @@ flowchart LR
   objective plan in the existing Live dashboard. It also offers up to five most recently recorded unresolved human
   decisions, linked to their exact objective, graph, and decision in the existing plan view. Aggregate counts still
   cover all graphs; cancelled graph decisions remain in history but are excluded from pending-action counts.
-- `GET /api/v1/system/status` is read-only, `no-store`, and admitted without a browser session only when the control
-  plane is configured to listen on loopback and the request is same-origin loopback. A configured updater status file
-  that cannot be read is reported as unavailable without exposing its path or raw error; work and worker status remain
-  available.
+- `GET /api/v1/system/status` is read-only and `no-store`. Unauthenticated status is available only in the single-user
+  local mode; configured authentication requires a valid session, and access-policy installs require an administrator.
+  An unreadable access policy fails closed. A configured updater status file that cannot be read is reported as
+  unavailable without exposing its path or raw error; work and worker status remain available.
+- The menu distinguishes a missing session from missing administrator access and does not offer Start when either
+  response means the local service is responding but its status is not authorized.
 - Cancelled WorkGraphs remain in history but their unresolved decisions are excluded from actionable status counts and
   menu links. Blocked WorkGraphs still expose unanswered decisions.
 - **Open Dashboard** uses the canonical URL returned by the control plane, after validating its host and port.
@@ -63,7 +66,9 @@ broken login item after the bundle moves. Quit exits only the menu-bar process.
 
 ## Limits
 
-This is a partial #387 implementation. The app bundle is locally ad-hoc signed, not Developer ID signed or notarized;
-the feature does not yet install/update a stable managed app path or verify login-item approval, updater-generation
-reconnect, CPU/memory, or token/cost telemetry. The control-plane API and app are macOS-local; CI on non-macOS hosts
-does not exercise the menu UI. No live restart/wake/update acceptance is claimed.
+This is a partial #387 implementation. Authenticated installations currently require a signed-in administrator for
+the menu status API, but the companion does not yet share the browser session; unauthenticated single-user local mode
+works. The app bundle is locally ad-hoc signed, not Developer ID signed or notarized; the feature does not yet
+install/update a stable managed app path or verify login-item approval, updater-generation reconnect, CPU/memory, or
+token/cost telemetry. The control-plane API and app are macOS-local; CI on non-macOS hosts does not exercise the menu UI.
+No live restart/wake/update acceptance is claimed.

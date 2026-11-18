@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -195,35 +196,57 @@ func TestLocalSystemStatusOmitsActiveGraphWhenNoWorkIsActive(t *testing.T) {
 	}
 }
 
-func TestLocalSystemStatusPassesAuthOnlyForSameOriginLoopbackRead(t *testing.T) {
-	server := authHandler(newMux(), testAuthConfig())
+func TestLocalSystemStatusRequiresSessionAndAdministratorWithAccessPolicy(t *testing.T) {
+	config := testAuthConfig()
+	server := authHandler(newMux(), config)
 	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
 	request.RemoteAddr = "127.0.0.1:4000"
 	request.Header.Set("Origin", "http://127.0.0.1:8080")
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatalf("local system status HTTP = %d, want %d", response.Code, http.StatusOK)
-	}
-
-	request = httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
-	request.RemoteAddr = "192.0.2.1:4000"
-	request.Header.Set("Origin", "http://127.0.0.1:8080")
-	response = httptest.NewRecorder()
-	server.ServeHTTP(response, request)
 	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("remote system status HTTP = %d, want session auth %d", response.Code, http.StatusUnauthorized)
+		t.Fatalf("unauthenticated local system status HTTP = %d, want %d", response.Code, http.StatusUnauthorized)
 	}
 
-	config := testAuthConfig()
-	config.loopbackStatus = false
+	accessPath := writeAccessFile(t,
+		`{"admins":["admin"],"workers":[],"users":{"engineer":["github.com/acme/project"]}}`)
+	config.access = &accessPolicy{path: accessPath}
 	server = authHandler(newMux(), config)
+	for _, test := range []struct {
+		login string
+		want  int
+	}{{login: "engineer", want: http.StatusForbidden}, {login: "admin", want: http.StatusOK}} {
+		t.Run(test.login, func(t *testing.T) {
+			value, err := signSession(authUser{Login: test.login, ExpiresAt: time.Now().Add(time.Hour).Unix()}, config.sessionKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+			request.RemoteAddr = "127.0.0.1:4000"
+			request.Header.Set("Origin", "http://127.0.0.1:8080")
+			request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: value})
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, request)
+			if response.Code != test.want {
+				t.Fatalf("system status for %s HTTP = %d, want %d", test.login, response.Code, test.want)
+			}
+		})
+	}
+
+	if err := os.Remove(accessPath); err != nil {
+		t.Fatal(err)
+	}
+	value, err := signSession(authUser{Login: "admin", ExpiresAt: time.Now().Add(time.Hour).Unix()}, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	request = httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
 	request.RemoteAddr = "127.0.0.1:4000"
 	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: value})
 	response = httptest.NewRecorder()
 	server.ServeHTTP(response, request)
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("proxied loopback status HTTP = %d, want session auth %d", response.Code, http.StatusUnauthorized)
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status with unreadable access policy HTTP = %d, want %d", response.Code, http.StatusServiceUnavailable)
 	}
 }

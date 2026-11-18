@@ -4,6 +4,11 @@ import Foundation
 import ServiceManagement
 import ZenchronStatusCore
 
+private enum StatusAccessError: Error {
+    case signInRequired
+    case administratorRequired
+}
+
 final class InstanceLock {
     private let descriptor: Int32
 
@@ -38,8 +43,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var timer: Timer?
     private var status: SystemStatus?
     private var message = "Checking Zenchron…"
+    private var requiresOperatorSession = false
+    private var startFailure: String?
     private var launchAtLoginError: String?
     private var refreshGeneration: UInt64 = 0
+    private var startAttempt: UUID?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -64,13 +72,18 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        armPollingTimer()
+        Task { await refresh() }
+    }
+
+    private func armPollingTimer() {
+        timer?.invalidate()
         let interval: TimeInterval = status == nil ? 30 : 15
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
-        RunLoop.main.add(timer, forMode: .common)
+        RunLoop.main.add(timer, forMode: .eventTracking)
         self.timer = timer
-        Task { await refresh() }
     }
 
     func menuDidClose(_ menu: NSMenu) {
@@ -80,7 +93,8 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func addStatusItems(to menu: NSMenu) {
         let revision = status?.revision.map { String($0.prefix(8)) } ?? "revision unknown"
-        let title = status == nil ? message : "Zenchron · connected · \(revision)"
+        let title = status == nil ? (startFailure ?? (startAttempt == nil ? message : "Starting Zenchron…"))
+            : "Zenchron · connected · \(revision)"
         menu.addItem(NSMenuItem(title: title, action: nil, keyEquivalent: ""))
         if let status {
             let workers = "Workers · \(status.workers.online) online / \(status.workers.total)"
@@ -126,9 +140,12 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             open.target = self
             menu.addItem(open)
         } else {
-            let start = NSMenuItem(title: "Start Zenchron", action: #selector(startZenchron), keyEquivalent: "")
-            start.target = self
-            menu.addItem(start)
+            if !requiresOperatorSession {
+                let start = NSMenuItem(title: "Start Zenchron", action: #selector(startZenchron), keyEquivalent: "")
+                start.target = self
+                start.isEnabled = startAttempt == nil
+                menu.addItem(start)
+            }
         }
         addLaunchAtLoginItem(to: menu)
         menu.addItem(NSMenuItem.separator())
@@ -185,20 +202,40 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func refresh() async {
         refreshGeneration &+= 1
         let generation = refreshGeneration
+        let wasConnected = status != nil
         do {
             var request = URLRequest(url: statusURL, timeoutInterval: 3)
             request.setValue("http://127.0.0.1:8080", forHTTPHeaderField: "Origin")
             request.cachePolicy = .reloadIgnoringLocalCacheData
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+            guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+            if httpResponse.statusCode == 401 { throw StatusAccessError.signInRequired }
+            if httpResponse.statusCode == 403 { throw StatusAccessError.administratorRequired }
+            guard httpResponse.statusCode == 200 else { throw URLError(.badServerResponse) }
             let decoded = try decodeSystemStatus(data)
             guard generation == refreshGeneration else { return }
             status = decoded
+            requiresOperatorSession = false
+            startFailure = nil
             message = "Connected"
+        } catch StatusAccessError.signInRequired {
+            guard generation == refreshGeneration else { return }
+            status = nil
+            requiresOperatorSession = true
+            message = "Sign in to the dashboard to view local status"
+        } catch StatusAccessError.administratorRequired {
+            guard generation == refreshGeneration else { return }
+            status = nil
+            requiresOperatorSession = true
+            message = "Administrator access is required for local status"
         } catch {
             guard generation == refreshGeneration else { return }
             status = nil
+            requiresOperatorSession = false
             message = "Zenchron disconnected · \(error.localizedDescription)"
+        }
+        if wasConnected != (status != nil), timer != nil {
+            armPollingTimer()
         }
         refreshMenu()
     }
@@ -221,9 +258,14 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func startZenchron() {
+        guard startAttempt == nil else { return }
+        let attempt = UUID()
+        startAttempt = attempt
+        startFailure = nil
         let executable = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".local/bin/zenchron-engineering")
         guard FileManager.default.isExecutableFile(atPath: executable.path) else {
+            startAttempt = nil
             message = "Canonical Zenchron command is unavailable"
             refreshMenu()
             return
@@ -235,8 +277,10 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let exitStatus = process.terminationStatus
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                guard self.startAttempt == attempt else { return }
+                self.startAttempt = nil
                 guard exitStatus == 0 else {
-                    self.message = "Zenchron start failed · exit code \(exitStatus)"
+                    self.startFailure = "Zenchron start failed · exit code \(exitStatus)"
                     self.refreshMenu()
                     return
                 }
@@ -248,6 +292,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             try process.run()
             message = "Starting Zenchron…"
         } catch {
+            startAttempt = nil
             message = "Could not start Zenchron · \(error.localizedDescription)"
         }
         refreshMenu()
@@ -265,6 +310,6 @@ struct ZenchronMenuBarMain {
         let application = NSApplication.shared
         let delegate = MenuBarApp()
         application.delegate = delegate
-        application.run()
+        withExtendedLifetime(delegate) { application.run() }
     }
 }

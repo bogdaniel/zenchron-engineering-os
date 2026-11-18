@@ -63,9 +63,6 @@ func runControlPlane() error {
 	if err != nil {
 		return err
 	}
-	if auth != nil {
-		auth.loopbackStatus = isLoopbackHost(host)
-	}
 	if !isLoopbackHost(host) && !configured {
 		return fmt.Errorf("non-loopback listen address requires GitHub authentication and worker credentials")
 	}
