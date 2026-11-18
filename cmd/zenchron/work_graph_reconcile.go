@@ -145,9 +145,17 @@ func (graph *workGraph) settled(unit *workUnit, runs map[string]agentRun) bool {
 		target := graph.unit(unit.DependsOn[0])
 		// A verdict counts only for the handoff the review started from.
 		return unit.Verdict == "accept" && unit.Seen >= target.HandoffAt && graph.settled(target, runs)
+	case unitIntegrate:
+		return graph.producersSettled(runs) && unit.Candidate != "" && !graph.integrationDue(unit)
 	default:
 		return unit.Candidate != "" && !graph.integrationDue(unit)
 	}
+}
+
+func (graph *workGraph) producersSettled(runs map[string]agentRun) bool {
+	return !slices.ContainsFunc(graph.producers(), func(producer *workUnit) bool {
+		return !graph.settled(producer, runs)
+	})
 }
 
 // integrationDue reports whether a producer handed off after the integrate unit last combined them.
@@ -168,6 +176,9 @@ func (graph *workGraph) frontier(runs map[string]agentRun, publishable bool) []u
 		dependenciesSettled := !slices.ContainsFunc(unit.DependsOn, func(key string) bool {
 			return !graph.settled(graph.unit(key), runs)
 		})
+		if unit.Kind == unitIntegrate {
+			dependenciesSettled = dependenciesSettled && graph.producersSettled(runs)
+		}
 		_, undecided := graph.openDecision(unit.Key)
 		switch {
 		case unit.Kind == unitProduce && (!started || unit.Restart):
@@ -368,7 +379,7 @@ func (graph *workGraph) unitState(unit *workUnit, runs map[string]agentRun, publ
 func (graph *workGraph) integrationState(unit *workUnit, run agentRun, runs map[string]agentRun, publishable bool) (string, string) {
 	unit.PullRequestURL = run.PullRequestURL
 	switch {
-	case unit.Candidate == "" || graph.integrationDue(unit):
+	case !graph.producersSettled(runs) || unit.Candidate == "" || graph.integrationDue(unit):
 		return unitWaiting, "Waiting for every produced candidate to be admitted."
 	case !graph.reviewed(unit, runs):
 		return unitWaiting, "Waiting for review of the integrated candidate."
