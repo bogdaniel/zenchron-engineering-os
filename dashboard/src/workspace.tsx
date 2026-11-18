@@ -265,7 +265,8 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
               source.editable(selected.id)?.repository_ids.includes(project.id))} />}
           {/* The Objectives tab also shows how each objective is being executed: units, handoffs, findings, decisions, PR. */}
           {activeTab === 'Objectives' && <WorkspaceExecution sampleData={designPreview} objectiveIDs={facts.objectives
-            ?.filter((objective) => objective.product_id === selected?.id).map((objective) => objective.id) ?? []} />}
+            ?.filter((objective) => objective.product_id === selected?.id).map((objective) => objective.id) ?? []}
+            agentRuns={facts.agentRuns} agentRunsLoading={facts.agentRunsLoading} agentRunsError={facts.agentRunsError} />}
         </Card>
 
         <Card className="repositories" title={repositories.title} icon={<IconCode size={15} />} action="View All"

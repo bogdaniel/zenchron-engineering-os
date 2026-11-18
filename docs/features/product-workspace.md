@@ -11,7 +11,7 @@ control plane records nothing.
 
 ```mermaid
 flowchart LR
-    Shell["App shell · main.tsx<br/>mode, projects, objectives, workers"] -->|"designPreview, WorkspaceFacts"| Page["WorkspacePage · workspace.tsx<br/>one layout, focus and UI state"]
+    Shell["App shell · main.tsx<br/>mode, projects, objectives, workers, agent runs"] -->|"designPreview, WorkspaceFacts"| Page["WorkspacePage · workspace.tsx<br/>one layout, focus and UI state"]
     Page -->|"source.view(product, quarter)"| Source{"WorkspaceSource"}
     Source -->|Mock| Mock["useMockWorkspace<br/>workspace-preview-data.tsx · useState"]
     Source -->|Live| Live["useLiveWorkspace<br/>workspaceView.tsx · TanStack Query"]
@@ -21,6 +21,7 @@ flowchart LR
     Live -->|"GET /api/v1/personas"| CP
     Live -->|"GET /api/v1/products/{id}/environment"| CP
     Shell -->|"GET /api/v1/projects · GET /api/v1/objectives"| CP
+    Shell -->|"GET /api/v1/agent-runs"| CP
     Page -->|"Add / Edit product"| Editor["ProductEditor · productEditor.tsx"]
     Editor -->|"source.saveProduct"| Source
     Live -->|"POST /api/v1/products · PUT /api/v1/products/{id}"| CP
@@ -115,6 +116,8 @@ Live:
   integration states, and observed pull-request link from existing product-environment records. Its WorkGraph view
   resolves a pending decision against that exact graph and request through the existing governed API action. Opening
   an objective shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
+- WorkGraph-linked run IDs are joined to the app shell's agent-run records to show provider-reported token totals and
+  cost with explicit run coverage. Providers that do not report cost remain unknown; budgets are not recorded here.
 - The selected product's environment projection supplies the pending-decision count, decision links, current
   WorkGraph/handoff/finding counts, and observed PR-link count. These are recorded counts, without a time trend or
   implied merge state. A failed projection shows an error, and a missing product shows an empty explanation.

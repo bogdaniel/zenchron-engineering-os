@@ -308,12 +308,19 @@ test('Product Workspace links runs to Reviews and resolves decisions through its
     created_at: createdAt, updated_at: createdAt,
     units: [{ key: 'api', kind: 'produce', title: 'Update export', instructions: 'Implement the API change.',
       acceptance: [], depends_on: [], capabilities: ['code.write'], agent_id: 'd'.repeat(32),
-      agent_name: 'Code Reviewer', state: 'blocked', reason: 'Waiting for the operator decision.', run_ids: ['9'.repeat(32)] }],
+      agent_name: 'Code Reviewer', state: 'blocked', reason: 'Waiting for the operator decision.',
+      run_ids: ['9'.repeat(32), '8'.repeat(32)] }],
     messages: [{ id: 'decision-1', type: 'decision_request', from: 'api', to: [], run_id: '9'.repeat(32), attempt: 1,
       body: 'Publish the revised export?', notes: ['publish', 'hold'], created_at: createdAt }],
   };
   let action: { method: string; path: string; body: unknown; status?: number } | undefined;
   await page.route('**/api/v1/work-graphs', (route) => route.fulfill(json([graph])));
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([{
+    id: '9'.repeat(32), agent_id: 'd'.repeat(32), agent_name: 'Code Reviewer', project_id: projectID,
+    project_name: 'nova-platform', worker_id: 'c'.repeat(32), worker_name: 'Mac Studio', branch: 'feature/export',
+    prompt: 'Update export', status: 'succeeded', attempts: 1, created_at: createdAt, updated_at: createdAt,
+    graph_id: graphID, unit_key: 'api', usage: { input_tokens: 1234, output_tokens: 567, cost_usd: 0.05 },
+  }])));
   await page.route('**/api/v1/work-graphs/*/decisions/*', async (route) => {
     action = { method: route.request().method(), path: new URL(route.request().url()).pathname,
       body: route.request().postDataJSON() };
@@ -328,6 +335,8 @@ test('Product Workspace links runs to Reviews and resolves decisions through its
   await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
   const execution = page.getByRole('region', { name: 'Work graph for Ship Platform v3.0' });
   const runID = '9'.repeat(32);
+  await expect(page.getByRole('status', { name: 'Provider usage for Ship Platform v3.0' }))
+    .toHaveText('Provider-reported usage (1 of 2 runs): 1,234 input / 567 output tokens · $0.05 provider-reported cost for 1 run');
   await expect(execution.getByRole('link', { name: `Open run ${runID} in Reviews` }))
     .toHaveAttribute('href', `/?run=${runID}&mode=live#reviews`);
   await page.screenshot({ path: testInfo.outputPath('workspace-run-links-desktop.png'), fullPage: true });
