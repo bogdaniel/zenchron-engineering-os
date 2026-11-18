@@ -35,6 +35,7 @@ flowchart LR
     Report -->|"workflow ID"| Workflow["WorkflowsPage · current saved definition"]
     Report -->|"profile ID"| Agents["AgentsPage · current saved profile"]
     Report -->|"run ID"| Reviews["ReviewsPage · run evidence"]
+    Execution -->|"exact WorkUnit run ID"| Reviews
     Mock -->|"add or rename in fixture state"| Tab["This browser tab only"]
     CP --> Store[(products.json)]
     Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
@@ -123,6 +124,8 @@ Live:
   recorded workflow version and profile/persona assignments with links to the saved records. Current provider/model
   and profile status are labeled as current configuration, distinct from the executed versions. These relationships
   come from the product's objectives and WorkGraphs; workspace-wide definitions remain available separately.
+- Live WorkGraph units link each recorded run ID directly to its Reviews evidence. Mock execution fixtures do not
+  create Live run links.
 - Plan revisions link to their selected workflow and assigned profiles, with profile/persona versions labeled as
   planned configuration. Cross-page links preserve Live mode on local dashboards.
 - Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, and time-series

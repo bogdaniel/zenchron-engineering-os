@@ -245,8 +245,9 @@ test('Live Product Workspace rejects another product’s execution projection', 
   await expect(page.locator('.workspace-mock')).not.toContainText('Other product decision');
 });
 
-test('Product Workspace resolves the selected WorkGraph decision through its governed API action', async ({ page }) => {
+test('Product Workspace links runs to Reviews and resolves decisions through its governed API action', async ({ page }, testInfo) => {
   await useLiveFixtures(page);
+  await page.setViewportSize({ width: 1672, height: 941 });
   const graphID = 'f'.repeat(32);
   const objectiveID = '1'.repeat(32);
   const graph: {
@@ -281,6 +282,14 @@ test('Product Workspace resolves the selected WorkGraph decision through its gov
   await page.goto('/?mode=live#workspace');
   await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
   const execution = page.getByRole('region', { name: 'Work graph for Ship Platform v3.0' });
+  const runID = '9'.repeat(32);
+  await expect(execution.getByRole('link', { name: `Open run ${runID} in Reviews` }))
+    .toHaveAttribute('href', `/?run=${runID}&mode=live#reviews`);
+  await page.screenshot({ path: testInfo.outputPath('workspace-run-links-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({ path: testInfo.outputPath('workspace-run-links-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1672, height: 941 });
   const decision = execution.getByRole('form', { name: 'Decision for api' });
   await expect(decision).toContainText('Publish the revised export?');
   await decision.getByRole('button', { name: 'publish' }).click();

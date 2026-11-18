@@ -32,7 +32,7 @@ export function WorkspaceExecution({ objectiveIDs, sampleData }: { objectiveIDs:
           </li>;
         })}</ul>
       </div>}
-      <WorkGraphView graph={graph} source={source} />
+      <WorkGraphView graph={graph} source={source} showRunLinks={!sampleData} />
     </div>)}
   </div>;
 }
