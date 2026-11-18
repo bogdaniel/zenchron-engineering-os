@@ -28,6 +28,7 @@ import { OverviewPage } from './OverviewPage';
 import { Sidebar } from './Sidebar';
 import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
+import { PageErrorBoundary } from './PageErrorBoundary';
 import { describeProvider, workerProvidersSchema } from './agentRunQueue';
 import './style.css';
 import './overview.css';
@@ -286,6 +287,7 @@ function App() {
             <a href="#activity">Alerts</a>
           </nav>}
 
+          <PageErrorBoundary key={activePage}>
           {sessionUnavailable && !previewPage ? <section className="session-preview-region" aria-labelledby="session-preview-title"><PanelCard className="session-preview-card" withBorder>
             <IconActivity size={24} aria-hidden="true" />
             <h2 id="session-preview-title">Session check unavailable</h2>
@@ -334,6 +336,7 @@ function App() {
               workers={workers.data}
             />
           ) : null}
+          </PageErrorBoundary>
         </main>
       </div>
     </MantineProvider>

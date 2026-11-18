@@ -354,6 +354,11 @@ button:disabled, input:disabled {
 .session-preview-card h2 { margin: 0; color: #eee9f6; font-size: 18px; font-weight: 650; }
 .session-preview-card p { max-width: 400px; margin: 0; color: #aaa5b9; font-size: 12px; line-height: 1.5; }
 .session-preview-card .github-login-button { max-width: 280px; }
+.page-error-region { padding: 48px 24px; }
+.page-error-card { display: grid; max-width: 520px; justify-items: center; gap: 12px; margin: 48px auto; padding: 30px; text-align: center; }
+.page-error-card > svg { color: #ffbd66; }
+.page-error-card h2 { margin: 0; color: #eee9f6; font-size: 18px; font-weight: 650; }
+.page-error-card p { max-width: 400px; margin: 0; color: #aaa5b9; font-size: 12px; line-height: 1.5; }
 .github-login-button {
   display: flex;
   min-height: 42px;
