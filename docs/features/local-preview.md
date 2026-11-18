@@ -38,6 +38,8 @@ The local `status` command and Settings / System Update page read the same persi
 reconnects to update progress, keeps Mock isolated from the API, and automatically reloads only after it observes a new
 running revision.
 
+## Feature diagram
+
 ```mermaid
 sequenceDiagram
     participant I as Local installer
@@ -46,38 +48,55 @@ sequenceDiagram
     participant R as Versioned release store
     participant CP as Control plane
     participant W as Local worker
-    participant D as Existing dashboard tab
-    I->>I: Inspect PATH and retire only recognized legacy Zenchron shadows
+    participant D as Settings System Update page
+    participant U as system-update.json
+    participant A as agent-runs.json and in-memory admission
+    I->>I: Validate canonical entrypoint and PATH without changing them
     I->>R: Build and verify the initial trusted release
+    I->>I: Retire recognized legacy shadows and install stable launcher
     I->>S: Install one stable command and one managed LaunchAgent
     GH->>S: New merged main revision
     S->>GH: Verify signature, required checks and merged PR
     S->>R: Fetch exact commit/tree and build isolated artifacts
     S->>S: Verify digests and protocol/state compatibility
-    S->>CP: Pause new run admission and wait for active CLI attempts
+    S->>CP: POST /api/v1/system/update/quiesce
+    CP->>A: Close in-memory run admission
+    loop Until safe boundary
+        S->>CP: GET /api/v1/system/update/active-runs
+        CP->>A: Recover expired leases and count running or publishing runs
+        CP-->>S: Return active run count
+    end
     S->>W: Stop old worker after attempts drain
     S->>CP: Stop old control plane
     S->>R: Keep old active pointer; exec candidate supervisor
     S->>CP: Start candidate admission-paused
     W->>CP: Report candidate revision and worker protocol
-    D->>CP: Reconnect and observe the new running revision
+    S->>CP: GET /api/v1/system/update/worker-compatible
     CP-->>D: Serve the verified versioned dashboard
     S->>R: Atomically advance active pointer after health proof
+    S->>CP: Reopen run admission and persist active status
+    CP->>U: Write verified running revision
+    D->>CP: GET /api/v1/system/update
+    CP->>U: Read persisted update status
+    U-->>CP: Return running revision and update state
+    CP-->>D: Return verified running revision
+    D->>D: Reload current URL to use the new dashboard bundle
+    D->>CP: POST /api/v1/system/update/check on operator request
+    CP->>S: Signal the existing managed supervisor
     opt Candidate recovery fails after pointer advancement
         S->>S: Persist blocked status and exit
         S->>S: LaunchAgent restarts supervisor
         S->>R: Read blocked marker without starting child processes
     end
-    S->>CP: Reopen run admission and persist active status
-    D->>D: Reload current URL to use the new dashboard bundle
 ```
 
 ## Configuration and boundaries
 
 GitHub authentication is required to inspect protected-branch/ruleset metadata and fetch private source. Prefer the
 existing GitHub App configuration; credentials are stored in the per-user LaunchAgent environment and are not passed
-to the worker or dashboard. The GitHub App needs repository metadata/contents read access and permission to read commit
-checks. Keep the private key at an owner-only path outside the repository.
+to the worker or dashboard. The GitHub App needs repository metadata, contents, administration, commit statuses, and
+check runs read access to verify branch protection and required checks. Keep the private key at an owner-only path
+outside the repository.
 
 The installation requires no root privileges, containers or external server. This implementation currently uses
 macOS LaunchAgents. By default it reuses the existing `<UserConfigDir>/zenchron` durable state directory and keeps
@@ -92,3 +111,9 @@ periodic poll. An unavailable or unverifiable GitHub state leaves the currently 
 blocked reason.
 The same failed candidate is not rebuilt on each poll: automatic retries resume when trusted `main` advances, while
 the operator can use Check for updates to retry that exact revision.
+
+## Acceptance status
+
+Automated tests cover source verification, release staging, activation recovery, dashboard reconnection and restart
+blocking. A managed LaunchAgent has not yet been observed updating itself after a trusted-main merge with durable
+engineering work preserved. Keep #177 and #203 open until that installed-instance acceptance is demonstrated.

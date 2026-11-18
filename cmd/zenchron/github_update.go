@@ -15,8 +15,9 @@ import (
 )
 
 type trustedBranch struct {
-	Name   string `json:"name"`
-	Commit struct {
+	Name      string `json:"name"`
+	Protected bool   `json:"protected"`
+	Commit    struct {
 		SHA    string `json:"sha"`
 		Commit struct {
 			Tree struct {
@@ -43,6 +44,8 @@ type branchRules []struct {
 		} `json:"required_status_checks"`
 	} `json:"parameters"`
 }
+
+const githubUpdatePageSize, githubUpdateMaxPages = 100, 100
 
 func (client gitHubClient) trustedMain(ctx context.Context, repository string) (updater.Candidate, error) {
 	candidate := updater.Candidate{Repository: repository}
@@ -83,9 +86,23 @@ func (client gitHubClient) trustedMain(ctx context.Context, repository string) (
 		return updater.Candidate{}, errors.New("GitHub cannot verify the exact main commit, tree and signature")
 	}
 	var rules branchRules
-	rulesErr := client.getJSON(ctx, base+"/rules/branches/main", &rules)
-	if rulesErr != nil && !githubNotFound(rulesErr) {
-		return updater.Candidate{}, fmt.Errorf("verify main rulesets: %w", rulesErr)
+	for page := 1; page <= githubUpdateMaxPages; page++ {
+		var pageRules branchRules
+		query := url.Values{"per_page": {strconv.Itoa(githubUpdatePageSize)}, "page": {strconv.Itoa(page)}}
+		rulesErr := client.getJSONQuery(ctx, base+"/rules/branches/main", query, &pageRules)
+		if rulesErr != nil {
+			if page == 1 && githubNotFound(rulesErr) {
+				break
+			}
+			return updater.Candidate{}, fmt.Errorf("verify main rulesets: %w", rulesErr)
+		}
+		rules = append(rules, pageRules...)
+		if len(pageRules) < githubUpdatePageSize {
+			break
+		}
+		if page == githubUpdateMaxPages {
+			return updater.Candidate{}, errors.New("main branch rules exceeded the bounded pagination limit")
+		}
 	}
 	checks := requiredChecks{}
 	for _, rule := range rules {
@@ -107,6 +124,9 @@ func (client gitHubClient) trustedMain(ctx context.Context, repository string) (
 	protectionErr := client.getJSON(ctx, base+"/branches/main/protection", &protection)
 	if protectionErr != nil && !githubNotFound(protectionErr) {
 		return updater.Candidate{}, fmt.Errorf("verify main branch protection: %w", protectionErr)
+	}
+	if protectionErr != nil && branch.Protected {
+		return updater.Candidate{}, errors.New("main is protected but its branch-protection checks are unreadable; grant the GitHub App Administration: read permission")
 	}
 	checks.Contexts = append(checks.Contexts, protection.Required.Contexts...)
 	checks.Checks = append(checks.Checks, protection.Required.Checks...)
@@ -159,36 +179,40 @@ func (client gitHubClient) verifyRequiredChecks(ctx context.Context, base, commi
 	type checkResult struct {
 		updated time.Time
 		success bool
+		seen    bool
 	}
 	checks := make(map[checkKey]struct{}, len(required.Contexts)+len(required.Checks))
 	for _, context := range required.Contexts {
 		checks[checkKey{name: context, appID: -1}] = struct{}{}
 	}
 	for _, check := range required.Checks {
-		checks[checkKey{name: check.Context, appID: check.AppID}] = struct{}{}
+		appID := check.AppID
+		if appID == 0 {
+			appID = -1
+		}
+		checks[checkKey{name: check.Context, appID: appID}] = struct{}{}
 	}
 	if len(checks) == 0 {
 		return errors.New("trusted main has no required status checks configured")
 	}
 	newest := func(previous checkResult, updated time.Time, success bool) checkResult {
-		if !previous.updated.IsZero() && updated.Before(previous.updated) {
+		if previous.seen && updated.Before(previous.updated) {
 			return previous
 		}
-		if updated.Equal(previous.updated) && !success {
-			return checkResult{updated: updated}
+		if previous.seen && updated.Equal(previous.updated) && !success {
+			return checkResult{updated: updated, seen: true}
 		}
-		return checkResult{updated: updated, success: success}
+		return checkResult{updated: updated, success: success, seen: true}
 	}
 	// ponytail: caps this commit-scoped verification at 10,000 results; increase only for repositories that exceed it.
-	const pageSize, maxPages = 100, 100
 	statuses := make(map[checkKey]checkResult)
-	for page := 1; page <= maxPages; page++ {
+	for page := 1; page <= githubUpdateMaxPages; page++ {
 		var pageStatuses []struct {
 			Context   string    `json:"context"`
 			State     string    `json:"state"`
 			UpdatedAt time.Time `json:"updated_at"`
 		}
-		query := url.Values{"per_page": {strconv.Itoa(pageSize)}, "page": {strconv.Itoa(page)}}
+		query := url.Values{"per_page": {strconv.Itoa(githubUpdatePageSize)}, "page": {strconv.Itoa(page)}}
 		if err := client.getJSONQuery(ctx, base+"/commits/"+commit+"/statuses", query, &pageStatuses); err != nil {
 			return fmt.Errorf("read main commit statuses: %w", err)
 		}
@@ -199,42 +223,46 @@ func (client gitHubClient) verifyRequiredChecks(ctx context.Context, base, commi
 			}
 			statuses[key] = newest(statuses[key], status.UpdatedAt, status.State == "success")
 		}
-		if len(pageStatuses) < pageSize {
+		if len(pageStatuses) < githubUpdatePageSize {
 			break
 		}
-		if page == maxPages {
+		if page == githubUpdateMaxPages {
 			return errors.New("main commit statuses exceeded the bounded pagination limit")
 		}
 	}
 	runs := make(map[checkKey]checkResult)
-	for page := 1; page <= maxPages; page++ {
+	for page := 1; page <= githubUpdateMaxPages; page++ {
 		var pageResult struct {
 			CheckRuns []struct {
-				Name       string    `json:"name"`
-				Status     string    `json:"status"`
-				Conclusion string    `json:"conclusion"`
-				UpdatedAt  time.Time `json:"updated_at"`
+				Name       string `json:"name"`
+				Status     string `json:"status"`
+				Conclusion string `json:"conclusion"`
 				App        struct {
 					ID int `json:"id"`
 				} `json:"app"`
 			} `json:"check_runs"`
 		}
-		query := url.Values{"per_page": {strconv.Itoa(pageSize)}, "page": {strconv.Itoa(page)}}
+		query := url.Values{"per_page": {strconv.Itoa(githubUpdatePageSize)}, "page": {strconv.Itoa(page)}}
 		if err := client.getJSONQuery(ctx, base+"/commits/"+commit+"/check-runs", query, &pageResult); err != nil {
 			return fmt.Errorf("read main commit check runs: %w", err)
 		}
 		for _, check := range pageResult.CheckRuns {
 			for key := range checks {
-				if key.name != check.Name || (key.appID != -1 && key.appID != 0 && key.appID != check.App.ID) {
+				if key.name != check.Name || (key.appID != -1 && key.appID != check.App.ID) {
 					continue
 				}
-				runs[key] = newest(runs[key], check.UpdatedAt, check.Status == "completed" && check.Conclusion == "success")
+				passed := check.Status == "completed" && check.Conclusion == "success"
+				previous := runs[key]
+				runs[key] = checkResult{success: passed, seen: true}
+				if previous.seen {
+					runs[key] = checkResult{success: previous.success && passed, seen: true}
+				}
 			}
 		}
-		if len(pageResult.CheckRuns) < pageSize {
+		if len(pageResult.CheckRuns) < githubUpdatePageSize {
 			break
 		}
-		if page == maxPages {
+		if page == githubUpdateMaxPages {
 			return errors.New("main commit check runs exceeded the bounded pagination limit")
 		}
 	}

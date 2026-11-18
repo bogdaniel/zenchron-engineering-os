@@ -24,7 +24,7 @@ func TestStableEntrypointFollowsTwoSuccessiveReleases(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(binary), 0o700); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(binary, []byte("#!/bin/sh\nprintf '%s' '"+revision+"'\n"), 0o700); err != nil {
+		if err := os.WriteFile(binary, []byte("#!/bin/sh\nprintf '%s %s' '"+revision+"' \"$ZENCHRON_MANAGED_HOME\"\n"), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -40,7 +40,7 @@ func TestStableEntrypointFollowsTwoSuccessiveReleases(t *testing.T) {
 			t.Fatal(err)
 		}
 		output, err := exec.Command(entrypoint, "status").Output()
-		if err != nil || strings.TrimSpace(string(output)) != revision {
+		if err != nil || strings.TrimSpace(string(output)) != revision+" "+managedHome {
 			t.Fatalf("entrypoint for %s returned %q, %v", revision, output, err)
 		}
 	}
@@ -144,6 +144,13 @@ func TestInstallMigratesLegacyCommandBeforeCanonicalEntrypoint(t *testing.T) {
 	if err := os.Link(legacyCommand, recoveryCopy); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(canonicalDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	canonical := filepath.Join(canonicalDirectory, "zenchron-engineering")
+	if err := os.Link(legacyCommand, canonical); err != nil {
+		t.Fatal(err)
+	}
 	managedHome := filepath.Join(userHome, ".config", "Zenchron")
 	entrypoint, err := installStableEntrypoint(managedHome)
 	if err != nil {
@@ -154,6 +161,9 @@ func TestInstallMigratesLegacyCommandBeforeCanonicalEntrypoint(t *testing.T) {
 	}
 	if _, err := os.Stat(recoveryCopy); err != nil {
 		t.Fatalf("stale command recovery copy was not preserved: %v", err)
+	}
+	if _, err := os.Stat(canonical + ".legacy"); err != nil {
+		t.Fatalf("canonical legacy binary recovery copy was not preserved: %v", err)
 	}
 	resolved, err := exec.LookPath("zenchron-engineering")
 	if err != nil || resolved != entrypoint {
@@ -293,7 +303,14 @@ func TestZshPathSetupPrependsCanonicalCommandDirectoryOnce(t *testing.T) {
 	userHome := t.TempDir()
 	t.Setenv("HOME", userHome)
 	profile := filepath.Join(userHome, ".zprofile")
-	if err := os.WriteFile(profile, []byte("export PATH=\"$HOME/bin:$PATH\"\n"), 0o600); err != nil {
+	dotfile := filepath.Join(userHome, "dotfiles", "zprofile")
+	if err := os.MkdirAll(filepath.Dir(dotfile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dotfile, []byte("export PATH=\"$HOME/bin:$PATH\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(dotfile, profile); err != nil {
 		t.Fatal(err)
 	}
 	if err := addLocalBinToZshPath(); err != nil {
@@ -302,8 +319,15 @@ func TestZshPathSetupPrependsCanonicalCommandDirectoryOnce(t *testing.T) {
 	if err := addLocalBinToZshPath(); err != nil {
 		t.Fatal(err)
 	}
-	contents, err := os.ReadFile(profile)
+	info, err := os.Lstat(profile)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("managed setup replaced the symlinked zsh profile: %v", err)
+	}
+	contents, err := os.ReadFile(dotfile)
 	if err != nil || strings.Count(string(contents), "$HOME/.local/bin") != 1 {
 		t.Fatalf("zsh profile PATH setup = %q, %v", contents, err)
+	}
+	if info, err := os.Stat(dotfile); err != nil || info.Mode().Perm() != 0o644 {
+		t.Fatalf("zsh profile mode = %v, %v; want 0644", info, err)
 	}
 }

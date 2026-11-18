@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -50,18 +52,47 @@ func TestManagedRuntimeStopsSiblingAfterChildFailure(t *testing.T) {
 	}
 }
 
+func TestShutdownStopsChildrenWhenAdmissionPauseFails(t *testing.T) {
+	directory := t.TempDir()
+	client := &http.Client{Transport: managedTestTransport(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("control plane did not respond")
+	})}
+	runtime := &managedRuntime{client: client}
+	var err error
+	runtime.api, err = startManagedChild("/bin/sh", []string{"-c", "exec sleep 30"}, directory, os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime.worker, err = startManagedChild("/bin/sh", []string{"-c", "exec sleep 30"}, directory, os.Environ())
+	if err != nil {
+		if stopErr := runtime.api.stop(time.Second); stopErr != nil {
+			t.Errorf("stop test control plane: %v", stopErr)
+		}
+		t.Fatal(err)
+	}
+	if err := runtime.stopSafely(); err == nil {
+		t.Fatal("shutdown hid the admission pause failure")
+	}
+	if runtime.api != nil || runtime.worker != nil {
+		t.Fatalf("shutdown left children owned: api=%v worker=%v", runtime.api, runtime.worker)
+	}
+}
+
 func TestFailedCandidateWaitsForExplicitRetryOrNewMain(t *testing.T) {
 	failed := "0123456789abcdef0123456789abcdef01234567"
 	newer := "abcdef0123456789abcdef0123456789abcdef01"
 	status := updater.Status{LastFailedRevision: failed}
-	if !shouldDeferFailedCandidate(status, failed, false) {
+	if !shouldDeferFailedCandidate(status, failed, "previous", false) {
 		t.Fatal("automatic poll retried the same failed release")
 	}
-	if shouldDeferFailedCandidate(status, failed, true) {
+	if shouldDeferFailedCandidate(status, failed, "previous", true) {
 		t.Fatal("explicit operator retry was suppressed")
 	}
-	if shouldDeferFailedCandidate(status, newer, false) {
+	if shouldDeferFailedCandidate(status, newer, "previous", false) {
 		t.Fatal("new trusted main was suppressed by an older failure")
+	}
+	if shouldDeferFailedCandidate(status, failed, failed, false) {
+		t.Fatal("currently running failed revision remained in failed state")
 	}
 }
 
@@ -70,11 +101,17 @@ func TestManagedRuntimePreservesCLIChildrenUntilActiveRunsReachSafeBoundary(t *t
 	firstActiveCount := make(chan struct{}, 1)
 	secondActiveCount := make(chan struct{}, 1)
 	releaseZeroCount := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseZero := func() { releaseOnce.Do(func() { close(releaseZeroCount) }) }
 	activeChecks := 0
 	runtime := &managedRuntime{statusPath: filepath.Join(directory, "system-update.json"), status: updater.Status{State: "waiting_for_runs"},
+		supervisorToken: "test-supervisor",
 		client: &http.Client{Transport: managedTestTransport(func(request *http.Request) (*http.Response, error) {
 			if strings.HasSuffix(request.URL.Path, "/quiesce") {
 				return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody, Header: make(http.Header), Request: request}, nil
+			}
+			if request.Header.Get("X-Zenchron-Supervisor-Token") != "test-supervisor" {
+				return nil, errors.New("active-run request omitted supervisor token")
 			}
 			activeChecks++
 			if activeChecks == 1 {
@@ -95,16 +132,23 @@ func TestManagedRuntimePreservesCLIChildrenUntilActiveRunsReachSafeBoundary(t *t
 		t.Fatal(err)
 	}
 	worker := runtime.worker
-	defer func() {
-		select {
-		case releaseZeroCount <- struct{}{}:
-		default:
-		}
-		_ = runtime.stopChildren()
-	}()
-
 	stopped := make(chan error, 1)
 	go func() { stopped <- runtime.stopSafely() }()
+	stopCompleted := false
+	defer func() {
+		releaseZero()
+		if !stopCompleted {
+			select {
+			case err := <-stopped:
+				if err != nil {
+					t.Errorf("managed shutdown cleanup failed: %v", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Error("managed shutdown did not finish during cleanup")
+			}
+		}
+	}()
+
 	select {
 	case <-firstActiveCount:
 	case <-time.After(5 * time.Second):
@@ -113,6 +157,7 @@ func TestManagedRuntimePreservesCLIChildrenUntilActiveRunsReachSafeBoundary(t *t
 	select {
 	case <-secondActiveCount:
 	case err := <-stopped:
+		stopCompleted = true
 		t.Fatalf("managed runtime stopped before rechecking active runs: %v", err)
 	case <-time.After(5 * time.Second):
 		t.Fatal("managed runtime did not recheck active runs")
@@ -123,9 +168,10 @@ func TestManagedRuntimePreservesCLIChildrenUntilActiveRunsReachSafeBoundary(t *t
 	if err := worker.command.Process.Signal(syscall.Signal(0)); err != nil {
 		t.Fatalf("active CLI child was not preserved at the safe boundary: %v", err)
 	}
-	releaseZeroCount <- struct{}{}
+	releaseZero()
 	select {
 	case err := <-stopped:
+		stopCompleted = true
 		if err != nil {
 			t.Fatalf("safe managed shutdown failed after active runs drained: %v", err)
 		}
@@ -225,6 +271,34 @@ func TestInterruptedCandidateStartupCannotRollBackAfterPointerAdvance(t *testing
 	if err != nil || status.State != "blocked" || status.RunningRevision != "" ||
 		status.LastFailedRevision != candidate || !strings.Contains(status.BlockReason, "durable boundary") {
 		t.Fatalf("blocked recovery status = %#v, %v", status, err)
+	}
+}
+
+func TestInvalidInterruptedCandidateIsPersistentlyBlocked(t *testing.T) {
+	home, dataDir := t.TempDir(), t.TempDir()
+	previous := "0123456789abcdef0123456789abcdef01234567"
+	candidate := "abcdef0123456789abcdef0123456789abcdef01"
+	if err := updater.SetActiveRelease(home, candidate); err != nil {
+		t.Fatal(err)
+	}
+	statusPath := filepath.Join(dataDir, "system-update.json")
+	status := updater.Status{RunningRevision: previous, LatestRevision: candidate, State: "activating"}
+	if err := updater.WriteStatus(statusPath, status); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENCHRON_MANAGED_HOME", home)
+	t.Setenv("ZENCHRON_DATA_DIR", dataDir)
+	t.Setenv("ZENCHRON_MANAGED_REVISION", "")
+	if err := runManaged(); err == nil || !strings.Contains(err.Error(), "automatic rollback is blocked") {
+		t.Fatalf("invalid interrupted candidate recovery error = %v", err)
+	}
+	active, err := updater.ActiveRelease(home)
+	if err != nil || active != candidate {
+		t.Fatalf("invalid candidate recovery moved active pointer to %q: %v", active, err)
+	}
+	persisted, err := updater.ReadStatus(statusPath)
+	if err != nil || persisted.State != "blocked" || persisted.RunningRevision != "" || persisted.LastFailedRevision != candidate {
+		t.Fatalf("invalid candidate recovery status = %#v, %v", persisted, err)
 	}
 }
 
@@ -334,7 +408,7 @@ func TestReleasePointerAdvancesOnlyAfterDashboardProof(t *testing.T) {
 	}
 	initial := updater.Status{RunningRevision: old, LatestRevision: candidate, State: "activating"}
 	failed := makeRuntime(http.StatusServiceUnavailable, http.StatusNoContent, initial)
-	if err := failed.activateRelease(candidate); err == nil {
+	if err := failed.activateRelease(context.Background(), candidate); err == nil {
 		t.Fatal("activation accepted an unavailable dashboard")
 	}
 	if active, err := updater.ActiveRelease(root); err != nil || active != old {
@@ -344,7 +418,7 @@ func TestReleasePointerAdvancesOnlyAfterDashboardProof(t *testing.T) {
 		t.Fatalf("failed dashboard proof claimed state %q", failed.status.State)
 	}
 	ready := makeRuntime(http.StatusOK, http.StatusNoContent, initial)
-	if err := ready.activateRelease(candidate); err != nil {
+	if err := ready.activateRelease(context.Background(), candidate); err != nil {
 		t.Fatal(err)
 	}
 	if active, err := updater.ActiveRelease(root); err != nil || active != candidate {
@@ -363,7 +437,7 @@ func TestReleasePointerAdvancesOnlyAfterDashboardProof(t *testing.T) {
 	if err := updater.WriteStatus(interrupted.statusPath, initial); err != nil {
 		t.Fatal(err)
 	}
-	if err := interrupted.activateRelease(candidate); err == nil {
+	if err := interrupted.activateRelease(context.Background(), candidate); err == nil {
 		t.Fatal("activation reported success after run admission failed to reopen")
 	}
 	if active, err := updater.ActiveRelease(root); err != nil || active != candidate {
@@ -378,7 +452,7 @@ func TestReleasePointerAdvancesOnlyAfterDashboardProof(t *testing.T) {
 		t.Fatal(err)
 	}
 	restarted := makeRuntime(http.StatusOK, http.StatusNoContent, recovered)
-	if err := restarted.activateRelease(candidate); err != nil {
+	if err := restarted.activateRelease(context.Background(), candidate); err != nil {
 		t.Fatalf("activation retry after pointer advance: %v", err)
 	}
 	if status, err := updater.ReadStatus(restarted.statusPath); err != nil || status.State != "active" || status.RunningRevision != candidate {

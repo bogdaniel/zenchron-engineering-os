@@ -219,6 +219,9 @@ chmod +x "$output"
 	if _, err := VerifyRelease(filepath.Join(root, "releases", candidate.Commit), candidate); err != nil {
 		t.Fatalf("VerifyRelease() error = %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(root, "releases", candidate.Commit, "build-home")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("published release contains the isolated build home: %v", err)
+	}
 	for _, binary := range []string{"zenchron", "zenchron-worker"} {
 		info, err := os.Stat(filepath.Join(root, "releases", candidate.Commit, "bin", binary))
 		if err != nil {
@@ -255,5 +258,29 @@ func TestBuildFailureLeavesCurrentReleaseActive(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "releases", candidate.Commit)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("failed build published a partial candidate release: %v", err)
+	}
+	staging, err := os.ReadDir(filepath.Join(root, "staging"))
+	if err != nil || len(staging) != 0 {
+		t.Fatalf("failed build left staging trees behind: %v, %v", staging, err)
+	}
+}
+
+func TestMakeWritableDirectoriesAllowsReadOnlyCacheCleanup(t *testing.T) {
+	root := t.TempDir()
+	cache := filepath.Join(root, "build-home", "pkg", "mod")
+	if err := os.MkdirAll(cache, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cache, "module.zip"), []byte("cache"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(cache, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	if err := makeWritableDirectories(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(root); err != nil {
+		t.Fatalf("read-only build cache could not be removed: %v", err)
 	}
 }

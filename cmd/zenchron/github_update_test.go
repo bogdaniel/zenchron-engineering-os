@@ -102,6 +102,28 @@ func TestTrustedMainFailsClosedWhenProtectionOrMergedPRIsUnavailable(t *testing.
 	}
 }
 
+func TestTrustedMainExplainsUnreadableClassicProtection(t *testing.T) {
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+	const tree = "abcdef0123456789abcdef0123456789abcdef01"
+	client := updateTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/owner/repo/branches/main":
+			w.Write([]byte(`{"name":"main","protected":true,"commit":{"sha":"` + commit + `","commit":{"tree":{"sha":"` + tree + `"}}}}`))
+		case "/repos/owner/repo/commits/" + commit:
+			w.Write([]byte(`{"sha":"` + commit + `","commit":{"tree":{"sha":"` + tree + `"},"verification":{"verified":true}}}`))
+		case "/repos/owner/repo/rules/branches/main":
+			w.Write([]byte(`[]`))
+		case "/repos/owner/repo/branches/main/protection":
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	if _, err := client.trustedMain(context.Background(), "owner/repo"); err == nil || !strings.Contains(err.Error(), "Administration: read") {
+		t.Fatalf("unreadable protected branch returned %v; want an actionable permission error", err)
+	}
+}
+
 func TestTrustedMainAcceptsEffectiveRulesetChecksAndRejectsUnsignedCommit(t *testing.T) {
 	const commit = "0123456789abcdef0123456789abcdef01234567"
 	const tree = "abcdef0123456789abcdef0123456789abcdef01"
@@ -140,14 +162,57 @@ func TestTrustedMainAcceptsEffectiveRulesetChecksAndRejectsUnsignedCommit(t *tes
 	}
 }
 
+func TestTrustedMainReadsEveryRulesetPage(t *testing.T) {
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+	const tree = "abcdef0123456789abcdef0123456789abcdef01"
+	client := updateTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/owner/repo/branches/main":
+			w.Write([]byte(`{"name":"main","commit":{"sha":"` + commit + `","commit":{"tree":{"sha":"` + tree + `"}}}}`))
+		case "/repos/owner/repo/commits/" + commit:
+			w.Write([]byte(`{"sha":"` + commit + `","commit":{"tree":{"sha":"` + tree + `"},"verification":{"verified":true}}}`))
+		case "/repos/owner/repo/rules/branches/main":
+			if r.URL.Query().Get("page") == "1" {
+				w.Write([]byte("[" + strings.TrimSuffix(strings.Repeat(`{"type":"deletion"},`, githubUpdatePageSize), ",") + "]"))
+				return
+			}
+			w.Write([]byte(`[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"build","integration_id":17}]}}]`))
+		case "/repos/owner/repo/branches/main/protection":
+			http.NotFound(w, r)
+		case "/repos/owner/repo/commits/" + commit + "/statuses":
+			w.Write([]byte(`[]`))
+		case "/repos/owner/repo/commits/" + commit + "/check-runs":
+			w.Write([]byte(`{"check_runs":[{"name":"build","status":"completed","conclusion":"success","app":{"id":17}}]}`))
+		case "/repos/owner/repo/commits/" + commit + "/pulls":
+			w.Write([]byte(`[{"merged_at":"2026-11-17T00:00:00Z","base":{"ref":"main"}}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	if _, err := client.trustedMain(context.Background(), "owner/repo"); err != nil {
+		t.Fatalf("trustedMain() did not verify the second ruleset page: %v", err)
+	}
+}
+
 func TestRequiredChecksIgnoreOptionalFailuresAndRejectFailedSameNameRun(t *testing.T) {
 	const base, commit = "/repos/owner/repo", "0123456789abcdef0123456789abcdef01234567"
 	failedRun := false
+	bothRunOrder := 0
 	client := updateTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case base + "/commits/" + commit + "/statuses":
 			w.Write([]byte(`[{"context":"ci","state":"success","updated_at":"2026-11-18T10:00:00Z"},{"context":"optional","state":"failure"}]`))
 		case base + "/commits/" + commit + "/check-runs":
+			if bothRunOrder != 0 {
+				checkRuns := `{"check_runs":[{"name":"ci","status":"completed","conclusion":"failure","app":{"id":17}},` +
+					`{"name":"ci","status":"completed","conclusion":"success","app":{"id":17}}]}`
+				if bothRunOrder == 2 {
+					checkRuns = `{"check_runs":[{"name":"ci","status":"completed","conclusion":"success","app":{"id":17}},` +
+						`{"name":"ci","status":"completed","conclusion":"failure","app":{"id":17}}]}`
+				}
+				w.Write([]byte(checkRuns))
+				return
+			}
 			conclusion := "success"
 			if failedRun {
 				conclusion = "failure"
@@ -164,6 +229,22 @@ func TestRequiredChecksIgnoreOptionalFailuresAndRejectFailedSameNameRun(t *testi
 	failedRun = true
 	if err := client.verifyRequiredChecks(context.Background(), base, commit, required); err == nil || !strings.Contains(err.Error(), `required main check "ci"`) {
 		t.Fatalf("failed same-name check run was hidden by a passing status: %v", err)
+	}
+	for _, bothRunOrder = range []int{1, 2} {
+		if err := client.verifyRequiredChecks(context.Background(), base, commit, required); err == nil {
+			t.Fatalf("required check passed despite a failed run in response order %d", bothRunOrder)
+		}
+	}
+	statusOnly := requiredChecks{Checks: []struct {
+		Context string `json:"context"`
+		AppID   int    `json:"app_id"`
+	}{{Context: "ci"}}}
+	if err := client.verifyRequiredChecks(context.Background(), base, commit, statusOnly); err == nil {
+		t.Fatal("failed check run did not block a successful status for app-agnostic requirement")
+	}
+	failedRun, bothRunOrder = false, 0
+	if err := client.verifyRequiredChecks(context.Background(), base, commit, statusOnly); err != nil {
+		t.Fatalf("app-agnostic required check did not match successful commit status: %v", err)
 	}
 }
 

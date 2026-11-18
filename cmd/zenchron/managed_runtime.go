@@ -93,7 +93,10 @@ func runManaged() error {
 		return fmt.Errorf("managed activation recovery for %s remains blocked; control plane and worker were not started: %s",
 			runtime.status.LatestRevision, runtime.status.BlockReason)
 	}
-	activationCandidate := runtime.status.State == "activating" && runtime.status.LatestRevision == commit &&
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	resumingActivation := runtime.status.State == "activating" && runtime.status.LatestRevision == commit
+	activationCandidate := resumingActivation &&
 		runtime.status.RunningRevision != "" && runtime.status.RunningRevision != commit
 	if runtime.status.State == "activating" && runtime.status.LatestRevision != active && commit == active {
 		runtime.status.State = "failed"
@@ -109,25 +112,33 @@ func runManaged() error {
 		Repository: repository, Commit: commit, Tree: readReleaseTree(home, commit),
 	})
 	if err != nil {
+		if resumingActivation {
+			return runtime.restorePreviousRelease(err)
+		}
 		return fmt.Errorf("active managed release is invalid: %w", err)
 	}
 	if manifest.StateSchemaVersion != updater.StateSchemaVersion || manifest.ControlPlaneProtocolVersion != workerapi.ProtocolVersion ||
 		manifest.WorkerProtocolVersion != workerapi.ProtocolVersion {
-		return errors.New("active release is incompatible with its own control-plane or worker binary")
+		err := errors.New("active release is incompatible with its own control-plane or worker binary")
+		if resumingActivation {
+			return runtime.restorePreviousRelease(err)
+		}
+		return err
 	}
-	if err := runtime.startRelease(commit); err != nil {
+	if err := runtime.startRelease(ctx, commit); err != nil {
+		if ctx.Err() != nil {
+			return errors.Join(ctx.Err(), runtime.stopChildren())
+		}
 		if !activationCandidate && !(runtime.status.State == "activating" && runtime.status.LatestRevision == commit) {
-			return err
+			return errors.Join(err, runtime.stopChildren())
 		}
 		return runtime.restorePreviousRelease(err)
 	}
 	if runtime.status.State == "activating" && runtime.status.LatestRevision == commit {
-		if err := runtime.activateRelease(commit); err != nil {
+		if err := runtime.activateRelease(ctx, commit); err != nil {
 			return runtime.restorePreviousRelease(err)
 		}
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	checks := make(chan os.Signal, 1)
 	signal.Notify(checks, syscall.SIGUSR1)
 	defer signal.Stop(checks)
@@ -166,7 +177,7 @@ func (runtime *managedRuntime) stopAfterChildExit(name string, childErr error) e
 	return errors.Join(fmt.Errorf("managed %s stopped: %w", name, childErr), runtime.stopChildren())
 }
 
-func (runtime *managedRuntime) startRelease(commit string) error {
+func (runtime *managedRuntime) startRelease(ctx context.Context, commit string) error {
 	release := filepath.Join(runtime.home, "releases", commit)
 	base := os.Environ()
 	apiEnv := withEnvironment(base, map[string]string{
@@ -184,7 +195,7 @@ func (runtime *managedRuntime) startRelease(commit string) error {
 	if err != nil {
 		return err
 	}
-	if err := waitManagedHealth(runtime.api, commit); err != nil {
+	if err := waitManagedHealth(ctx, runtime.api, commit); err != nil {
 		runtime.api.stop(5 * time.Second)
 		return err
 	}
@@ -198,7 +209,7 @@ func (runtime *managedRuntime) startRelease(commit string) error {
 		runtime.api.stop(5 * time.Second)
 		return err
 	}
-	if err := waitManagedWorker(runtime.client, commit, runtime.supervisorToken); err != nil {
+	if err := waitManagedWorker(ctx, runtime.client, runtime.api, runtime.worker, commit, runtime.supervisorToken); err != nil {
 		runtime.worker.stop(5 * time.Second)
 		runtime.api.stop(5 * time.Second)
 		return err
@@ -218,7 +229,7 @@ func (runtime *managedRuntime) startRelease(commit string) error {
 	return nil
 }
 
-func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current string, explicitRetry bool) error {
+func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current string, explicitRetry bool) (returnErr error) {
 	runtime.status.State, runtime.status.Progress, runtime.status.BlockReason = "checking", "Checking trusted main and required checks", ""
 	runtime.status.LastAttempt = time.Now().UTC()
 	if err := runtime.writeStatus(); err != nil {
@@ -230,7 +241,7 @@ func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current strin
 		return runtime.failUpdate("blocked", "Could not verify trusted main: "+err.Error())
 	}
 	runtime.status.LatestRevision = candidate.Commit
-	if shouldDeferFailedCandidate(runtime.status, candidate.Commit, explicitRetry) {
+	if shouldDeferFailedCandidate(runtime.status, candidate.Commit, current, explicitRetry) {
 		runtime.status.State, runtime.status.Progress = "failed", ""
 		runtime.status.BlockReason = runtime.status.LastFailureReason
 		return runtime.writeStatus()
@@ -274,15 +285,17 @@ func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current strin
 	if err := runtime.writeStatus(); err != nil {
 		return err
 	}
-	if err := runtime.setQuiesced(true); err != nil {
-		return runtime.failUpdate("failed", "Could not pause new run admission: "+err.Error())
-	}
 	quiesced := true
 	defer func() {
 		if quiesced {
-			_ = runtime.setQuiesced(false)
+			if err := runtime.setQuiesced(false); err != nil {
+				returnErr = errors.Join(returnErr, fmt.Errorf("restore run admission after aborted update: %w", err))
+			}
 		}
 	}()
+	if err := runtime.setQuiesced(true); err != nil {
+		return runtime.failUpdate("failed", "Could not pause new run admission: "+err.Error())
+	}
 	if err := runtime.waitForActiveRuns(ctx); err != nil {
 		return runtime.failUpdate("failed", "Could not wait for active runs to reach a safe boundary: "+err.Error())
 	}
@@ -297,13 +310,16 @@ func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current strin
 	if err := runtime.writeStatus(); err != nil {
 		return err
 	}
+	if err := verifyCurrentTrustedCandidate(ctx, newGitHubClient(), candidate); err != nil {
+		return runtime.restorePreviousRelease(fmt.Errorf("trusted main changed after the old release stopped: %w", err))
+	}
 	argv := []string{filepath.Join(runtime.home, "releases", candidate.Commit, "bin", "zenchron"), "managed"}
 	environment := withEnvironment(os.Environ(), map[string]string{
 		"ZENCHRON_MANAGED_HOME": runtime.home, "ZENCHRON_MANAGED_REVISION": candidate.Commit,
 	})
 	if err := syscall.Exec(argv[0], argv, environment); err != nil {
 		quiesced = false
-		if startErr := runtime.startRelease(current); startErr != nil {
+		if startErr := runtime.startRelease(context.Background(), current); startErr != nil {
 			return runtime.failUpdate("blocked", "Activation handoff failed and the previous release could not be restarted: "+startErr.Error())
 		}
 		return runtime.failUpdate("failed", "Could not replace the managed runtime: "+err.Error())
@@ -311,8 +327,8 @@ func (runtime *managedRuntime) checkAndUpdate(ctx context.Context, current strin
 	return nil
 }
 
-func shouldDeferFailedCandidate(status updater.Status, candidate string, explicitRetry bool) bool {
-	return !explicitRetry && candidate != "" && candidate == status.LastFailedRevision
+func shouldDeferFailedCandidate(status updater.Status, candidate, current string, explicitRetry bool) bool {
+	return !explicitRetry && candidate != "" && candidate != current && candidate == status.LastFailedRevision
 }
 
 func activationCanRollback(home, previous, candidate string) bool {
@@ -332,11 +348,15 @@ func releaseTransitionCompatibility(current, candidate updater.Manifest) error {
 
 func (runtime *managedRuntime) restorePreviousRelease(startErr error) error {
 	previous := runtime.status.RunningRevision
+	if !activationCanRollback(runtime.home, previous, runtime.status.LatestRevision) {
+		blockErr := runtime.blockActivationRecovery(startErr)
+		if stopErr := runtime.stopChildren(); stopErr != nil {
+			return errors.Join(blockErr, fmt.Errorf("candidate services did not stop cleanly: %w", stopErr))
+		}
+		return blockErr
+	}
 	if err := runtime.stopChildren(); err != nil {
 		return fmt.Errorf("candidate recovery failed (%v) and candidate services did not stop cleanly: %w", startErr, err)
-	}
-	if !activationCanRollback(runtime.home, previous, runtime.status.LatestRevision) {
-		return runtime.blockActivationRecovery(startErr)
 	}
 	if err := updater.SetActiveRelease(runtime.home, previous); err != nil {
 		return fmt.Errorf("candidate startup failed (%v) and rollback pointer failed: %w", startErr, err)
@@ -378,10 +398,13 @@ func activationRecoveryBlocked(status updater.Status) bool {
 		status.BlockReason == activationRecoveryBlockedReason
 }
 
-func (runtime *managedRuntime) activateRelease(commit string) error {
+func (runtime *managedRuntime) activateRelease(ctx context.Context, commit string) error {
 	previous := runtime.status.RunningRevision
-	if err := waitManagedDashboard(runtime.client); err != nil {
+	if err := waitManagedDashboard(ctx, runtime.client); err != nil {
 		return fmt.Errorf("dashboard release did not become healthy: %w", err)
+	}
+	if err := managedChildrenAlive(runtime.api, runtime.worker); err != nil {
+		return err
 	}
 	if err := updater.SetActiveRelease(runtime.home, commit); err != nil {
 		return err
@@ -406,6 +429,7 @@ func (runtime *managedRuntime) activeRunCount(ctx context.Context) (int, error) 
 	if err != nil {
 		return 0, err
 	}
+	request.Header.Set("X-Zenchron-Supervisor-Token", runtime.supervisorToken)
 	response, err := runtime.client.Do(request)
 	if err != nil {
 		return 0, err
@@ -442,6 +466,10 @@ func (runtime *managedRuntime) waitForActiveRuns(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case childErr := <-runtime.worker.done:
+			return runtime.stopAfterChildExit("local worker", childErr)
+		case childErr := <-runtime.api.done:
+			return runtime.stopAfterChildExit("control plane", childErr)
 		case <-time.After(updateRunPollInterval):
 		}
 	}
@@ -469,31 +497,38 @@ func (runtime *managedRuntime) setQuiesced(quiesce bool) error {
 }
 
 func (runtime *managedRuntime) stopSafely() error {
+	var drainErr error
 	if runtime.api != nil {
 		if err := runtime.setQuiesced(true); err != nil {
-			return fmt.Errorf("pause run admission before shutdown: %w", err)
-		}
-		if err := runtime.waitForActiveRuns(context.Background()); err != nil {
-			return err
+			drainErr = fmt.Errorf("pause run admission before shutdown: %w", err)
+		} else if err := runtime.waitForActiveRuns(context.Background()); err != nil {
+			drainErr = fmt.Errorf("drain active runs before shutdown: %w", err)
 		}
 	}
-	return runtime.stopChildren()
+	return errors.Join(drainErr, runtime.stopChildren())
 }
 
 func (runtime *managedRuntime) stopChildren() error {
+	var stopErrors []error
 	if runtime.worker != nil {
-		if err := runtime.worker.stop(30 * time.Second); err != nil {
-			return err
+		child := runtime.worker
+		if err := child.stop(30 * time.Second); err != nil {
+			stopErrors = append(stopErrors, err)
 		}
-		runtime.worker = nil
+		if child.command.ProcessState != nil {
+			runtime.worker = nil
+		}
 	}
 	if runtime.api != nil {
-		if err := runtime.api.stop(10 * time.Second); err != nil {
-			return err
+		child := runtime.api
+		if err := child.stop(10 * time.Second); err != nil {
+			stopErrors = append(stopErrors, err)
 		}
-		runtime.api = nil
+		if child.command.ProcessState != nil {
+			runtime.api = nil
+		}
 	}
-	return nil
+	return errors.Join(stopErrors...)
 }
 
 func (runtime *managedRuntime) failUpdate(state, reason string) error {

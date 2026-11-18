@@ -105,5 +105,13 @@ func WriteStatus(path string, status Status) error {
 		os.Remove(temporary)
 		return fmt.Errorf("publish update status: %w", err)
 	}
+	directory, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return fmt.Errorf("open update status directory: %w", err)
+	}
+	defer directory.Close()
+	if err := directory.Sync(); err != nil {
+		return fmt.Errorf("sync update status directory: %w", err)
+	}
 	return nil
 }

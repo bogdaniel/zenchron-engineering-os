@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,11 +47,11 @@ func (child *managedChild) stop(timeout time.Duration) error {
 	}
 }
 
-func waitManagedHealth(api *managedChild, expectedRevision string) error {
+func waitManagedHealth(ctx context.Context, api *managedChild, expectedRevision string) error {
 	deadline := time.Now().Add(updateHealthTimeout)
 	client := &http.Client{Timeout: time.Second}
 	for time.Now().Before(deadline) {
-		request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/healthz", nil)
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/healthz", nil)
 		if err != nil {
 			return err
 		}
@@ -66,19 +67,27 @@ func waitManagedHealth(api *managedChild, expectedRevision string) error {
 				return nil
 			}
 		}
+		timer := time.NewTimer(250 * time.Millisecond)
 		select {
 		case err := <-api.done:
+			timer.Stop()
 			return fmt.Errorf("control plane failed before activation: %w", err)
-		case <-time.After(250 * time.Millisecond):
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
 		}
 	}
 	return errors.New("control plane did not report the expected managed release identity")
 }
 
-func waitManagedWorker(client *http.Client, expectedRevision, supervisorToken string) error {
+func waitManagedWorker(ctx context.Context, client *http.Client, api, worker *managedChild, expectedRevision, supervisorToken string) error {
 	deadline := time.Now().Add(updateHealthTimeout)
 	for time.Now().Before(deadline) {
-		request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/update/worker-compatible", nil)
+		if err := managedChildrenAlive(api, worker); err != nil {
+			return err
+		}
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/api/v1/system/update/worker-compatible", nil)
 		if err != nil {
 			return err
 		}
@@ -91,16 +100,52 @@ func waitManagedWorker(client *http.Client, expectedRevision, supervisorToken st
 			decodeErr := json.NewDecoder(io.LimitReader(response.Body, 1024)).Decode(&result)
 			response.Body.Close()
 			if decodeErr == nil && response.StatusCode == http.StatusOK && result.Compatible {
-				return nil
+				return managedChildrenAlive(api, worker)
 			}
 		}
-		time.Sleep(250 * time.Millisecond)
+		timer := time.NewTimer(250 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case err := <-worker.done:
+			timer.Stop()
+			return fmt.Errorf("local worker exited before readiness: %w", err)
+		case err := <-api.done:
+			timer.Stop()
+			return fmt.Errorf("control plane exited before worker readiness: %w", err)
+		case <-timer.C:
+		}
 	}
 	return errors.New("worker did not report the active release and protocol")
 }
 
-func waitManagedDashboard(client *http.Client) error {
-	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/", nil)
+func managedChildrenAlive(api, worker *managedChild) error {
+	if api != nil {
+		if api.command.ProcessState != nil {
+			return errors.New("control plane exited before release activation")
+		}
+		select {
+		case err := <-api.done:
+			return fmt.Errorf("control plane exited before release activation: %w", err)
+		default:
+		}
+	}
+	if worker != nil {
+		if worker.command.ProcessState != nil {
+			return errors.New("local worker exited before release activation")
+		}
+		select {
+		case err := <-worker.done:
+			return fmt.Errorf("local worker exited before release activation: %w", err)
+		default:
+		}
+	}
+	return nil
+}
+
+func waitManagedDashboard(ctx context.Context, client *http.Client) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/", nil)
 	if err != nil {
 		return err
 	}

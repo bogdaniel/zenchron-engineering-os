@@ -184,16 +184,30 @@ func installStableEntrypoint(home string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return "", fmt.Errorf("create local command directory: %w", err)
 	}
+	if err := verifyReplaceableEntrypoint(path, nil); err != nil {
+		return "", err
+	}
+	if isZenchronExecutable(path) {
+		if err := validateStaleCommandRecoveryPath(path); err != nil {
+			return "", err
+		}
+	}
 	if err := migrateShadowingZenchronCommands(path); err != nil {
 		return "", err
 	}
 	script := "#!/bin/sh\n" + managedEntrypointMarker + "\nset -eu\nroot=" + shellQuote(home) + "\n"
 	script += "revision=$(cat \"$root/active-release\")\n"
 	script += "case \"$revision\" in " + strings.Repeat("[0-9a-f]", 40) + ") ;; *) echo 'invalid Zenchron release pointer' >&2; exit 1 ;; esac\n"
+	script += "export ZENCHRON_MANAGED_HOME=\"$root\"\n"
 	script += "exec \"$root/releases/$revision/bin/zenchron\" \"$@\"\n"
 	contents := []byte(script)
 	if err := verifyReplaceableEntrypoint(path, contents); err != nil {
 		return "", err
+	}
+	if isZenchronExecutable(path) {
+		if err := retireZenchronCommand(path); err != nil {
+			return "", err
+		}
 	}
 	if err := writeInstallFile(path, contents, 0o700); err != nil {
 		return "", fmt.Errorf("install canonical Zenchron command: %w", err)
@@ -257,6 +271,14 @@ func migrateShadowingZenchronCommands(canonical string) error {
 }
 
 func validateEntrypointPath(canonical string) error {
+	if err := verifyReplaceableEntrypoint(canonical, nil); err != nil {
+		return err
+	}
+	if isZenchronExecutable(canonical) {
+		if err := validateStaleCommandRecoveryPath(canonical); err != nil {
+			return err
+		}
+	}
 	paths, err := shadowingCommandPaths(canonical)
 	if err != nil {
 		return err
@@ -311,7 +333,7 @@ func shadowingCommandPaths(canonical string) ([]string, error) {
 		return nil, err
 	}
 	for index, path := range paths {
-		if path == canonical || sameFile(path, canonical) {
+		if path == canonical {
 			return paths[:index], nil
 		}
 	}
@@ -331,6 +353,21 @@ func addLocalBinToZshPath() error {
 		return err
 	}
 	path := filepath.Join(home, ".zprofile")
+	mode := os.FileMode(0o600)
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("resolve zsh profile: %w", err)
+	} else if _, lstatErr := os.Lstat(path); lstatErr == nil {
+		return errors.New("refusing to replace a broken zsh profile symlink")
+	} else if !errors.Is(lstatErr, os.ErrNotExist) {
+		return fmt.Errorf("inspect zsh profile symlink: %w", lstatErr)
+	}
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect zsh profile: %w", err)
+	}
 	contents, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("read zsh profile: %w", err)
@@ -339,7 +376,7 @@ func addLocalBinToZshPath() error {
 		return nil
 	}
 	addition := "\n# Zenchron managed entrypoint\nexport PATH=\"$HOME/.local/bin:$PATH\"\n"
-	return writeInstallFile(path, append(contents, []byte(addition)...), 0o600)
+	return writeInstallFile(path, append(contents, []byte(addition)...), mode)
 }
 
 func installLaunchAgent(home, entrypoint string) error {
@@ -438,13 +475,11 @@ func launchEnvironment() (map[string]string, error) {
 			environment[key] = value
 		}
 	}
-	if path := environment["ZENCHRON_DATA_DIR"]; path != "" && !filepath.IsAbs(path) {
-		absolute, err := filepath.Abs(path)
-		if err != nil {
-			return nil, fmt.Errorf("resolve managed state directory: %w", err)
-		}
-		environment["ZENCHRON_DATA_DIR"] = absolute
+	data, err := managedDataDirectory(managed)
+	if err != nil {
+		return nil, err
 	}
+	environment["ZENCHRON_DATA_DIR"] = data
 	return environment, nil
 }
 

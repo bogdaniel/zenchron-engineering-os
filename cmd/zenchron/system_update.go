@@ -48,7 +48,7 @@ func requestSystemUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func setRunAdmission(w http.ResponseWriter, r *http.Request, runs *agentRunStore, paused bool) {
-	if !isLoopbackRequest(r) {
+	if !managedSupervisorRequest(r) {
 		http.Error(w, "release transitions are available only to the local supervisor", http.StatusForbidden)
 		return
 	}
@@ -59,14 +59,21 @@ func setRunAdmission(w http.ResponseWriter, r *http.Request, runs *agentRunStore
 }
 
 func activeSystemRunCount(w http.ResponseWriter, r *http.Request, runs *agentRunStore) {
-	if !isLoopbackRequest(r) {
+	if !managedSupervisorRequest(r) {
 		http.Error(w, "run status is available only to the local supervisor", http.StatusForbidden)
 		return
 	}
 	runs.mu.Lock()
+	if runs.recoverExpiredLocked(time.Now().UTC()) {
+		if err := runs.persistLocked(); err != nil {
+			runs.mu.Unlock()
+			http.Error(w, "could not persist expired agent run lease", http.StatusInternalServerError)
+			return
+		}
+	}
 	active := 0
 	for _, run := range runs.items {
-		if run.Status == "running" {
+		if run.Status == "running" || run.Publishing {
 			active++
 		}
 	}

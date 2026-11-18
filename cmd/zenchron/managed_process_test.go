@@ -1,8 +1,14 @@
 package main
 
 import (
+	"context"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestManagedWorkerReceivesOnlyExecutionCredentials(t *testing.T) {
@@ -32,5 +38,73 @@ func TestManagedWorkerReceivesOnlyExecutionCredentials(t *testing.T) {
 		if !strings.Contains(got, expected) {
 			t.Fatalf("worker environment omitted %q: %s", expected, got)
 		}
+	}
+}
+
+func TestManagedStartupWaitsHonorCancellationAndWorkerExit(t *testing.T) {
+	directory := t.TempDir()
+	api, err := startManagedChild("/bin/sh", []string{"-c", "exec sleep 30"}, directory, os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker, err := startManagedChild("/bin/sh", []string{"-c", "exec sleep 30"}, directory, os.Environ())
+	if err != nil {
+		api.stop(time.Second)
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := api.stop(time.Second); err != nil {
+			t.Errorf("stop test control plane: %v", err)
+		}
+	}()
+	defer func() {
+		if err := worker.stop(time.Second); err != nil {
+			t.Errorf("stop test worker: %v", err)
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	started := time.Now()
+	if err := waitManagedHealth(ctx, api, "revision"); err == nil || time.Since(started) > time.Second {
+		t.Fatalf("health wait ignored cancellation: %v", err)
+	}
+	if err := waitManagedWorker(ctx, &http.Client{}, api, worker, "revision", "token"); err == nil || time.Since(started) > time.Second {
+		t.Fatalf("worker wait ignored cancellation: %v", err)
+	}
+	if err := waitManagedDashboard(ctx, &http.Client{}); err == nil {
+		t.Fatal("dashboard wait accepted a cancelled startup")
+	}
+
+	exited, err := startManagedChild("/bin/sh", []string{"-c", "exit 0"}, directory, os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-exited.done:
+	case <-time.After(time.Second):
+		t.Fatal("fixture worker did not exit")
+	}
+	client := &http.Client{Transport: managedTestTransport(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"compatible":true}`)),
+			Header: make(http.Header), Request: request}, nil
+	})}
+	if err := waitManagedWorker(context.Background(), client, api, exited, "revision", "token"); err == nil {
+		t.Fatal("worker readiness accepted an exited candidate worker")
+	}
+}
+
+func TestManagedChildrenAliveRejectsExitedControlPlane(t *testing.T) {
+	api, err := startManagedChild("/bin/sh", []string{"-c", "exit 0"}, filepath.Clean(t.TempDir()), os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-api.done:
+	case <-time.After(time.Second):
+		t.Fatal("fixture control plane did not exit")
+	}
+	if err := managedChildrenAlive(api, nil); err == nil || !strings.Contains(err.Error(), "control plane exited") {
+		t.Fatalf("exited control plane was accepted: %v", err)
 	}
 }

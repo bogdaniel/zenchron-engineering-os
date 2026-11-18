@@ -58,7 +58,7 @@ func TestManagedSupervisorCanQuiesceWithoutCreatingAnotherAdmissionPath(t *testi
 	agents := newAgentProfileStore()
 	registry := newWorkerRegistry()
 	runs := newAgentRunStore(registry, agents)
-	runs.items["running"] = agentRun{ID: "running", Status: "running"}
+	runs.items["running"] = agentRun{ID: "running", Status: "running", LeaseUntil: time.Now().Add(time.Minute)}
 	handler := authHandler(newMuxWithStores(newObjectiveStore(products), newWorkflowStore(), agents, products, registry, runs),
 		&authConfig{sessionKey: []byte("test-test-test-test-test-test-test-test")})
 	call := func(method, path, token string) *httptest.ResponseRecorder {
@@ -120,5 +120,47 @@ func TestManagedWorkerCompatibilityRequiresMatchingLiveHeartbeat(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || response.Body.String() != "{\"compatible\":false}\n" {
 		t.Fatalf("incompatible worker compatibility = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestSystemUpdateRunControlsRequireSupervisorTokenAndRecoverLeases(t *testing.T) {
+	t.Setenv("ZENCHRON_MANAGED_SUPERVISOR_TOKEN", "supervisor-secret")
+	registry, agents := newWorkerRegistry(), newAgentProfileStore()
+	runs := newAgentRunStore(registry, agents)
+	runs.path = filepath.Join(t.TempDir(), "agent-runs.json")
+	expiredID, publishingID := "0123456789abcdef0123456789abcdef", "abcdef0123456789abcdef0123456789"
+	runs.items[expiredID] = agentRun{ID: expiredID, Status: "running", LeaseUntil: time.Now().Add(-time.Second)}
+	runs.items[publishingID] = agentRun{ID: publishingID, Status: "succeeded", Publishing: true}
+	products := newProductStore()
+	handler := authHandler(newMuxWithStores(newObjectiveStore(products), newWorkflowStore(), agents, products, registry, runs), nil)
+	call := func(method, path, token string) *httptest.ResponseRecorder {
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest(method, path, nil)
+		request.RemoteAddr = "127.0.0.1:1234"
+		if token != "" {
+			request.Header.Set("X-Zenchron-Supervisor-Token", token)
+		}
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	if response := call(http.MethodPost, "/api/v1/system/update/quiesce", ""); response.Code != http.StatusForbidden {
+		t.Fatalf("unauthorized process changed run admission: HTTP %d", response.Code)
+	}
+	if response := call(http.MethodGet, "/api/v1/system/update/active-runs", ""); response.Code != http.StatusForbidden {
+		t.Fatalf("unauthorized process read internal run state: HTTP %d", response.Code)
+	}
+	response := call(http.MethodGet, "/api/v1/system/update/active-runs", "supervisor-secret")
+	if response.Code != http.StatusOK || response.Body.String() != "{\"active_runs\":1}\n" {
+		t.Fatalf("active-run count = HTTP %d %s", response.Code, response.Body.String())
+	}
+	if runs.items[expiredID].Status != "queued" {
+		t.Fatalf("expired lease state = %q, want queued", runs.items[expiredID].Status)
+	}
+	var persisted struct {
+		Items map[string]agentRun `json:"items"`
+	}
+	data, err := os.ReadFile(runs.path)
+	if err != nil || json.Unmarshal(data, &persisted) != nil || persisted.Items[expiredID].Status != "queued" {
+		t.Fatalf("recovered lease was not persisted: %s, %v", data, err)
 	}
 }

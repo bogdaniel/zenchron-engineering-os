@@ -11,8 +11,8 @@ go run ./cmd/zenchron install
 ```
 
 The installer builds the exact eligible trusted-main revision into an immutable versioned release and registers one
-per-user macOS LaunchAgent. The installed command is `~/.local/bin/zenchron-engineering`; use
-`zenchron-engineering start` to open the stable dashboard at <http://127.0.0.1:8080/?mode=live> and
+per-user macOS LaunchAgent. The installed command is `~/.local/bin/zenchron-engineering`; on first install, use
+`~/.local/bin/zenchron-engineering start` to open the stable dashboard at <http://127.0.0.1:8080/?mode=live> and
 `zenchron-engineering status` to inspect the running revision and update state. Run `zenchron-engineering doctor` to
 verify which PATH entry is active and whether it resolves to the current release. The service checks trusted GitHub main
 every five minutes and updates itself after eligible merges. `./dev.sh` is only a convenience wrapper for that same
@@ -34,7 +34,8 @@ pull request; see [Issue to pull request](docs/features/issue-to-pull-request.md
 authenticated access, prefer a GitHub App installed only on the repositories Zenchron should control. Set
 `ZENCHRON_GITHUB_APP_ID`, `ZENCHRON_GITHUB_INSTALLATION_ID`, and `ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH` on the control
 plane; installation tokens are minted and cached there. Keep the PEM key outside the repository with owner-only file
-permissions. Required permissions are Issues: read/write and Pull requests: read/write; Actions: read is needed for
+permissions. Required permissions are Issues: read/write and Pull requests: read/write; Administration: read,
+Commit statuses: read, and Checks: read are needed to verify trusted-main protection. Actions: read is needed for
 GitHub Actions history in Reports. `ZENCHRON_GITHUB_TOKEN` remains available as a personal-token fallback and takes
 precedence if both are set. Neither the worker nor dashboard receives GitHub API credentials.
 

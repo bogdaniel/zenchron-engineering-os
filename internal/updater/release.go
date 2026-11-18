@@ -66,7 +66,7 @@ func BuildRelease(ctx context.Context, root string, candidate Candidate, gitCred
 	return buildReleaseFrom(ctx, root, candidate, "https://github.com/"+candidate.Repository+".git", gitCredential)
 }
 
-func buildReleaseFrom(ctx context.Context, root string, candidate Candidate, remote, gitCredential string) (Manifest, error) {
+func buildReleaseFrom(ctx context.Context, root string, candidate Candidate, remote, gitCredential string) (manifest Manifest, returnErr error) {
 	if err := candidate.Validate(); err != nil {
 		return Manifest{}, err
 	}
@@ -84,7 +84,21 @@ func buildReleaseFrom(ctx context.Context, root string, candidate Candidate, rem
 	if err != nil {
 		return Manifest{}, fmt.Errorf("create staged release: %w", err)
 	}
-	defer os.RemoveAll(stage)
+	defer func() {
+		if _, err := os.Lstat(stage); errors.Is(err, os.ErrNotExist) {
+			return
+		} else if err != nil {
+			returnErr = errors.Join(returnErr, fmt.Errorf("inspect failed release staging tree: %w", err))
+			return
+		}
+		if err := makeWritableDirectories(stage); err != nil {
+			returnErr = errors.Join(returnErr, fmt.Errorf("prepare failed release staging tree for cleanup: %w", err))
+			return
+		}
+		if err := os.RemoveAll(stage); err != nil {
+			returnErr = errors.Join(returnErr, fmt.Errorf("remove failed release staging tree: %w", err))
+		}
+	}()
 	source := filepath.Join(stage, "source")
 	if err := os.Mkdir(source, 0o700); err != nil {
 		return Manifest{}, fmt.Errorf("create source directory: %w", err)
@@ -146,10 +160,16 @@ func buildReleaseFrom(ctx context.Context, root string, candidate Candidate, rem
 	if err := os.Rename(filepath.Join(dashboard, "dist"), filepath.Join(stage, "dashboard")); err != nil {
 		return Manifest{}, fmt.Errorf("place dashboard release assets: %w", err)
 	}
+	if err := makeWritableDirectories(buildHome); err != nil {
+		return Manifest{}, fmt.Errorf("prepare isolated build home for cleanup: %w", err)
+	}
+	if err := os.RemoveAll(buildHome); err != nil {
+		return Manifest{}, fmt.Errorf("remove isolated build home: %w", err)
+	}
 	if err := os.RemoveAll(source); err != nil {
 		return Manifest{}, fmt.Errorf("remove build checkout: %w", err)
 	}
-	manifest := Manifest{Repository: candidate.Repository, Commit: candidate.Commit, Tree: candidate.Tree,
+	manifest = Manifest{Repository: candidate.Repository, Commit: candidate.Commit, Tree: candidate.Tree,
 		StateSchemaVersion:          controlPlaneInfo.StateSchemaVersion,
 		ControlPlaneProtocolVersion: controlPlaneInfo.ProtocolVersion, WorkerProtocolVersion: workerInfo.ProtocolVersion,
 		Artifacts: make(map[string]string)}
@@ -166,16 +186,63 @@ func buildReleaseFrom(ctx context.Context, root string, candidate Candidate, rem
 	if err := writeManifest(filepath.Join(stage, "release.json"), manifest); err != nil {
 		return Manifest{}, err
 	}
+	if err := syncReleaseTree(stage); err != nil {
+		return Manifest{}, fmt.Errorf("sync staged release before publication: %w", err)
+	}
 	if err := os.MkdirAll(filepath.Dir(releaseDir), 0o700); err != nil {
 		return Manifest{}, fmt.Errorf("create release directory: %w", err)
 	}
 	if err := os.Rename(stage, releaseDir); err != nil {
 		return Manifest{}, fmt.Errorf("publish immutable release: %w", err)
 	}
+	if err := syncDirectory(filepath.Dir(releaseDir)); err != nil {
+		return Manifest{}, fmt.Errorf("sync published releases directory: %w", err)
+	}
 	if err := makeReadOnly(releaseDir); err != nil {
 		return Manifest{}, fmt.Errorf("make release immutable: %w", err)
 	}
+	if err := syncReleaseTree(releaseDir); err != nil {
+		return Manifest{}, fmt.Errorf("sync immutable release: %w", err)
+	}
 	return VerifyRelease(releaseDir, candidate)
+}
+
+func syncReleaseTree(root string) error {
+	var directories []string
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			directories = append(directories, path)
+			return nil
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		syncErr := file.Sync()
+		closeErr := file.Close()
+		return errors.Join(syncErr, closeErr)
+	}); err != nil {
+		return err
+	}
+	for index := len(directories) - 1; index >= 0; index-- {
+		if err := syncDirectory(directories[index]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	syncErr := directory.Sync()
+	closeErr := directory.Close()
+	return errors.Join(syncErr, closeErr)
 }
 
 func binaryBuildInfo(ctx context.Context, path string, environment []string) (struct {
