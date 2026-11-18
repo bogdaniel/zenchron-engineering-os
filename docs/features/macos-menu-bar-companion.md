@@ -31,6 +31,8 @@ flowchart LR
   by online workers, active and blocked graphs,
   queued/running/waiting/failed units, pending decisions, and the recorded updater state. When available, it also
   shows the candidate revision and current progress; blocked or failed updates include the recorded reason.
+- The menu-bar icon distinguishes connected/idle, active work, action required, updating, degraded, and disconnected
+  states from those same API fields. Update failure or worker loss cannot display as a healthy idle icon.
 - When work is active, the menu offers the five most recently updated active WorkGraphs. Each opens its exact
   objective plan in the existing Live dashboard. It also offers up to five most recently recorded unresolved human
   decisions, linked to their exact objective, graph, and decision in the existing plan view. Aggregate counts still

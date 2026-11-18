@@ -3,6 +3,34 @@ import Foundation
 public struct SystemStatus: Decodable, Equatable {
     public static let canonicalDashboardURL = URL(string: "http://127.0.0.1:8080/?mode=live")!
 
+    public enum Indicator: Equatable {
+        case connected
+        case active
+        case actionRequired
+        case updating
+        case degraded
+
+        public var systemSymbolName: String {
+            switch self {
+            case .connected: "checkmark.circle"
+            case .active: "bolt.circle"
+            case .actionRequired: "exclamationmark.circle"
+            case .updating: "arrow.triangle.2.circlepath.circle"
+            case .degraded: "exclamationmark.triangle"
+            }
+        }
+
+        public var description: String {
+            switch self {
+            case .connected: "connected · idle"
+            case .active: "active work"
+            case .actionRequired: "action required"
+            case .updating: "updating"
+            case .degraded: "degraded"
+            }
+        }
+    }
+
     public struct Workers: Decodable, Equatable {
         public struct Provider: Decodable, Equatable {
             public let id: String
@@ -82,6 +110,18 @@ public struct SystemStatus: Decodable, Equatable {
     public let updateRevision: String?
     public let updateProgress: String?
     public let updateReason: String?
+
+    public var indicator: Indicator {
+        switch updateState {
+        case "checking", "building", "verifying", "waiting_for_runs", "activating": return .updating
+        case "failed", "blocked", "unavailable", "unknown": return .degraded
+        default: break
+        }
+        if workers.online < workers.total { return .degraded }
+        if work.openDecisions > 0 || work.failedUnits > 0 || work.blockedGraphs > 0 { return .actionRequired }
+        if work.activeGraphs > 0 || work.queuedUnits > 0 || work.runningUnits > 0 { return .active }
+        return .connected
+    }
 
     enum CodingKeys: String, CodingKey {
         case revision, workers, work

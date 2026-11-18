@@ -3,6 +3,17 @@ import XCTest
 @testable import ZenchronStatusCore
 
 final class SystemStatusTests: XCTestCase {
+    func testStatusIndicatorReflectsWorkUpdateAndWorkerState() throws {
+        XCTAssertEqual(try status().indicator, .connected)
+        XCTAssertEqual(try status(activeGraphs: 1).indicator, .active)
+        XCTAssertEqual(try status(queuedUnits: 1).indicator, .active)
+        XCTAssertEqual(try status(openDecisions: 1).indicator, .actionRequired)
+        XCTAssertEqual(try status(blockedGraphs: 1).indicator, .actionRequired)
+        XCTAssertEqual(try status(updateState: "activating").indicator, .updating)
+        XCTAssertEqual(try status(updateState: "blocked").indicator, .degraded)
+        XCTAssertEqual(try status(onlineWorkers: 0, totalWorkers: 1).indicator, .degraded)
+    }
+
     func testDecodesRecordedStatusAndCanonicalDashboardURL() throws {
         let data = Data("""
         {"revision":"abc123","dashboard_url":"http://127.0.0.1:8080/?mode=live",
@@ -87,5 +98,19 @@ final class SystemStatusTests: XCTestCase {
          "update_state":"blocked","update_revision":"not-a-commit"}
         """.utf8)
         XCTAssertThrowsError(try decodeSystemStatus(data))
+    }
+
+    private func status(updateState: String = "idle", onlineWorkers: Int = 1, totalWorkers: Int = 1,
+                        activeGraphs: Int = 0, blockedGraphs: Int = 0, queuedUnits: Int = 0,
+                        openDecisions: Int = 0) throws -> SystemStatus {
+        let data = Data("""
+        {"dashboard_url":"http://127.0.0.1:8080/?mode=live",
+         "workers":{"online":\(onlineWorkers),"total":\(totalWorkers)},
+         "work":{"active_graphs":\(activeGraphs),"blocked_graphs":\(blockedGraphs),
+         "queued_units":\(queuedUnits),"running_units":0,
+         "waiting_units":0,"failed_units":0,"open_decisions":\(openDecisions)},
+         "update_state":"\(updateState)"}
+        """.utf8)
+        return try decodeSystemStatus(data)
     }
 }

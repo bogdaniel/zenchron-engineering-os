@@ -15,6 +15,7 @@ struct StatusSelfCheck {
         """.utf8)
         let status = try decodeSystemStatus(valid)
         assert(status.workers.online == 1 && status.work.queuedUnits == 2 && status.updateState == "blocked")
+        assert(status.indicator == .degraded)
         assert(status.updateRevision == String(repeating: "a", count: 40) && status.updateReason == "active runs must finish")
         assert(status.work.activeGraphLinks?.first.flatMap(status.activeWorkURL(for:))?.absoluteString ==
             "http://127.0.0.1:8080/?mode=live&objective=objective-2&tab=plan&graph_id=graph-7#objectives")
@@ -37,5 +38,26 @@ struct StatusSelfCheck {
             _ = try decodeSystemStatus(withFragment)
             fatalError("dashboard URL fragment was accepted")
         } catch is DecodingError {}
+
+        let idle = try decodeSystemStatus(fixture())
+        let active = try decodeSystemStatus(fixture(activeGraphs: 1))
+        let actionRequired = try decodeSystemStatus(fixture(openDecisions: 1))
+        let updating = try decodeSystemStatus(fixture(updateState: "activating"))
+        let workerOffline = try decodeSystemStatus(fixture(onlineWorkers: 0, totalWorkers: 1))
+        assert(idle.indicator == .connected)
+        assert(active.indicator == .active)
+        assert(actionRequired.indicator == .actionRequired)
+        assert(updating.indicator == .updating)
+        assert(workerOffline.indicator == .degraded)
+    }
+
+    private static func fixture(updateState: String = "idle", onlineWorkers: Int = 1, totalWorkers: Int = 1,
+                                 activeGraphs: Int = 0, openDecisions: Int = 0) -> Data {
+        Data("""
+        {"dashboard_url":"http://127.0.0.1:8080/?mode=live",
+         "workers":{"online":\(onlineWorkers),"total":\(totalWorkers)},
+         "work":{"active_graphs":\(activeGraphs),"blocked_graphs":0,"queued_units":0,"running_units":0,
+         "waiting_units":0,"failed_units":0,"open_decisions":\(openDecisions)},"update_state":"\(updateState)"}
+        """.utf8)
     }
 }

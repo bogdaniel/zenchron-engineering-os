@@ -94,8 +94,12 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func addStatusItems(to menu: NSMenu) {
         let revision = status?.revision.map { String($0.prefix(8)) } ?? "revision unknown"
-        let title = status == nil ? (startFailure ?? (startAttempt == nil ? message : "Starting Zenchron…"))
-            : "Zenchron · connected · \(revision)"
+        let title: String
+        if let status {
+            title = "Zenchron · \(status.indicator.description) · \(revision)"
+        } else {
+            title = startFailure ?? (startAttempt == nil ? message : "Starting Zenchron…")
+        }
         menu.addItem(NSMenuItem(title: title, action: nil, keyEquivalent: ""))
         if let status {
             let workers = "Workers · \(status.workers.online) online / \(status.workers.total)"
@@ -169,9 +173,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let menu = statusItem?.menu else { return }
         menu.removeAllItems()
         addStatusItems(to: menu)
-        let symbol = status == nil ? "exclamationmark.circle.fill" : "circle.fill"
-        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Zenchron status")
-        statusItem?.button?.toolTip = status == nil ? "Zenchron disconnected" : "Zenchron connected"
+        let indicator = status?.indicator
+        let symbol = indicator?.systemSymbolName ?? "exclamationmark.circle.fill"
+        let description = indicator.map { "Zenchron \($0.description)" } ?? "Zenchron disconnected"
+        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: description)
+        statusItem?.button?.toolTip = description
     }
 
     private func addLaunchAtLoginItem(to menu: NSMenu) {
