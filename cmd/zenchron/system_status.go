@@ -26,7 +26,10 @@ type systemStatus struct {
 		FailedUnits   int                   `json:"failed_units"`
 		OpenDecisions int                   `json:"open_decisions"`
 	} `json:"work"`
-	UpdateState string `json:"update_state"`
+	UpdateState    string `json:"update_state"`
+	UpdateRevision string `json:"update_revision,omitempty"`
+	UpdateProgress string `json:"update_progress,omitempty"`
+	UpdateReason   string `json:"update_reason,omitempty"`
 }
 
 type systemStatusWorkItem struct {
@@ -98,6 +101,14 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 	if path := strings.TrimSpace(os.Getenv("ZENCHRON_UPDATE_STATUS_FILE")); path != "" {
 		if update, err := updater.ReadStatus(path); err == nil {
 			status.UpdateState = update.State
+			status.UpdateRevision = update.LatestRevision
+			status.UpdateProgress = update.Progress
+			if update.State == "blocked" || update.State == "failed" {
+				status.UpdateReason = update.BlockReason
+				if status.UpdateReason == "" {
+					status.UpdateReason = update.LastFailureReason
+				}
+			}
 		}
 	}
 	w.Header().Set("Cache-Control", "no-store")

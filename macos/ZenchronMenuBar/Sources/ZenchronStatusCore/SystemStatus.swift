@@ -45,11 +45,17 @@ public struct SystemStatus: Decodable, Equatable {
     public let workers: Workers
     public let work: Work
     public let updateState: String
+    public let updateRevision: String?
+    public let updateProgress: String?
+    public let updateReason: String?
 
     enum CodingKeys: String, CodingKey {
         case revision, workers, work
         case dashboardURL = "dashboard_url"
         case updateState = "update_state"
+        case updateRevision = "update_revision"
+        case updateProgress = "update_progress"
+        case updateReason = "update_reason"
     }
 
     public var activeWorkURL: URL? {
@@ -75,6 +81,9 @@ public struct SystemStatus: Decodable, Equatable {
         workers = try values.decode(Workers.self, forKey: .workers)
         work = try values.decode(Work.self, forKey: .work)
         updateState = try values.decode(String.self, forKey: .updateState)
+        updateRevision = try values.decodeIfPresent(String.self, forKey: .updateRevision)
+        updateProgress = try values.decodeIfPresent(String.self, forKey: .updateProgress)
+        updateReason = try values.decodeIfPresent(String.self, forKey: .updateReason)
         guard dashboardURL.scheme == "http", dashboardURL.host == "127.0.0.1",
               dashboardURL.port == 8080, dashboardURL.path == "/", dashboardURL.query == "mode=live" else {
             throw DecodingError.dataCorruptedError(forKey: .dashboardURL, in: values,
@@ -85,7 +94,10 @@ public struct SystemStatus: Decodable, Equatable {
         guard workers.online >= 0, workers.total >= workers.online,
               work.activeGraphs >= 0, work.blockedGraphs >= 0, work.queuedUnits >= 0,
               work.runningUnits >= 0, work.waitingUnits >= 0, work.failedUnits >= 0,
-              work.openDecisions >= 0, validUpdateStates.contains(updateState) else {
+              work.openDecisions >= 0, validUpdateStates.contains(updateState),
+              updateRevision.map({ $0.count == 40 && $0.allSatisfy(\.isHexDigit) }) ?? true,
+              updateProgress.map({ $0.count <= 500 }) ?? true,
+              updateReason.map({ $0.count <= 500 }) ?? true else {
             throw DecodingError.dataCorruptedError(forKey: .updateState, in: values,
                 debugDescription: "status contains invalid counts or update state")
         }

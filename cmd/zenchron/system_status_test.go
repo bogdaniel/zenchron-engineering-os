@@ -16,7 +16,8 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 	revision := strings.Repeat("a", 40)
 	t.Setenv("ZENCHRON_RELEASE_REVISION", revision)
 	updateFile := filepath.Join(t.TempDir(), "update.json")
-	if err := updater.WriteStatus(updateFile, updater.Status{State: "active", RunningRevision: revision}); err != nil {
+	if err := updater.WriteStatus(updateFile, updater.Status{State: "active", RunningRevision: revision,
+		LatestRevision: revision, Progress: "Release is active"}); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("ZENCHRON_UPDATE_STATUS_FILE", updateFile)
@@ -51,8 +52,46 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 		status.Work.ActiveGraph.GraphID != "active-newer" || status.Work.ActiveGraph.ObjectiveID != "objective-new" ||
 		status.Work.ActiveGraph.ObjectiveTitle != "Current objective" ||
 		status.Work.QueuedUnits != 1 || status.Work.RunningUnits != 1 || status.Work.WaitingUnits != 1 ||
-		status.Work.FailedUnits != 1 || status.Work.OpenDecisions != 1 || status.UpdateState != "active" {
+		status.Work.FailedUnits != 1 || status.Work.OpenDecisions != 1 || status.UpdateState != "active" ||
+		status.UpdateRevision != revision || status.UpdateProgress != "Release is active" {
 		t.Fatalf("system status = %#v", status)
+	}
+}
+
+func TestLocalSystemStatusIncludesRecordedBlockedUpdateReason(t *testing.T) {
+	tests := []struct {
+		name   string
+		update updater.Status
+		reason string
+	}{
+		{name: "blocked reason", update: updater.Status{State: "blocked", BlockReason: "active runs must finish"},
+			reason: "active runs must finish"},
+		{name: "failed reason fallback", update: updater.Status{State: "failed", LastFailureReason: "release build failed"},
+			reason: "release build failed"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			update := test.update
+			update.LatestRevision = strings.Repeat("b", 40)
+			updateFile := filepath.Join(t.TempDir(), "update.json")
+			if err := updater.WriteStatus(updateFile, update); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("ZENCHRON_UPDATE_STATUS_FILE", updateFile)
+			request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+			request.RemoteAddr = "127.0.0.1:4000"
+			request.Header.Set("Origin", "http://127.0.0.1:8080")
+			response := httptest.NewRecorder()
+			writeLocalSystemStatus(response, request, newWorkerRegistry(), newWorkGraphStore(nil, nil, nil, nil))
+			var status systemStatus
+			if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK {
+				t.Fatalf("system status response: decode error %v, HTTP %d", err, response.Code)
+			}
+			if status.UpdateState != update.State || status.UpdateReason != test.reason ||
+				status.UpdateRevision != update.LatestRevision {
+				t.Fatalf("update status = %#v", status)
+			}
+		})
 	}
 }
 

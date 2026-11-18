@@ -19,7 +19,8 @@ flowchart LR
 ## Behavior
 
 - The menu reports control-plane connectivity and release revision, online worker count, active and blocked graphs,
-  queued/running/waiting/failed units, pending decisions, and the recorded updater state.
+  queued/running/waiting/failed units, pending decisions, and the recorded updater state. When available, it also
+  shows the candidate revision and current progress; blocked or failed updates include the recorded reason.
 - When work is active, the menu links to the most recently updated active WorkGraph's exact objective plan in the
   existing Live dashboard. The status API returns that graph and objective's IDs and title with the aggregate counts.
 - `GET /api/v1/system/status` is read-only, `no-store`, and admitted without a browser session only for a same-origin

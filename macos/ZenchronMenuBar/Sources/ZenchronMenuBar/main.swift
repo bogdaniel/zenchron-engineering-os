@@ -100,6 +100,17 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ].joined(separator: " · ")
             menu.addItem(NSMenuItem(title: actions, action: nil, keyEquivalent: ""))
             menu.addItem(NSMenuItem(title: "Update · \(status.updateState)", action: nil, keyEquivalent: ""))
+            if let revision = status.updateRevision {
+                menu.addItem(NSMenuItem(title: "Candidate · \(revision.prefix(8))", action: nil, keyEquivalent: ""))
+            }
+            if let progress = status.updateProgress, !progress.isEmpty {
+                menu.addItem(NSMenuItem(title: progress, action: nil, keyEquivalent: ""))
+            }
+            if let reason = status.updateReason, !reason.isEmpty {
+                let item = NSMenuItem(title: String(reason.prefix(120)), action: nil, keyEquivalent: "")
+                item.toolTip = reason
+                menu.addItem(item)
+            }
             let open = NSMenuItem(title: "Open Dashboard", action: #selector(openDashboard), keyEquivalent: "")
             open.target = self
             menu.addItem(open)
