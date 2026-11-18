@@ -122,8 +122,10 @@ Live:
 - WorkGraph-linked run IDs are joined to the app shell's agent-run records to show provider-reported token totals and
   cost with explicit run coverage. Providers that do not report cost remain unknown; budgets are not recorded here.
 - The selected product's environment projection supplies the pending-decision count, decision links, current
-  WorkGraph/handoff/finding counts, and observed PR-link count. These are recorded counts, without a time trend or
-  implied merge state. A failed projection shows an error, and a missing product shows an empty explanation.
+  WorkGraph/handoff/finding counts, observed PR-link count, and a newest-first list of its historical WorkGraphs.
+  History entries reference the durable graph, plan hash/revision, graph revision, run IDs, status and timestamps;
+  evidence bodies remain in their owning graph. These are recorded facts, without a time trend or implied merge state.
+  A failed projection shows an error, and a missing product shows an empty explanation.
 - Delivery report workflow and profile links open the referenced saved record using
   `/?workflow=<id>&mode=live#workflows` and `/?profile=<id>&mode=live#agents`. The Live mode parameter keeps local
   navigation from switching to Mock.
@@ -178,12 +180,18 @@ verified; deterministic fake-CLI coverage lives in `orchestration.spec.ts`.
 
 `GET /api/v1/products/{id}/environment` returns the engineering world of one product by reference: its repository
 ids; each objective linked to it with its status, the number of plan revisions, and the id, status, plan revision,
-handoff and finding counts, and pull-request URL of its newest work graph; and every decision asked in those graphs
-with the unit that asked, the question, and who resolved it.
+handoff and finding counts, and pull-request URL of its newest work graph; every visible WorkGraph in newest-first
+history order with its plan hash/revision, graph revision, run IDs, status and timestamps; and every decision asked in
+those graphs with the unit that asked, the question, and who resolved it.
 
 - It is a projection of the product, objective, plan, and work-graph records and stores nothing.
+- Historical work survives a control-plane restart through the existing durable WorkGraph store; history entries
+  point to the graph and run records rather than copying their evidence bodies.
 - Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
 - A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
-- Not implemented: product history, configuration, knowledge entries, and promotion between scopes.
+- Not implemented: product-scoped configuration, knowledge entries, promotion between scopes, architecture/team
+  references, and cross-product organization knowledge. Those require the established authority/context boundaries
+  and are intentionally left for their dependent work.
 
-Verified by `go test ./cmd/zenchron -run TestProductEnvironment -count=1`.
+Verified by `go test ./cmd/zenchron -run TestProductEnvironment -count=1`, including product isolation and history after
+reopening the durable WorkGraph store.

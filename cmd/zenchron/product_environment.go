@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 )
 
 // productEnvironment is the engineering world of one product: its repositories and, by reference, the
@@ -16,6 +17,23 @@ type productEnvironment struct {
 	RepositoryIDs []string               `json:"repository_ids"`
 	Objectives    []environmentObjective `json:"objectives"`
 	Decisions     []environmentDecision  `json:"decisions"`
+	History       []environmentGraph     `json:"history"`
+}
+
+// environmentGraph is a product-scoped reference to a durable execution record, without copying its evidence.
+type environmentGraph struct {
+	ID             string    `json:"id"`
+	ObjectiveID    string    `json:"objective_id"`
+	PlanRevision   int       `json:"plan_revision"`
+	PlanHash       string    `json:"plan_hash"`
+	Revision       int       `json:"revision"`
+	Status         string    `json:"status"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	RunIDs         []string  `json:"run_ids"`
+	Handoffs       int       `json:"handoffs"`
+	Findings       int       `json:"findings"`
+	PullRequestURL string    `json:"pull_request_url,omitempty"`
 }
 
 // environmentObjective names an objective of the product and where its execution stands.
@@ -54,7 +72,8 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	environment := productEnvironment{ProductID: item.ID, Name: item.Name, Description: item.Description,
-		RepositoryIDs: item.RepositoryIDs, Objectives: []environmentObjective{}, Decisions: []environmentDecision{}}
+		RepositoryIDs: item.RepositoryIDs, Objectives: []environmentObjective{}, Decisions: []environmentDecision{},
+		History: []environmentGraph{}}
 	objectives := store.objectives.ofProduct(item.ID)
 	store.mu.Lock()
 	defer store.mu.Unlock()
@@ -68,39 +87,51 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 				entry.PlanRevisions++
 			}
 		}
-		if graph := store.newestGraphLocked(access, objective.ID); graph != nil {
-			entry.GraphID, entry.GraphStatus, entry.PlanRevision = graph.ID, graph.Status, graph.PlanRevision
+		var newest environmentGraph
+		hasNewest := false
+		// ponytail: scans the bounded 100-graph store per objective; index by objective if retention grows.
+		for _, graph := range store.graphs {
+			if graph.ObjectiveID != objective.ID || !store.mayRead(access, graph) {
+				continue
+			}
+			reference := environmentGraph{ID: graph.ID, ObjectiveID: objective.ID, PlanRevision: graph.PlanRevision,
+				PlanHash: graph.PlanHash, Revision: graph.Revision, Status: graph.Status, CreatedAt: graph.CreatedAt,
+				UpdatedAt: graph.UpdatedAt, RunIDs: []string{}}
+			for _, unit := range graph.Units {
+				reference.RunIDs = append(reference.RunIDs, unit.RunIDs...)
+				reference.PullRequestURL = max(reference.PullRequestURL, unit.PullRequestURL)
+			}
 			for _, message := range graph.Messages {
 				switch message.Type {
 				case messageHandoff:
-					entry.Handoffs++
+					reference.Handoffs++
 				case messageFinding:
-					entry.Findings++
+					reference.Findings++
 				case messageDecisionRequest:
 					environment.Decisions = append(environment.Decisions, environmentDecision{GraphID: graph.ID, MessageID: message.ID,
 						GraphStatus: graph.Status, ObjectiveID: objective.ID, Unit: message.From, Question: message.Body,
 						ResolvedBy: graph.resolvedBy(message.ID)})
 				}
 			}
-			for _, unit := range graph.Units {
-				entry.PullRequestURL = max(entry.PullRequestURL, unit.PullRequestURL)
+			environment.History = append(environment.History, reference)
+			if !hasNewest || reference.CreatedAt.After(newest.CreatedAt) {
+				newest, hasNewest = reference, true
 			}
+		}
+		if hasNewest {
+			entry.GraphID, entry.GraphStatus, entry.PlanRevision = newest.ID, newest.Status, newest.PlanRevision
+			entry.Handoffs, entry.Findings, entry.PullRequestURL = newest.Handoffs, newest.Findings, newest.PullRequestURL
 		}
 		environment.Objectives = append(environment.Objectives, entry)
 	}
 	slices.SortFunc(environment.Objectives, func(a, b environmentObjective) int { return strings.Compare(a.ID, b.ID) })
-	writeJSON(w, http.StatusOK, environment)
-}
-
-// newestGraphLocked returns the newest work graph of an objective that the caller may read.
-func (store *workGraphStore) newestGraphLocked(access requestAccess, objectiveID string) *workGraph {
-	var newest *workGraph
-	for _, graph := range store.graphs {
-		if graph.ObjectiveID == objectiveID && store.mayRead(access, graph) && (newest == nil || graph.CreatedAt.After(newest.CreatedAt)) {
-			newest = graph
+	slices.SortFunc(environment.History, func(a, b environmentGraph) int {
+		if order := b.CreatedAt.Compare(a.CreatedAt); order != 0 {
+			return order
 		}
-	}
-	return newest
+		return strings.Compare(a.ID, b.ID)
+	})
+	writeJSON(w, http.StatusOK, environment)
 }
 
 // resolvedBy returns who answered a decision request, or nothing while it is open.
