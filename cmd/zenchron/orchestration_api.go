@@ -168,7 +168,8 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 			}
 			plan.WorkflowMode = workflowModeGuidance
 		}
-		run, status, message := store.queuePlanner(item, project, strings.ToLower(input.PlannerAgentID), access.user, guidance)
+		run, status, message := store.queuePlanner(item, project, strings.ToLower(input.PlannerAgentID),
+			access.user, guidance, plan.ProductContext)
 		if status != 0 {
 			http.Error(w, message, status)
 			return
@@ -197,12 +198,17 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 }
 
 // queuePlanner queues the run in which a read-only agent proposes a plan for the objective.
-func (store *workGraphStore) queuePlanner(item objective, project projectRecord, agentID, user, workflowGuidance string) (agentRun, int, string) {
+func (store *workGraphStore) queuePlanner(
+	item objective, project projectRecord, agentID, user, workflowGuidance, productContext string,
+) (agentRun, int, string) {
 	profile, exists := store.agentProfiles()[agentID]
 	if !exists || profile.Status != "active" || !workerapi.IsCLIProvider(profile.Provider) || slices.Contains(profile.Tools, "code.write") {
 		return agentRun{}, http.StatusConflict, "planner_agent_id must name an active, read-only Codex or Claude Code profile"
 	}
 	prompt := "Plan the engineering work for this objective: " + item.Title
+	var productDescription strings.Builder
+	writeProductContext(&productDescription, productContext)
+	prompt += productDescription.String()
 	if workflowGuidance != "" {
 		prompt += "\n\n" + workflowGuidance
 	}
