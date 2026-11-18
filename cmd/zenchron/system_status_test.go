@@ -85,6 +85,30 @@ func TestLocalSystemStatusOmitsUnknownProviderReadiness(t *testing.T) {
 	}
 }
 
+func TestLocalSystemStatusAcceptsCredentialAddedAfterSupervisorStarted(t *testing.T) {
+	userHome := t.TempDir()
+	t.Setenv("HOME", userHome)
+	statusToken := strings.Repeat("s", 43)
+	launchDirectory := filepath.Join(userHome, "Library", "LaunchAgents")
+	if err := os.MkdirAll(launchDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	plist := filepath.Join(launchDirectory, managedLaunchAgentLabel+".plist")
+	contents := renderLaunchAgent(filepath.Join(userHome, ".local", "bin", "zenchron-engineering"), userHome,
+		filepath.Join(userHome, "logs"), map[string]string{"ZENCHRON_LOCAL_STATUS_TOKEN": statusToken})
+	if err := os.WriteFile(plist, contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	request := localStatusTestRequest(t)
+	request.Header.Set("X-Zenchron-Local-Status-Token", statusToken)
+	t.Setenv("ZENCHRON_LOCAL_STATUS_TOKEN", "")
+	response := httptest.NewRecorder()
+	writeLocalSystemStatus(response, request, newWorkerRegistry(), newWorkGraphStore(nil, nil, nil, nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status with plist credential returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+}
+
 func TestLocalSystemStatusBoundsAndOrdersActionLinks(t *testing.T) {
 	graphs := &workGraphStore{graphs: make(map[string]*workGraph)}
 	for index := 0; index < 12; index++ {

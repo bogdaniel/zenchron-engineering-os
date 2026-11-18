@@ -84,6 +84,66 @@ func TestLaunchEnvironmentResolvesRelativeStateDirectory(t *testing.T) {
 	}
 }
 
+func TestEnsureManagedAgentRepairsLoadedLaunchAgentWithoutRestart(t *testing.T) {
+	userHome := t.TempDir()
+	managed := filepath.Join(userHome, "installation")
+	t.Setenv("HOME", userHome)
+	t.Setenv("ZENCHRON_MANAGED_HOME", managed)
+	commands := filepath.Join(t.TempDir(), "launchctl.log")
+	commandDirectory := t.TempDir()
+	launchctl := filepath.Join(commandDirectory, "launchctl")
+	if err := os.WriteFile(launchctl, []byte("#!/bin/sh\nprintf '%s\\n' \"$1\" >> \"$COMMAND_LOG\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("COMMAND_LOG", commands)
+	t.Setenv("PATH", commandDirectory+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	launchDirectory := filepath.Join(userHome, "Library", "LaunchAgents")
+	if err := os.MkdirAll(launchDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	plist := filepath.Join(launchDirectory, managedLaunchAgentLabel+".plist")
+	entrypoint := filepath.Join(userHome, ".local", "bin", "zenchron-engineering")
+	contents := renderLaunchAgent(entrypoint, userHome, filepath.Join(managed, "logs"), map[string]string{
+		"PATH": "/usr/bin:/bin", "ZENCHRON_DATA_DIR": filepath.Join(userHome, "state"),
+	})
+	if err := os.WriteFile(plist, contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ensureManagedAgent(managed, entrypoint); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := os.ReadFile(plist)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, found, err := launchAgentStatusCredential(updated)
+	if err != nil || !found || len(token) != 43 {
+		t.Fatalf("repaired LaunchAgent credential = %q, found %t, error %v", token, found, err)
+	}
+	log, err := os.ReadFile(commands)
+	if err != nil || string(log) != "print\n" {
+		t.Fatalf("loaded agent commands = %q, %v; want no restart", log, err)
+	}
+
+	t.Setenv("ZENCHRON_LOCAL_STATUS_TOKEN", "")
+	if got := localStatusCredential(); got != token {
+		t.Fatalf("status credential from repaired LaunchAgent = %q, want %q", got, token)
+	}
+	if err := ensureManagedAgent(managed, entrypoint); err != nil {
+		t.Fatal(err)
+	}
+	unchanged, err := os.ReadFile(plist)
+	if err != nil || string(unchanged) != string(updated) {
+		t.Fatalf("repeated install rotated the existing credential: %v", err)
+	}
+	log, err = os.ReadFile(commands)
+	if err != nil || string(log) != "print\nprint\n" {
+		t.Fatalf("repeated loaded-agent commands = %q, %v; want no restart", log, err)
+	}
+}
+
 func TestStableEntrypointRefusesToReplaceUnrelatedCommand(t *testing.T) {
 	userHome := t.TempDir()
 	t.Setenv("HOME", userHome)

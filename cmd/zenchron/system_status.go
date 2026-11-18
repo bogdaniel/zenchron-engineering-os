@@ -67,7 +67,7 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 		http.Error(w, "system status is available only to the local operator", http.StatusForbidden)
 		return
 	}
-	token := strings.TrimSpace(os.Getenv("ZENCHRON_LOCAL_STATUS_TOKEN"))
+	token := localStatusCredential()
 	if token == "" || !hmac.Equal([]byte(r.Header.Get("X-Zenchron-Local-Status-Token")), []byte(token)) {
 		http.Error(w, "system status credential required", http.StatusUnauthorized)
 		return
@@ -195,4 +195,16 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, status)
+}
+
+func localStatusCredential() string {
+	// Read the plist first so a live credential repair also updates an older supervisor process.
+	if path, err := managedLaunchAgentPlistPath(); err == nil {
+		if contents, err := os.ReadFile(path); err == nil {
+			if token, found, err := launchAgentStatusCredential(contents); err == nil && found && token != "" {
+				return token
+			}
+		}
+	}
+	return strings.TrimSpace(os.Getenv("ZENCHRON_LOCAL_STATUS_TOKEN"))
 }

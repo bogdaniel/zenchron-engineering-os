@@ -9,6 +9,7 @@ plane, worker, dashboard, updater, or store. One per-user lock limits the proces
 flowchart LR
   Companion[Zenchron menu-bar app] -->|GET /api/v1/system/status| API[Managed control plane]
   LaunchAgent[Mode 0600 managed LaunchAgent plist] -->|Local status credential| Companion
+  LaunchAgent -->|Credential fallback for older supervisor environments| API
   Companion -->|Credential header · loopback only| API
   API -->|Signed-in administrator when access policy is enabled| Auth[Existing session and access policy]
   API --> Workers[(Worker registry)]
@@ -40,6 +41,9 @@ flowchart LR
 - `GET /api/v1/system/status` is read-only and `no-store`. The managed installer generates a local status credential
   in the mode-0600 LaunchAgent plist; the companion reads it and sends it in a request header. The endpoint also
   requires a loopback connection, so client-controlled Host and Origin headers alone cannot authorize a request.
+  The control plane accepts the same credential from its process environment and reads the plist value when an
+  already-running supervisor predates that environment entry. Re-running install repairs the plist without
+  restarting the supervisor or interrupting active work.
   Configured authentication still requires a valid session, and access-policy installs still require an administrator;
   the local credential does not bypass either check. An unreadable access policy fails closed. A configured updater
   status file that cannot be read is reported as unavailable without exposing its path or raw error; work and worker

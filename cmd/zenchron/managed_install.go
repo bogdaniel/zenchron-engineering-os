@@ -173,6 +173,33 @@ func ensureManagedAgent(home, entrypoint string) error {
 		return fmt.Errorf("resolve current user: %w", err)
 	}
 	if _, err := exec.Command("launchctl", "print", "gui/"+current.Uid+"/"+managedLaunchAgentLabel).CombinedOutput(); err == nil {
+		// The status endpoint reads this plist value live, so repairing it does not restart active work.
+		plist, err := managedLaunchAgentPlistPath()
+		if err != nil {
+			return err
+		}
+		contents, err := os.ReadFile(plist)
+		if err != nil {
+			return fmt.Errorf("read managed LaunchAgent: %w", err)
+		}
+		token, found, err := launchAgentStatusCredential(contents)
+		if err != nil {
+			return fmt.Errorf("read local status credential from managed LaunchAgent: %w", err)
+		}
+		if found && token != "" {
+			return nil
+		}
+		token, err = randomToken(32)
+		if err != nil {
+			return fmt.Errorf("generate local status credential: %w", err)
+		}
+		contents, err = withLaunchAgentStatusCredential(contents, token)
+		if err != nil {
+			return fmt.Errorf("repair managed LaunchAgent status credential: %w", err)
+		}
+		if err := writeInstallFile(plist, contents, 0o600); err != nil {
+			return fmt.Errorf("persist local status credential: %w", err)
+		}
 		return nil
 	}
 	return installLaunchAgent(home, entrypoint)
