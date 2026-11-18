@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,14 +18,16 @@ type systemStatus struct {
 		Total  int `json:"total"`
 	} `json:"workers"`
 	Work struct {
-		ActiveGraphs  int                   `json:"active_graphs"`
-		ActiveGraph   *systemStatusWorkItem `json:"active_graph,omitempty"`
-		BlockedGraphs int                   `json:"blocked_graphs"`
-		QueuedUnits   int                   `json:"queued_units"`
-		RunningUnits  int                   `json:"running_units"`
-		WaitingUnits  int                   `json:"waiting_units"`
-		FailedUnits   int                   `json:"failed_units"`
-		OpenDecisions int                   `json:"open_decisions"`
+		ActiveGraphs     int                    `json:"active_graphs"`
+		ActiveGraph      *systemStatusWorkItem  `json:"active_graph,omitempty"`
+		ActiveGraphLinks []systemStatusWorkItem `json:"active_graph_links,omitempty"`
+		Decisions        []systemStatusDecision `json:"decisions,omitempty"`
+		BlockedGraphs    int                    `json:"blocked_graphs"`
+		QueuedUnits      int                    `json:"queued_units"`
+		RunningUnits     int                    `json:"running_units"`
+		WaitingUnits     int                    `json:"waiting_units"`
+		FailedUnits      int                    `json:"failed_units"`
+		OpenDecisions    int                    `json:"open_decisions"`
 	} `json:"work"`
 	UpdateState    string `json:"update_state"`
 	UpdateRevision string `json:"update_revision,omitempty"`
@@ -32,10 +35,22 @@ type systemStatus struct {
 	UpdateReason   string `json:"update_reason,omitempty"`
 }
 
+const maxSystemStatusLinks = 5
+
 type systemStatusWorkItem struct {
 	GraphID        string `json:"graph_id"`
 	ObjectiveID    string `json:"objective_id"`
 	ObjectiveTitle string `json:"objective_title"`
+	updatedAt      time.Time
+}
+
+type systemStatusDecision struct {
+	ID             string `json:"id"`
+	GraphID        string `json:"graph_id"`
+	ObjectiveID    string `json:"objective_id"`
+	ObjectiveTitle string `json:"objective_title"`
+	From           string `json:"from"`
+	createdAt      time.Time
 }
 
 func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *workerRegistry, graphs *workGraphStore) {
@@ -56,11 +71,16 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 	registry.mu.RUnlock()
 
 	graphs.mu.Lock()
+	// ponytail: five links per menu section; add pagination if operators need older items.
 	var activeGraphUpdatedAt time.Time
 	var activeGraphID string
 	for _, graph := range graphs.graphs {
 		if graph.Status == graphActive {
 			status.Work.ActiveGraphs++
+			status.Work.ActiveGraphLinks = append(status.Work.ActiveGraphLinks, systemStatusWorkItem{
+				GraphID: graph.ID, ObjectiveID: graph.ObjectiveID, ObjectiveTitle: graph.ObjectiveTitle,
+				updatedAt: graph.UpdatedAt,
+			})
 			if status.Work.ActiveGraph == nil || graph.UpdatedAt.After(activeGraphUpdatedAt) ||
 				(graph.UpdatedAt.Equal(activeGraphUpdatedAt) && graph.ID < activeGraphID) {
 				status.Work.ActiveGraph = &systemStatusWorkItem{
@@ -81,6 +101,10 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 		for _, message := range graph.Messages {
 			if message.Type == messageDecisionRequest && !resolved[message.ID] {
 				status.Work.OpenDecisions++
+				status.Work.Decisions = append(status.Work.Decisions, systemStatusDecision{
+					ID: message.ID, GraphID: graph.ID, ObjectiveID: graph.ObjectiveID,
+					ObjectiveTitle: graph.ObjectiveTitle, From: message.From, createdAt: message.CreatedAt,
+				})
 			}
 		}
 		for _, unit := range graph.Units {
@@ -95,6 +119,26 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 				status.Work.FailedUnits++
 			}
 		}
+	}
+	sort.Slice(status.Work.ActiveGraphLinks, func(i, j int) bool {
+		left, right := status.Work.ActiveGraphLinks[i], status.Work.ActiveGraphLinks[j]
+		if left.updatedAt.Equal(right.updatedAt) {
+			return left.GraphID < right.GraphID
+		}
+		return left.updatedAt.After(right.updatedAt)
+	})
+	if len(status.Work.ActiveGraphLinks) > maxSystemStatusLinks {
+		status.Work.ActiveGraphLinks = status.Work.ActiveGraphLinks[:maxSystemStatusLinks]
+	}
+	sort.Slice(status.Work.Decisions, func(i, j int) bool {
+		left, right := status.Work.Decisions[i], status.Work.Decisions[j]
+		if left.createdAt.Equal(right.createdAt) {
+			return left.ID < right.ID
+		}
+		return left.createdAt.After(right.createdAt)
+	})
+	if len(status.Work.Decisions) > maxSystemStatusLinks {
+		status.Work.Decisions = status.Work.Decisions[:maxSystemStatusLinks]
 	}
 	graphs.mu.Unlock()
 

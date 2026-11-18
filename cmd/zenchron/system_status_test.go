@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -51,10 +52,39 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 		status.Work.BlockedGraphs != 1 || status.Work.ActiveGraph == nil ||
 		status.Work.ActiveGraph.GraphID != "active-newer" || status.Work.ActiveGraph.ObjectiveID != "objective-new" ||
 		status.Work.ActiveGraph.ObjectiveTitle != "Current objective" ||
+		len(status.Work.ActiveGraphLinks) != 2 || status.Work.ActiveGraphLinks[0].GraphID != "active-newer" ||
+		len(status.Work.Decisions) != 1 || status.Work.Decisions[0].ID != "open" ||
+		status.Work.Decisions[0].GraphID != "graph" || status.Work.Decisions[0].ObjectiveID != "objective" ||
 		status.Work.QueuedUnits != 1 || status.Work.RunningUnits != 1 || status.Work.WaitingUnits != 1 ||
 		status.Work.FailedUnits != 1 || status.Work.OpenDecisions != 1 || status.UpdateState != "active" ||
 		status.UpdateRevision != revision || status.UpdateProgress != "Release is active" {
 		t.Fatalf("system status = %#v", status)
+	}
+}
+
+func TestLocalSystemStatusBoundsAndOrdersActionLinks(t *testing.T) {
+	graphs := &workGraphStore{graphs: make(map[string]*workGraph)}
+	for index := 0; index < 12; index++ {
+		id := fmt.Sprintf("graph-%02d", index)
+		graphs.graphs[id] = &workGraph{ID: id, ObjectiveID: "objective-" + id, Status: graphActive,
+			UpdatedAt: time.Unix(int64(index), 0), Messages: []graphMessage{
+				{ID: "decision-" + id, Type: messageDecisionRequest, From: "reviewer", CreatedAt: time.Unix(int64(index), 0)},
+			}}
+	}
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+	request.RemoteAddr = "127.0.0.1:4000"
+	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	response := httptest.NewRecorder()
+	writeLocalSystemStatus(response, request, newWorkerRegistry(), graphs)
+	var status systemStatus
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("system status response: decode error %v, HTTP %d", err, response.Code)
+	}
+	if len(status.Work.ActiveGraphLinks) != maxSystemStatusLinks ||
+		status.Work.ActiveGraphLinks[0].GraphID != "graph-11" ||
+		len(status.Work.Decisions) != maxSystemStatusLinks || status.Work.Decisions[0].ID != "decision-graph-11" ||
+		status.Work.ActiveGraphs != 12 || status.Work.OpenDecisions != 12 {
+		t.Fatalf("bounded links = %#v, want newest %d of 12", status.Work, maxSystemStatusLinks)
 	}
 }
 

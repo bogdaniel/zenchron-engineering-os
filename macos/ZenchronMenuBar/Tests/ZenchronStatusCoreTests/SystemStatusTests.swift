@@ -9,6 +9,9 @@ final class SystemStatusTests: XCTestCase {
          "workers":{"online":1,"total":2},
          "work":{"active_graphs":1,"active_graph":{"graph_id":"graph-7","objective_id":"objective-2",
          "objective_title":"Ship the dashboard"},"blocked_graphs":0,"queued_units":2,"running_units":1,
+         "active_graph_links":[{"graph_id":"graph-7","objective_id":"objective-2",
+         "objective_title":"Ship the dashboard"}],"decisions":[{"id":"decision-4","graph_id":"graph-7",
+         "objective_id":"objective-2","objective_title":"Ship the dashboard","from":"reviewer"}],
          "waiting_units":1,"failed_units":0,"open_decisions":1},
          "update_state":"blocked","update_revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
          "update_reason":"active runs must finish"}
@@ -20,8 +23,10 @@ final class SystemStatusTests: XCTestCase {
         XCTAssertEqual(status.updateRevision, String(repeating: "a", count: 40))
         XCTAssertEqual(status.updateReason, "active runs must finish")
         XCTAssertEqual(status.dashboardURL.absoluteString, "http://127.0.0.1:8080/?mode=live")
-        XCTAssertEqual(status.activeWorkURL?.absoluteString,
+        XCTAssertEqual(status.work.activeGraphLinks?.first.flatMap(status.activeWorkURL(for:))?.absoluteString,
             "http://127.0.0.1:8080/?mode=live&objective=objective-2&tab=plan&graph_id=graph-7#objectives")
+        XCTAssertEqual(status.work.decisions?.first.flatMap(status.decisionURL(for:))?.absoluteString,
+            "http://127.0.0.1:8080/?mode=live&objective=objective-2&tab=plan&graph_id=graph-7&decision=decision-4#objectives")
     }
 
     func testRejectsUnexpectedDashboardAddress() {
@@ -43,7 +48,9 @@ final class SystemStatusTests: XCTestCase {
          "waiting_units":0,"failed_units":0,"open_decisions":0},
          "update_state":"unknown"}
         """.utf8)
-        XCTAssertNil(try decodeSystemStatus(data).activeWorkURL)
+        let status = try decodeSystemStatus(data)
+        XCTAssertTrue(status.work.activeGraphLinks?.isEmpty ?? true)
+        XCTAssertTrue(status.work.decisions?.isEmpty ?? true)
     }
 
     func testRejectsInvalidUpdateRevision() {

@@ -87,11 +87,17 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 "\(status.work.waitingUnits) waiting",
             ].joined(separator: " · ")
             menu.addItem(NSMenuItem(title: work, action: nil, keyEquivalent: ""))
-            if let activeGraph = status.work.activeGraph {
-                let title = activeGraph.objectiveTitle.isEmpty ? "Open active work" : "Open · \(activeGraph.objectiveTitle)"
-                let openWork = NSMenuItem(title: title, action: #selector(openActiveWork), keyEquivalent: "")
-                openWork.target = self
-                menu.addItem(openWork)
+            for graph in status.work.activeGraphLinks ?? (status.work.activeGraph.map { [$0] } ?? []) {
+                let title = graph.objectiveTitle.isEmpty ? "Open active work" : "Open · \(graph.objectiveTitle)"
+                if let url = status.activeWorkURL(for: graph) {
+                    menu.addItem(linkItem(title: title, url: url))
+                }
+            }
+            for decision in status.work.decisions ?? [] {
+                guard let url = status.decisionURL(for: decision) else { continue }
+                let title = decision.objectiveTitle.isEmpty ? "Review decision · \(decision.from)"
+                    : "Decision · \(decision.objectiveTitle)"
+                menu.addItem(linkItem(title: title, url: url))
             }
             let actions = [
                 "Action required",
@@ -155,8 +161,15 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSWorkspace.shared.open(status.dashboardURL)
     }
 
-    @objc private func openActiveWork() {
-        guard let url = status?.activeWorkURL else { return }
+    private func linkItem(title: String, url: URL) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(openMenuLink), keyEquivalent: "")
+        item.target = self
+        item.representedObject = url
+        return item
+    }
+
+    @objc private func openMenuLink(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
         NSWorkspace.shared.open(url)
     }
 

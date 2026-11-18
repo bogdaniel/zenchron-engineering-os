@@ -19,8 +19,25 @@ public struct SystemStatus: Decodable, Equatable {
             }
         }
 
+        public struct Decision: Decodable, Equatable {
+            public let id: String
+            public let graphID: String
+            public let objectiveID: String
+            public let objectiveTitle: String
+            public let from: String
+
+            enum CodingKeys: String, CodingKey {
+                case id, from
+                case graphID = "graph_id"
+                case objectiveID = "objective_id"
+                case objectiveTitle = "objective_title"
+            }
+        }
+
         public let activeGraphs: Int
         public let activeGraph: ActiveGraph?
+        public let activeGraphLinks: [ActiveGraph]?
+        public let decisions: [Decision]?
         public let blockedGraphs: Int
         public let queuedUnits: Int
         public let runningUnits: Int
@@ -31,6 +48,8 @@ public struct SystemStatus: Decodable, Equatable {
         enum CodingKeys: String, CodingKey {
             case activeGraphs = "active_graphs"
             case activeGraph = "active_graph"
+            case activeGraphLinks = "active_graph_links"
+            case decisions
             case blockedGraphs = "blocked_graphs"
             case queuedUnits = "queued_units"
             case runningUnits = "running_units"
@@ -58,17 +77,31 @@ public struct SystemStatus: Decodable, Equatable {
         case updateReason = "update_reason"
     }
 
-    public var activeWorkURL: URL? {
-        guard let graph = work.activeGraph,
-              var components = URLComponents(url: dashboardURL, resolvingAgainstBaseURL: false) else { return nil }
-        let deepLinkParameters = ["mode", "objective", "tab", "graph_id"]
-        var queryItems = (components.queryItems ?? []).filter { !deepLinkParameters.contains($0.name) }
-        queryItems.append(contentsOf: [
-            URLQueryItem(name: "mode", value: "live"),
+    public func activeWorkURL(for graph: Work.ActiveGraph) -> URL? {
+        dashboardURL(for: [
             URLQueryItem(name: "objective", value: graph.objectiveID),
             URLQueryItem(name: "tab", value: "plan"),
             URLQueryItem(name: "graph_id", value: graph.graphID),
         ])
+    }
+
+    public func decisionURL(for decision: Work.Decision) -> URL? {
+        dashboardURL(for: [
+            URLQueryItem(name: "objective", value: decision.objectiveID),
+            URLQueryItem(name: "tab", value: "plan"),
+            URLQueryItem(name: "graph_id", value: decision.graphID),
+            URLQueryItem(name: "decision", value: decision.id),
+        ])
+    }
+
+    private func dashboardURL(for selection: [URLQueryItem]) -> URL? {
+        guard var components = URLComponents(url: dashboardURL, resolvingAgainstBaseURL: false) else { return nil }
+        let deepLinkParameters = ["mode", "objective", "tab", "graph_id", "decision"]
+        var queryItems = (components.queryItems ?? []).filter { !deepLinkParameters.contains($0.name) }
+        queryItems.append(contentsOf: [
+            URLQueryItem(name: "mode", value: "live"),
+        ])
+        queryItems.append(contentsOf: selection)
         components.queryItems = queryItems
         components.fragment = "objectives"
         return components.url
