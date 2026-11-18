@@ -162,6 +162,8 @@ for (const viewport of viewports) {
     await page.route(`**/api/v1/agent-runs/${runID}/pull-request`, (route) => route.fulfill(json({
       number: 23, url: 'https://github.com/acme/platform/pull/23', state: viewport.name === 'desktop' ? 'closed' : 'open',
       merged: viewport.name === 'desktop', head_sha: 'a'.repeat(40),
+      review_stage: viewport.name === 'desktop' ? 'fresh_approval_received' : 'awaiting_human_rereview',
+      merge_blocked_by_review: viewport.name !== 'desktop',
       checks: [{ name: 'go', status: 'completed', conclusion: 'success' }, { name: 'dashboard', status: 'in_progress', conclusion: '' }],
       reviews: [
         { id: 900, state: 'COMMENTED', user: { login: 'colleague' }, body: '', submitted_at: now },
@@ -177,6 +179,8 @@ for (const viewport of viewports) {
       ['Base commit', 'bbbbbbbbbbbb'], ['Result commit', 'aaaaaaaaaaaa'], ['Execution', 'Completed'],
       ['Verification', 'Passed'], ['Publication', 'Pull request published'], ['Pull request', '#23 on GitHub'],
       ['Pull request status', viewport.name === 'desktop' ? 'Merged' : 'Open'],
+      ['Human review', viewport.name === 'desktop' ? 'Fresh approval received' : 'Remediation complete · awaiting human re-review'],
+      ...(viewport.name === 'desktop' ? [] : [['Merge status', 'Blocked by an outstanding change request']]),
       ['Usage', '706,042 input · 6,570 output tokens'],
       ['Review and CI', '1 check running · changes requested by maintainer'],
     ]) {
@@ -214,6 +218,34 @@ for (const viewport of viewports) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }
+
+test('Reviews distinguishes every human re-review stage reported by the control plane', async ({ page }) => {
+  await mockWorkspace(page, { providerReady: true });
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([{ ...evidenceRun, github_reviews: [] }])));
+  await page.route(`**/api/v1/agent-runs/${runID}/diff`, (route) => route.fulfill(json({ run_id: runID, diff: '', truncated: false })));
+  await page.route(`**/api/v1/agent-runs/${runID}/events`, (route) => route.fulfill(json([])));
+  let stage = 'feedback_not_addressed';
+  await page.route(`**/api/v1/agent-runs/${runID}/pull-request`, (route) => route.fulfill(json({
+    number: 23, url: 'https://github.com/acme/platform/pull/23', state: 'open', merged: false,
+    head_sha: 'a'.repeat(40), review_stage: stage, merge_blocked_by_review: stage !== 'fresh_approval_received',
+    checks: [], reviews: [],
+  })));
+  const labels: Record<string, string> = {
+    feedback_not_addressed: 'Feedback not addressed', remediation_in_progress: 'Remediation in progress',
+    awaiting_human_rereview: 'Remediation complete · awaiting human re-review',
+    fresh_approval_received: 'Fresh approval received',
+  };
+  for (const value of Object.keys(labels)) {
+    stage = value;
+    if (value !== 'feedback_not_addressed') await page.reload();
+    await page.goto('/#reviews');
+    await page.getByRole('button', { name: 'Local branches' }).click();
+    await page.getByRole('group', { name: 'Review detail sections' }).getByRole('button', { name: 'Evidence' }).click();
+    const reviewFact = page.getByLabel('Run evidence summary').locator('div')
+      .filter({ has: page.getByText('Human review', { exact: true }) }).locator('dd');
+    await expect(reviewFact).toHaveText(labels[value]!);
+  }
+});
 
 test('Reviews evidence reports loading failures and an empty event log', async ({ page }) => {
   await mockWorkspace(page, { providerReady: true });

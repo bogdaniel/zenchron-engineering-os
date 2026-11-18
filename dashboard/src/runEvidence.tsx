@@ -35,6 +35,8 @@ const eventsSchema = z.array(z.object({
 }));
 const pullRequestSchema = z.object({
   state: z.string(), merged: z.boolean(),
+  review_stage: z.enum(['feedback_not_addressed', 'remediation_in_progress', 'awaiting_human_rereview', 'fresh_approval_received']).optional(),
+  merge_blocked_by_review: z.boolean().optional(),
   checks: z.array(z.object({ name: z.string(), status: z.string(), conclusion: z.string().nullable().optional() })).nullable(),
   reviews: z.array(z.object({
     id: z.number(), state: z.string(), user: z.object({ login: z.string() }),
@@ -44,6 +46,11 @@ const pullRequestSchema = z.object({
 const passingConclusions = ['success', 'neutral', 'skipped'];
 const reviewStates: Record<string, string> = {
   approved: 'Approved', changes_requested: 'Changes requested', commented: 'Commented', dismissed: 'Dismissed',
+};
+const reviewStageLabels: Record<string, string> = {
+  feedback_not_addressed: 'Feedback not addressed', remediation_in_progress: 'Remediation in progress',
+  awaiting_human_rereview: 'Remediation complete · awaiting human re-review',
+  fresh_approval_received: 'Fresh approval received',
 };
 
 type Check = { name: string; status: string; conclusion?: string | null };
@@ -120,6 +127,8 @@ export function RunEvidence({ run }: { run: EvidenceRun }) {
   const received = new Map((run.github_reviews ?? []).map((review) => [review.id, review]));
   if (pullRequest.data) facts.push(['Pull request status', pullRequest.data.merged ? 'Merged'
     : pullRequest.data.state === 'open' ? 'Open' : 'Closed without merge']);
+  if (pullRequest.data?.review_stage) facts.push(['Human review', reviewStageLabels[pullRequest.data.review_stage]]);
+  if (pullRequest.data?.merge_blocked_by_review) facts.push(['Merge status', 'Blocked by an outstanding change request']);
   if (run.pull_request_number !== undefined) facts.push(['Review and CI', outstanding(checks, reviews)]);
   const queryClient = useQueryClient();
   const followUp = useMutation({

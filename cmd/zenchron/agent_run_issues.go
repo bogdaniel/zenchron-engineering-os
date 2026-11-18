@@ -62,13 +62,15 @@ func truncateUTF8(value string, limit int) string {
 }
 
 type pullRequestStatus struct {
-	Number  int              `json:"number"`
-	URL     string           `json:"url"`
-	State   string           `json:"state"`
-	Merged  bool             `json:"merged"`
-	HeadSHA string           `json:"head_sha"`
-	Checks  []gitHubCheckRun `json:"checks"`
-	Reviews []gitHubReview   `json:"reviews"`
+	Number               int              `json:"number"`
+	URL                  string           `json:"url"`
+	State                string           `json:"state"`
+	Merged               bool             `json:"merged"`
+	HeadSHA              string           `json:"head_sha"`
+	ReviewStage          string           `json:"review_stage,omitempty"`
+	MergeBlockedByReview bool             `json:"merge_blocked_by_review"`
+	Checks               []gitHubCheckRun `json:"checks"`
+	Reviews              []gitHubReview   `json:"reviews"`
 }
 
 // pullRequestStatus reads the live CI and review state of the pull request a run published.
@@ -83,7 +85,11 @@ func (store *agentRunStore) pullRequestStatus(w http.ResponseWriter, r *http.Req
 		http.Error(w, "GitHub pull request is unavailable", http.StatusBadGateway)
 		return
 	}
-	checks, err := github.commitCheckRuns(r.Context(), owner, repository, item.CommitSHA)
+	if !validCommitSHA(pull.Head.SHA) {
+		http.Error(w, "GitHub pull request head is unavailable", http.StatusBadGateway)
+		return
+	}
+	checks, err := github.commitCheckRuns(r.Context(), owner, repository, pull.Head.SHA)
 	if err != nil {
 		http.Error(w, "GitHub check runs are unavailable", http.StatusBadGateway)
 		return
@@ -93,8 +99,88 @@ func (store *agentRunStore) pullRequestStatus(w http.ResponseWriter, r *http.Req
 		http.Error(w, "GitHub reviews are unavailable", http.StatusBadGateway)
 		return
 	}
+	stage := humanReviewStage(item, pull.Head.SHA, reviews)
 	writeJSON(w, http.StatusOK, pullRequestStatus{Number: pull.Number, URL: pull.HTMLURL, State: pull.State,
-		Merged: pull.MergedAt != nil, HeadSHA: item.CommitSHA, Checks: checks, Reviews: reviews})
+		Merged: pull.MergedAt != nil, HeadSHA: pull.Head.SHA, ReviewStage: stage,
+		MergeBlockedByReview: outstandingChangeRequest(reviews) != "", Checks: checks, Reviews: reviews})
+}
+
+func humanReviewStage(item agentRun, headSHA string, reviews []gitHubReview) string {
+	var latestImportedRequest gitHubReview
+	var latestRequest gitHubReview
+	for _, review := range reviews {
+		if review.State != "CHANGES_REQUESTED" || !trustedGitHubAuthor(review.AuthorAssociation) {
+			continue
+		}
+		if latestRequest.ID == 0 || laterGitHubReview(review, latestRequest) {
+			latestRequest = review
+		}
+		if review.ID <= item.ImportedReviewID &&
+			(latestImportedRequest.ID == 0 || laterGitHubReview(review, latestImportedRequest)) {
+			latestImportedRequest = review
+		}
+	}
+	if latestRequest.ID == 0 {
+		return ""
+	}
+	if latestImportedRequest.ID != 0 {
+		var latestCurrentApproval gitHubReview
+		hasOutstandingRequest := false
+		for _, review := range latestPullRequestDecisions(reviews) {
+			if !trustedGitHubAuthor(review.AuthorAssociation) {
+				continue
+			}
+			if review.State == "CHANGES_REQUESTED" {
+				hasOutstandingRequest = true
+			}
+			if review.State == "APPROVED" && review.CommitID == headSHA &&
+				(latestCurrentApproval.ID == 0 || laterGitHubReview(review, latestCurrentApproval)) {
+				latestCurrentApproval = review
+			}
+		}
+		if !hasOutstandingRequest && latestCurrentApproval.ID != 0 &&
+			laterGitHubReview(latestCurrentApproval, latestImportedRequest) {
+			return "fresh_approval_received"
+		}
+	}
+
+	importedRequestOnOlderHead := false
+	requestOnCurrentHead := false
+	importedRequestOnCurrentHead := false
+	for _, review := range reviews {
+		if review.State != "CHANGES_REQUESTED" || !trustedGitHubAuthor(review.AuthorAssociation) {
+			continue
+		}
+		if review.CommitID == headSHA {
+			requestOnCurrentHead = true
+			importedRequestOnCurrentHead = importedRequestOnCurrentHead || review.ID <= item.ImportedReviewID
+			continue
+		}
+		if review.ID <= item.ImportedReviewID {
+			importedRequestOnOlderHead = true
+		}
+	}
+	if requestOnCurrentHead {
+		if importedRequestOnCurrentHead && (item.Status == "queued" || item.Status == "running") {
+			return "remediation_in_progress"
+		}
+		return "feedback_not_addressed"
+	}
+	if importedRequestOnOlderHead && (item.Status == "queued" || item.Status == "running") {
+		return "remediation_in_progress"
+	}
+	if importedRequestOnOlderHead && item.Status == "succeeded" && item.CommitSHA == headSHA {
+		return "awaiting_human_rereview"
+	}
+	if importedRequestOnOlderHead {
+		return "feedback_not_addressed"
+	}
+	return ""
+}
+
+func laterGitHubReview(candidate, previous gitHubReview) bool {
+	return candidate.SubmittedAt.After(previous.SubmittedAt) ||
+		(candidate.SubmittedAt.Equal(previous.SubmittedAt) && candidate.ID > previous.ID)
 }
 
 func (store *agentRunStore) publishedRun(w http.ResponseWriter, r *http.Request) (agentRun, string, string, bool) {
