@@ -141,7 +141,12 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             open.target = self
             menu.addItem(open)
         } else {
-            if !requiresOperatorSession {
+            if requiresOperatorSession {
+                let open = NSMenuItem(title: "Open Dashboard for access", action: #selector(openDashboard),
+                    keyEquivalent: "")
+                open.target = self
+                menu.addItem(open)
+            } else {
                 let start = NSMenuItem(title: "Start Zenchron", action: #selector(startZenchron), keyEquivalent: "")
                 start.target = self
                 start.isEnabled = startAttempt == nil
@@ -259,7 +264,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func openDashboard() {
-        guard let status else { return }
+        guard let status else {
+            guard requiresOperatorSession else { return }
+            NSWorkspace.shared.open(SystemStatus.canonicalDashboardURL)
+            return
+        }
         NSWorkspace.shared.open(status.dashboardURL)
     }
 

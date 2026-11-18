@@ -192,8 +192,7 @@ func TestLocalSystemStatusOmitsActiveGraphWhenNoWorkIsActive(t *testing.T) {
 func TestLocalSystemStatusRequiresSessionAndAdministratorWithAccessPolicy(t *testing.T) {
 	config := testAuthConfig()
 	server := authHandler(newMux(), config)
-	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
-	request.RemoteAddr = "127.0.0.1:4000"
+	request := localStatusTestRequest(t)
 	request.Header.Set("Origin", "http://127.0.0.1:8080")
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)

@@ -1,7 +1,7 @@
 import Foundation
 
 public struct SystemStatus: Decodable, Equatable {
-    private static let canonicalDashboardURL = "http://127.0.0.1:8080/?mode=live"
+    public static let canonicalDashboardURL = URL(string: "http://127.0.0.1:8080/?mode=live")!
 
     public struct Workers: Decodable, Equatable {
         public let online: Int
@@ -113,11 +113,11 @@ public struct SystemStatus: Decodable, Equatable {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         revision = try values.decodeIfPresent(String.self, forKey: .revision)
         let rawDashboardURL = try values.decode(String.self, forKey: .dashboardURL)
-        guard rawDashboardURL == Self.canonicalDashboardURL, let parsedDashboardURL = URL(string: rawDashboardURL) else {
+        guard rawDashboardURL == Self.canonicalDashboardURL.absoluteString else {
             throw DecodingError.dataCorruptedError(forKey: .dashboardURL, in: values,
                 debugDescription: "status returned a non-canonical dashboard address")
         }
-        dashboardURL = parsedDashboardURL
+        dashboardURL = Self.canonicalDashboardURL
         workers = try values.decode(Workers.self, forKey: .workers)
         work = try values.decode(Work.self, forKey: .work)
         updateState = try values.decode(String.self, forKey: .updateState)

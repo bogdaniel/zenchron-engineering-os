@@ -15,6 +15,7 @@ flowchart LR
   API --> Graphs[(WorkGraph store)]
   API --> Update[(Updater status file)]
   Companion -->|Open Dashboard| Browser[Canonical Live dashboard URL]
+  Companion -->|Open Dashboard for access after 401 or 403| Browser
   Companion -->|Open selected objective and WorkGraph| Browser
   Companion -->|Open selected human decision| Browser
   Companion -->|Start Zenchron| CLI[Canonical CLI start command]
@@ -39,7 +40,9 @@ flowchart LR
   status file that cannot be read is reported as unavailable without exposing its path or raw error; work and worker
   status remain available.
 - The menu distinguishes a missing session from missing administrator access and does not offer Start when either
-  response means the local service is responding but its status is not authorized.
+  response means the local service is responding but its status is not authorized. It offers **Open Dashboard for
+  access**, using the canonical local dashboard URL, so the operator can sign in there. The companion does not share
+  the browser session; its own status remains unavailable until a secure session-sharing path exists.
 - Cancelled WorkGraphs remain in history but their unresolved decisions are excluded from actionable status counts and
   menu links. Blocked WorkGraphs still expose unanswered decisions.
 - **Open Dashboard** uses the canonical URL returned by the control plane, after validating its host and port.

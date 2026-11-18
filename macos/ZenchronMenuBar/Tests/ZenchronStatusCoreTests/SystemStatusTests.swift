@@ -22,6 +22,7 @@ final class SystemStatusTests: XCTestCase {
         XCTAssertEqual(status.updateState, "blocked")
         XCTAssertEqual(status.updateRevision, String(repeating: "a", count: 40))
         XCTAssertEqual(status.updateReason, "active runs must finish")
+        XCTAssertEqual(SystemStatus.canonicalDashboardURL.absoluteString, "http://127.0.0.1:8080/?mode=live")
         XCTAssertEqual(status.dashboardURL.absoluteString, "http://127.0.0.1:8080/?mode=live")
         XCTAssertEqual(status.work.activeGraphLinks?.first.flatMap(status.activeWorkURL(for:))?.absoluteString,
             "http://127.0.0.1:8080/?mode=live&objective=objective-2&tab=plan&graph_id=graph-7#objectives")
