@@ -107,6 +107,10 @@
 .workspace-mock-tabs { display: flex; min-height: 39px; gap: 4px; margin: 15px 0 12px; padding: 4px; border: 1px solid #302b48; border-radius: 9px; background: #12121d; }
 .workspace-mock-tabs button { display: flex; min-width: 103px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 0; border-radius: 7px; color: #d9d4e2; background: transparent; font-size: 10px; }
 .workspace-mock-tabs button.active { color: #fff; background: linear-gradient(105deg, #6738a5, #442566); }
+.workspace-mock-focus { display: flex; flex: 0 0 240px; align-items: center; gap: 6px; margin-left: auto; color: #aaa3ba; font-size: 10px; white-space: nowrap; }
+.workspace-mock-focus span { flex: 0 0 auto; }
+.workspace-mock-focus select { min-width: 0; width: 100%; padding: 5px 6px; border: 1px solid #39334e; border-radius: 6px; color: #eee9f5; background: #1a1926; font: inherit; }
+.workspace-mock-focus select:focus-visible { outline: 2px solid #b78bfa; outline-offset: 2px; }
 .workspace-mock-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: 174px 166px; gap: 8px; }
 .workspace-live-grid.overview { grid-template-rows: minmax(174px, auto) minmax(166px, auto); }
 .workspace-live-grid.overview > .workspace-mock-card { height: auto; }
@@ -229,6 +233,8 @@
   .workspace-mock-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .workspace-mock-metric { height: auto; min-height: 76px; }
   .workspace-mock-tabs button { min-width: 0; flex: 1; padding: 0 5px; }
+  .workspace-mock-focus { flex-basis: 150px; }
+  .workspace-mock-focus span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
   .workspace-mock-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; }
   .workspace-mock-grid > .workspace-mock-card { height: auto; grid-column: auto; min-height: 166px; }
   .workspace-mock-grid > .workspace-mock-card.roadmap { grid-column: 1 / -1; min-height: 185px; }
@@ -253,4 +259,5 @@
 
 .workspace-mock-grid:not(.overview) { grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: auto; }
 .workspace-mock-grid:not(.overview) > .workspace-mock-card { grid-column: 1 / -1; height: auto; min-height: 166px; }
+.workspace-mock-grid.no-primary-cards { display: none; }
 .workspace-mock-card.is-hidden { display: none; }

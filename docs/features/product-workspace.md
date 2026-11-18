@@ -11,7 +11,7 @@ control plane records nothing.
 
 ```mermaid
 flowchart LR
-    Shell["App shell · main.tsx<br/>mode, projects, objectives, workers"] -->|"designPreview, WorkspaceFacts"| Page["WorkspacePage · workspace.tsx<br/>one layout, UI state"]
+    Shell["App shell · main.tsx<br/>mode, projects, objectives, workers"] -->|"designPreview, WorkspaceFacts"| Page["WorkspacePage · workspace.tsx<br/>one layout, focus and UI state"]
     Page -->|"source.view(product, quarter)"| Source{"WorkspaceSource"}
     Source -->|Mock| Mock["useMockWorkspace<br/>workspace-preview-data.tsx · useState"]
     Source -->|Live| Live["useLiveWorkspace<br/>workspaceView.tsx · TanStack Query"]
@@ -62,6 +62,9 @@ Both modes:
 - The directory lists products with a search box, a status filter, and "All Products (N)", which clears both. Below
   1050px the directory is hidden, as in the design; the Product actions (⋯) menu lists the products under "Switch
   product" so selection stays reachable.
+- "Workspace focus" narrows navigation and Overview cards for Product owner, Engineer, Designer, Security reviewer,
+  or Platform operator. It changes only the dashboard projection; it does not grant permissions or hide data from
+  APIs. Missing role-owned data remains visibly unavailable in its relevant view.
 - "＋ New Workspace", "＋ Add Product", and "Add another product" open the product editor; "Edit product" in the
   Product actions menu opens it for the selected product. The editor validates the name (required, at most 100
   characters) and description (at most 2000) and shows a save error in place.

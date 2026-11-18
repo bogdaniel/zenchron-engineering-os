@@ -25,6 +25,20 @@ interface WorkspacePageProps extends WorkspaceFacts {
 
 const tabs = ['Overview', 'Objectives', 'Repos', 'Files', 'Decisions', 'Templates'] as const;
 type WorkspaceTab = typeof tabs[number];
+const workspaceFoci = {
+  'All sections': {
+    tabs,
+    overview: ['roadmap', 'objectives', 'repositories', 'linked-workflows', 'files', 'people', 'release', 'decisions', 'analytics'],
+  },
+  'Product owner': { tabs: ['Overview', 'Objectives', 'Decisions'], overview: ['roadmap', 'objectives', 'decisions', 'analytics'] },
+  Engineer: { tabs: ['Overview', 'Objectives', 'Repos', 'Templates'], overview: ['roadmap', 'objectives', 'repositories', 'linked-workflows'] },
+  Designer: { tabs: ['Overview', 'Objectives', 'Files'], overview: ['roadmap', 'objectives', 'files'] },
+  'Security reviewer': { tabs: ['Objectives', 'Decisions'], overview: ['objectives', 'decisions'] },
+  'Platform operator': {
+    tabs: ['Overview', 'Repos', 'Templates', 'Decisions'], overview: ['repositories', 'linked-workflows', 'decisions', 'analytics'],
+  },
+} as const;
+type WorkspaceFocus = keyof typeof workspaceFoci;
 const noFavoritesReason = 'Favorites are not stored by the control plane';
 const stateClass = (state: string) => state.toLowerCase().replaceAll(' ', '-');
 
@@ -77,6 +91,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('Overview');
+  const [focus, setFocus] = useState<WorkspaceFocus>('All sections');
   const [roadmapView, setRoadmapView] = useState<'Roadmap' | 'Timeline'>('Roadmap');
   const [roadmapQuarter, setRoadmapQuarter] = useState<string>();
   const [deliveryRange, setDeliveryRange] = useState('Last 8 weeks');
@@ -101,6 +116,17 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
   function selectProduct(productID: string) {
     setSelectedID(productID);
     setActiveTab('Overview');
+  }
+
+  function selectFocus(value: WorkspaceFocus) {
+    setFocus(value);
+    if (!(workspaceFoci[value].tabs as readonly string[]).includes(activeTab)) setActiveTab(workspaceFoci[value].tabs[0]);
+  }
+
+  function cardIsHidden(card: string, availableTabs: readonly WorkspaceTab[]) {
+    if (!availableTabs.includes(activeTab)) return true;
+    if (focus === 'Security reviewer' && card === 'people') return true;
+    return activeTab === 'Overview' && !(workspaceFoci[focus].overview as readonly string[]).includes(card);
   }
 
   function openEditor(productID?: string) {
@@ -192,17 +218,23 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
       </div>
 
       <nav className="workspace-mock-tabs" aria-label="Product sections">
-        {tabs.map((tab, index) => <button key={tab} type="button" aria-current={activeTab === tab ? 'page' : undefined}
+        {(workspaceFoci[focus].tabs as readonly WorkspaceTab[]).map((tab) => <button key={tab} type="button" aria-current={activeTab === tab ? 'page' : undefined}
           onClick={() => setActiveTab(tab)} className={activeTab === tab ? 'active' : ''}>
-          {index === 0 ? <IconHome size={13} /> : index === 1 ? <IconTarget size={13} />
-            : index === 2 ? <IconCode size={13} /> : index === 3 ? <IconFolder size={13} />
-              : index === 4 ? <IconGitBranch size={13} /> : <IconStack2 size={13} />}{tab}
+          {tab === 'Overview' ? <IconHome size={13} /> : tab === 'Objectives' ? <IconTarget size={13} />
+            : tab === 'Repos' ? <IconCode size={13} /> : tab === 'Files' ? <IconFolder size={13} />
+              : tab === 'Decisions' ? <IconGitBranch size={13} /> : <IconStack2 size={13} />}{tab}
         </button>)}
+        <label className="workspace-mock-focus"><span>Workspace focus</span>
+          <select aria-label="Workspace focus" value={focus} onChange={(event) => selectFocus(event.currentTarget.value as WorkspaceFocus)}>
+            {Object.keys(workspaceFoci).map((value) => <option key={value}>{value}</option>)}
+          </select>
+        </label>
       </nav>
 
-      <div className={`workspace-mock-grid ${activeTab.toLowerCase()}${designPreview ? '' : ' workspace-live-grid'}`}>
+      <div className={`workspace-mock-grid ${activeTab.toLowerCase()}`
+        + `${activeTab === 'Decisions' ? ' no-primary-cards' : ''}${designPreview ? '' : ' workspace-live-grid'}`}>
         <Card className="roadmap" title="Product Roadmap" description="Strategic delivery plan and key milestones" icon={<IconMap2 size={15} />}
-          hidden={activeTab !== 'Overview' && activeTab !== 'Objectives'}
+          hidden={cardIsHidden('roadmap', ['Overview', 'Objectives'])}
           action={<span className="workspace-mock-roadmap-tabs">
             {(['Roadmap', 'Timeline'] as const).map((option) => <button key={option} type="button"
               aria-pressed={roadmapView === option} className={roadmapView === option ? 'selected' : ''}
@@ -226,7 +258,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
         </Card>
         <Card className="objectives" title={objectiveList.title} icon={<IconTarget size={15} />} action="View All"
           onAction={() => setActiveTab('Objectives')}
-          hidden={activeTab !== 'Overview' && activeTab !== 'Objectives'}>
+          hidden={cardIsHidden('objectives', ['Overview', 'Objectives'])}>
           {objectiveList.note ? <Note note={objectiveList.note} /> : <ObjectiveRows rows={objectiveList.rows} />}
           {!designPreview && selected && <WorkspaceObjectiveStart key={selected.id} productID={selected.id}
             productName={selected.name} projects={(source.repositories ?? []).filter((project) =>
@@ -238,7 +270,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
 
         <Card className="repositories" title={repositories.title} icon={<IconCode size={15} />} action="View All"
           onAction={() => setActiveTab('Repos')}
-          hidden={activeTab !== 'Overview' && activeTab !== 'Repos'}>
+          hidden={cardIsHidden('repositories', ['Overview', 'Repos'])}>
           {repositories.note ? <Note note={repositories.note} /> : <div className="workspace-mock-list">
             {(showAll ? repositories.allRows : repositories.rows).map((repository) => <div key={repository.name}>
               <IconBrandGithub className="workspace-mock-git-icon" size={13} aria-hidden="true" />
@@ -247,19 +279,19 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
         </Card>
         <Card className="linked-workflows" title={workflowList.title}
           icon={<IconHierarchy size={15} />} action="View All" onAction={() => setActiveTab('Templates')}
-          hidden={activeTab !== 'Overview' && activeTab !== 'Repos' && activeTab !== 'Templates'}>
+          hidden={cardIsHidden('linked-workflows', ['Overview', 'Repos', 'Templates'])}>
           {workflowList.note && <Note note={workflowList.note} />}
           {workflowList.rows.length > 0 && <StatusRows rows={workflowList.rows} />}
         </Card>
         <Card className="files" title="Design / Docs / Files" icon={<IconFileText size={15} />} action="View All"
           onAction={() => setActiveTab('Files')}
-          hidden={activeTab !== 'Overview' && activeTab !== 'Files'}>
+          hidden={cardIsHidden('files', ['Overview', 'Files'])}>
           {files.note ? <Note note={files.note} /> : <div className="workspace-mock-list files">{files.rows.map(([name, count], i) => <div key={name}>
             <span>{i === 0 ? <IconBrandFigma size={14} /> : i === 1 ? <IconBook size={14} /> : i === 2 ? <IconFileText size={14} /> : <IconFolder size={14} />}</span><b>{name}</b><em>{count}</em></div>)}</div>}
         </Card>
         <Card className="people" title={stakeholders.title} icon={<IconUsers size={15} />} action="Manage"
           onAction={() => setStakeholdersOpen(true)}
-          hidden={activeTab !== 'Overview' && activeTab !== 'Decisions'}>
+          hidden={cardIsHidden('people', ['Overview', 'Decisions'])}>
           {stakeholders.note ? <Note note={stakeholders.note} /> : <div className="workspace-mock-list people">{stakeholders.rows.map(({ name, role, avatar }) => <div key={name}>
             <span>{avatar ? <img src={avatar} alt="" /> : name.slice(0, 1)}</span><b>{name}</b><small>{role}</small></div>)}
             {stakeholders.more && <small>{stakeholders.more}</small>}</div>}
@@ -270,20 +302,20 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
     <div className={`workspace-mock-bottom ${activeTab.toLowerCase()}`}>
       <Card className="release" title="Release Streams" description="Coordinated release trains and environments" icon={<IconRocket size={15} />} action="View All"
         onAction={() => setActiveTab('Templates')}
-        hidden={activeTab !== 'Overview' && activeTab !== 'Templates'}>
+        hidden={cardIsHidden('release', ['Overview', 'Templates'])}>
         {releases.note ? <Note note={releases.note} /> : <div className="workspace-mock-list release-list">{releases.rows.map(({ name, state, version, progress, tone }) => <div key={name}>
           <IconCube className={`workspace-mock-release-icon ${tone}`} size={16} /><b>{name}</b><Badge className={`workspace-mock-state ${stateClass(state)}`} variant="light">{state}</Badge><small>{version}</small>
           <Progress value={progress} size="xs" color={tone === 'green' ? 'teal.5' : tone === 'blue' ? 'blue.5' : 'violet.5'} /><small className="release-progress-label">{`${progress}%`}</small></div>)}</div>}
       </Card>
         <Card className="decisions" title={designPreview ? 'Recent Decisions' : 'Objective Decisions'} icon={<IconHistory size={15} />} action="View All"
         onAction={() => setActiveTab('Decisions')}
-        hidden={activeTab !== 'Overview' && activeTab !== 'Decisions'}>
+        hidden={cardIsHidden('decisions', ['Overview', 'Decisions'])}>
         {decisions.note ? <Note note={decisions.note} /> : <div className="workspace-mock-list decision-list">{decisions.rows.map(({ name, state, time, href }) => <div key={name}>
           <IconFileText size={13} /><b>{href ? <a href={href}>{name}</a> : name}</b>
           <Badge className={`workspace-mock-state ${stateClass(state)}`} variant="light">{state}</Badge>{time && <small>{time}</small>}</div>)}</div>}
       </Card>
       <Card className="analytics" title="Delivery Metrics" icon={<IconChartBar size={15} />}
-        hidden={activeTab !== 'Overview'}
+        hidden={cardIsHidden('analytics', ['Overview'])}
         action={<Menu position="bottom-end" withinPortal>
           <Menu.Target><button className="workspace-mock-range" type="button" aria-label="Choose delivery metrics time range"
             disabled={!delivery.ranges.length} title={delivery.ranges.length ? undefined

@@ -232,6 +232,51 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
+test('Product Workspace focuses durable cards for each operator role', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await useLiveFixtures(page);
+  await page.goto('/?mode=live#workspace');
+  const focus = page.getByRole('combobox', { name: 'Workspace focus' });
+  const tabs = page.getByRole('navigation', { name: 'Product sections' });
+  const card = (name: string) => page.locator(`.workspace-mock-card.${name}`);
+
+  await focus.selectOption('Product owner');
+  await expect(card('objectives')).toBeVisible();
+  await expect(card('decisions')).toBeVisible();
+  await expect(card('repositories')).toBeHidden();
+  await focus.selectOption('Engineer');
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Objectives', 'Repos', 'Templates']);
+  await expect(card('repositories')).toBeVisible();
+  await expect(card('linked-workflows')).toBeVisible();
+  await expect(card('decisions')).toBeHidden();
+
+  await focus.selectOption('Designer');
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Objectives', 'Files']);
+  await expect(card('files')).toContainText('Unavailable: files and evidence');
+  await expect(card('decisions')).toBeHidden();
+
+  await focus.selectOption('Security reviewer');
+  await expect(focus).toHaveValue('Security reviewer');
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Objectives', 'Decisions']);
+  await expect(page.getByRole('heading', { name: 'Objectives (3)' })).toBeVisible();
+  await tabs.getByRole('button', { name: 'Decisions' }).click();
+  await expect(page.locator('.workspace-mock-grid')).toBeHidden();
+  await expect(card('decisions').getByRole('link', { name: 'Publish the revised export?' })).toBeVisible();
+  await expect(card('people')).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath('workspace-security-reviewer-desktop.png'), fullPage: true });
+
+  await focus.selectOption('Platform operator');
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Repos', 'Templates', 'Decisions']);
+  await tabs.getByRole('button', { name: 'Overview' }).click();
+  await expect(card('linked-workflows')).toBeVisible();
+  await expect(card('analytics')).toBeVisible();
+  await expect(card('files')).toBeHidden();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({ path: testInfo.outputPath('workspace-platform-operator-mobile.png'), fullPage: true });
+});
+
 test('Live Product Workspace rejects another product’s execution projection', async ({ page }) => {
   await useLiveFixtures(page);
   await page.route('**/api/v1/products/*/environment', (route) => route.fulfill(json({
