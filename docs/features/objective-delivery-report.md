@@ -81,7 +81,7 @@ flowchart LR
 
 | Test | Proves |
 |---|---|
-| `TestWorkGraphReportMeasuresACompletedRun` | Measures a completed run, reports GitHub PR state, detects head mismatch, keeps failed lookups unknown, and reconstructs the same durable report after restart. |
+| `TestWorkGraphReportMeasuresACompletedRun` | Measures a completed run, reports GitHub PR state, detects head mismatch, keeps failed lookups unknown, and reconstructs the same durable report after reopening graph and run stores. |
 | `TestWorkGraphReportOmitsWhatWasNotRecorded` | Omits unrecorded measurements and lists them in `unknown`. |
 | `TestWorkGraphReportIsHiddenFromOtherCallers` | A caller who may not read the graph receives no report. |
 | `TestPlanPinsProfileConfigurationAndRejectsStaleApproval` | The approved report source keeps profile/persona versions through restart and edits. |

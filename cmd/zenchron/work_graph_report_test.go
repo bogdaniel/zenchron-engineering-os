@@ -124,6 +124,7 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	original := report
 	harness.restart()
 	replayed, _ := harness.deliveryReport(started.ID)
+	// GitHub observation time changes per read; durable report evidence should not.
 	if original.PullRequest != nil {
 		observed := *original.PullRequest
 		observed.ObservedAt = time.Time{}
