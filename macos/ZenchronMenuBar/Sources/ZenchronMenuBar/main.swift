@@ -228,7 +228,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard generation == refreshGeneration else { return }
             status = nil
             requiresOperatorSession = true
-            message = "Sign in to the dashboard to view local status"
+            message = "Menu status is unavailable; open the dashboard to sign in"
         } catch StatusAccessError.administratorRequired {
             guard generation == refreshGeneration else { return }
             status = nil
