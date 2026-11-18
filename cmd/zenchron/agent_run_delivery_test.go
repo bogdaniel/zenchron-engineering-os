@@ -110,7 +110,7 @@ func (harness *deliveryHarness) serveGitHub(w http.ResponseWriter, r *http.Reque
 		_, _ = io.WriteString(w, harness.reviews)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, repository+"/commits/") && strings.HasSuffix(r.URL.Path, "/check-runs"):
 		harness.checkHead = strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, repository+"/commits/"), "/check-runs")
-		_, _ = io.WriteString(w, `{"check_runs":[{"name":"go","status":"completed","conclusion":"success"}]}`)
+		_, _ = fmt.Fprintf(w, `{"check_runs":[{"name":"go","status":"completed","conclusion":"success","head_sha":%q}]}`, harness.checkHead)
 	case r.Method == http.MethodPost && r.URL.Path == repository+"/issues":
 		w.WriteHeader(http.StatusCreated)
 		_, _ = io.WriteString(w, `{"number":9,"title":"New defect","html_url":"https://github.com/acme/platform/issues/9"}`)

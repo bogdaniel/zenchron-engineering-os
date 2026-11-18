@@ -42,6 +42,7 @@ type gitHubCheckRun struct {
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
 	HTMLURL    string `json:"html_url"`
+	HeadSHA    string `json:"head_sha"`
 }
 
 // trustedGitHubAuthor reports whether GitHub says the author can push to or belongs to the repository.

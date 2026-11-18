@@ -20,6 +20,8 @@ flowchart LR
   GitHub -->|Yes: bounded read-only lookup| API[GitHub pull request API]
   GitHub -->|No or lookup unavailable| Unknown[Keep external PR state unknown]
   API -->|Validated state and head SHA| Compute
+  Compute -->|GET candidate commit check-runs| ChecksAPI[GitHub check runs API]
+  ChecksAPI -->|Checks bound to the integrated SHA| Compute
   Compute --> Response[JSON response]
   Response --> ReportUI[ObjectiveDeliveryReport.tsx]
   ReportUI -->|Export JSON| Download[Typed report download]
@@ -48,8 +50,9 @@ flowchart LR
   successful integration run records it for the selected candidate. Publication authority remains unknown. Current PR
   state is read from GitHub only when the recorded canonical PR URL matches the graph repository; unavailable or
   invalid responses leave it unknown. The report includes the observed state, draft/merged flags, head SHA, observation
-  time, and whether the PR head matches the integrated candidate when one is recorded. This read does not change stored
-  graph or run state.
+  time, and whether the PR head matches the integrated candidate when one is recorded. GitHub checks are read by the
+  exact integrated candidate SHA and include their own observation time; unavailable or mismatched check results stay
+  unknown. This read does not change stored graph or run state.
 - Top-level `measurements` contains:
   - `unit_count`: number of units.
   - `run_count`: number of all run ids, including ids without a stored run.
@@ -84,6 +87,7 @@ flowchart LR
 |---|---|
 | `TestWorkGraphReportMeasuresACompletedRun` | Measures a completed run, reports GitHub PR state, detects head mismatch, keeps failed lookups unknown, and reconstructs the same durable report after reopening graph and run stores. |
 | `TestWorkGraphReportOmitsWhatWasNotRecorded` | Omits unrecorded measurements and lists them in `unknown`. |
+| `TestWorkGraphReportRequiresExplicitGitHubPRState` | Missing or malformed PR fields and candidate checks remain unknown; explicit false/null PR fields remain valid. |
 | `TestWorkGraphReportIsHiddenFromOtherCallers` | A caller who may not read the graph receives no report. |
 | `TestPlanPinsProfileConfigurationAndRejectsStaleApproval` | The approved report source keeps profile/persona versions through restart and edits. |
 

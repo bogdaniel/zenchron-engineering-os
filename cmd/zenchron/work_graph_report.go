@@ -37,13 +37,26 @@ type deliveryReport struct {
 }
 
 type reportPullRequest struct {
-	Number               int       `json:"number"`
-	State                string    `json:"state"`
-	Draft                bool      `json:"draft"`
-	Merged               bool      `json:"merged"`
-	HeadSHA              string    `json:"head_sha"`
-	CandidateMatchesHead *bool     `json:"candidate_matches_head,omitempty"`
-	ObservedAt           time.Time `json:"observed_at"`
+	Number               int                    `json:"number"`
+	State                string                 `json:"state"`
+	Draft                bool                   `json:"draft"`
+	Merged               bool                   `json:"merged"`
+	HeadSHA              string                 `json:"head_sha"`
+	CandidateMatchesHead *bool                  `json:"candidate_matches_head,omitempty"`
+	CandidateChecks      *reportCandidateChecks `json:"candidate_checks,omitempty"`
+	ObservedAt           time.Time              `json:"observed_at"`
+}
+
+type reportCandidateChecks struct {
+	HeadSHA    string           `json:"head_sha"`
+	ObservedAt time.Time        `json:"observed_at"`
+	Runs       []reportCheckRun `json:"runs"`
+}
+
+type reportCheckRun struct {
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion,omitempty"`
 }
 
 type reportPlan struct {
@@ -105,6 +118,33 @@ func (report *deliveryReport) observePullRequest(ctx context.Context, repository
 	}
 	state := &reportPullRequest{Number: number, State: pull.State, Draft: *pull.Draft,
 		Merged: merged, HeadSHA: pull.Head.SHA, ObservedAt: time.Now().UTC()}
+	for _, unit := range report.Units {
+		if unit.Kind != unitIntegrate || !fullGitSHA(unit.Candidate) {
+			continue
+		}
+		checks, err := client.commitCheckRuns(ctx, owner, repositoryName, unit.Candidate)
+		if err != nil {
+			break
+		}
+		runs := make([]reportCheckRun, 0, len(checks))
+		valid := true
+		for _, check := range checks {
+			if check.HeadSHA != unit.Candidate || strings.TrimSpace(check.Name) == "" ||
+				(check.Status != "queued" && check.Status != "in_progress" && check.Status != "completed") {
+				valid = false
+				break
+			}
+			runs = append(runs, reportCheckRun{Name: check.Name, Status: check.Status, Conclusion: check.Conclusion})
+		}
+		if !valid {
+			break
+		}
+		state.CandidateChecks = &reportCandidateChecks{HeadSHA: unit.Candidate, ObservedAt: time.Now().UTC(), Runs: runs}
+		report.UnknownEvidence = slices.DeleteFunc(report.UnknownEvidence, func(evidence string) bool {
+			return evidence == "candidate_checks"
+		})
+		break
+	}
 	for _, unit := range report.Units {
 		if unit.Kind != unitIntegrate || unit.Candidate == "" {
 			continue
@@ -226,7 +266,7 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 		WorkflowMode: graph.WorkflowMode,
 		Status:       graph.Status, Units: make([]reportUnit, 0, len(graph.Units)), Handoffs: []reportHandoff{},
 		Decisions: []reportDecision{}, Outstanding: []reportOutstanding{},
-		UnknownEvidence: []string{"candidate_tree_sha", "publication_authority", "pull_request_external_state"}}
+		UnknownEvidence: []string{"candidate_tree_sha", "candidate_checks", "publication_authority", "pull_request_external_state"}}
 	if plan != nil {
 		report.ApprovedPlan = reportPlan{Revision: plan.Revision, Status: plan.Status, Hash: plan.Hash, Summary: plan.Summary,
 			ApprovedBy: plan.ApprovedBy, ApprovedAt: plan.ApprovedAt}

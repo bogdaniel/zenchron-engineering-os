@@ -43,26 +43,46 @@ func reportedUnit(t *testing.T, report deliveryReport, key string) reportUnit {
 func TestWorkGraphReportRequiresExplicitGitHubPRState(t *testing.T) {
 	valid := `"number":23,"state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"sha":"` + commit(4) + `"}`
 	for _, test := range []struct {
-		name string
-		body string
-		want bool
+		name       string
+		body       string
+		checksBody string
+		checksCode int
+		want       bool
+		wantChecks bool
 	}{
 		{name: "missing draft", body: `{` + valid + `,"merged_at":null}`},
 		{name: "missing merged timestamp", body: `{` + valid + `,"draft":false}`},
 		{name: "invalid merged timestamp", body: `{` + valid + `,"draft":false,"merged_at":false}`},
-		{name: "explicit false and null", body: `{` + valid + `,"draft":false,"merged_at":null}`, want: true},
+		{name: "explicit false and null", body: `{` + valid + `,"draft":false,"merged_at":null}`, want: true, wantChecks: true},
+		{name: "mismatched candidate check head", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{"check_runs":[{"name":"go","status":"completed","head_sha":"` + commit(7) + `"}]}`, want: true},
+		{name: "unavailable candidate checks", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksCode: http.StatusBadGateway, want: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			report := deliveryReport{PullRequestURL: "https://github.com/acme/platform/pull/23",
-				UnknownEvidence: []string{"pull_request_external_state"}}
+				Units:           []reportUnit{{Kind: unitIntegrate, Candidate: commit(4)}},
+				UnknownEvidence: []string{"pull_request_external_state", "candidate_checks"}}
 			report.observePullRequest(t.Context(), "github.com/acme/platform", gitHubClient{
 				apiURL: "https://api.github.com", client: &http.Client{Transport: updateTestTransport(
 					func(request *http.Request) (*http.Response, error) {
-						if request.URL.Path != "/repos/acme/platform/pulls/23" {
+						status, responseBody := http.StatusOK, test.body
+						if strings.HasSuffix(request.URL.Path, "/check-runs") {
+							if request.URL.Path != "/repos/acme/platform/commits/"+commit(4)+"/check-runs" {
+								t.Fatalf("candidate check path = %s", request.URL.Path)
+							}
+							status, responseBody = test.checksCode, test.checksBody
+							if status == 0 {
+								status = http.StatusOK
+							}
+							if responseBody == "" {
+								responseBody = `{"check_runs":[{"name":"go","status":"completed","conclusion":"success","head_sha":"` + commit(4) + `"}]}`
+							}
+						} else if request.URL.Path != "/repos/acme/platform/pulls/23" {
 							t.Fatalf("request path = %s", request.URL.Path)
 						}
-						return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header),
-							Body: io.NopCloser(strings.NewReader(test.body)), Request: request}, nil
+						return &http.Response{StatusCode: status, Header: make(http.Header),
+							Body: io.NopCloser(strings.NewReader(responseBody)), Request: request}, nil
 					})},
 			})
 			if (report.PullRequest != nil) != test.want {
@@ -70,6 +90,12 @@ func TestWorkGraphReportRequiresExplicitGitHubPRState(t *testing.T) {
 			}
 			if test.want && (report.PullRequest.Draft || report.PullRequest.Merged || slices.Contains(report.UnknownEvidence, "pull_request_external_state")) {
 				t.Fatalf("explicit false/null state = %#v, unknown=%v", report.PullRequest, report.UnknownEvidence)
+			}
+			if test.wantChecks != (report.PullRequest != nil && report.PullRequest.CandidateChecks != nil) {
+				t.Fatalf("candidate checks = %#v, want present %t", report.PullRequest, test.wantChecks)
+			}
+			if !test.wantChecks && !slices.Contains(report.UnknownEvidence, "candidate_checks") {
+				t.Fatalf("unavailable candidate checks were not marked unknown: %v", report.UnknownEvidence)
 			}
 			if !test.want && !slices.Contains(report.UnknownEvidence, "pull_request_external_state") {
 				t.Fatalf("missing or invalid state removed unknown evidence: %v", report.UnknownEvidence)
@@ -167,11 +193,21 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	if original.PullRequest != nil {
 		observed := *original.PullRequest
 		observed.ObservedAt = time.Time{}
+		if observed.CandidateChecks != nil {
+			checks := *observed.CandidateChecks
+			checks.ObservedAt = time.Time{}
+			observed.CandidateChecks = &checks
+		}
 		original.PullRequest = &observed
 	}
 	if replayed.PullRequest != nil {
 		observed := *replayed.PullRequest
 		observed.ObservedAt = time.Time{}
+		if observed.CandidateChecks != nil {
+			checks := *observed.CandidateChecks
+			checks.ObservedAt = time.Time{}
+			observed.CandidateChecks = &checks
+		}
 		replayed.PullRequest = &observed
 	}
 	if !reflect.DeepEqual(replayed, original) {

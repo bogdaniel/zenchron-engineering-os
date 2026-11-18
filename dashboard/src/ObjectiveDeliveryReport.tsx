@@ -36,11 +36,14 @@ const reportSchema = z.object({
   unknown_evidence: z.array(z.string()).default([]),
   pull_request_url: z.string().optional(),
   pull_request_external_state: z.object({ number: z.number(), state: z.enum(['open', 'closed']), draft: z.boolean(),
-    merged: z.boolean(), head_sha: z.string(), candidate_matches_head: z.boolean().optional(), observed_at: z.string() }).optional(),
+    merged: z.boolean(), head_sha: z.string(), candidate_matches_head: z.boolean().optional(), observed_at: z.string(),
+    candidate_checks: z.object({ head_sha: z.string(), observed_at: z.string(), runs: z.array(z.object({ name: z.string(),
+      status: z.string(), conclusion: z.string().optional() })) }).optional() }).optional(),
 });
 type Report = z.infer<typeof reportSchema>;
 const unknownEvidenceLabels: Record<string, string> = {
   candidate_tree_sha: 'candidate tree SHA',
+  candidate_checks: 'GitHub checks for the integrated candidate',
   publication_authority: 'publication authority',
   pull_request_external_state: 'current pull request state',
 };
@@ -128,6 +131,15 @@ function ReportDetails({ report }: { report: Report }) {
         : report.pull_request_external_state.candidate_matches_head ? ' · matches the integrated candidate' : ' · differs from the integrated candidate'}
       {' · observed '}{new Date(report.pull_request_external_state.observed_at).toLocaleString()}
     </p>}
+    {report.pull_request_external_state?.candidate_checks && <div aria-label="GitHub checks for integrated candidate">
+      <p>GitHub checks for candidate <code>{report.pull_request_external_state.candidate_checks.head_sha}</code>
+        {' · observed '}{new Date(report.pull_request_external_state.candidate_checks.observed_at).toLocaleString()}</p>
+      {report.pull_request_external_state.candidate_checks.runs.length === 0
+        ? <p>No check runs were reported for this candidate.</p>
+        : <ul>{report.pull_request_external_state.candidate_checks.runs.map((check, index) => <li key={`${check.name}-${index}`}>
+          {check.name}{' · '}{check.status}{check.conclusion ? ` · ${check.conclusion}` : ''}
+        </li>)}</ul>}
+    </div>}
     <h5>Handoffs and decisions</h5>
     {report.handoffs.map((handoff, index) => <p key={`${handoff.run_id}-${handoff.attempt}-${index}`}>
       <b>{handoff.from}</b>{handoff.commit && <> · <code>{handoff.commit}</code></>} · {handoff.summary}

@@ -137,7 +137,9 @@ for (const viewport of viewports) {
         human_actions_complete: false, max_concurrency: 0, runs_with_usage: 0, runs_with_cost: 0, unknown: [] },
       unknown_evidence: ['publication_authority'], pull_request_url: 'https://github.com/acme/platform/pull/23',
       pull_request_external_state: { number: 23, state: 'open', draft: true, merged: false,
-        head_sha: 'd'.repeat(40), candidate_matches_head: false, observed_at: now },
+        head_sha: 'd'.repeat(40), candidate_matches_head: false, observed_at: now,
+        candidate_checks: { head_sha: 'c'.repeat(40), observed_at: now,
+          runs: [{ name: 'go', status: 'completed', conclusion: 'success' }] } },
     })));
     await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
     await page.getByRole('tab', { name: 'Plan', exact: true }).click();
@@ -146,6 +148,7 @@ for (const viewport of viewports) {
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('pull request #23 open as a draft');
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('differs from the integrated candidate');
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('observed');
+    await expect(report.getByLabel('GitHub checks for integrated candidate')).toContainText('go · completed · success');
     await expect(report).toContainText('Unknown evidence: publication authority');
     expect(await noHorizontalScroll(page)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`delivery-report-${viewport.name}.png`), fullPage: true });
