@@ -3,7 +3,9 @@
 An agent response to GitHub `CHANGES_REQUESTED` records feedback as run state, while GitHub remains the authority for
 approval and merge policy. The pull-request projection compares the live PR head with durable imported-review/run
 state and reports whether the feedback is untouched, being remediated, awaiting human re-review, or freshly approved.
-Outstanding GitHub change requests remain visible as a merge block; Zenchron never dismisses a review.
+Fresh approval is anchored to the current head and must follow the latest reviewer decision that still requests changes;
+comment-only reviews do not clear a request. Outstanding GitHub change requests remain visible as a merge block;
+Zenchron never dismisses a review.
 
 ## Feature diagram
 
