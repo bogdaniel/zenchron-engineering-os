@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
@@ -68,16 +70,41 @@ func (report *deliveryReport) observePullRequest(ctx context.Context, repository
 	if !ok {
 		return
 	}
-	pull, err := client.pullRequest(ctx, owner, repositoryName, number)
-	if err != nil || pull.Number != number || (pull.State != "open" && pull.State != "closed") || !fullGitSHA(pull.Head.SHA) {
+	path := "/repos/" + owner + "/" + repositoryName + "/pulls/" + strconv.Itoa(number)
+	body, err := client.requestBytes(ctx, http.MethodGet, path, "application/vnd.github+json", nil, nil)
+	if err != nil {
 		return
+	}
+	var pull struct {
+		Number  int             `json:"number"`
+		State   string          `json:"state"`
+		HTMLURL string          `json:"html_url"`
+		Draft   *bool           `json:"draft"`
+		Merged  json.RawMessage `json:"merged_at"`
+		Head    struct {
+			SHA string `json:"sha"`
+		} `json:"head"`
+	}
+	if err := json.Unmarshal(body, &pull); err != nil || pull.Number != number || (pull.State != "open" && pull.State != "closed") ||
+		!fullGitSHA(pull.Head.SHA) || pull.Draft == nil || len(pull.Merged) == 0 || !json.Valid(pull.Merged) {
+		return
+	}
+	merged := string(pull.Merged) != "null"
+	if merged {
+		var mergedAt string
+		if json.Unmarshal(pull.Merged, &mergedAt) != nil {
+			return
+		}
+		if _, err := time.Parse(time.RFC3339, mergedAt); err != nil {
+			return
+		}
 	}
 	responseNumber, matchesRepository := reportPullRequestNumber(pull.HTMLURL, owner, repositoryName)
 	if !matchesRepository || responseNumber != number {
 		return
 	}
-	state := &reportPullRequest{Number: number, State: pull.State, Draft: pull.Draft,
-		Merged: pull.MergedAt != nil, HeadSHA: pull.Head.SHA, ObservedAt: time.Now().UTC()}
+	state := &reportPullRequest{Number: number, State: pull.State, Draft: *pull.Draft,
+		Merged: merged, HeadSHA: pull.Head.SHA, ObservedAt: time.Now().UTC()}
 	for _, unit := range report.Units {
 		if unit.Kind != unitIntegrate || unit.Candidate == "" {
 			continue

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -37,6 +38,44 @@ func reportedUnit(t *testing.T, report deliveryReport, key string) reportUnit {
 		t.Fatalf("report has no unit %q", key)
 	}
 	return report.Units[index]
+}
+
+func TestWorkGraphReportRequiresExplicitGitHubPRState(t *testing.T) {
+	valid := `"number":23,"state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"sha":"` + commit(4) + `"}`
+	for _, test := range []struct {
+		name string
+		body string
+		want bool
+	}{
+		{name: "missing draft", body: `{` + valid + `,"merged_at":null}`},
+		{name: "missing merged timestamp", body: `{` + valid + `,"draft":false}`},
+		{name: "invalid merged timestamp", body: `{` + valid + `,"draft":false,"merged_at":false}`},
+		{name: "explicit false and null", body: `{` + valid + `,"draft":false,"merged_at":null}`, want: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			report := deliveryReport{PullRequestURL: "https://github.com/acme/platform/pull/23",
+				UnknownEvidence: []string{"pull_request_external_state"}}
+			report.observePullRequest(t.Context(), "github.com/acme/platform", gitHubClient{
+				apiURL: "https://api.github.com", client: &http.Client{Transport: updateTestTransport(
+					func(request *http.Request) (*http.Response, error) {
+						if request.URL.Path != "/repos/acme/platform/pulls/23" {
+							t.Fatalf("request path = %s", request.URL.Path)
+						}
+						return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header),
+							Body: io.NopCloser(strings.NewReader(test.body)), Request: request}, nil
+					})},
+			})
+			if (report.PullRequest != nil) != test.want {
+				t.Fatalf("observed PR = %#v, want present %t", report.PullRequest, test.want)
+			}
+			if test.want && (report.PullRequest.Draft || report.PullRequest.Merged || slices.Contains(report.UnknownEvidence, "pull_request_external_state")) {
+				t.Fatalf("explicit false/null state = %#v, unknown=%v", report.PullRequest, report.UnknownEvidence)
+			}
+			if !test.want && !slices.Contains(report.UnknownEvidence, "pull_request_external_state") {
+				t.Fatalf("missing or invalid state removed unknown evidence: %v", report.UnknownEvidence)
+			}
+		})
+	}
 }
 
 func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {

@@ -12,7 +12,8 @@ flowchart LR
   Graphs --> Visibility{Objective visible and repository access?}
   Visibility -->|No: 404| NotFound[Not found]
   Visibility -->|Yes| Runs[(agent-runs.json<br/>runs, attempts, usage)]
-  Worker[CLI worker] -->|Recorded commit and tree SHA| Runs
+  Worker[CLI worker] -->|PUT /api/v1/workers/{workerID}/agent-runs/{requestID}| ResultAPI[agent_run_results.go finish handler]
+  ResultAPI -->|Validated result and attempt evidence| Runs
   Graphs --> Compute[work_graph_report.go<br/>pure computation]
   Runs --> Compute
   Compute --> GitHub{Recorded PR URL matches graph repository?}

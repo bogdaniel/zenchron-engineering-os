@@ -143,8 +143,9 @@ for (const viewport of viewports) {
     await page.getByRole('tab', { name: 'Plan', exact: true }).click();
     const report = page.getByRole('region', { name: 'Objective delivery report' });
     await report.getByRole('button', { name: 'View delivery report' }).click();
-    await expect(report.getByLabel('Current GitHub pull request state')).toContainText('pull request #23 open as a draft');
-    await expect(report.getByLabel('Current GitHub pull request state')).toContainText('differs from the integrated candidate');
+    await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('pull request #23 open as a draft');
+    await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('differs from the integrated candidate');
+    await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('observed');
     await expect(report).toContainText('Unknown evidence: publication authority');
     expect(await noHorizontalScroll(page)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`delivery-report-${viewport.name}.png`), fullPage: true });
