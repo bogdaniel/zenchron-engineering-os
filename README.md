@@ -2,23 +2,26 @@
 
 Go control plane, local worker, and React dashboard for coordinating engineering work across Git projects.
 
-## Run the local preview
+## Install and run the canonical local application
 
-Start the Go control plane, local worker, and live-reloading dashboard together from the repository root:
+Bootstrap the managed installation from a source checkout once:
 
 ```sh
-./dev.sh
+go run ./cmd/zenchron install
 ```
 
-Open <http://127.0.0.1:4173>. Keep dashboard port `4173` and control-plane/worker port `8080` for the latest-source
-manual-review preview; focused tests use their own temporary ports. The preview stops all services when you press
-Ctrl+C. Set `ZENCHRON_LISTEN_ADDR`, `ZENCHRON_DASHBOARD_PORT`, `ZENCHRON_PROJECTS_ROOT`, or `ZENCHRON_DATA_DIR`
-before launch to change the local setup.
+The installer builds the exact eligible trusted-main revision into an immutable versioned release and registers one
+per-user macOS LaunchAgent. The installed command is `~/.local/bin/zenchron-engineering`; on first install, use
+`~/.local/bin/zenchron-engineering start` to open the stable dashboard at <http://127.0.0.1:8080/?mode=live> and
+`zenchron-engineering status` to inspect the running revision and update state. Run `zenchron-engineering doctor` to
+verify which PATH entry is active and whether it resolves to the current release. The service checks trusted GitHub main
+every five minutes and updates itself after eligible merges. `./dev.sh` is only a convenience wrapper for that same
+installed command; it does not start a source preview.
 
-On a local address the dashboard opens in **Mock** mode, which shows the approved sample data and never writes to the
-control plane. Choose **Live** in the sidebar, or open <http://127.0.0.1:4173/?mode=live>, to work with the control
-plane's real data; `?mode=mock` returns to the sample data. Both modes render the same pages. On any other host the
-dashboard is always Live and has no selector.
+The one dashboard switches between **Mock** and **Live** at the same URL. Mock shows sample data and does not write to
+the control plane. Live uses the managed control plane. When a release changes, the open dashboard reconnects to the
+new release and reloads its verified UI while preserving the URL, page and browser session. Unmerged source changes do
+not replace the installed application; use the short-lived isolated test fixtures for development checks.
 
 Agent runs execute through the Codex CLI or Claude Code installed and signed in on the worker machine (`codex login`,
 `claude auth login`); the worker detects them at startup, and there is no model endpoint or API key to configure.
@@ -31,7 +34,8 @@ pull request; see [Issue to pull request](docs/features/issue-to-pull-request.md
 authenticated access, prefer a GitHub App installed only on the repositories Zenchron should control. Set
 `ZENCHRON_GITHUB_APP_ID`, `ZENCHRON_GITHUB_INSTALLATION_ID`, and `ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH` on the control
 plane; installation tokens are minted and cached there. Keep the PEM key outside the repository with owner-only file
-permissions. Required permissions are Issues: read/write and Pull requests: read/write; Actions: read is needed for
+permissions. Required permissions are Issues: read/write and Pull requests: read/write; Administration: read,
+Commit statuses: read, and Checks: read are needed to verify trusted-main protection. Actions: read is needed for
 GitHub Actions history in Reports. `ZENCHRON_GITHUB_TOKEN` remains available as a personal-token fallback and takes
 precedence if both are set. Neither the worker nor dashboard receives GitHub API credentials.
 
@@ -42,12 +46,13 @@ export ZENCHRON_GITHUB_APP_ID="<app ID>"
 export ZENCHRON_GITHUB_INSTALLATION_ID="<installation ID>"
 export ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH="$HOME/.config/zenchron/github-app.pem"
 chmod 600 "$ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH"
-./dev.sh
+go run ./cmd/zenchron install
 ```
 
-On first run, install dashboard dependencies with `cd dashboard && npm ci`. The overview polls the Go service and
-displays worker heartbeats and locally discovered Git checkouts. Set `ZENCHRON_PROJECTS_ROOT` before starting the worker
-to scan a folder (default `.`).
+The installer requires Go, Git, Node/npm and access to the configured GitHub repository. Set `ZENCHRON_PROJECTS_ROOT`
+before installation to choose the folder scanned by the worker (default the user's home directory). Development and
+browser tests run against short-lived state and separate ports; they never use the managed application's port `8080`
+or state directory.
 
 The API listens on loopback by default; a remote listener requires the GitHub OAuth, allowlist, session, access-file,
 and HTTPS public-origin configuration described in
@@ -72,7 +77,7 @@ Feature docs:
 - [Settings and integrations](docs/features/system-settings-and-integrations.md)
 - [Engineering reports](docs/features/engineering-reports.md)
 - [Product workspace](docs/features/product-workspace.md)
-- [One-command local preview](docs/features/local-preview.md)
+- [Canonical managed installation and self-update](docs/features/local-preview.md)
 - [GitHub issue sync and pull-request reviews](docs/features/github-review-sync.md)
 - [GitHub webhooks: reviews and CI results](docs/features/github-webhooks.md)
 - [Objective orchestration: plan, parallel agents, review, integration, one pull request](docs/features/objective-orchestration.md)
@@ -102,5 +107,5 @@ go test ./cmd/zenchron-worker \
   --grep 'dashboard displays|mobile overview|overview lists only agent runs|Projects page shows|agent run branches|Reviews page|workflow graph can be edited|Objectives dashboard fits|objectives can be created|agent profiles')
 ```
 
-The browser checks use the same dashboard at `127.0.0.1:4173` as manual review; they do not launch a second dashboard
-on another port. Focused control-plane checks may start an isolated API and worker on `8083`.
+The browser checks launch an isolated dashboard on `127.0.0.1:4174` and control plane/worker on `8083`; their state is
+under `dashboard/.playwright-state`. They never connect to the managed instance on port `8080`.

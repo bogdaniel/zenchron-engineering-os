@@ -17,11 +17,12 @@ import (
 )
 
 const (
-	agentRunLease       = 3 * time.Minute
-	maxAgentRuns        = 200
-	maxAgentRunAttempts = 3
-	maxAgentRunDiffSize = 128 << 10
-	maxIssueContextSize = 12_000
+	agentRunLease             = 3 * time.Minute
+	maxAgentRuns              = 200
+	maxAgentRunAttempts       = 3
+	maxAgentRunDiffSize       = 128 << 10
+	maxIssueContextSize       = 12_000
+	runAdmissionPausedMessage = "run admission is paused for a managed release transition"
 )
 
 // Publication outcomes are separate from the run status and from verification.
@@ -112,7 +113,8 @@ type agentRunStore struct {
 	webhookSecret []byte
 	deliveries    *webhookDeliveries
 	// graphs advances WorkGraphs from run outcomes; nil when no orchestration store is wired.
-	graphs *workGraphStore
+	graphs   *workGraphStore
+	quiesced bool
 }
 
 // agentRunAttempt records one claim of a run by a worker and how that attempt ended.
@@ -384,6 +386,9 @@ func (store *agentRunStore) enqueue(item agentRun) (agentRun, int, string) {
 	item.Branch = workerapi.AgentRunBranch(item.ID)
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	if store.quiesced {
+		return agentRun{}, http.StatusServiceUnavailable, runAdmissionPausedMessage
+	}
 	if len(store.items) >= maxAgentRuns {
 		return agentRun{}, http.StatusInsufficientStorage, "agent run history is full"
 	}
@@ -393,6 +398,12 @@ func (store *agentRunStore) enqueue(item agentRun) (agentRun, int, string) {
 		return agentRun{}, http.StatusInternalServerError, "could not persist agent run"
 	}
 	return item, 0, ""
+}
+
+func (store *agentRunStore) isQuiesced() bool {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.quiesced
 }
 
 // workerRunsProfile reports whether a worker has the execution provider an agent profile names.
@@ -451,6 +462,14 @@ func (store *agentRunStore) lease(worker workerRecord, access requestAccess) (ag
 	defer store.mu.Unlock()
 	now := time.Now().UTC()
 	recovered := store.recoverExpiredLocked(now)
+	if store.quiesced {
+		if recovered {
+			if err := store.persistLocked(); err != nil {
+				return agentRun{}, http.StatusInternalServerError, "could not persist expired agent run lease"
+			}
+		}
+		return agentRun{}, 0, ""
+	}
 	var selected agentRun
 	for _, item := range store.items {
 		// A run waits in the queue until its worker reports the provider it needs, and is never handed to

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -12,6 +13,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 func main() {
@@ -21,6 +25,32 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) == 1 {
+		return startManaged()
+	}
+	switch os.Args[1] {
+	case "build-info":
+		return json.NewEncoder(os.Stdout).Encode(map[string]int{
+			"state_schema_version": updater.StateSchemaVersion, "protocol_version": workerapi.ProtocolVersion,
+		})
+	case "install":
+		return installManaged()
+	case "start":
+		return startManaged()
+	case "managed":
+		return runManaged()
+	case "serve":
+		return runControlPlane()
+	case "status":
+		return showManagedStatus()
+	case "doctor":
+		return showManagedDoctor()
+	default:
+		return fmt.Errorf("unknown command %q; use install, start, status, or doctor", os.Args[1])
+	}
+}
+
+func runControlPlane() error {
 	addr := os.Getenv("ZENCHRON_LISTEN_ADDR")
 	if addr == "" {
 		addr = "127.0.0.1:8080"
@@ -49,6 +79,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	lock, err := acquireControlPlaneLock(dataDir)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
 	handler, err := newPersistentMux(dataDir)
 	if err != nil {
 		return fmt.Errorf("initialize control-plane state: %w", err)

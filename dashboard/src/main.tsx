@@ -72,6 +72,19 @@ const workersResponse = z.array(
 function App() {
   const [activePage, setActivePage] = useState(pageFromHash);
   const [mode, setMode] = useState(modeFromLocation);
+  const activeRelease = useQuery({
+    queryKey: ['managed-release'],
+    enabled: localDevelopment && mode === 'live',
+    queryFn: async () => {
+      const response = await fetch('/api/v1/system/update');
+      if (!response.ok) throw new Error(`Managed release check failed: ${response.status}`);
+      return z.object({ running_revision: z.string(), state: z.string() }).parse(await response.json());
+    },
+    retry: 20,
+    retryDelay: 1000,
+    refetchInterval: (query) => ['checking', 'building', 'verifying', 'waiting_for_runs', 'activating']
+      .includes(query.state.data?.state ?? '') ? 2000 : 30_000,
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -85,6 +98,14 @@ function App() {
       window.removeEventListener('hashchange', syncPage);
     };
   }, []);
+  useEffect(() => {
+    const revision = activeRelease.data?.running_revision;
+    if (!revision) return;
+    const storageKey = 'zenchron-managed-release';
+    const previous = window.sessionStorage.getItem(storageKey);
+    window.sessionStorage.setItem(storageKey, revision);
+    if (previous && previous !== revision) window.location.reload();
+  }, [activeRelease.data?.running_revision]);
   useEffect(() => {
     const focusSearch = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
@@ -293,6 +314,7 @@ function App() {
             <SystemPage
               section={activePage === 'settings' ? 'settings' : 'integrations'}
               designPreview={previewPage}
+              canManageUpdates={localDevelopment}
               apiOnline={health.isSuccess}
               githubLogin={auth.data?.local === false}
               workerCount={workers.data?.length ?? 0}

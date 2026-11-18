@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -39,7 +40,9 @@ type workerRecord struct {
 	Name     string    `json:"name"`
 	LastSeen time.Time `json:"last_seen"`
 	// Providers are the installed coding CLIs the worker detected, with their version and sign-in state.
-	Providers []workerapi.ProviderStatus `json:"providers,omitempty"`
+	Providers       []workerapi.ProviderStatus `json:"providers,omitempty"`
+	ProtocolVersion int                        `json:"protocol_version,omitempty"`
+	ReleaseRevision string                     `json:"release_revision,omitempty"`
 }
 
 type projectRecord struct {
@@ -104,6 +107,9 @@ func newPersistentMux(dataDir string) (http.Handler, error) {
 	if runs.graphs, err = openWorkGraphStore(filepath.Join(absoluteDir, "work-graphs.json"), runs, objectives, agents, workflows); err != nil {
 		return nil, err
 	}
+	if strings.EqualFold(os.Getenv("ZENCHRON_STARTUP_QUIESCED"), "true") {
+		runs.quiesced = true
+	}
 	return newMuxWithStores(objectives, workflows, agents, products, registry, runs), nil
 }
 
@@ -127,7 +133,21 @@ func newMuxWithStores(
 	mux := http.NewServeMux()
 	runs.graphs.routes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "revision": os.Getenv("ZENCHRON_RELEASE_REVISION")})
+	})
+	mux.HandleFunc("GET /api/v1/system/update", systemUpdateStatus)
+	mux.HandleFunc("GET /api/v1/system/update/active-runs", func(w http.ResponseWriter, r *http.Request) {
+		activeSystemRunCount(w, r, runs)
+	})
+	mux.HandleFunc("GET /api/v1/system/update/worker-compatible", func(w http.ResponseWriter, r *http.Request) {
+		activeSystemWorkerCompatibility(w, r, registry)
+	})
+	mux.HandleFunc("POST /api/v1/system/update/check", requestSystemUpdate)
+	mux.HandleFunc("POST /api/v1/system/update/quiesce", func(w http.ResponseWriter, r *http.Request) {
+		setRunAdmission(w, r, runs, true)
+	})
+	mux.HandleFunc("DELETE /api/v1/system/update/quiesce", func(w http.ResponseWriter, r *http.Request) {
+		setRunAdmission(w, r, runs, false)
 	})
 	mux.HandleFunc("GET /api/v1/workers", registry.listWorkers)
 	mux.HandleFunc("GET /api/v1/workers/healthz", registry.ready)
@@ -173,7 +193,45 @@ func newMuxWithStores(
 	mux.HandleFunc("POST "+gitHubWebhookPath, runs.gitHubWebhook)
 	mux.HandleFunc("POST /api/v1/projects/{id}/issues", registry.createGitHubIssue)
 	mux.HandleFunc("PUT /api/v1/workers/{id}/agent-runs/{requestID}", runs.finish)
+	registerDashboard(mux, os.Getenv("ZENCHRON_DASHBOARD_DIR"))
 	return mux
+}
+
+func registerDashboard(mux *http.ServeMux, directory string) {
+	if strings.TrimSpace(directory) == "" {
+		return
+	}
+	mux.HandleFunc("GET /{path...}", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/auth/") {
+			http.NotFound(w, r)
+			return
+		}
+		name := strings.TrimPrefix(r.URL.Path, "/")
+		if name == "" {
+			name = "index.html"
+		}
+		if !fs.ValidPath(name) {
+			http.NotFound(w, r)
+			return
+		}
+		path := filepath.Join(directory, filepath.FromSlash(name))
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			if filepath.Ext(name) != "" {
+				http.NotFound(w, r)
+				return
+			}
+			path = filepath.Join(directory, "index.html")
+			if _, err := os.Stat(path); err != nil {
+				http.Error(w, "dashboard assets are unavailable", http.StatusServiceUnavailable)
+				return
+			}
+		}
+		if filepath.Base(path) == "index.html" {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		http.ServeFile(w, r, path)
+	})
 }
 
 func (registry *workerRegistry) ready(w http.ResponseWriter, _ *http.Request) {
@@ -271,6 +329,11 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 		http.Error(w, "worker providers are invalid", http.StatusBadRequest)
 		return
 	}
+	if expected := os.Getenv("ZENCHRON_RELEASE_REVISION"); expected != "" &&
+		(request.ProtocolVersion != workerapi.ProtocolVersion || request.ReleaseRevision != expected) {
+		http.Error(w, "worker release does not match the active control plane", http.StatusConflict)
+		return
+	}
 
 	seen := make(map[string]struct{}, len(request.Projects))
 	for i := range request.Projects {
@@ -308,6 +371,7 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 	now := time.Now().UTC()
 	worker := workerRecord{
 		ID: id, Name: request.Name, LastSeen: now, Providers: request.Providers,
+		ProtocolVersion: request.ProtocolVersion, ReleaseRevision: request.ReleaseRevision,
 	}
 	registry.mu.Lock()
 	registry.workers[id] = worker

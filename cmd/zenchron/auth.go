@@ -89,6 +89,10 @@ func loadAuthConfig() (*authConfig, bool, error) {
 
 func authHandler(next http.Handler, config *authConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if managedSupervisorRequest(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if r.URL.Path == "/auth/github" && r.Method == http.MethodGet {
 			if config == nil {
 				http.Error(w, "GitHub sign-in is not configured", http.StatusNotFound)
@@ -159,6 +163,20 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func managedSupervisorRequest(r *http.Request) bool {
+	secret := os.Getenv("ZENCHRON_MANAGED_SUPERVISOR_TOKEN")
+	if secret == "" || !isLoopbackRequest(r) || !hmac.Equal([]byte(r.Header.Get("X-Zenchron-Supervisor-Token")), []byte(secret)) {
+		return false
+	}
+	switch r.Method + " " + r.URL.Path {
+	case "GET /api/v1/system/update/active-runs", "GET /api/v1/system/update/worker-compatible",
+		"POST /api/v1/system/update/quiesce", "DELETE /api/v1/system/update/quiesce":
+		return true
+	default:
+		return false
+	}
 }
 
 // authorize authenticates one API request and returns what its caller may touch.

@@ -347,7 +347,7 @@ func TestRunRejectsRemoteListenerWithoutSecureAuthentication(t *testing.T) {
 		"ZENCHRON_WORKER_TOKEN", "ZENCHRON_GITHUB_ALLOWED_USERS", "ZENCHRON_PUBLIC_URL", "ZENCHRON_ACCESS_FILE"} {
 		t.Setenv(key, "")
 	}
-	if err := run(); err == nil || !strings.Contains(err.Error(), "requires GitHub authentication") {
+	if err := runControlPlane(); err == nil || !strings.Contains(err.Error(), "requires GitHub authentication") {
 		t.Fatalf("remote listener without auth returned %v", err)
 	}
 	t.Setenv("ZENCHRON_GITHUB_CLIENT_ID", "client")
@@ -357,11 +357,11 @@ func TestRunRejectsRemoteListenerWithoutSecureAuthentication(t *testing.T) {
 	t.Setenv("ZENCHRON_GITHUB_ALLOWED_USERS", "engineer")
 	t.Setenv("ZENCHRON_PUBLIC_URL", "http://zenchron.example")
 	t.Setenv("ZENCHRON_ACCESS_FILE", "")
-	if err := run(); err == nil || !strings.Contains(err.Error(), "requires ZENCHRON_ACCESS_FILE") {
+	if err := runControlPlane(); err == nil || !strings.Contains(err.Error(), "requires ZENCHRON_ACCESS_FILE") {
 		t.Fatalf("remote listener with only the shared worker token returned %v", err)
 	}
 	t.Setenv("ZENCHRON_ACCESS_FILE", writeAccessFile(t, `{"workers":[],"users":{}}`))
-	if err := run(); err == nil || !strings.Contains(err.Error(), "must use https") {
+	if err := runControlPlane(); err == nil || !strings.Contains(err.Error(), "must use https") {
 		t.Fatalf("remote listener without HTTPS returned %v", err)
 	}
 }

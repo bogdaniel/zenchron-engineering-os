@@ -32,6 +32,9 @@ func run() error {
 	if len(os.Args) > 1 && os.Args[1] == "guard" {
 		os.Exit(runGuard(os.Args[2:]))
 	}
+	if len(os.Args) == 2 && os.Args[1] == "build-info" {
+		return json.NewEncoder(os.Stdout).Encode(map[string]int{"protocol_version": workerapi.ProtocolVersion})
+	}
 	controlPlaneURL := strings.TrimRight(os.Getenv("ZENCHRON_CONTROL_PLANE_URL"), "/")
 	if controlPlaneURL == "" {
 		controlPlaneURL = "http://127.0.0.1:8080"
@@ -112,7 +115,8 @@ func run() error {
 		if err != nil {
 			log.Printf("project discovery failed: %v", err)
 		} else {
-			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects), Providers: runner.providerStatuses()}
+			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects), Providers: runner.providerStatuses(),
+				ProtocolVersion: workerapi.ProtocolVersion, ReleaseRevision: os.Getenv("ZENCHRON_RELEASE_REVISION")}
 			if err := sendHeartbeat(ctx, runner.client, baseURL, workerID, heartbeat); err != nil {
 				log.Printf("worker heartbeat failed: %v", err)
 			} else if err := runner.dispatch(ctx, projects); err != nil {

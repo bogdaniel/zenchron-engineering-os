@@ -9,12 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
 )
 
 // ponytail: one API process per data directory; snapshots cap at 16 MiB before database migration.
 const maxStateFileSize = 16 << 20
 
-const stateFileVersion = 1
+const stateFileVersion = updater.StateSchemaVersion
 
 func controlPlaneDataDirectory() (string, error) {
 	if configured := strings.TrimSpace(os.Getenv("ZENCHRON_DATA_DIR")); configured != "" {

@@ -2,6 +2,9 @@
 package workerapi
 
 const (
+	// ProtocolVersion identifies the control-plane/worker contract recorded in managed releases.
+	ProtocolVersion = 1
+
 	ProviderCodex  = "codex-cli"
 	ProviderClaude = "claude-code"
 
@@ -95,9 +98,11 @@ type Project struct {
 }
 
 type Heartbeat struct {
-	Name      string           `json:"name"`
-	Projects  []Project        `json:"projects"`
-	Providers []ProviderStatus `json:"providers,omitempty"`
+	Name            string           `json:"name"`
+	Projects        []Project        `json:"projects"`
+	Providers       []ProviderStatus `json:"providers,omitempty"`
+	ProtocolVersion int              `json:"protocol_version,omitempty"`
+	ReleaseRevision string           `json:"release_revision,omitempty"`
 }
 
 type AgentProfile struct {
