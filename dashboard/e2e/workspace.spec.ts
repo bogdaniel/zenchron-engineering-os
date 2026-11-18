@@ -5,13 +5,16 @@ const orionID = 'b'.repeat(32);
 const projectID = 'c'.repeat(32);
 const personaID = 'e'.repeat(32);
 const createdAt = '2026-01-01T00:00:00Z';
-const nova = { id: novaID, name: 'Nova Platform', description: 'Developer platform', repository_ids: [projectID],
+type ProductFixture = { id: string; name: string; description: string; repository_ids: string[];
+  default_workflow_id?: string; created_at: string; updated_at: string };
+const nova: ProductFixture = { id: novaID, name: 'Nova Platform', description: 'Developer platform', repository_ids: [projectID],
   default_workflow_id: 'release', created_at: createdAt, updated_at: createdAt };
-const orion = { id: orionID, name: 'Orion Analytics', description: 'Data tools', repository_ids: [], created_at: createdAt, updated_at: createdAt };
+const orion: ProductFixture = { id: orionID, name: 'Orion Analytics', description: 'Data tools', repository_ids: [],
+  created_at: createdAt, updated_at: createdAt };
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
 /** Serves the Live workspace from fixtures and records every write the page attempts. */
-async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, orion], objectivesUnavailable = false) {
+async function useLiveFixtures(page: Page, products: ProductFixture[] = [nova, orion], objectivesUnavailable = false) {
   const writes: { method: string; path: string; body: unknown }[] = [];
   await page.route('**/api/v1/**', (route) => route.fulfill(json([])));
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
