@@ -113,16 +113,16 @@ func run() error {
 	ticker := time.NewTicker(workerHeartbeatInterval)
 	defer ticker.Stop()
 	for {
-		providersReady := false
-		select {
-		case <-providersDetected:
-			providersReady = true
-		default:
-		}
 		projects, err := discoverServedProjects(projectsRoot, workerID, config)
 		if err != nil {
 			log.Printf("project discovery failed: %v", err)
 		} else {
+			providersReady := false
+			select {
+			case <-providersDetected:
+				providersReady = true
+			default:
+			}
 			var providers []workerapi.ProviderStatus
 			if providersReady {
 				providers = runner.providerStatuses()

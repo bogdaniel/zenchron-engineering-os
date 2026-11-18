@@ -8,7 +8,9 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
@@ -98,8 +100,26 @@ func TestProviderDetectionDoesNotBlockWorkerHeartbeat(t *testing.T) {
 			return nil
 		},
 	}
-	done := detectProvidersAsync(context.Background(), map[string]*cliProvider{"fake": provider})
-	<-started
+	ctx, cancel := context.WithCancel(context.Background())
+	done := detectProvidersAsync(ctx, map[string]*cliProvider{"fake": provider})
+	var releaseOnce sync.Once
+	stopDetection := func() {
+		cancel()
+		releaseOnce.Do(func() { close(release) })
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("provider detection did not stop after its blocked probe was released")
+		}
+	}
+	t.Cleanup(stopDetection)
+	select {
+	case <-started:
+	case <-done:
+		t.Fatal("provider detection exited before reaching the blocked confinement probe")
+	case <-time.After(5 * time.Second):
+		t.Fatal("provider detection did not reach the confinement probe")
+	}
 	select {
 	case <-done:
 		t.Fatal("provider detection completed before the blocked probe was released")
@@ -119,8 +139,7 @@ func TestProviderDetectionDoesNotBlockWorkerHeartbeat(t *testing.T) {
 			ReleaseRevision: "main-test"}); err != nil {
 		t.Fatalf("heartbeat while provider detection is blocked: %v", err)
 	}
-	close(release)
-	<-done
+	stopDetection()
 }
 
 func TestWorkerHTTPClientAddsBearerCredential(t *testing.T) {
