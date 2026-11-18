@@ -8,6 +8,9 @@ const (
 	ProviderCodex  = "codex-cli"
 	ProviderClaude = "claude-code"
 
+	// MaxJSONRequestBodySize is the largest JSON request body accepted by the control plane.
+	MaxJSONRequestBodySize = 1 << 20
+
 	agentRunBranchPrefix = "zenchron/agent-run/"
 
 	MaxProgressEvents   = 50
