@@ -69,7 +69,7 @@ export type WorkspaceView = {
   };
 };
 
-export type WorkspaceEditable = Pick<Product, 'id' | 'name' | 'description' | 'repository_ids'>;
+export type WorkspaceEditable = Pick<Product, 'id' | 'name' | 'description' | 'repository_ids' | 'default_workflow_id'>;
 
 /** Everything the Product Workspace layout needs. Operations a mode cannot perform are absent. */
 export type WorkspaceSource = {

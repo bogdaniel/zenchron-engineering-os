@@ -12,13 +12,14 @@ func TestProductsCanBeCreatedUpdatedAndListed(t *testing.T) {
 	server := newMux()
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
-		`{"name":"Core Product","description":"Platform APIs","repository_ids":["`+testProjectID+`"]}`,
+		`{"name":"Core Product","description":"Platform APIs","repository_ids":["`+testProjectID+`"],"default_workflow_id":"pr-review-release"}`,
 	)))
 	var created product
 	if err := json.NewDecoder(response.Body).Decode(&created); err != nil || response.Code != http.StatusCreated {
 		t.Fatalf("create product = %#v, decode error = %v, HTTP %d", created, err, response.Code)
 	}
-	if created.Name != "Core Product" || len(created.RepositoryIDs) != 1 || created.RepositoryIDs[0] != testProjectID {
+	if created.Name != "Core Product" || len(created.RepositoryIDs) != 1 || created.RepositoryIDs[0] != testProjectID ||
+		created.DefaultWorkflowID != "pr-review-release" {
 		t.Fatalf("created product = %#v", created)
 	}
 
@@ -33,6 +34,9 @@ func TestProductsCanBeCreatedUpdatedAndListed(t *testing.T) {
 	if updated.Description != "Updated" || len(updated.RepositoryIDs) != 0 {
 		t.Fatalf("updated product = %#v", updated)
 	}
+	if updated.DefaultWorkflowID != created.DefaultWorkflowID {
+		t.Fatalf("omitted workflow setting was not preserved: %#v", updated)
+	}
 
 	response = httptest.NewRecorder()
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/products", nil))
@@ -40,6 +44,32 @@ func TestProductsCanBeCreatedUpdatedAndListed(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&items); err != nil || response.Code != http.StatusOK ||
 		len(items) != 1 || items[0].ID != created.ID || items[0].Description != "Updated" {
 		t.Fatalf("list products = %#v, decode error = %v, HTTP %d", items, err, response.Code)
+	}
+}
+
+func TestProductDefaultWorkflowMustExistAndCanBeCleared(t *testing.T) {
+	server := newMux()
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
+		`{"name":"Invalid","repository_ids":[],"default_workflow_id":"missing"}`)))
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("unknown default workflow returned HTTP %d", response.Code)
+	}
+
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
+		`{"name":"Configured","repository_ids":[],"default_workflow_id":"pr-review-release"}`)))
+	var created product
+	if err := json.NewDecoder(response.Body).Decode(&created); err != nil || response.Code != http.StatusCreated {
+		t.Fatalf("create configured product: decode error %v, HTTP %d", err, response.Code)
+	}
+
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/v1/products/"+created.ID, strings.NewReader(
+		`{"name":"Configured","repository_ids":[],"default_workflow_id":""}`)))
+	var updated product
+	if err := json.NewDecoder(response.Body).Decode(&updated); err != nil || response.Code != http.StatusOK || updated.DefaultWorkflowID != "" {
+		t.Fatalf("clear default workflow: product %#v, error %v, HTTP %d", updated, err, response.Code)
 	}
 }
 

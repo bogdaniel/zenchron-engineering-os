@@ -92,6 +92,11 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	if !decodeJSONBody(w, r, &input) {
 		return
 	}
+	if input.WorkflowID == "" && item.ProductID != "" {
+		if linkedProduct, exists := store.objectives.products.get(item.ProductID); exists {
+			input.WorkflowID = linkedProduct.DefaultWorkflowID
+		}
+	}
 	access := accessFor(r)
 	project, online := store.runs.registry.onlineProject(strings.ToLower(input.ProjectID))
 	if !online || !access.allows(project.GitRemote) || !access.mayDispatchTo(project.WorkerID) {

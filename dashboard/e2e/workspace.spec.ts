@@ -5,7 +5,8 @@ const orionID = 'b'.repeat(32);
 const projectID = 'c'.repeat(32);
 const personaID = 'e'.repeat(32);
 const createdAt = '2026-01-01T00:00:00Z';
-const nova = { id: novaID, name: 'Nova Platform', description: 'Developer platform', repository_ids: [projectID], created_at: createdAt, updated_at: createdAt };
+const nova = { id: novaID, name: 'Nova Platform', description: 'Developer platform', repository_ids: [projectID],
+  default_workflow_id: 'release', created_at: createdAt, updated_at: createdAt };
 const orion = { id: orionID, name: 'Orion Analytics', description: 'Data tools', repository_ids: [], created_at: createdAt, updated_at: createdAt };
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
@@ -403,6 +404,7 @@ test('local Live product navigation stays Live when opening objective creation',
   await expect(page.getByRole('link', { name: 'Create objective for Nova Platform' })).toBeVisible();
   await page.getByRole('link', { name: 'Create objective for Nova Platform' }).click();
   await expect(page).toHaveURL(/mode=live.*#objectives$/);
+  await expect(page).toHaveURL(/workflow=release/);
   await expect(page.getByRole('dialog', { name: 'New objective' }).getByRole('combobox', { name: 'Product' }))
     .toHaveValue('Nova Platform');
 });

@@ -1,13 +1,16 @@
 import { useEffect } from 'react';
 import { useForm } from '@mantine/form';
-import { Button, Modal, MultiSelect, Text, TextInput, Textarea } from '@mantine/core';
+import { Button, Modal, MultiSelect, Select, Text, TextInput, Textarea } from '@mantine/core';
 import { z } from 'zod';
 import type { Project } from './projects';
+import { loadWorkflows } from './workflowModel';
+import { useQuery } from '@tanstack/react-query';
 
 export const productSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
+  default_workflow_id: z.string().optional(),
   repository_ids: z.array(z.string()),
   created_at: z.string(),
   updated_at: z.string(),
@@ -16,6 +19,7 @@ export const productsSchema = z.array(productSchema);
 export const productInputSchema = z.object({
   name: z.string().trim().min(1, 'Add a product name').max(100),
   description: z.string().max(2000),
+  default_workflow_id: z.string(),
   repository_ids: z.array(z.string()),
 });
 export type Product = z.infer<typeof productSchema>;
@@ -29,7 +33,7 @@ export async function loadProducts() {
 
 type ProductEditorProps = {
   opened: boolean;
-  product: Pick<Product, 'id' | 'name' | 'description' | 'repository_ids'> | undefined;
+  product: Pick<Product, 'id' | 'name' | 'description' | 'repository_ids' | 'default_workflow_id'> | undefined;
   projects: Project[] | undefined;
   /** Why repositories cannot be linked here; the picker is disabled while it is set. */
   repositoryNote?: string;
@@ -40,8 +44,9 @@ type ProductEditorProps = {
 };
 
 export function ProductEditor({ opened, product, projects, repositoryNote, onClose, onSave, isSaving, error }: ProductEditorProps) {
+  const workflows = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows, enabled: opened });
   const form = useForm<ProductInput>({
-    initialValues: { name: '', description: '', repository_ids: [] },
+    initialValues: { name: '', description: '', repository_ids: [], default_workflow_id: '' },
     validate: (values) => {
       const result = productInputSchema.safeParse(values);
       return result.success
@@ -56,6 +61,7 @@ export function ProductEditor({ opened, product, projects, repositoryNote, onClo
       name: product?.name ?? '',
       description: product?.description ?? '',
       repository_ids: product?.repository_ids ?? [],
+      default_workflow_id: product?.default_workflow_id ?? '',
     });
   }, [opened, product?.id]);
 
@@ -73,6 +79,12 @@ export function ProductEditor({ opened, product, projects, repositoryNote, onClo
         <TextInput label="Product name" required {...form.getInputProps('name')} />
         <Textarea label="Description" mt="sm" autosize minRows={2} maxRows={4}
           {...form.getInputProps('description')} />
+        <Select label="Default workflow for new objectives" placeholder="Choose when proposing a plan"
+          data={workflows.data?.map((workflow) => ({ value: workflow.id, label: workflow.name })) ?? []}
+          clearable mt="sm" value={form.values.default_workflow_id || null}
+          onChange={(value) => form.setFieldValue('default_workflow_id', value ?? '')}
+          disabled={workflows.isLoading || workflows.isError} />
+        {workflows.isError && <Text className="form-error" role="alert">Workflow definitions could not be loaded.</Text>}
         <MultiSelect
           label="Repositories"
           description={repositoryNote ?? 'Only repository names and worker IDs are shared with the control plane.'}

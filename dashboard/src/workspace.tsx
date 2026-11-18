@@ -263,7 +263,8 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
           hidden={cardIsHidden('objectives', ['Overview', 'Objectives'])}>
           {objectiveList.note ? <Note note={objectiveList.note} /> : <ObjectiveRows rows={objectiveList.rows} />}
           {!designPreview && selected && <WorkspaceObjectiveStart key={selected.id} productID={selected.id}
-            productName={selected.name} projects={(source.repositories ?? []).filter((project) =>
+            productName={selected.name} defaultWorkflowID={source.editable(selected.id)?.default_workflow_id}
+            projects={(source.repositories ?? []).filter((project) =>
               source.editable(selected.id)?.repository_ids.includes(project.id))} />}
           {/* The Objectives tab also shows how each objective is being executed: units, handoffs, findings, decisions, PR. */}
           {activeTab === 'Objectives' && <WorkspaceExecution sampleData={designPreview} objectiveIDs={facts.objectives

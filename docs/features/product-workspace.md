@@ -25,7 +25,7 @@ flowchart LR
     Editor -->|"source.saveProduct"| Source
     Live -->|"POST /api/v1/products · PUT /api/v1/products/{id}"| CP
     Page -->|"Create objective for selected product"| Objective["ObjectivesPage · product_id prefilled"]
-    Page -->|"linked checkout + saved workflow selection"| Start["WorkspaceObjectiveStart"]
+    Page -->|"product default + linked checkout"| Start["WorkspaceObjectiveStart"]
     Start -->|"project/workflow IDs carried to Plan form"| Plans
     Objective -->|"create objective, then select repository and workflow in Plan"| Plans["ObjectivePlanPanel"]
     Plans -->|"POST /api/v1/objectives/{id}/plans"| CP
@@ -47,8 +47,8 @@ flowchart LR
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
     Environment --> Store
     Environment --> Graphs[(objectives.json · work-graphs.json)]
-    Store -->|"read linked product identity and description"| CP
-    CP -->|"snapshot in plan revision and plan hash"| Graphs
+    Store -->|"read product context and default workflow"| CP
+    CP -->|"resolve default only for new plans; pin workflow version"| Graphs
     Graphs -->|"matching objective, revision and hash"| RunContext["planner / WorkUnit runContext"]
     Graphs -->|"frozen workflow/profile/persona revision references"| Environment
     Page -->|"Product actions → Open repository inventory"| Projects["#projects"]
@@ -93,7 +93,9 @@ Live:
   layout and does not invent WorkGraph history.
 
 - Products come from `GET /api/v1/products`; create and edit use `POST` and `PUT /api/v1/products/{id}` and select the
-  saved product. The editor links repositories from the worker inventory.
+  saved product. The editor links repositories from the worker inventory and can store a default saved workflow. A
+  product default fills an omitted workflow choice for a new plan; the plan stores the selected workflow ID and
+  version so later product edits do not change existing plans.
 - A product's health is `Healthy` when at least one linked repository's worker is online, `Offline` when linked
   repositories are reported but none is online, `No repos` when nothing is linked, and `Unavailable` when no linked
   repository is in the current inventory. It appears as the directory badge, the status filter, the heading line
@@ -159,16 +161,17 @@ Live:
 
 ## Data boundaries
 
-- Products, descriptions, and repository ID links persist in `products.json`; product names are unique without regard to
-  case.
+- Products, descriptions, default workflow IDs, and repository ID links persist in `products.json`; product names are
+  unique without regard to case.
 - Repository IDs are stable for a worker identity and checkout path. Names, branches, worker names, and heartbeat state
   come from current worker inventory; local paths remain on the worker. Only repository names and worker IDs are shared
   with the control plane.
-- New fields are additive: prior profile records without personas and prior plans without configuration snapshots load
+- New fields are additive: prior products without a default workflow, profile records without personas, and plans
+  without configuration snapshots load
   with their previous behavior. The strict state reader rejects unknown fields, so rolling back after personas, pinned
-  plans, product-context snapshots, or workflows with the `integrate` node have been saved requires restoring
-  pre-upgrade copies of `agents.json`, `work-graphs.json`, and `workflows.json`; retain a local data-directory backup
-  before a downgrade.
+  plans, product-context snapshots/default workflows, or workflows with the `integrate` node have been saved requires
+  restoring pre-upgrade copies of `agents.json`, `products.json`, `work-graphs.json`, and `workflows.json`; retain a
+  local data-directory backup before a downgrade.
 - A worker restart does not erase product configuration. Moving a checkout changes its ID and requires relinking.
 - Objectives link to products by ID. Unlinked and legacy free-text objectives remain visible on the Objectives page.
 - File search, evidence artifacts, decisions, stakeholder membership, release streams, and delivery history require
@@ -176,12 +179,14 @@ Live:
 
 ## Verification
 
-Focused Go tests cover product validation, create/update/list, and restart persistence. The E2E checks cover the Live
-layout with isolated API fixtures, the create flow against the real control plane, and the Mock layout:
+Focused Go tests cover product validation, create/update/list, default-workflow plan pinning, and restart persistence.
+The E2E checks cover the Live layout with isolated API fixtures, the default workflow carried into objective creation,
+the create flow against the real control plane, and the Mock layout:
 
 ```sh
-go test ./cmd/zenchron -run 'TestProducts|TestPersistentMuxRestoresObjectivesAndWorkflows'
+go test ./cmd/zenchron -run 'TestProducts|TestProductDefaultWorkflow|TestPersistentMuxRestoresObjectivesAndWorkflows'
 cd dashboard && npm run test:e2e -- e2e/workspace.spec.ts e2e/workspace-preview.spec.ts
+cd dashboard && npm run test:e2e -- e2e/workspace.spec.ts --grep 'local Live product navigation stays Live when opening objective creation'
 cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Product Workspace groups live repositories'
 ```
 
@@ -209,9 +214,9 @@ with the unit that asked, the question, and who resolved it.
   is user-supplied task data and does not grant authority or change the result contract.
 - Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
 - A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
-- Not implemented: product-owned configuration defaults, knowledge entries, promotion between scopes,
-  architecture/team references, and cross-product organization knowledge. Those require the established
-  authority/context boundaries and are intentionally left for their dependent work.
+- Only the default workflow is product-scoped configuration. Other configuration, knowledge entries, promotion between
+  scopes, architecture/team references, and cross-product organization knowledge remain unimplemented because they
+  require established authority/context boundaries.
 
 Verified by `go test ./cmd/zenchron -run 'Test(ProductEnvironment|WorkUnitContextIncludesOnlyItsLinkedProductDescription|PlannerReceivesLinkedProductDescription)' -count=1`,
 including product isolation, historical context across a restart, and product context delivery to planner and WorkUnits.

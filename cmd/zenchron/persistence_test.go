@@ -41,7 +41,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 	}
 	response = httptest.NewRecorder()
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
-		`{"name":"Persisted product","repository_ids":["`+testProjectID+`"]}`,
+		`{"name":"Persisted product","repository_ids":["`+testProjectID+`"],"default_workflow_id":"pr-review-release"}`,
 	)))
 	var createdProduct product
 	if err := json.NewDecoder(response.Body).Decode(&createdProduct); err != nil || response.Code != http.StatusCreated {
@@ -141,7 +141,8 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 	var products []product
 	if err := json.NewDecoder(response.Body).Decode(&products); err != nil || response.Code != http.StatusOK ||
 		len(products) != 1 || products[0].ID != createdProduct.ID ||
-		len(products[0].RepositoryIDs) != 1 || products[0].RepositoryIDs[0] != testProjectID {
+		len(products[0].RepositoryIDs) != 1 || products[0].RepositoryIDs[0] != testProjectID ||
+		products[0].DefaultWorkflowID != "pr-review-release" {
 		t.Fatalf("restored products = %#v, decode error = %v, HTTP %d", products, err, response.Code)
 	}
 	response = httptest.NewRecorder()
