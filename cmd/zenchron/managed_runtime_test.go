@@ -199,6 +199,30 @@ func TestPreActivationRecoveryRestoresPreviousPointerAndFailureStatus(t *testing
 	}
 }
 
+func TestInterruptedCandidateStartupCannotRollBackAfterPointerAdvance(t *testing.T) {
+	root := t.TempDir()
+	previous := "0123456789abcdef0123456789abcdef01234567"
+	candidate := "abcdef0123456789abcdef0123456789abcdef01"
+	statusPath := filepath.Join(root, "data", "system-update.json")
+	runtime := &managedRuntime{home: root, statusPath: statusPath,
+		status: updater.Status{RunningRevision: previous, LatestRevision: candidate, State: "activating"}}
+	if err := updater.SetActiveRelease(root, candidate); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.restorePreviousRelease(errors.New("candidate failed during startup")); err == nil ||
+		!strings.Contains(err.Error(), "automatic rollback is blocked") {
+		t.Fatalf("interrupted activation recovery error = %v", err)
+	}
+	if active, err := updater.ActiveRelease(root); err != nil || active != candidate {
+		t.Fatalf("startup recovery moved the active pointer to %q: %v", active, err)
+	}
+	status, err := updater.ReadStatus(statusPath)
+	if err != nil || status.State != "blocked" || status.RunningRevision != "" ||
+		status.LastFailedRevision != candidate || !strings.Contains(status.BlockReason, "durable boundary") {
+		t.Fatalf("blocked recovery status = %#v, %v", status, err)
+	}
+}
+
 func TestReleasePointerAdvancesOnlyAfterDashboardProof(t *testing.T) {
 	root := t.TempDir()
 	old := "0123456789abcdef0123456789abcdef01234567"

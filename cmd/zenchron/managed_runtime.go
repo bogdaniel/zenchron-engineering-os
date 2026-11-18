@@ -114,19 +114,10 @@ func runManaged() error {
 		if !activationCandidate && !(runtime.status.State == "activating" && runtime.status.LatestRevision == commit) {
 			return err
 		}
-		if stopErr := runtime.stopChildren(); stopErr != nil {
-			return fmt.Errorf("candidate startup failed (%v) and candidate services did not stop cleanly: %w", err, stopErr)
-		}
 		return runtime.restorePreviousRelease(err)
 	}
 	if runtime.status.State == "activating" && runtime.status.LatestRevision == commit {
 		if err := runtime.activateRelease(commit); err != nil {
-			if !activationCanRollback(home, runtime.status.RunningRevision, commit) {
-				return fmt.Errorf("release activation crossed its durable boundary; recovery is required: %w", err)
-			}
-			if stopErr := runtime.stopChildren(); stopErr != nil {
-				return fmt.Errorf("candidate health failed (%v) and candidate services did not stop cleanly: %w", err, stopErr)
-			}
 			return runtime.restorePreviousRelease(err)
 		}
 	}
@@ -336,6 +327,12 @@ func releaseTransitionCompatibility(current, candidate updater.Manifest) error {
 
 func (runtime *managedRuntime) restorePreviousRelease(startErr error) error {
 	previous := runtime.status.RunningRevision
+	if err := runtime.stopChildren(); err != nil {
+		return fmt.Errorf("candidate recovery failed (%v) and candidate services did not stop cleanly: %w", startErr, err)
+	}
+	if !activationCanRollback(runtime.home, previous, runtime.status.LatestRevision) {
+		return runtime.blockActivationRecovery(startErr)
+	}
 	if err := updater.SetActiveRelease(runtime.home, previous); err != nil {
 		return fmt.Errorf("candidate startup failed (%v) and rollback pointer failed: %w", startErr, err)
 	}
@@ -355,6 +352,21 @@ func (runtime *managedRuntime) restorePreviousRelease(startErr error) error {
 		return fmt.Errorf("candidate failed and the previous supervisor could not restart: %w", err)
 	}
 	return nil
+}
+
+func (runtime *managedRuntime) blockActivationRecovery(startErr error) error {
+	message := "Candidate release failed after the active release pointer crossed its durable boundary; automatic rollback is blocked"
+	runtime.status.State = "blocked"
+	runtime.status.Progress = ""
+	runtime.status.RunningRevision = ""
+	runtime.status.BlockReason = boundedUpdateReason(message)
+	runtime.status.LastFailureReason = runtime.status.BlockReason
+	runtime.status.LastFailure = time.Now().UTC()
+	runtime.status.LastFailedRevision = runtime.status.LatestRevision
+	if err := runtime.writeStatus(); err != nil {
+		return fmt.Errorf("%s: %v; persist blocked recovery status: %w", message, startErr, err)
+	}
+	return fmt.Errorf("%s: %w", message, startErr)
 }
 
 func (runtime *managedRuntime) activateRelease(commit string) error {
