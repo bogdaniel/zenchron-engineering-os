@@ -50,12 +50,14 @@ func TestWorkUnitContextIncludesOnlyItsLinkedProduct(t *testing.T) {
 			harness.handOff(command, commit(1), "api is ready")
 			products.mu.Lock()
 			item := products.items[test.productID]
+			item.Name = "Updated product name."
 			item.Description = "Updated after approval."
 			products.items[test.productID] = item
 			products.mu.Unlock()
 			harness.restart()
 			retry := harness.claimUnit("ui")
-			if !strings.Contains(retry.Prompt, test.want) || strings.Contains(retry.Prompt, "Updated after approval.") {
+			if !strings.Contains(retry.Prompt, test.want) || strings.Contains(retry.Prompt, "Updated product name.") ||
+				strings.Contains(retry.Prompt, "Updated after approval.") {
 				t.Fatalf("restarted graph did not retain its product context snapshot: %q", retry.Prompt)
 			}
 		}
