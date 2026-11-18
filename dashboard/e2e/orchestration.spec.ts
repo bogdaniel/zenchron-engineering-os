@@ -493,7 +493,7 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(report).toContainText('E2E CSV specialist v1');
   await expect(report).toContainText('codex-cli');
   await expect(report).toContainText('Worker-reported verification: not_configured');
-  await expect(report).toContainText('Unknown evidence: publication authority, current pull request state');
+  await expect(report).toContainText('Unknown evidence: GitHub checks for the integrated candidate, publication authority, current pull request state');
   await expect(report.locator('.objective-delivery-run').filter({ hasText: /Tree/ }).first()).toBeVisible();
   await expect(report.locator('a[href$="#reviews"]').first()).toHaveAttribute('href', /^\/\?run=.+&mode=live#reviews$/);
   await expect(report).toContainText('CSV');
