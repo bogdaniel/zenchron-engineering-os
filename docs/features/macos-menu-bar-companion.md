@@ -79,6 +79,9 @@ nested bundles. Move it to a
 stable user-controlled location before enabling Launch at Login; registering a temporary build path would leave a
 broken login item after the bundle moves. Quit exits only the menu-bar process.
 
+GitHub CI's macOS job runs the Swift tests and packages the app. It does not exercise the menu UI, Login Items,
+Developer ID signing, notarization, or update/restart behavior.
+
 ## Limits
 
 This is a partial #387 implementation. Authenticated installations currently require a signed-in administrator for
