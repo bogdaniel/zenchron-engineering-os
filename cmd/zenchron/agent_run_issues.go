@@ -124,11 +124,24 @@ func humanReviewStage(item agentRun, headSHA string, reviews []gitHubReview) str
 		return ""
 	}
 	if latestImportedRequest.ID != 0 {
-		for _, review := range reviews {
-			if review.State == "APPROVED" && trustedGitHubAuthor(review.AuthorAssociation) && review.CommitID == headSHA &&
-				laterGitHubReview(review, latestImportedRequest) {
-				return "fresh_approval_received"
+		var latestOutstandingRequest gitHubReview
+		var latestCurrentApproval gitHubReview
+		for _, review := range latestPullRequestDecisions(reviews) {
+			if !trustedGitHubAuthor(review.AuthorAssociation) {
+				continue
 			}
+			if review.State == "CHANGES_REQUESTED" &&
+				(latestOutstandingRequest.ID == 0 || laterGitHubReview(review, latestOutstandingRequest)) {
+				latestOutstandingRequest = review
+			}
+			if review.State == "APPROVED" && review.CommitID == headSHA &&
+				(latestCurrentApproval.ID == 0 || laterGitHubReview(review, latestCurrentApproval)) {
+				latestCurrentApproval = review
+			}
+		}
+		if latestCurrentApproval.ID != 0 && laterGitHubReview(latestCurrentApproval, latestImportedRequest) &&
+			laterGitHubReview(latestCurrentApproval, latestOutstandingRequest) {
+			return "fresh_approval_received"
 		}
 	}
 
