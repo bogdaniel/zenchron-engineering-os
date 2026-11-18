@@ -81,6 +81,48 @@ func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
 	}
 }
 
+func TestProviderDetectionDoesNotBlockWorkerHeartbeat(t *testing.T) {
+	binDir := t.TempDir()
+	if err := os.WriteFile(binDir+"/fake-cli", []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+":"+os.Getenv("PATH"))
+	started := make(chan struct{})
+	release := make(chan struct{})
+	provider := &cliProvider{
+		binary: "fake-cli", versionArgs: []string{"--version"}, readyArgs: []string{"auth"},
+		isReady: func([]byte, error) bool { return true },
+		confinement: func(context.Context, string) error {
+			close(started)
+			<-release
+			return nil
+		},
+	}
+	done := detectProvidersAsync(context.Background(), map[string]*cliProvider{"fake": provider})
+	<-started
+	select {
+	case <-done:
+		t.Fatal("provider detection completed before the blocked probe was released")
+	default:
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	baseURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sendHeartbeat(context.Background(), server.Client(), baseURL,
+		"0123456789abcdef0123456789abcdef", workerapi.Heartbeat{ProtocolVersion: workerapi.ProtocolVersion,
+			ReleaseRevision: "main-test"}); err != nil {
+		t.Fatalf("heartbeat while provider detection is blocked: %v", err)
+	}
+	close(release)
+	<-done
+}
+
 func TestWorkerHTTPClientAddsBearerCredential(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer worker-secret-for-auth-tests-1234567890" {
