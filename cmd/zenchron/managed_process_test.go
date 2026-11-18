@@ -69,7 +69,7 @@ func TestManagedStartupWaitsHonorCancellationAndWorkerExit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	started := time.Now()
-	if err := waitManagedHealth(ctx, &http.Client{Timeout: time.Second}, api, "revision"); err == nil || time.Since(started) > time.Second {
+	if err := waitManagedHealth(ctx, &http.Client{Timeout: time.Second}, api, func() (string, error) { return "revision", nil }); err == nil || time.Since(started) > time.Second {
 		t.Fatalf("health wait ignored cancellation: %v", err)
 	}
 	if err := waitManagedWorker(ctx, &http.Client{}, api, worker, "revision", "token"); err == nil || time.Since(started) > time.Second {
@@ -147,7 +147,7 @@ func TestOpenVerifiedManagedDashboardOpensOnlyAfterBothHealthChecks(t *testing.T
 				return result, nil
 			})}
 			opened := false
-			err := openVerifiedManagedDashboard(ctx, client, "expected", func() error {
+			err := openVerifiedManagedDashboard(ctx, client, func() (string, error) { return "expected", nil }, func() error {
 				opened = true
 				return nil
 			})
@@ -158,6 +158,32 @@ func TestOpenVerifiedManagedDashboardOpensOnlyAfterBothHealthChecks(t *testing.T
 				t.Fatalf("readiness request count = %d, want %d", requests, len(test.responses))
 			}
 		})
+	}
+}
+
+func TestOpenVerifiedManagedDashboardTracksActivatedRelease(t *testing.T) {
+	checks := 0
+	client := &http.Client{Transport: managedTestTransport(func(request *http.Request) (*http.Response, error) {
+		contentType, body := "application/json", `{"status":"ok","revision":"release-b"}`
+		if request.URL.Path != "/healthz" {
+			contentType, body = "text/html", "dashboard"
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{contentType}},
+			Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+	})}
+	opened := false
+	err := openVerifiedManagedDashboard(context.Background(), client, func() (string, error) {
+		checks++
+		if checks == 1 {
+			return "release-a", nil
+		}
+		return "release-b", nil
+	}, func() error {
+		opened = true
+		return nil
+	})
+	if err != nil || !opened || checks != 2 {
+		t.Fatalf("dashboard open error=%v opened=%t active-release checks=%d", err, opened, checks)
 	}
 }
 

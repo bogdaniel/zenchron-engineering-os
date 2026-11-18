@@ -45,7 +45,7 @@ PLIST
 plutil -lint "$STAGED_APP/Contents/Info.plist"
 codesign --force --sign - --timestamp=none "$STAGED_APP"
 codesign --verify --deep --strict "$STAGED_APP"
-mv -n "$STAGED_APP" "$APP_PATH"
+mv -n "$STAGED_APP" "$OUTPUT_DIR/"
 if [[ -e "$STAGED_APP" ]]; then
   printf 'Refusing to replace existing app bundle: %s\n' "$APP_PATH" >&2
   exit 1

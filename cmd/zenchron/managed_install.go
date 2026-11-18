@@ -688,8 +688,7 @@ func startManaged() error {
 	if err != nil {
 		return err
 	}
-	expectedRevision, err := updater.ActiveRelease(home)
-	if err != nil {
+	if _, err := updater.ActiveRelease(home); err != nil {
 		return fmt.Errorf("managed installation has no active release: %w", err)
 	}
 	current, err := user.Current()
@@ -704,7 +703,7 @@ func startManaged() error {
 	ctx, cancel := context.WithTimeout(context.Background(), updateHealthTimeout)
 	defer cancel()
 	client := &http.Client{Timeout: time.Second}
-	return openVerifiedManagedDashboard(ctx, client, expectedRevision, func() error {
+	return openVerifiedManagedDashboard(ctx, client, func() (string, error) { return updater.ActiveRelease(home) }, func() error {
 		output, err := exec.Command("open", "http://127.0.0.1:8080/?mode=live").CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("managed runtime is ready, but could not open the dashboard: %w: %s", err,

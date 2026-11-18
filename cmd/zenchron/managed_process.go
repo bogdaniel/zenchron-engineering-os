@@ -47,7 +47,7 @@ func (child *managedChild) stop(timeout time.Duration) error {
 	}
 }
 
-func waitManagedHealth(ctx context.Context, client *http.Client, api *managedChild, expectedRevision string) error {
+func waitManagedHealth(ctx context.Context, client *http.Client, api *managedChild, activeRevision func() (string, error)) error {
 	deadline := time.Now().Add(updateHealthTimeout)
 	clientWithoutRedirects := *client
 	clientWithoutRedirects.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -56,6 +56,10 @@ func waitManagedHealth(ctx context.Context, client *http.Client, api *managedChi
 		apiDone = api.done
 	}
 	for time.Now().Before(deadline) {
+		expectedRevision, err := activeRevision()
+		if err != nil {
+			return fmt.Errorf("read active managed release: %w", err)
+		}
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/healthz", nil)
 		if err != nil {
 			return err
@@ -170,8 +174,8 @@ func waitManagedDashboard(ctx context.Context, client *http.Client) error {
 	return nil
 }
 
-func openVerifiedManagedDashboard(ctx context.Context, client *http.Client, revision string, open func() error) error {
-	if err := waitManagedHealth(ctx, client, nil, revision); err != nil {
+func openVerifiedManagedDashboard(ctx context.Context, client *http.Client, activeRevision func() (string, error), open func() error) error {
+	if err := waitManagedHealth(ctx, client, nil, activeRevision); err != nil {
 		return fmt.Errorf("managed control plane did not report the active release; dashboard was not opened: %w", err)
 	}
 	if err := waitManagedDashboard(ctx, client); err != nil {

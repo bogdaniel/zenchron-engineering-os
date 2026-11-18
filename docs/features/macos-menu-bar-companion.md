@@ -50,8 +50,9 @@ flowchart LR
 - **Open Dashboard** uses the canonical URL returned by the control plane, after validating its host and port.
 - When disconnected, the menu shows the disconnected condition and offers **Start Zenchron**, which invokes the
   existing `~/.local/bin/zenchron-engineering start` command. The CLI opens the dashboard only after `/healthz`
-  reports the active release revision and the root page returns HTML without redirecting. A stopped, unhealthy, or
-  unrelated service on port 8080 is not opened. Quit exits only the menu-bar process.
+  reports the current active release revision and the root page returns HTML without redirecting. The CLI refreshes
+  the active revision during readiness polling, so an update that activates while it is waiting is accepted. A stopped,
+  unhealthy, or unrelated service on port 8080 is not opened. Quit exits only the menu-bar process.
 - A process lock prevents another companion instance for the same user from adding a second icon.
 - **Launch at Login** is opt-in and uses `SMAppService.mainApp`. The menu reflects macOS registration state, directs approval-required cases to System Settings, and reports registration errors. It never starts or stops the engineering services.
 - Status refreshes continue while the menu is tracking and older network responses cannot overwrite a newer refresh.
@@ -72,7 +73,9 @@ swiftc macos/ZenchronMenuBar/Sources/ZenchronStatusCore/SystemStatus.swift \
 /tmp/zenchron-status-self-check
 ```
 
-The package script refuses to overwrite an existing app bundle and ad-hoc signs the generated `.app`. Move it to a
+The package script refuses to overwrite an existing app bundle and ad-hoc signs the generated `.app`. Concurrent
+packaging attempts can publish only one top-level bundle; a losing attempt reports the existing destination without
+nested bundles. Move it to a
 stable user-controlled location before enabling Launch at Login; registering a temporary build path would leave a
 broken login item after the bundle moves. Quit exits only the menu-bar process.
 
