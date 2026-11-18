@@ -236,13 +236,14 @@ func TestPullRequestPublicationRetriesWithoutDuplicates(t *testing.T) {
 		failed.PullRequestNumber != 0 || failed.PullRequestError == "" {
 		t.Fatalf("run after GitHub failure = %#v, HTTP %d", failed, status)
 	}
-	if _, status := harness.finish(run.ID, pushedResult); status != http.StatusConflict {
-		t.Fatalf("repeated worker result returned HTTP %d, want conflict", status)
+	response := harness.call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+run.ID, pushedResult)
+	if response.Code != http.StatusConflict || strings.TrimSpace(response.Body.String()) != "agent run result was already accepted" {
+		t.Fatalf("repeated worker result = HTTP %d, %q", response.Code, response.Body.String())
 	}
 	harness.mu.Lock()
 	harness.failPullCreate = false
 	harness.mu.Unlock()
-	response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", "")
+	response = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", "")
 	var published agentRun
 	if err := json.NewDecoder(response.Body).Decode(&published); err != nil || response.Code != http.StatusOK ||
 		published.Publication != publicationPublished || published.PullRequestNumber != 23 || published.PullRequestError != "" {
