@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
@@ -227,6 +228,7 @@ func TestStableEntrypointDoesNotFallBackWhenActiveReleaseIsMissing(t *testing.T)
 func TestDoctorRejectsAlteredCanonicalEntrypoint(t *testing.T) {
 	userHome := t.TempDir()
 	t.Setenv("HOME", userHome)
+	t.Setenv("ZENCHRON_UPDATE_REPOSITORY", "bogdaniel/zenchron-engineering-os")
 	managedHome := filepath.Join(userHome, ".config", "Zenchron")
 	t.Setenv("ZENCHRON_MANAGED_HOME", managedHome)
 	t.Setenv("PATH", filepath.Join(userHome, ".local", "bin")+string(os.PathListSeparator)+"/usr/bin:/bin")
@@ -249,7 +251,7 @@ func TestDoctorRejectsAlteredCanonicalEntrypoint(t *testing.T) {
 		t.Fatalf("doctor result = %#v, error %v; wanted the current managed launcher to be healthy", report, doctorErr)
 	}
 	activeBinary := filepath.Join(managedHome, "releases", revision, "bin", "zenchron")
-	if err := os.Chmod(activeBinary, 0o600); err != nil {
+	if err := os.Chmod(activeBinary, 0o601); err != nil {
 		t.Fatal(err)
 	}
 	output, doctorErr = captureDoctorOutput(t)
@@ -275,13 +277,52 @@ func TestDoctorRejectsAlteredCanonicalEntrypoint(t *testing.T) {
 	}
 }
 
+func TestReadManagedEntrypointRejectsNamedPipe(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zenchron-engineering")
+	if err := syscall.Mkfifo(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readManagedEntrypoint(path, []byte("expected")); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("readManagedEntrypoint() error = %v; want a non-regular-file error", err)
+	}
+}
+
+func TestManagedEntrypointIdentityDetectsPathReplacement(t *testing.T) {
+	directory := t.TempDir()
+	canonical := filepath.Join(directory, "canonical")
+	shadow := filepath.Join(directory, "shadow")
+	expected := []byte("managed launcher")
+	for _, path := range []string{canonical, shadow} {
+		if err := os.WriteFile(path, expected, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	opened, err := readManagedEntrypoint(canonical, expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(canonical); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(shadow, canonical); err != nil {
+		t.Fatal(err)
+	}
+	if sameFileInfo(opened, canonical) {
+		t.Fatal("replaced canonical launcher still matches the opened file identity")
+	}
+}
+
 func writeManagedReleaseFixture(t *testing.T, home, revision string) {
 	t.Helper()
 	tree := "abcdef0123456789abcdef0123456789abcdef01"
 	releaseDir := filepath.Join(home, "releases", revision)
 	artifacts := map[string]string{"bin/zenchron": "control-plane", "bin/zenchron-worker": "worker",
 		"dashboard/index.html": "dashboard"}
-	manifest := updater.Manifest{Repository: "bogdaniel/zenchron-engineering-os", Commit: revision, Tree: tree,
+	repository := strings.TrimSpace(os.Getenv("ZENCHRON_UPDATE_REPOSITORY"))
+	if repository == "" {
+		repository = "bogdaniel/zenchron-engineering-os"
+	}
+	manifest := updater.Manifest{Repository: repository, Commit: revision, Tree: tree,
 		StateSchemaVersion: updater.StateSchemaVersion, ControlPlaneProtocolVersion: workerapi.ProtocolVersion,
 		WorkerProtocolVersion: workerapi.ProtocolVersion, Artifacts: make(map[string]string, len(artifacts))}
 	for path, content := range artifacts {

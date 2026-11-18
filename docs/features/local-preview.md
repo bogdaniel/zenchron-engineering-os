@@ -44,6 +44,7 @@ running revision.
 ```mermaid
 sequenceDiagram
     participant I as Local installer
+    participant C as Doctor command
     participant GH as Trusted GitHub main
     participant S as Managed supervisor
     participant R as Versioned release store
@@ -53,7 +54,9 @@ sequenceDiagram
     participant U as system-update.json
     participant A as agent-runs.json and in-memory admission
     I->>I: Validate canonical entrypoint and PATH without changing them
-    I->>I: Doctor verifies launcher contents against the managed release path
+    C->>C: Resolve PATH and inspect shadowing commands
+    C->>R: Verify the active release
+    C->>C: Compare canonical launcher bytes with the managed template
     I->>R: Build and verify the initial trusted release
     I->>I: Retire recognized legacy shadows and install stable launcher
     I->>S: Install one stable command and one managed LaunchAgent
