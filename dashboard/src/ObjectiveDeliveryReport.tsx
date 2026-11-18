@@ -35,6 +35,8 @@ const reportSchema = z.object({
     runs_with_usage: z.number(), runs_with_cost: z.number(), unknown: z.array(z.string()) }),
   unknown_evidence: z.array(z.string()).default([]),
   pull_request_url: z.string().optional(),
+  pull_request_external_state: z.object({ number: z.number(), state: z.enum(['open', 'closed']), draft: z.boolean(),
+    merged: z.boolean(), head_sha: z.string(), candidate_matches_head: z.boolean().optional(), observed_at: z.string() }).optional(),
 });
 type Report = z.infer<typeof reportSchema>;
 const unknownEvidenceLabels: Record<string, string> = {
@@ -118,6 +120,13 @@ function ReportDetails({ report }: { report: Report }) {
       ? <a href={report.pull_request_url} target="_blank" rel="noreferrer">{report.pull_request_url}</a>
       : <>{report.units.find((unit) => unit.kind === 'integrate')?.reason || 'No pull-request URL was recorded.'}
         {' WorkGraph completion does not establish publication.'}</>}</p>
+    {report.pull_request_external_state && <p aria-label="Current GitHub pull request state">
+      GitHub reports pull request #{report.pull_request_external_state.number} {report.pull_request_external_state.state}
+      {report.pull_request_external_state.merged ? ' and merged' : ''}{report.pull_request_external_state.draft ? ' as a draft' : ''} · head{' '}
+      <code>{report.pull_request_external_state.head_sha}</code>
+      {report.pull_request_external_state.candidate_matches_head === undefined ? ' · candidate match unknown'
+        : report.pull_request_external_state.candidate_matches_head ? ' · matches the integrated candidate' : ' · differs from the integrated candidate'}
+    </p>}
     <h5>Handoffs and decisions</h5>
     {report.handoffs.map((handoff, index) => <p key={`${handoff.run_id}-${handoff.attempt}-${index}`}>
       <b>{handoff.from}</b>{handoff.commit && <> · <code>{handoff.commit}</code></>} · {handoff.summary}

@@ -401,7 +401,9 @@ func (store *workGraphStore) reportGraph(w http.ResponseWriter, r *http.Request)
 		plan = &approved
 	}
 	store.mu.Unlock()
-	writeJSON(w, http.StatusOK, buildDeliveryReport(graph, store.runs.unitRuns(graph.ID), plan))
+	report := buildDeliveryReport(graph, store.runs.unitRuns(graph.ID), plan)
+	report.observePullRequest(r.Context(), graph.Repository, store.runs.registry.github)
+	writeJSON(w, http.StatusOK, report)
 }
 
 func (store *workGraphStore) mayRead(access requestAccess, graph *workGraph) bool {

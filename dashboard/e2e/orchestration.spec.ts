@@ -124,6 +124,33 @@ test('plan proposal refuses unknown workflow and unlinked checkout address selec
   await expect(page.getByRole('combobox', { name: 'Repository checkout' })).toBeVisible();
 });
 
+for (const viewport of viewports) {
+  test(`delivery report distinguishes observed GitHub PR state from a changed candidate (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await mockOrchestration(page, { graphs: [graph], plans: [plan] });
+    await page.route(`**/api/v1/work-graphs/${graphID}/report`, (route) => route.fulfill(json({
+      graph_id: graphID, objective_id: objectiveID, objective_title: objective.title, plan_revision: 1,
+      status: 'completed', approved_plan: { revision: 1, status: 'approved', hash: 'h', summary: 'One producer, one review.' },
+      units: [], handoffs: [], decisions: [], outstanding_steps: [],
+      measurements: { unit_count: 0, run_count: 0, attempt_count: 0, failed_attempts: 0, review_rounds: 0, findings: 0,
+        remediation_passes: 0, decisions_requested: 0, decisions_resolved: 0, human_actions: 0,
+        human_actions_complete: false, max_concurrency: 0, runs_with_usage: 0, runs_with_cost: 0, unknown: [] },
+      unknown_evidence: ['publication_authority'], pull_request_url: 'https://github.com/acme/platform/pull/23',
+      pull_request_external_state: { number: 23, state: 'open', draft: true, merged: false,
+        head_sha: 'd'.repeat(40), candidate_matches_head: false, observed_at: now },
+    })));
+    await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
+    await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+    const report = page.getByRole('region', { name: 'Objective delivery report' });
+    await report.getByRole('button', { name: 'View delivery report' }).click();
+    await expect(report.getByLabel('Current GitHub pull request state')).toContainText('pull request #23 open as a draft');
+    await expect(report.getByLabel('Current GitHub pull request state')).toContainText('differs from the integrated candidate');
+    await expect(report).toContainText('Unknown evidence: publication authority');
+    expect(await noHorizontalScroll(page)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`delivery-report-${viewport.name}.png`), fullPage: true });
+  });
+}
+
 const noHorizontalScroll = (page: Page) => page.evaluate(() =>
   document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 

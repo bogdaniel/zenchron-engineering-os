@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
+	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -28,6 +31,17 @@ type deliveryReport struct {
 	Measurements    deliveryMeasurements `json:"measurements"`
 	UnknownEvidence []string             `json:"unknown_evidence"`
 	PullRequestURL  string               `json:"pull_request_url,omitempty"`
+	PullRequest     *reportPullRequest   `json:"pull_request_external_state,omitempty"`
+}
+
+type reportPullRequest struct {
+	Number               int       `json:"number"`
+	State                string    `json:"state"`
+	Draft                bool      `json:"draft"`
+	Merged               bool      `json:"merged"`
+	HeadSHA              string    `json:"head_sha"`
+	CandidateMatchesHead *bool     `json:"candidate_matches_head,omitempty"`
+	ObservedAt           time.Time `json:"observed_at"`
 }
 
 type reportPlan struct {
@@ -37,6 +51,59 @@ type reportPlan struct {
 	Summary    string     `json:"summary"`
 	ApprovedBy string     `json:"approved_by,omitempty"`
 	ApprovedAt *time.Time `json:"approved_at,omitempty"`
+}
+
+// observePullRequest reads current state from GitHub without changing the durable report source.
+// When GitHub is unavailable or the recorded link does not match this graph's repository, the
+// existing unknown-evidence marker remains authoritative.
+func (report *deliveryReport) observePullRequest(ctx context.Context, repository string, client gitHubClient) {
+	if report.PullRequestURL == "" {
+		return
+	}
+	owner, repositoryName, ok := githubRepositoryParts(repository)
+	if !ok {
+		return
+	}
+	number, ok := reportPullRequestNumber(report.PullRequestURL, owner, repositoryName)
+	if !ok {
+		return
+	}
+	pull, err := client.pullRequest(ctx, owner, repositoryName, number)
+	if err != nil || pull.Number != number || (pull.State != "open" && pull.State != "closed") || !fullGitSHA(pull.Head.SHA) {
+		return
+	}
+	responseNumber, matchesRepository := reportPullRequestNumber(pull.HTMLURL, owner, repositoryName)
+	if !matchesRepository || responseNumber != number {
+		return
+	}
+	state := &reportPullRequest{Number: number, State: pull.State, Draft: pull.Draft,
+		Merged: pull.MergedAt != nil, HeadSHA: pull.Head.SHA, ObservedAt: time.Now().UTC()}
+	for _, unit := range report.Units {
+		if unit.Kind != unitIntegrate || unit.Candidate == "" {
+			continue
+		}
+		matches := strings.EqualFold(pull.Head.SHA, unit.Candidate)
+		state.CandidateMatchesHead = &matches
+		break
+	}
+	report.PullRequest = state
+	report.UnknownEvidence = slices.DeleteFunc(report.UnknownEvidence, func(evidence string) bool {
+		return evidence == "pull_request_external_state"
+	})
+}
+
+func reportPullRequestNumber(value, owner, repository string) (int, bool) {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme != "https" || !strings.EqualFold(parsed.Host, "github.com") ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return 0, false
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) != 4 || !strings.EqualFold(parts[0], owner) || !strings.EqualFold(parts[1], repository) || parts[2] != "pull" {
+		return 0, false
+	}
+	number, err := strconv.Atoi(parts[3])
+	return number, err == nil && number > 0
 }
 
 type reportUnit struct {

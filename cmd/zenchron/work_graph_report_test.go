@@ -62,6 +62,7 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	harness.verdict(harness.claimUnit("review-all"), commit(4), `{"review":{"verdict":"accept"}}`)
 	harness.report(harness.claimUnit("integrate"), workerapi.AgentRunResult{CommitSHA: commit(4), CommitTreeSHA: commit(5), BaseCommit: commit(9),
 		Output: "Merged.", Verification: workerapi.VerificationPassed, BranchPushed: true, Result: string(merged)})
+	harness.pullHead = commit(4)
 
 	before := harness.graph()
 	report, body := harness.deliveryReport(started.ID)
@@ -106,8 +107,13 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 		len(review.RunIDs) != 2 || review.Attempts != 2 || !slices.Equal(review.Providers, []string{workerapi.ProviderCodex}) {
 		t.Fatalf("ui unit = %#v, review unit = %#v", uiUnit, review)
 	}
-	if !slices.Equal(report.UnknownEvidence, []string{"publication_authority", "pull_request_external_state"}) {
+	if !slices.Equal(report.UnknownEvidence, []string{"publication_authority"}) {
 		t.Fatalf("unrecorded evidence = %v", report.UnknownEvidence)
+	}
+	if report.PullRequest == nil || report.PullRequest.State != "open" || !report.PullRequest.Draft || report.PullRequest.Merged ||
+		report.PullRequest.HeadSHA != commit(4) || report.PullRequest.CandidateMatchesHead == nil || !*report.PullRequest.CandidateMatchesHead ||
+		report.PullRequest.ObservedAt.IsZero() || slices.Contains(report.UnknownEvidence, "pull_request_external_state") {
+		t.Fatalf("external pull request state = %#v; unknown evidence = %v", report.PullRequest, report.UnknownEvidence)
 	}
 	if integration := reportedUnit(t, report, "integrate"); len(integration.Executions) != 1 ||
 		integration.Executions[0].CandidateTree != commit(5) {
@@ -129,6 +135,16 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	stale, _ := harness.deliveryReport(started.ID)
 	if !slices.Contains(stale.UnknownEvidence, "candidate_tree_sha") {
 		t.Fatalf("tree for another candidate was accepted: %v", stale.UnknownEvidence)
+	}
+	harness.pullHead = commit(7)
+	changed, _ := harness.deliveryReport(started.ID)
+	if changed.PullRequest == nil || changed.PullRequest.CandidateMatchesHead == nil || *changed.PullRequest.CandidateMatchesHead {
+		t.Fatalf("changed external PR head was not distinguished from the candidate: %#v", changed.PullRequest)
+	}
+	harness.failPullStatus = true
+	unavailable, _ := harness.deliveryReport(started.ID)
+	if unavailable.PullRequest != nil || !slices.Contains(unavailable.UnknownEvidence, "pull_request_external_state") {
+		t.Fatalf("unavailable GitHub state was presented as observed: %#v, unknown=%v", unavailable.PullRequest, unavailable.UnknownEvidence)
 	}
 }
 
