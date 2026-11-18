@@ -114,7 +114,8 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 				}
 			}
 			environment.History = append(environment.History, reference)
-			if !hasNewest || reference.CreatedAt.After(newest.CreatedAt) {
+			if !hasNewest || reference.CreatedAt.After(newest.CreatedAt) ||
+				(reference.CreatedAt.Equal(newest.CreatedAt) && reference.ID < newest.ID) {
 				newest, hasNewest = reference, true
 			}
 		}
