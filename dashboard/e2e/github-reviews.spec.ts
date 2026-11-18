@@ -45,8 +45,8 @@ test('Live Reviews merges the exact inspected pull request head through the cont
     }]),
   }));
   await page.route(`**/api/v1/projects/${projectID}/issues`, (route) => route.fulfill({ status: 200, body: '[]' }));
-  await page.route(`**/api/v1/projects/${projectID}/pull-requests/42/diff`, (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ diff: '' }),
+  await page.route(`**/api/v1/projects/${projectID}/pull-requests/42/diff?**`, (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ head_sha: headSHA, diff: '' }),
   }));
   await page.route(`**/api/v1/projects/${projectID}/pull-requests/42/merge`, async (route) => {
     mergeRequest = route.request().postDataJSON() as { head_sha: string };
@@ -68,6 +68,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
     body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }) }));
   const projectID = 'fedcbafedcbafedcbafedcbafedcbafe';
   const runID = 'abcdefabcdefabcdefabcdefabcdefab';
+  const headSHA = '0123456789abcdef0123456789abcdef01234567';
   const submittedReviews: { body: string; event: string }[] = [];
   const issueComments: { body: string; number: number }[] = [];
   const issueStates: string[] = [];
@@ -87,12 +88,12 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
       {
         number: 42, title: 'Improve agent review flow across multiple projects and the local control plane', state: 'open', html_url: 'https://github.com/acme/platform/pull/42',
         body: '<details><summary>Release notes</summary><p>Version <strong>0.12.1</strong> <a href="https://example.com/releases">release notes</a><img src="https://example.com/pixel" onerror="alert(1)"></p></details>', draft: false, updated_at: new Date().toISOString(),
-        user: { login: 'maya' }, head: { ref: `zenchron/agent-run/${runID}` }, base: { ref: 'main' },
+        user: { login: 'maya' }, head: { ref: `zenchron/agent-run/${runID}`, sha: headSHA }, base: { ref: 'main' },
       },
       {
         number: 43, title: 'Add review checklist coverage', state: 'open', html_url: 'https://github.com/acme/platform/pull/43',
         body: '', draft: true, updated_at: new Date().toISOString(),
-        user: { login: 'alex' }, head: { ref: 'feature/review-checklist' }, base: { ref: 'main' },
+        user: { login: 'alex' }, head: { ref: 'feature/review-checklist', sha: headSHA }, base: { ref: 'main' },
       },
     ]),
   }));
@@ -115,12 +116,12 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
     issueStates.push(issueState);
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'updated', state: issueState }) });
   });
-  await page.route(`**/api/v1/projects/${projectID}/pull-requests/42/diff`, (route) => route.fulfill({
+  await page.route(`**/api/v1/projects/${projectID}/pull-requests/42/diff?**`, (route) => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ diff: 'diff --git a/retry.go b/retry.go\n--- a/retry.go\n+++ b/retry.go\n@@ -1 +1 @@\n-old\n+return retry(ctx)\n' }),
+    body: JSON.stringify({ head_sha: headSHA, diff: 'diff --git a/retry.go b/retry.go\n--- a/retry.go\n+++ b/retry.go\n@@ -1 +1 @@\n-old\n+return retry(ctx)\n' }),
   }));
-  await page.route(`**/api/v1/projects/${projectID}/pull-requests/43/diff`, (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ diff: 'diff --git a/README.md b/README.md' }),
+  await page.route(`**/api/v1/projects/${projectID}/pull-requests/43/diff?**`, (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ head_sha: headSHA, diff: 'diff --git a/README.md b/README.md' }),
   }));
   await page.route(`**/api/v1/projects/${projectID}/pull-requests/*/reviews`, async (route) => {
     const review = route.request().postDataJSON() as { body: string; event: string };
@@ -185,9 +186,9 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
     'Evidence CompletenessUnavailable']);
   await expect(page.getByRole('progressbar', { name: 'Evidence completeness' })).toHaveCount(0);
   await expect(page.locator('.reviews-checks-heading')).toHaveText('Required checksUnavailable');
-  await expect(page.locator('.reviews-governance-row b')).toHaveText(['Unavailable', 'main', 'Unavailable']);
+  await expect(page.locator('.reviews-governance-row b')).toHaveText(['Unavailable', 'main', headSHA.slice(0, 12), 'Unavailable']);
   await expect(page.getByRole('switch', { name: 'Auto-merge when ready' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Merge to protected branch' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Merge to protected branch' })).toBeEnabled();
   expect(await page.locator('.reviews-summary-actions').evaluate((actions) => [...actions.children].map((child) =>
     child.classList.contains('reviews-summary-review-actions') ? 'review'
       : child.classList.contains('reviews-merge-button') ? 'merge' : 'export'))).toEqual(['review', 'merge', 'export']);
@@ -356,7 +357,8 @@ test('a copied pull request link opens that pull request in Live', async ({ page
   const otherProjectID = '0123456789abcdef0123456789abcdef';
   const pullRequest = (number: number, title: string) => ({
     number, title, state: 'open', html_url: `https://github.com/acme/platform/pull/${number}`, body: '', draft: false,
-    updated_at: new Date().toISOString(), user: { login: 'maya' }, head: { ref: `feature/${number}` }, base: { ref: 'main' },
+    updated_at: new Date().toISOString(), user: { login: 'maya' },
+    head: { ref: `feature/${number}`, sha: '0123456789abcdef0123456789abcdef01234567' }, base: { ref: 'main' },
   });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify({ authenticated: true, local: true, login: 'Local workspace' }) }));
@@ -376,9 +378,9 @@ test('a copied pull request link opens that pull request in Live', async ({ page
     status: 200, contentType: 'application/json', body: JSON.stringify([pullRequest(42, 'First change'), pullRequest(43, 'Second change')]),
   }));
   await page.route(`**/api/v1/projects/${projectID}/issues`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-  await page.route('**/api/v1/projects/*/pull-requests/*/diff', (route) => route.fulfill({
+  await page.route('**/api/v1/projects/*/pull-requests/*/diff?**', (route) => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ diff: 'diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/b.go b/b.go\n--- a/b.go\n+++ b/b.go\n@@ -1 +1,2 @@\n same\n+more\n' }),
+    body: JSON.stringify({ head_sha: '0123456789abcdef0123456789abcdef01234567', diff: 'diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/b.go b/b.go\n--- a/b.go\n+++ b/b.go\n@@ -1 +1,2 @@\n same\n+more\n' }),
   }));
   // The clipboard needs a secure context, which a local address is and the plain-HTTP test host is not.
   const local = new URL(baseURL!);

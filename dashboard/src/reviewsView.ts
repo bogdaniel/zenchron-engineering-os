@@ -14,7 +14,7 @@ const pullRequestSchema = z.array(githubItem.extend({
 }));
 const issueSchema = z.array(githubItem.extend({ labels: z.array(z.object({ name: z.string() })) }));
 const diffSchema = z.object({ run_id: z.string(), diff: z.string(), truncated: z.boolean() });
-const pullRequestDiffSchema = z.object({ diff: z.string().max(1 << 20) });
+const pullRequestDiffSchema = z.object({ head_sha: z.string(), diff: z.string().max(1 << 20) });
 const reviewResultSchema = z.object({
   agent_run_linked: z.boolean().optional(), agent_run_queued: z.boolean().optional(),
   feedback_sync_error: z.string().optional(),
@@ -125,7 +125,7 @@ export type ReviewsSource = {
   /** Approve and merge return the confirmation to show. */
   approve?: (pullRequest: GitHubPullRequest) => string;
   requestChanges?: (pullRequest: GitHubPullRequest) => void;
-  merge?: (pullRequest: GitHubPullRequest) => string | Promise<string>;
+  merge?: (pullRequest: GitHubPullRequest, inspectedHeadSHA: string) => string | Promise<string>;
   exportEvidence?: (pullRequest: GitHubPullRequest) => void;
   bookmarks?: { has: (number: number) => boolean; toggle: (number: number) => void };
   autoMerge?: { checked: boolean; set: (checked: boolean) => void };
@@ -137,19 +137,23 @@ export type ReviewsSource = {
   };
 };
 
-export type PullRequestDiff = { patch?: string; loading: boolean; error: Error | null };
+export type PullRequestDiff = { patch?: string; headSHA?: string; loading: boolean; error: Error | null };
 
-export function useLivePullRequestDiff(enabled: boolean, projectID: string | undefined, number: number | undefined): PullRequestDiff {
+export function useLivePullRequestDiff(
+  enabled: boolean, projectID: string | undefined, number: number | undefined, headSHA: string | undefined,
+): PullRequestDiff {
   const diff = useQuery({
-    queryKey: ['github-pull-request-diff', projectID, number],
+    queryKey: ['github-pull-request-diff', projectID, number, headSHA],
     queryFn: async () => {
-      const response = await fetch(`/api/v1/projects/${projectID}/pull-requests/${number}/diff`);
+      const response = await fetch(`/api/v1/projects/${projectID}/pull-requests/${number}/diff?head_sha=${headSHA}`);
       if (!response.ok) throw new Error((await response.text()).trim() || `Could not load pull request diff (${response.status})`);
       return pullRequestDiffSchema.parse(await response.json());
     },
-    enabled: enabled && Boolean(projectID) && number !== undefined, staleTime: 60_000,
+    enabled: enabled && Boolean(projectID) && number !== undefined && Boolean(headSHA), staleTime: 60_000,
   });
-  return { patch: diff.data?.diff, loading: diff.isLoading, error: diff.error };
+  const inspected = diff.data?.head_sha === headSHA;
+  return { patch: inspected ? diff.data?.diff : undefined, headSHA: inspected ? headSHA : undefined,
+    loading: diff.isLoading, error: diff.error };
 }
 
 const liveNotes: ReviewsSource['notes'] = {
@@ -257,10 +261,12 @@ export function useLiveReviews(
         return `Issue ${state} on GitHub.`;
       },
     },
-    merge: project ? (pullRequest) => {
-      if (!pullRequest.head.sha) throw new Error('GitHub did not provide the pull request head SHA; refresh before merging.');
+    merge: project ? (pullRequest, inspectedHeadSHA) => {
+      if (!pullRequest.head.sha || inspectedHeadSHA !== pullRequest.head.sha) {
+        throw new Error('The pull request head changed; inspect the current revision before merging.');
+      }
       return sendJSON(`/api/v1/projects/${project.id}/pull-requests/${pullRequest.number}/merge`, 'POST',
-        { head_sha: pullRequest.head.sha }, 'GitHub pull request merge failed')
+        { head_sha: inspectedHeadSHA }, 'GitHub pull request merge failed')
         .then(async (response) => {
           const result = mergeResultSchema.parse(await response.json());
           await queryClient.invalidateQueries();

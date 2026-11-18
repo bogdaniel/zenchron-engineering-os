@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -17,13 +18,14 @@ type gitHubMergeResult struct {
 	Message string `json:"message"`
 }
 
-func (client gitHubClient) mergePullRequest(ctx context.Context, owner, repository string, number int, expectedHead string) (gitHubMergeResult, error) {
+func (client gitHubClient) mergePullRequest(ctx context.Context, owner, repository string, number int, expectedHead, method string) (gitHubMergeResult, error) {
 	if !client.authConfigured() {
 		return gitHubMergeResult{}, errors.New("GitHub authentication is not configured")
 	}
 	payload, err := json.Marshal(struct {
-		SHA string `json:"sha"`
-	}{expectedHead})
+		SHA         string `json:"sha"`
+		MergeMethod string `json:"merge_method"`
+	}{expectedHead, method})
 	if err != nil {
 		return gitHubMergeResult{}, err
 	}
@@ -115,11 +117,24 @@ func (registry *workerRegistry) mergeGitHubPullRequest(w http.ResponseWriter, r 
 		http.Error(w, "review from @"+reviewer+" still requests changes; obtain a fresh approval on GitHub", http.StatusConflict)
 		return
 	}
+	if !hasCurrentApproval(reviews, input.HeadSHA) {
+		http.Error(w, "a trusted human approval on the current pull request head is required", http.StatusConflict)
+		return
+	}
+	if !hasSuccessfulCheck(checks) {
+		http.Error(w, "at least one successful CI check on the current pull request head is required", http.StatusConflict)
+		return
+	}
 	if check := unsettledCheck(checks); check != "" {
 		http.Error(w, "check "+check+" has not completed successfully", http.StatusConflict)
 		return
 	}
-	result, err := registry.github.mergePullRequest(r.Context(), owner, repository, number, input.HeadSHA)
+	method, err := registry.github.pullRequestMergeMethod(r.Context(), owner, repository)
+	if err != nil {
+		http.Error(w, "GitHub repository merge settings are unavailable; nothing was merged", http.StatusBadGateway)
+		return
+	}
+	result, err := registry.github.mergePullRequest(r.Context(), owner, repository, number, input.HeadSHA, method)
 	if err != nil {
 		http.Error(w, githubMergeFailure(err), mergeFailureStatus(err))
 		return
@@ -148,28 +163,74 @@ func mergeabilityMessage(state string) string {
 }
 
 func outstandingChangeRequest(reviews []gitHubReview) string {
-	type currentReview struct {
-		review gitHubReview
-		seen   bool
-	}
-	latest := make(map[string]currentReview)
-	for _, review := range reviews {
-		login := strings.ToLower(strings.TrimSpace(review.User.Login))
-		if login == "" {
-			continue
-		}
-		previous := latest[login]
-		if !previous.seen || review.SubmittedAt.After(previous.review.SubmittedAt) ||
-			(review.SubmittedAt.Equal(previous.review.SubmittedAt) && review.State == "CHANGES_REQUESTED") {
-			latest[login] = currentReview{review: review, seen: true}
-		}
-	}
-	for login, current := range latest {
-		if current.review.State == "CHANGES_REQUESTED" {
-			return login
+	for _, review := range latestPullRequestDecisions(reviews) {
+		if review.State == "CHANGES_REQUESTED" {
+			return strings.ToLower(strings.TrimSpace(review.User.Login))
 		}
 	}
 	return ""
+}
+
+func latestPullRequestDecisions(reviews []gitHubReview) []gitHubReview {
+	latest := make(map[string]gitHubReview)
+	for _, review := range reviews {
+		login := strings.ToLower(strings.TrimSpace(review.User.Login))
+		if login == "" || (review.State != "CHANGES_REQUESTED" && review.State != "APPROVED" && review.State != "DISMISSED") {
+			continue
+		}
+		previous, exists := latest[login]
+		if !exists || review.SubmittedAt.After(previous.SubmittedAt) ||
+			(review.SubmittedAt.Equal(previous.SubmittedAt) && review.ID > previous.ID) {
+			latest[login] = review
+		}
+	}
+	decisions := make([]gitHubReview, 0, len(latest))
+	for _, review := range latest {
+		decisions = append(decisions, review)
+	}
+	slices.SortFunc(decisions, func(a, b gitHubReview) int {
+		return strings.Compare(strings.ToLower(a.User.Login), strings.ToLower(b.User.Login))
+	})
+	return decisions
+}
+
+func hasCurrentApproval(reviews []gitHubReview, head string) bool {
+	for _, review := range latestPullRequestDecisions(reviews) {
+		if review.State == "APPROVED" && review.CommitID == head && trustedGitHubAuthor(review.AuthorAssociation) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasSuccessfulCheck(checks []gitHubCheckRun) bool {
+	for _, check := range checks {
+		if check.Status == "completed" && check.Conclusion == "success" {
+			return true
+		}
+	}
+	return false
+}
+
+func (client gitHubClient) pullRequestMergeMethod(ctx context.Context, owner, repository string) (string, error) {
+	var settings struct {
+		AllowSquash bool `json:"allow_squash_merge"`
+		AllowMerge  bool `json:"allow_merge_commit"`
+		AllowRebase bool `json:"allow_rebase_merge"`
+	}
+	if err := client.get(ctx, "/repos/"+owner+"/"+repository, nil, &settings); err != nil {
+		return "", err
+	}
+	if settings.AllowSquash {
+		return "squash", nil
+	}
+	if settings.AllowMerge {
+		return "merge", nil
+	}
+	if settings.AllowRebase {
+		return "rebase", nil
+	}
+	return "", errors.New("repository has no enabled merge method")
 }
 
 func unsettledCheck(checks []gitHubCheckRun) string {

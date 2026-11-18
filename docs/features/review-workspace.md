@@ -27,18 +27,18 @@ flowchart LR
     Detail --> Evidence["RunEvidence · runEvidence.tsx"]
     Live -->|"GET /api/v1/projects/{id}/pull-requests"| API[(Go control plane)]
     Live -->|"GET /api/v1/projects/{id}/issues"| API
-    Page -->|"GET /api/v1/projects/{id}/pull-requests/{number}/diff"| API
+    Page -->|"GET /api/v1/projects/{id}/pull-requests/{number}/diff · inspected head SHA"| API
     Page -->|"GET /api/v1/agent-runs/{id}/diff"| API
     Shell["main.tsx"] -->|"GET /api/v1/projects, /api/v1/agent-runs"| API
     Shell -->|projects, runs| Page
     Live -->|"POST /api/v1/projects/{id}/pull-requests/{number}/reviews"| API
-    Live -->|"POST /api/v1/projects/{id}/pull-requests/{number}/merge · exact head SHA"| API
+    Live -->|"POST /api/v1/projects/{id}/pull-requests/{number}/merge · inspected head SHA"| API
     Live -->|"POST /api/v1/projects/{id}/issues/{number}/comments"| API
     Live -->|"PATCH /api/v1/projects/{id}/issues/{number}"| API
     Local -->|"POST /api/v1/agent-runs/{id}/comments, /request-changes, /cancel"| API
     Evidence -->|"GET /api/v1/agent-runs/{id}/events, /pull-request"| API
     Evidence -->|"POST /api/v1/agent-runs/{id}/sync-reviews, /publish"| API
-    API -->|open items, diff, current checks and reviews, review / issue / protected merge writes| GitHub[GitHub REST API]
+    API -->|open items, head-bound diff, paged checks and reviews, review / issue / protected merge writes| GitHub[GitHub REST API]
     API -->|request changes: requeue the same run and branch| Worker[Assigned local worker]
     GitHub -->|Markdown / HTML body| Render[marked, then DOMPurify; images removed]
     Render --> Summary
@@ -97,9 +97,13 @@ Live only:
   are available on terminal runs with diffs; the latter requires an online worker with the profile's coding CLI ready, `code.write`
   permission and a remaining attempt. "Cancel run" is enabled while the run is queued or running. The Evidence tab
   shows `RunEvidence` ([Issue to pull request](issue-to-pull-request.md)).
-- **Governed merge.** Merge to protected branch sends the exact inspected head SHA. The control plane refuses stale,
-  draft, conflicting, blocked, unsettled-check, and change-requested pull requests; GitHub still applies repository
-  permissions and branch protection. Success includes GitHub's merge commit and refreshes dashboard queries.
+- **Governed merge.** The diff request is bound to the selected full head SHA and rechecks the SHA around the diff
+  fetch. Merge stays disabled until that exact revision is displayed, then sends the inspected SHA. The control plane
+  requires a trusted human approval and at least one successful check on that SHA, rejects outstanding change
+  requests, and refuses stale, draft, conflicting, blocked, and unsettled-check pull requests. It reads the repository's
+  enabled merge methods and asks GitHub to merge with the configured method; GitHub still applies repository
+  permissions and branch protection. Reviews and checks are fully paged with a bounded fail-closed limit. Success
+  includes GitHub's merge commit and refreshes dashboard queries.
 - **Disabled with the reason.** New PR, Approve, Export evidence, the bookmark, the date range, and Auto-merge.
   Nothing in Live simulates a merge.
 
@@ -120,7 +124,7 @@ Mock only:
   Unavailable values, disabled controls, queue filters, search by branch, the reset menu, safe Markdown rendering, the
   pull-request diff and its statistics, a multi-file patch in Unified and Split, issue comment / close / reopen, both
   review actions with their run-sync messages and the exact write requests, the repository menu, a copied `?pull=`
-  link, a failed GitHub load without fixtures, an exact-head merge request and result, and the phone layout without
+  link, a failed GitHub load without fixtures, a SHA-bound diff, an exact-head merge request and result, and the phone layout without
   overflow.
 - `cd dashboard && npm run test:e2e -- e2e/reviews-preview.spec.ts`: the same frame in Mock with every local action,
   the Unified minimap, coloured change rows, Split view, the phone layout, and no API traffic beyond the session check.

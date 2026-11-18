@@ -23,7 +23,8 @@ func TestGitHubPullRequestMergeRequiresCurrentGovernedState(t *testing.T) {
 		wantMessage      string
 		wantMergeRequest bool
 	}{
-		{name: "merge current clean pull request", pull: mergePull("true", "clean", mergeHead), checks: "[]", reviews: "[]",
+		{name: "merge current clean pull request", pull: mergePull("true", "clean", mergeHead), checks: successCheck,
+			reviews:     currentApproval,
 			mergeStatus: http.StatusOK, remote: "127.0.0.1:1234", wantStatus: http.StatusOK, wantMergeRequest: true},
 		{name: "reject stale head before merge", pull: mergePull("true", "clean", mergeCommit), checks: "[]", reviews: "[]",
 			remote: "127.0.0.1:1234", wantStatus: http.StatusConflict, wantMessage: "head changed"},
@@ -36,22 +37,33 @@ func TestGitHubPullRequestMergeRequiresCurrentGovernedState(t *testing.T) {
 		{name: "reject conflicts", pull: mergePull("false", "dirty", mergeHead), checks: "[]", reviews: "[]",
 			remote: "127.0.0.1:1234", wantStatus: http.StatusConflict, wantMessage: "conflicting changes"},
 		{name: "reject unresolved check", pull: mergePull("true", "clean", mergeHead),
-			checks: `[{"name":"required-ci","status":"in_progress"}]`, reviews: "[]",
+			checks: `[{"name":"ci","status":"completed","conclusion":"success"},{"name":"required-ci","status":"in_progress"}]`, reviews: currentApproval,
 			remote: "127.0.0.1:1234", wantStatus: http.StatusConflict, wantMessage: "required-ci"},
 		{name: "reject failed check", pull: mergePull("true", "clean", mergeHead),
-			checks: `[{"name":"required-ci","status":"completed","conclusion":"failure"}]`, reviews: "[]",
+			checks: `[{"name":"ci","status":"completed","conclusion":"success"},{"name":"required-ci","status":"completed","conclusion":"failure"}]`, reviews: currentApproval,
 			remote: "127.0.0.1:1234", wantStatus: http.StatusConflict, wantMessage: "required-ci"},
 		{name: "reject outstanding change request", pull: mergePull("true", "clean", mergeHead), checks: "[]",
 			reviews: `[{"id":1,"state":"CHANGES_REQUESTED","submitted_at":"2026-11-17T12:00:00Z","user":{"login":"Reviewer"}}]`,
 			remote:  "127.0.0.1:1234", wantStatus: http.StatusConflict, wantMessage: "@reviewer"},
-		{name: "allow reviewer follow-up approval", pull: mergePull("true", "clean", mergeHead), checks: "[]",
-			reviews: `[{"id":1,"state":"CHANGES_REQUESTED","submitted_at":"2026-11-17T12:00:00Z","user":{"login":"reviewer"}},` +
-				`{"id":2,"state":"APPROVED","submitted_at":"2026-11-17T12:01:00Z","user":{"login":"reviewer"}}]`,
+		{name: "allow reviewer follow-up approval", pull: mergePull("true", "clean", mergeHead), checks: successCheck,
+			reviews: `[{"id":1,"state":"CHANGES_REQUESTED","commit_id":"` + mergeHead + `","author_association":"MEMBER","submitted_at":"2026-11-17T12:00:00Z","user":{"login":"reviewer"}},` +
+				`{"id":2,"state":"APPROVED","commit_id":"` + mergeHead + `","author_association":"MEMBER","submitted_at":"2026-11-17T12:01:00Z","user":{"login":"reviewer"}}]`,
 			mergeStatus: http.StatusOK, remote: "127.0.0.1:1234", wantStatus: http.StatusOK, wantMergeRequest: true},
-		{name: "GitHub stale-head race", pull: mergePull("true", "clean", mergeHead), checks: "[]", reviews: "[]",
+		{name: "require a current approval", pull: mergePull("true", "clean", mergeHead), checks: successCheck,
+			reviews: "[]", remote: "127.0.0.1:1234", wantStatus: http.StatusConflict, wantMessage: "trusted human approval"},
+		{name: "reject approval on an older head", pull: mergePull("true", "clean", mergeHead), checks: successCheck,
+			reviews: strings.Replace(currentApproval, mergeHead, mergeCommit, 1), remote: "127.0.0.1:1234",
+			wantStatus: http.StatusConflict, wantMessage: "trusted human approval"},
+		{name: "require successful CI", pull: mergePull("true", "clean", mergeHead), checks: "[]",
+			reviews: currentApproval, remote: "127.0.0.1:1234", wantStatus: http.StatusConflict, wantMessage: "successful CI"},
+		{name: "comment does not clear change request", pull: mergePull("true", "clean", mergeHead), checks: successCheck,
+			reviews: `[{"id":1,"state":"CHANGES_REQUESTED","commit_id":"` + mergeHead + `","author_association":"MEMBER","submitted_at":"2026-11-17T12:00:00Z","user":{"login":"reviewer"}},` +
+				`{"id":2,"state":"COMMENTED","commit_id":"` + mergeHead + `","author_association":"MEMBER","submitted_at":"2026-11-17T12:01:00Z","user":{"login":"reviewer"}}]`,
+			remote: "127.0.0.1:1234", wantStatus: http.StatusConflict, wantMessage: "still requests changes"},
+		{name: "GitHub stale-head race", pull: mergePull("true", "clean", mergeHead), checks: successCheck, reviews: currentApproval,
 			mergeStatus: http.StatusConflict, remote: "127.0.0.1:1234", wantStatus: http.StatusConflict,
 			wantMessage: "head or branch protection", wantMergeRequest: true},
-		{name: "GitHub permission refusal", pull: mergePull("true", "clean", mergeHead), checks: "[]", reviews: "[]",
+		{name: "GitHub permission refusal", pull: mergePull("true", "clean", mergeHead), checks: successCheck, reviews: currentApproval,
 			mergeStatus: http.StatusForbidden, remote: "127.0.0.1:1234", wantStatus: http.StatusForbidden,
 			wantMessage: "lack repository permission", wantMergeRequest: true},
 		{name: "unauthorized remote request", remote: "192.0.2.4:1234", wantStatus: http.StatusForbidden,
@@ -69,16 +81,19 @@ func TestGitHubPullRequestMergeRequiresCurrentGovernedState(t *testing.T) {
 					_, _ = w.Write([]byte(`{"check_runs":` + test.checks + `}`))
 				case "/repos/acme/platform/pulls/12/reviews":
 					_, _ = w.Write([]byte(test.reviews))
+				case "/repos/acme/platform":
+					_, _ = w.Write([]byte(`{"allow_squash_merge":true,"allow_merge_commit":false,"allow_rebase_merge":false}`))
 				case "/repos/acme/platform/pulls/12/merge":
 					mergeCalls++
 					if r.Method != http.MethodPut {
 						t.Errorf("merge method = %s", r.Method)
 					}
 					var input struct {
-						SHA string `json:"sha"`
+						SHA         string `json:"sha"`
+						MergeMethod string `json:"merge_method"`
 					}
-					if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.SHA != mergeHead {
-						t.Errorf("merge head SHA = %q, %v", input.SHA, err)
+					if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.SHA != mergeHead || input.MergeMethod != "squash" {
+						t.Errorf("merge request = %#v, %v", input, err)
 					}
 					if test.mergeStatus != http.StatusOK {
 						w.WriteHeader(test.mergeStatus)
@@ -119,3 +134,6 @@ func mergePull(mergeable, state, head string) string {
 	return `{"number":12,"state":"open","draft":false,"mergeable":` + mergeable +
 		`,"mergeable_state":"` + state + `","head":{"ref":"feature","sha":"` + head + `"},"base":{"ref":"main"}}`
 }
+
+const successCheck = `[{"name":"ci","status":"completed","conclusion":"success"}]`
+const currentApproval = `[{"id":1,"state":"APPROVED","commit_id":"` + mergeHead + `","author_association":"MEMBER","submitted_at":"2026-11-17T12:00:00Z","user":{"login":"reviewer"}}]`

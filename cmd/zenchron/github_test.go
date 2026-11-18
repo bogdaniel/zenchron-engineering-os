@@ -12,6 +12,8 @@ import (
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
+const testPullRequestHead = "0123456789abcdef0123456789abcdef01234567"
+
 func TestGitHubIssuesAndPullRequestsUseRemoteAndKeepDistinct(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer test-token" || r.Header.Get("X-GitHub-Api-Version") != "2022-11-28" {
@@ -24,7 +26,7 @@ func TestGitHubIssuesAndPullRequestsUseRemoteAndKeepDistinct(t *testing.T) {
 		}
 		switch r.URL.Path {
 		case "/repos/acme/platform/pulls":
-			w.Write([]byte(`[{"number":12,"title":"Improve review","state":"open","html_url":"https://github.com/acme/platform/pull/12","draft":false,"head":{"ref":"feature/review"},"base":{"ref":"main"}}]`))
+			w.Write([]byte(`[{"number":12,"title":"Improve review","state":"open","html_url":"https://github.com/acme/platform/pull/12","draft":false,"head":{"ref":"feature/review","sha":"` + testPullRequestHead + `"},"base":{"ref":"main"}}]`))
 		case "/repos/acme/platform/pulls/12":
 			if r.Method != http.MethodGet || r.URL.RawQuery != "" {
 				t.Errorf("pull request detail request method/query = %s / %q", r.Method, r.URL.RawQuery)
@@ -38,7 +40,7 @@ func TestGitHubIssuesAndPullRequestsUseRemoteAndKeepDistinct(t *testing.T) {
 				t.Errorf("pull request diff request method/query/accept = %s / %q / %q", r.Method,
 					r.URL.RawQuery, r.Header.Get("Accept"))
 			}
-			_, _ = w.Write([]byte(`{"number":12,"title":"Improve review","state":"open","html_url":"https://github.com/acme/platform/pull/12","draft":false,"head":{"ref":"feature/review"},"base":{"ref":"main"}}`))
+			_, _ = w.Write([]byte(`{"number":12,"title":"Improve review","state":"open","html_url":"https://github.com/acme/platform/pull/12","draft":false,"head":{"ref":"feature/review","sha":"` + testPullRequestHead + `"},"base":{"ref":"main"}}`))
 		case "/repos/acme/platform/pulls/13":
 			w.Write([]byte(strings.Repeat("x", maxGitHubResponseSize+1)))
 		case "/repos/acme/platform/issues":
@@ -118,15 +120,16 @@ func TestGitHubIssuesAndPullRequestsUseRemoteAndKeepDistinct(t *testing.T) {
 		t.Fatalf("pull requests = %#v", pulls)
 	}
 
-	response, err = http.Get(server.URL + "/api/v1/projects/project/pull-requests/12/diff")
+	response, err = http.Get(server.URL + "/api/v1/projects/project/pull-requests/12/diff?head_sha=" + testPullRequestHead)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var diff struct {
-		Diff string `json:"diff"`
+		HeadSHA string `json:"head_sha"`
+		Diff    string `json:"diff"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&diff); err != nil || response.StatusCode != http.StatusOK ||
-		diff.Diff != "diff --git a/retry.go b/retry.go\n+return retry(ctx)\n" {
+		diff.HeadSHA != testPullRequestHead || diff.Diff != "diff --git a/retry.go b/retry.go\n+return retry(ctx)\n" {
 		response.Body.Close()
 		t.Fatalf("pull request diff = %#v, decode error = %v, HTTP %d", diff, err, response.StatusCode)
 	}
@@ -141,7 +144,7 @@ func TestGitHubIssuesAndPullRequestsUseRemoteAndKeepDistinct(t *testing.T) {
 		t.Fatalf("invalid pull request number returned HTTP %d", response.StatusCode)
 	}
 	response.Body.Close()
-	response, err = http.Get(server.URL + "/api/v1/projects/project/pull-requests/13/diff")
+	response, err = http.Get(server.URL + "/api/v1/projects/project/pull-requests/13/diff?head_sha=" + testPullRequestHead)
 	if err != nil {
 		t.Fatal(err)
 	}
