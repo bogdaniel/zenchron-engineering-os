@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
@@ -142,5 +144,54 @@ func TestUnitIsNotReportedBlockedWhileItsPullRequestIsBeingCreated(t *testing.T)
 	}
 	if graph := harness.graph(); graph.Status != graphCompleted {
 		t.Fatalf("after publication: %s", graph.Status)
+	}
+}
+
+func TestPublicationPersistenceFailureReleasesUpdateBarrier(t *testing.T) {
+	harness := newGraphHarness(t)
+	harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID),
+		unitJSON("integrate", unitIntegrate, "", "api")))
+	harness.handOff(harness.claimUnit("api"), commit(1), "api")
+	integration := harness.claimUnit("integrate")
+	statePath := harness.store.path
+	failedPath := filepath.Join(t.TempDir(), "missing", "agent-runs.json")
+	harness.duringPullCreate = func() {
+		harness.store.path = failedPath
+	}
+	result, _ := json.Marshal(workerapi.AgentRunResult{Status: "succeeded", Attempts: integration.Attempts,
+		CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.", BranchPushed: true,
+		TerminationReason: workerapi.TerminationCompleted, Result: `{"integration":{}}`})
+	if _, status := harness.finish(integration.ID, string(result)); status != http.StatusInternalServerError {
+		t.Fatalf("finish after the post-publication write failure returned HTTP %d", status)
+	}
+	harness.store.path = statePath
+	harness.store.mu.Lock()
+	item := harness.store.items[integration.ID]
+	harness.store.mu.Unlock()
+	if item.Publishing {
+		t.Fatal("failed publication persistence left the run marked as publishing")
+	}
+
+	t.Setenv("ZENCHRON_MANAGED_SUPERVISOR_TOKEN", "supervisor-secret")
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/system/update/active-runs", nil)
+	request.RemoteAddr = "127.0.0.1:1234"
+	request.Header.Set("X-Zenchron-Supervisor-Token", "supervisor-secret")
+	response := httptest.NewRecorder()
+	activeSystemRunCount(response, request, harness.store)
+	var active struct {
+		Runs int `json:"active_runs"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&active); err != nil || response.Code != http.StatusOK || active.Runs != 0 {
+		t.Fatalf("active runs after publication write failure = %d, HTTP %d, %v", active.Runs, response.Code, err)
+	}
+	if unit := harness.unit("integrate"); unit.Reason == "Creating the pull request." {
+		t.Fatal("WorkGraph remained stuck on pull-request creation after the write failure")
+	}
+	restarted, err := openAgentRunStore(statePath, harness.store.registry, harness.store.agents)
+	if err != nil {
+		t.Fatalf("reopen run store after publication failure: %v", err)
+	}
+	if restarted.items[integration.ID].Publishing {
+		t.Fatal("recovered run was marked as publishing")
 	}
 }

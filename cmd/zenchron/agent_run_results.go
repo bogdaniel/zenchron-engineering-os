@@ -138,6 +138,14 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 		return 0, ""
 	})
 	if status != 0 {
+		store.mu.Lock()
+		item, exists := store.items[runID]
+		if exists {
+			item.Publishing = false
+			store.items[runID] = item
+		}
+		store.mu.Unlock()
+		store.graphs.reconcileAll()
 		return agentRun{}, status, "pull request state could not be persisted"
 	}
 	event := "Publication: " + publication
