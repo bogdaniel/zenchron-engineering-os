@@ -16,11 +16,14 @@ test('Reviews replaces the loading overlay after an empty GitHub response', asyn
     status: 200, contentType: 'application/json', body: '[]',
   }));
   await page.route(`**/api/v1/projects/${projectID}/issues`, (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: '[]',
+    status: 200, contentType: 'application/json', headers: { 'X-Zenchron-Complete': 'false' }, body: '[]',
   }));
   await page.goto('/#reviews');
   await expect(page.locator('.reviews-grid-wrap')).toContainText('No open pull requests in this repository.');
   await expect(page.locator('.reviews-grid-wrap')).not.toContainText('Loading GitHub items');
+  await page.getByRole('button', { name: 'Issues' }).click();
+  await expect(page.getByRole('navigation', { name: 'Issues pages' }).getByRole('status'))
+    .toHaveText('Showing newest 100; results may be incomplete.');
 });
 
 test('Live Reviews merges the exact inspected pull request head through the control plane', async ({ page }) => {

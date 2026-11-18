@@ -35,7 +35,10 @@ export async function loadDiff(runID: string) {
 async function loadGitHubItems<T>(projectID: string, kind: 'issues' | 'pull-requests', schema: z.ZodType<T>) {
   const response = await fetch(`/api/v1/projects/${projectID}/${kind}`);
   if (!response.ok) throw new Error((await response.text()).trim() || `Could not load GitHub ${kind} (${response.status})`);
-  return schema.parse(await response.json());
+  return {
+    items: schema.parse(await response.json()),
+    complete: response.headers.get('X-Zenchron-Complete') !== 'false',
+  };
 }
 
 async function sendJSON(path: string, method: 'POST' | 'PATCH', body: unknown, failure: string) {
@@ -63,7 +66,7 @@ export function summarizeDiff(diff: string) {
   return { files, added, removed, path };
 }
 
-export type Listing<T> = { items: T[]; loading: boolean; failed: boolean; syncing: boolean };
+export type Listing<T> = { items: T[]; loading: boolean; failed: boolean; syncing: boolean; complete?: boolean };
 /** A pull request's place in the queue. `tone` colours the card badge; a source without review states leaves it out. */
 export type QueueStatus = { value: string; label: string; tone?: string };
 export type ReviewSignals = {
@@ -182,17 +185,21 @@ export function useLiveReviews(
     queryFn: () => loadGitHubItems(project!.id, 'issues', issueSchema),
     enabled: enabled && Boolean(project), refetchInterval: 60_000,
   });
-  const pulls = pullRequests.data ?? [];
+  const pulls = pullRequests.data?.items ?? [];
   const count = (value: number | undefined, query: { isLoading: boolean }) =>
     value ?? (query.isLoading ? '…' : 'Unavailable');
-  const inReview = pullRequests.data?.filter((item) => liveStatus(item).value === 'open').length;
+  const inReview = pulls.filter((item) => liveStatus(item).value === 'open').length;
   const localBranches = runs.items.filter((run) => run.diff_available || ['queued', 'running', 'cancelled'].includes(run.status));
-  const listing = <T>(query: { data?: T[]; isLoading: boolean; isError: boolean; isFetching: boolean }): Listing<T> =>
-    ({ items: query.data ?? [], loading: query.isLoading, failed: query.isError, syncing: query.isFetching });
+  const listing = <T>(query: {
+    data?: { items: T[]; complete: boolean }; isLoading: boolean; isError: boolean; isFetching: boolean;
+  }): Listing<T> => ({
+    items: query.data?.items ?? [], complete: query.data?.complete,
+    loading: query.isLoading, failed: query.isError, syncing: query.isFetching,
+  });
   return {
     sections: ['pull-requests', 'issues', 'local-branches'],
     metrics: [
-      { value: count(pullRequests.data?.length, pullRequests) },
+      { value: count(pullRequests.data?.items.length, pullRequests) },
       { value: count(inReview, pullRequests) },
       { value: runs.loading ? '…' : runs.failed ? 'Unavailable' : localBranches.filter((run) => run.diff_available).length },
       { value: 'Unavailable' }, { value: 'Unavailable' }, { value: 'Unavailable' },
