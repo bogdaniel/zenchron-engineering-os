@@ -262,6 +262,57 @@ func TestPullRequestPublicationRetriesWithoutDuplicates(t *testing.T) {
 	}
 }
 
+func TestPullRequestPublicationDoesNotOverwriteANewerAttempt(t *testing.T) {
+	for _, path := range []string{"worker result", "manual retry"} {
+		t.Run(path, func(t *testing.T) {
+			harness := newDeliveryHarness(t, workerapi.ProviderCodex)
+			run := harness.createIssueRun()
+			harness.claim()
+			var expected agentRun
+			if path == "manual retry" {
+				harness.failPullCreate = true
+				if finished, status := harness.finish(run.ID, pushedResult); status != http.StatusOK ||
+					finished.Publication != publicationPullRequestFailed {
+					t.Fatalf("initial publication = %#v, HTTP %d", finished, status)
+				}
+				harness.mu.Lock()
+				harness.failPullCreate = false
+				harness.mu.Unlock()
+			}
+			harness.duringPullCreate = func() {
+				response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/request-changes", `{"comment":"Revise the change."}`)
+				if response.Code != http.StatusOK {
+					t.Errorf("request changes during publication returned HTTP %d", response.Code)
+				}
+				if command := harness.claim(); command.Attempts != 2 {
+					t.Errorf("claimed attempt %d during publication, want 2", command.Attempts)
+				}
+				harness.store.mu.Lock()
+				expected = harness.store.items[run.ID]
+				harness.store.mu.Unlock()
+			}
+
+			var status int
+			if path == "manual retry" {
+				status = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", "").Code
+			} else {
+				_, status = harness.finish(run.ID, pushedResult)
+			}
+			if status != http.StatusConflict {
+				t.Fatalf("publication after attempt changed returned HTTP %d, want conflict", status)
+			}
+			harness.store.mu.Lock()
+			current := harness.store.items[run.ID]
+			harness.store.mu.Unlock()
+			if current.Status != expected.Status || current.Attempts != expected.Attempts || current.Publication != expected.Publication ||
+				current.PullRequestError != expected.PullRequestError || current.PullRequestNumber != expected.PullRequestNumber ||
+				current.Publishing != expected.Publishing {
+				t.Fatalf("late publication changed attempt 2: %#v", current)
+			}
+		})
+	}
+}
+
 func TestProgressRenewsLeaseStoresEventsAndFencesOtherWorkersAndAttempts(t *testing.T) {
 	harness := newDeliveryHarness(t, workerapi.ProviderCodex)
 	run := harness.createIssueRun()
