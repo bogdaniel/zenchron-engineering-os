@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -161,6 +162,63 @@ func TestDecisionRequestBlocksItsUnitUntilAPersonResolvesIt(t *testing.T) {
 	if later := harness.claimUnit("api"); later.Attempts != 3 || !strings.Contains(later.Prompt, "Use a comma.") ||
 		!strings.Contains(later.Prompt, "Add a header.") {
 		t.Fatalf("pass after the handoff = attempt %d, prompt %q", later.Attempts, later.Prompt)
+	}
+}
+
+func TestGraphChangesRollBackWhenPersistenceFails(t *testing.T) {
+	for _, action := range []string{"retry", "resolve"} {
+		t.Run(action, func(t *testing.T) {
+			harness := newGraphHarness(t)
+			graph := harness.start(harness.twoProducerPlan())
+			harness.store.graphs.mu.Lock()
+			stored := harness.store.graphs.graphs[graph.ID]
+			if action == "retry" {
+				stored.unit("api").Failure = "The run failed."
+				stored.Status = graphFailed
+			} else {
+				stored.Messages = append(stored.Messages, graphMessage{ID: graph.ID[:8] + "-1",
+					Type: messageDecisionRequest, From: "api"})
+				stored.Status = graphBlocked
+			}
+			revision := stored.Revision
+			harness.store.graphs.mu.Unlock()
+			harness.store.graphs.path = filepath.Join(t.TempDir(), "missing", "work-graphs.json")
+
+			path, body := "/api/v1/work-graphs/"+graph.ID+"/units/api/retry", ""
+			if action == "resolve" {
+				path, body = "/api/v1/work-graphs/"+graph.ID+"/decisions/"+graph.ID[:8]+"-1", `{"resolution":"Continue."}`
+			}
+			if response := harness.call(http.MethodPost, path, body); response.Code != http.StatusInternalServerError {
+				t.Fatalf("%s with failed persistence returned HTTP %d", action, response.Code)
+			}
+			harness.store.graphs.mu.Lock()
+			defer harness.store.graphs.mu.Unlock()
+			stored = harness.store.graphs.graphs[graph.ID]
+			if stored.Revision != revision || stored.Status == graphCompleted ||
+				(action == "retry" && (stored.unit("api").Failure == "" || stored.unit("api").Restart)) ||
+				(action == "resolve" && len(stored.Messages) != 1) {
+				t.Fatalf("%s mutated graph after persistence failure: %#v", action, stored)
+			}
+		})
+	}
+}
+
+func TestCancelGraphReportsRunCancellationPersistenceFailure(t *testing.T) {
+	harness := newGraphHarness(t)
+	graph := harness.start(harness.twoProducerPlan())
+	run := harness.claimUnit("api")
+	harness.store.path = filepath.Join(t.TempDir(), "missing", "agent-runs.json")
+	if response := harness.call(http.MethodPost, "/api/v1/work-graphs/"+graph.ID+"/cancel", ""); response.Code != http.StatusInternalServerError {
+		t.Fatalf("cancel with failed run persistence returned HTTP %d", response.Code)
+	}
+	harness.store.mu.Lock()
+	item := harness.store.items[run.ID]
+	harness.store.mu.Unlock()
+	harness.store.graphs.mu.Lock()
+	stored := harness.store.graphs.graphs[graph.ID]
+	harness.store.graphs.mu.Unlock()
+	if item.Status != "running" || item.CancelRequested || stored.Status != graphActive || stored.Revision != graph.Revision {
+		t.Fatalf("cancel failure changed run %#v or graph %#v", item, stored)
 	}
 }
 
