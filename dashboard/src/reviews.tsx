@@ -80,7 +80,7 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
       : source.runs.items[0] : undefined;
 
   const liveDiff = useLivePullRequestDiff(!designPreview, source.project?.id, pullRequest?.number, pullRequest?.head.sha);
-  const pullRequestDiff = designPreview ? mockPullRequestDiff : liveDiff;
+  const pullRequestDiff = designPreview ? { ...mockPullRequestDiff, headSHA: pullRequest?.head.sha } : liveDiff;
   const runDiff = useQuery({
     queryKey: ['agent-run-diff', section, run?.id, run?.diff_attempt],
     queryFn: () => loadDiff(run!.id),
