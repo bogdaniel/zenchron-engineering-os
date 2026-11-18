@@ -17,6 +17,7 @@ func TestManagedWorkerReceivesOnlyExecutionCredentials(t *testing.T) {
 		"ZENCHRON_GITHUB_WEBHOOK_SECRET=webhook-secret", "ZENCHRON_SESSION_SECRET=session-secret",
 		"ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH=/private/app.pem", "ZENCHRON_ACCESS_FILE=/private/access.json",
 		"ZENCHRON_DATA_DIR=/private/state", "ZENCHRON_UPDATE_REPOSITORY=owner/repo",
+		"ZENCHRON_LOCAL_STATUS_TOKEN=menu-status-token",
 	}
 	original := append([]string(nil), base...)
 	api := withEnvironment(base, map[string]string{"ZENCHRON_DATA_DIR": "/private/state"})
@@ -28,7 +29,8 @@ func TestManagedWorkerReceivesOnlyExecutionCredentials(t *testing.T) {
 		t.Fatal("API environment lost its state directory after worker environment composition")
 	}
 	for _, key := range []string{"ZENCHRON_GITHUB_TOKEN", "ZENCHRON_GITHUB_WEBHOOK_SECRET", "ZENCHRON_SESSION_SECRET",
-		"ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", "ZENCHRON_ACCESS_FILE", "ZENCHRON_DATA_DIR", "ZENCHRON_UPDATE_REPOSITORY"} {
+		"ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", "ZENCHRON_ACCESS_FILE", "ZENCHRON_DATA_DIR", "ZENCHRON_UPDATE_REPOSITORY",
+		"ZENCHRON_LOCAL_STATUS_TOKEN"} {
 		if strings.Contains(got, key) {
 			t.Fatalf("worker received privileged environment variable %s", key)
 		}

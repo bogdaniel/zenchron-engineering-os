@@ -8,6 +8,8 @@ plane, worker, dashboard, updater, or store. One per-user lock limits the proces
 ```mermaid
 flowchart LR
   Companion[Zenchron menu-bar app] -->|GET /api/v1/system/status| API[Managed control plane]
+  LaunchAgent[Mode 0600 managed LaunchAgent plist] -->|Local status credential| Companion
+  Companion -->|Credential header · loopback only| API
   API -->|Signed-in administrator when access policy is enabled| Auth[Existing session and access policy]
   API --> Workers[(Worker registry)]
   API --> Graphs[(WorkGraph store)]
@@ -29,10 +31,13 @@ flowchart LR
   objective plan in the existing Live dashboard. It also offers up to five most recently recorded unresolved human
   decisions, linked to their exact objective, graph, and decision in the existing plan view. Aggregate counts still
   cover all graphs; cancelled graph decisions remain in history but are excluded from pending-action counts.
-- `GET /api/v1/system/status` is read-only and `no-store`. Unauthenticated status is available only in the single-user
-  local mode; configured authentication requires a valid session, and access-policy installs require an administrator.
-  An unreadable access policy fails closed. A configured updater status file that cannot be read is reported as
-  unavailable without exposing its path or raw error; work and worker status remain available.
+- `GET /api/v1/system/status` is read-only and `no-store`. The managed installer generates a local status credential
+  in the mode-0600 LaunchAgent plist; the companion reads it and sends it in a request header. The endpoint also
+  requires a loopback connection, so client-controlled Host and Origin headers alone cannot authorize a request.
+  Configured authentication still requires a valid session, and access-policy installs still require an administrator;
+  the local credential does not bypass either check. An unreadable access policy fails closed. A configured updater
+  status file that cannot be read is reported as unavailable without exposing its path or raw error; work and worker
+  status remain available.
 - The menu distinguishes a missing session from missing administrator access and does not offer Start when either
   response means the local service is responding but its status is not authorized.
 - Cancelled WorkGraphs remain in history but their unresolved decisions are excluded from actionable status counts and

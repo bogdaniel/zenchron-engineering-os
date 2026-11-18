@@ -486,6 +486,11 @@ func launchEnvironment() (map[string]string, error) {
 		return nil, err
 	}
 	environment["ZENCHRON_DATA_DIR"] = data
+	statusToken, err := randomToken(32)
+	if err != nil {
+		return nil, fmt.Errorf("generate local status credential: %w", err)
+	}
+	environment["ZENCHRON_LOCAL_STATUS_TOKEN"] = statusToken
 	return environment, nil
 }
 

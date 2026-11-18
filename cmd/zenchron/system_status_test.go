@@ -42,9 +42,7 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 		"cancelled": {ID: "cancelled", ObjectiveID: "objective-cancelled", Status: graphCancelled,
 			Messages: []graphMessage{{ID: "stale", Type: messageDecisionRequest}}},
 	}}
-	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
-	request.RemoteAddr = "127.0.0.1:4000"
-	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	request := localStatusTestRequest(t)
 	response := httptest.NewRecorder()
 	writeLocalSystemStatus(response, request, registry, graphs)
 	var status systemStatus
@@ -74,9 +72,7 @@ func TestLocalSystemStatusBoundsAndOrdersActionLinks(t *testing.T) {
 				{ID: "decision-" + id, Type: messageDecisionRequest, From: "reviewer", CreatedAt: time.Unix(int64(index), 0)},
 			}}
 	}
-	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
-	request.RemoteAddr = "127.0.0.1:4000"
-	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	request := localStatusTestRequest(t)
 	response := httptest.NewRecorder()
 	writeLocalSystemStatus(response, request, newWorkerRegistry(), graphs)
 	var status systemStatus
@@ -85,7 +81,7 @@ func TestLocalSystemStatusBoundsAndOrdersActionLinks(t *testing.T) {
 	}
 	wantGraphIDs := []string{"graph-11", "graph-10", "graph-09", "graph-08", "graph-07"}
 	wantDecisionIDs := []string{"decision-graph-11", "decision-graph-10", "decision-graph-09", "decision-graph-08", "decision-graph-07"}
-	if len(status.Work.ActiveGraphLinks) != maxSystemStatusLinks || len(status.Work.Decisions) != maxSystemStatusLinks ||
+	if len(status.Work.ActiveGraphLinks) != len(wantGraphIDs) || len(status.Work.Decisions) != len(wantDecisionIDs) ||
 		status.Work.ActiveGraphs != 12 || status.Work.OpenDecisions != 12 {
 		t.Fatalf("bounded links = %#v, want newest %d of 12", status.Work, maxSystemStatusLinks)
 	}
@@ -117,9 +113,7 @@ func TestLocalSystemStatusIncludesRecordedBlockedUpdateReason(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Setenv("ZENCHRON_UPDATE_STATUS_FILE", updateFile)
-			request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
-			request.RemoteAddr = "127.0.0.1:4000"
-			request.Header.Set("Origin", "http://127.0.0.1:8080")
+			request := localStatusTestRequest(t)
 			response := httptest.NewRecorder()
 			writeLocalSystemStatus(response, request, newWorkerRegistry(), newWorkGraphStore(nil, nil, nil, nil))
 			var status systemStatus
@@ -139,9 +133,7 @@ func TestLocalSystemStatusReportsUnreadableConfiguredUpdaterStatus(t *testing.T)
 	graphs := &workGraphStore{graphs: map[string]*workGraph{
 		"active": {ID: "active", ObjectiveID: "objective", Status: graphActive},
 	}}
-	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
-	request.RemoteAddr = "127.0.0.1:4000"
-	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	request := localStatusTestRequest(t)
 	response := httptest.NewRecorder()
 	writeLocalSystemStatus(response, request, newWorkerRegistry(), graphs)
 	var status systemStatus
@@ -153,35 +145,36 @@ func TestLocalSystemStatusReportsUnreadableConfiguredUpdaterStatus(t *testing.T)
 	}
 }
 
-func TestLocalSystemStatusRejectsRemoteAndCrossOriginRequests(t *testing.T) {
+func TestLocalSystemStatusRejectsRemoteAndUncredentialedRequests(t *testing.T) {
 	for name, request := range map[string]*http.Request{
 		"remote": func() *http.Request {
-			r := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+			r := localStatusTestRequest(t)
 			r.RemoteAddr = "192.0.2.1:4000"
-			r.Header.Set("Origin", "http://127.0.0.1:8080")
 			return r
 		}(),
-		"cross origin": func() *http.Request {
+		"spoofed loopback host and origin without credential": func() *http.Request {
 			r := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
 			r.RemoteAddr = "127.0.0.1:4000"
-			r.Header.Set("Origin", "https://example.com")
+			r.Header.Set("Origin", "http://127.0.0.1:8080")
 			return r
 		}(),
 	} {
 		t.Run(name, func(t *testing.T) {
 			response := httptest.NewRecorder()
 			writeLocalSystemStatus(response, request, newWorkerRegistry(), newWorkGraphStore(nil, nil, nil, nil))
-			if response.Code != http.StatusForbidden {
-				t.Fatalf("system status HTTP = %d, want %d", response.Code, http.StatusForbidden)
+			want := http.StatusForbidden
+			if name == "spoofed loopback host and origin without credential" {
+				want = http.StatusUnauthorized
+			}
+			if response.Code != want {
+				t.Fatalf("system status HTTP = %d, want %d", response.Code, want)
 			}
 		})
 	}
 }
 
 func TestLocalSystemStatusOmitsActiveGraphWhenNoWorkIsActive(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
-	request.RemoteAddr = "127.0.0.1:4000"
-	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	request := localStatusTestRequest(t)
 	graphs := &workGraphStore{graphs: map[string]*workGraph{
 		"blocked": {ID: "blocked", ObjectiveID: "objective", Status: graphBlocked},
 	}}
@@ -221,9 +214,7 @@ func TestLocalSystemStatusRequiresSessionAndAdministratorWithAccessPolicy(t *tes
 			if err != nil {
 				t.Fatal(err)
 			}
-			request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
-			request.RemoteAddr = "127.0.0.1:4000"
-			request.Header.Set("Origin", "http://127.0.0.1:8080")
+			request := localStatusTestRequest(t)
 			request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: value})
 			response := httptest.NewRecorder()
 			server.ServeHTTP(response, request)
@@ -240,13 +231,21 @@ func TestLocalSystemStatusRequiresSessionAndAdministratorWithAccessPolicy(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	request = httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
-	request.RemoteAddr = "127.0.0.1:4000"
-	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	request = localStatusTestRequest(t)
 	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: value})
 	response = httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status with unreadable access policy HTTP = %d, want %d", response.Code, http.StatusServiceUnavailable)
 	}
+}
+
+func localStatusTestRequest(t *testing.T) *http.Request {
+	t.Helper()
+	token := "test-local-status-token"
+	t.Setenv("ZENCHRON_LOCAL_STATUS_TOKEN", token)
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+	request.RemoteAddr = "127.0.0.1:4000"
+	request.Header.Set("X-Zenchron-Local-Status-Token", token)
+	return request
 }

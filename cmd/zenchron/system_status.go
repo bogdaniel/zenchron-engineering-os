@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/hmac"
 	"net/http"
 	"os"
 	"sort"
@@ -54,8 +55,13 @@ type systemStatusDecision struct {
 }
 
 func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *workerRegistry, graphs *workGraphStore) {
-	if !isLoopbackRequest(r) || !localRequestOrigin(r) {
+	if !isLoopbackRequest(r) {
 		http.Error(w, "system status is available only to the local operator", http.StatusForbidden)
+		return
+	}
+	token := strings.TrimSpace(os.Getenv("ZENCHRON_LOCAL_STATUS_TOKEN"))
+	if token == "" || !hmac.Equal([]byte(r.Header.Get("X-Zenchron-Local-Status-Token")), []byte(token)) {
+		http.Error(w, "system status credential required", http.StatusUnauthorized)
 		return
 	}
 

@@ -79,6 +79,9 @@ func TestLaunchEnvironmentResolvesRelativeStateDirectory(t *testing.T) {
 	if environment["ZENCHRON_DATA_DIR"] != want {
 		t.Fatalf("LaunchAgent state directory = %q, want %q", environment["ZENCHRON_DATA_DIR"], want)
 	}
+	if len(environment["ZENCHRON_LOCAL_STATUS_TOKEN"]) != 43 {
+		t.Fatalf("local status credential length = %d, want 43", len(environment["ZENCHRON_LOCAL_STATUS_TOKEN"]))
+	}
 }
 
 func TestStableEntrypointRefusesToReplaceUnrelatedCommand(t *testing.T) {

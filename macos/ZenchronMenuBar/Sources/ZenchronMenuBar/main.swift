@@ -7,6 +7,7 @@ import ZenchronStatusCore
 private enum StatusAccessError: Error {
     case signInRequired
     case administratorRequired
+    case localInstallationUnavailable
 }
 
 final class InstanceLock {
@@ -205,7 +206,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let wasConnected = status != nil
         do {
             var request = URLRequest(url: statusURL, timeoutInterval: 3)
-            request.setValue("http://127.0.0.1:8080", forHTTPHeaderField: "Origin")
+            request.setValue(try localStatusToken(), forHTTPHeaderField: "X-Zenchron-Local-Status-Token")
             request.cachePolicy = .reloadIgnoringLocalCacheData
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
@@ -228,6 +229,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             status = nil
             requiresOperatorSession = true
             message = "Administrator access is required for local status"
+        } catch StatusAccessError.localInstallationUnavailable {
+            guard generation == refreshGeneration else { return }
+            status = nil
+            requiresOperatorSession = false
+            message = "Local installation status credential is unavailable"
         } catch {
             guard generation == refreshGeneration else { return }
             status = nil
@@ -238,6 +244,18 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             armPollingTimer()
         }
         refreshMenu()
+    }
+
+    private func localStatusToken() throws -> String {
+        let launchAgentURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents/com.bogdaniel.zenchron-engineering-os.plist")
+        guard let data = try? Data(contentsOf: launchAgentURL),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+              let environment = plist["EnvironmentVariables"] as? [String: String],
+              let token = environment["ZENCHRON_LOCAL_STATUS_TOKEN"], !token.isEmpty else {
+            throw StatusAccessError.localInstallationUnavailable
+        }
+        return token
     }
 
     @objc private func openDashboard() {
