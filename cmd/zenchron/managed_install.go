@@ -684,6 +684,14 @@ func startManaged() error {
 	if runtime.GOOS != "darwin" {
 		return errors.New("the managed local installation currently requires macOS LaunchAgents")
 	}
+	home, err := managedHome()
+	if err != nil {
+		return err
+	}
+	expectedRevision, err := updater.ActiveRelease(home)
+	if err != nil {
+		return fmt.Errorf("managed installation has no active release: %w", err)
+	}
 	current, err := user.Current()
 	if err != nil {
 		return fmt.Errorf("resolve current user: %w", err)
@@ -693,8 +701,15 @@ func startManaged() error {
 		return fmt.Errorf("managed installation is not loaded; run zenchron-engineering install first: %w: %s", err,
 			strings.TrimSpace(string(output)))
 	}
-	if output, err := exec.Command("open", "http://127.0.0.1:8080/?mode=live").CombinedOutput(); err != nil {
-		return fmt.Errorf("managed runtime started, but could not open the dashboard: %w: %s", err, strings.TrimSpace(string(output)))
-	}
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), updateHealthTimeout)
+	defer cancel()
+	client := &http.Client{Timeout: time.Second}
+	return openVerifiedManagedDashboard(ctx, client, expectedRevision, func() error {
+		output, err := exec.Command("open", "http://127.0.0.1:8080/?mode=live").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("managed runtime is ready, but could not open the dashboard: %w: %s", err,
+				strings.TrimSpace(string(output)))
+		}
+		return nil
+	})
 }

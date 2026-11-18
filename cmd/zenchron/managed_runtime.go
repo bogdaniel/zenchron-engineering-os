@@ -195,7 +195,7 @@ func (runtime *managedRuntime) startRelease(ctx context.Context, commit string) 
 	if err != nil {
 		return err
 	}
-	if err := waitManagedHealth(ctx, runtime.api, commit); err != nil {
+	if err := waitManagedHealth(ctx, runtime.client, runtime.api, commit); err != nil {
 		runtime.api.stop(5 * time.Second)
 		return err
 	}

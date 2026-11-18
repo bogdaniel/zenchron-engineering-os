@@ -19,6 +19,8 @@ flowchart LR
   Companion -->|Open selected objective and WorkGraph| Browser
   Companion -->|Open selected human decision| Browser
   Companion -->|Start Zenchron| CLI[Canonical CLI start command]
+  CLI -->|Kickstart and verify active release on /healthz and dashboard HTML| API
+  CLI -->|Open only after both checks pass| Browser
   Bundle[package-app.sh · ad-hoc signed app bundle] --> Companion
   Companion -->|Launch at Login · SMAppService| Settings[macOS Login Items]
 ```
@@ -47,7 +49,9 @@ flowchart LR
   menu links. Blocked WorkGraphs still expose unanswered decisions.
 - **Open Dashboard** uses the canonical URL returned by the control plane, after validating its host and port.
 - When disconnected, the menu shows the disconnected condition and offers **Start Zenchron**, which invokes the
-  existing `~/.local/bin/zenchron-engineering start` command. Quit exits only the menu-bar process.
+  existing `~/.local/bin/zenchron-engineering start` command. The CLI opens the dashboard only after `/healthz`
+  reports the active release revision and the root page returns HTML without redirecting. A stopped, unhealthy, or
+  unrelated service on port 8080 is not opened. Quit exits only the menu-bar process.
 - A process lock prevents another companion instance for the same user from adding a second icon.
 - **Launch at Login** is opt-in and uses `SMAppService.mainApp`. The menu reflects macOS registration state, directs approval-required cases to System Settings, and reports registration errors. It never starts or stops the engineering services.
 - Status refreshes continue while the menu is tracking and older network responses cannot overwrite a newer refresh.
