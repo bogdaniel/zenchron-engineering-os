@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"net"
@@ -41,10 +42,13 @@ type gitHubPullRequest struct {
 	} `json:"user"`
 	Head struct {
 		Ref string `json:"ref"`
+		SHA string `json:"sha"`
 	} `json:"head"`
 	Base struct {
 		Ref string `json:"ref"`
 	} `json:"base"`
+	Mergeable      *bool  `json:"mergeable"`
+	MergeableState string `json:"mergeable_state"`
 }
 
 type gitHubIssue struct {
@@ -85,10 +89,29 @@ func (client gitHubClient) request(ctx context.Context, path string, target any)
 	return json.Unmarshal(body, target)
 }
 
-func (client gitHubClient) pullRequestDiff(ctx context.Context, owner, repository string, number int) (string, error) {
+var errPullRequestHeadChanged = errors.New("pull request head changed while the diff was being read")
+
+func (client gitHubClient) pullRequestDiff(ctx context.Context, owner, repository string, number int, expectedHead string) (string, error) {
+	current, err := client.pullRequest(ctx, owner, repository, number)
+	if err != nil {
+		return "", err
+	}
+	if current.Head.SHA != expectedHead {
+		return "", errPullRequestHeadChanged
+	}
 	path := "/repos/" + owner + "/" + repository + "/pulls/" + strconv.Itoa(number)
 	body, err := client.requestBytes(ctx, http.MethodGet, path, "application/vnd.github.diff", nil, nil)
-	return string(body), err
+	if err != nil {
+		return "", err
+	}
+	latest, err := client.pullRequest(ctx, owner, repository, number)
+	if err != nil {
+		return "", err
+	}
+	if latest.Head.SHA != expectedHead {
+		return "", errPullRequestHeadChanged
+	}
+	return string(body), nil
 }
 
 func (client gitHubClient) pullRequest(ctx context.Context, owner, repository string, number int) (gitHubPullRequest, error) {
@@ -269,12 +292,21 @@ func (registry *workerRegistry) getGitHubPullRequestDiff(w http.ResponseWriter, 
 		http.Error(w, "pull request number is invalid", http.StatusBadRequest)
 		return
 	}
-	diff, err := registry.github.pullRequestDiff(r.Context(), owner, repository, number)
+	expectedHead := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("head_sha")))
+	if !fullGitSHA(expectedHead) {
+		http.Error(w, "a full inspected pull request head SHA is required", http.StatusBadRequest)
+		return
+	}
+	diff, err := registry.github.pullRequestDiff(r.Context(), owner, repository, number, expectedHead)
 	if err != nil {
+		if errors.Is(err, errPullRequestHeadChanged) {
+			http.Error(w, "pull request head changed; refresh and inspect the current revision", http.StatusConflict)
+			return
+		}
 		http.Error(w, "GitHub pull request diff is unavailable", http.StatusBadGateway)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"diff": diff})
+	writeJSON(w, http.StatusOK, map[string]string{"head_sha": expectedHead, "diff": diff})
 }
 
 func (registry *workerRegistry) listGitHubIssues(w http.ResponseWriter, r *http.Request) {

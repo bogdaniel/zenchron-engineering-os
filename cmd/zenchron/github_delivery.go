@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,6 +13,9 @@ import (
 )
 
 // GitHub reads and writes used by the issue-to-pull-request delivery path.
+
+// ponytail: caps review/check history at 10,000 records; increase if a pull request exceeds that history.
+const maxGitHubPages = 100
 
 type gitHubIssueComment struct {
 	Body              string `json:"body"`
@@ -24,6 +28,7 @@ type gitHubIssueComment struct {
 type gitHubReview struct {
 	ID                int64     `json:"id"`
 	State             string    `json:"state"`
+	CommitID          string    `json:"commit_id"`
 	Body              string    `json:"body"`
 	AuthorAssociation string    `json:"author_association"`
 	SubmittedAt       time.Time `json:"submitted_at"`
@@ -64,17 +69,37 @@ func (client gitHubClient) issueComments(ctx context.Context, owner, repository 
 func (client gitHubClient) pullRequestReviews(ctx context.Context, owner, repository string, number int) ([]gitHubReview, error) {
 	reviews := make([]gitHubReview, 0)
 	path := "/repos/" + owner + "/" + repository + "/pulls/" + strconv.Itoa(number) + "/reviews"
-	err := client.get(ctx, path, url.Values{"per_page": {"100"}}, &reviews)
-	return reviews, err
+	for page := 1; page <= maxGitHubPages; page++ {
+		var current []gitHubReview
+		query := url.Values{"per_page": {"100"}, "page": {strconv.Itoa(page)}}
+		if err := client.get(ctx, path, query, &current); err != nil {
+			return nil, err
+		}
+		reviews = append(reviews, current...)
+		if len(current) < 100 {
+			return reviews, nil
+		}
+	}
+	return nil, errors.New("GitHub pull request reviews exceeded the bounded pagination limit")
 }
 
 func (client gitHubClient) commitCheckRuns(ctx context.Context, owner, repository, commit string) ([]gitHubCheckRun, error) {
-	var result struct {
-		CheckRuns []gitHubCheckRun `json:"check_runs"`
-	}
+	var checks []gitHubCheckRun
 	path := "/repos/" + owner + "/" + repository + "/commits/" + commit + "/check-runs"
-	err := client.get(ctx, path, url.Values{"per_page": {"100"}}, &result)
-	return result.CheckRuns, err
+	for page := 1; page <= maxGitHubPages; page++ {
+		var result struct {
+			CheckRuns []gitHubCheckRun `json:"check_runs"`
+		}
+		query := url.Values{"per_page": {"100"}, "page": {strconv.Itoa(page)}}
+		if err := client.get(ctx, path, query, &result); err != nil {
+			return nil, err
+		}
+		checks = append(checks, result.CheckRuns...)
+		if len(result.CheckRuns) < 100 {
+			return checks, nil
+		}
+	}
+	return nil, errors.New("GitHub pull request checks exceeded the bounded pagination limit")
 }
 
 func (client gitHubClient) createIssue(ctx context.Context, owner, repository, title, body string) (gitHubIssue, error) {

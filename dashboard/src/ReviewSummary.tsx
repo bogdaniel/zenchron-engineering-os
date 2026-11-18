@@ -1,4 +1,5 @@
 import { Button, Switch } from '@mantine/core';
+import { useState } from 'react';
 import {
   IconAlertTriangle, IconDownload, IconFileText, IconGitBranch, IconGitMerge, IconLock, IconMinus, IconPlus, IconShieldCheck,
 } from '@tabler/icons-react';
@@ -14,7 +15,8 @@ const statTiles = [
 ] as const;
 
 /** The right-hand pane: description, change statistics, required checks, review actions, and merge governance. */
-export function ReviewSummary({ source, context, copy, view, status, pullRequest, issue, onOpenConversations, onMessage }: {
+export function ReviewSummary({ source, context, copy, view, status, pullRequest, issue, inspectedHeadSHA, diffLoading, diffError,
+  onOpenConversations, onMessage }: {
   source: ReviewsSource;
   context: string;
   copy: string;
@@ -22,9 +24,24 @@ export function ReviewSummary({ source, context, copy, view, status, pullRequest
   status?: QueueStatus;
   pullRequest?: GitHubPullRequest;
   issue?: GitHubIssue;
+  inspectedHeadSHA?: string;
+  diffLoading: boolean;
+  diffError: Error | null;
   onOpenConversations: () => void;
   onMessage: (message: string) => void;
 }) {
+  const [mergePending, setMergePending] = useState(false);
+  const merge = async () => {
+    if (!pullRequest || !source.merge || !inspectedHeadSHA || inspectedHeadSHA !== pullRequest.head.sha || mergePending) return;
+    setMergePending(true);
+    try {
+      onMessage(await source.merge(pullRequest, inspectedHeadSHA));
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : 'GitHub could not merge this pull request.');
+    } finally {
+      setMergePending(false);
+    }
+  };
   return <PanelCard className="reviews-summary" withBorder>
     <PanelHeading className="reviews-panel-heading" title="Review Summary" description={context} actions={<IconShieldCheck size={17} />} />
     <GitHubMarkdown className="reviews-summary-copy reviews-markdown" value={copy} />
@@ -53,9 +70,14 @@ export function ReviewSummary({ source, context, copy, view, status, pullRequest
         }}>{status?.value === 'changes-requested' ? 'Changes requested' : 'Request changes'}</Button>}
         {issue && <Button variant="default" onClick={onOpenConversations}>Add comment</Button>}
       </div>
-      <Button className="reviews-merge-button" disabled={!source.merge || !pullRequest} fullWidth
-        title={source.merge ? undefined : 'Merging is done on GitHub; the control plane has no merge operation'}
-        onClick={() => pullRequest && source.merge && onMessage(source.merge(pullRequest))}>{view.mergeLabel}</Button>
+      <Button className="reviews-merge-button" disabled={!source.merge || !pullRequest?.head.sha || !inspectedHeadSHA ||
+        inspectedHeadSHA !== pullRequest.head.sha || diffLoading || Boolean(diffError) || mergePending}
+        loading={mergePending} fullWidth
+        title={!source.merge ? 'Merging is done on GitHub; this view does not provide a merge operation'
+          : inspectedHeadSHA === pullRequest?.head.sha ? undefined
+            : diffLoading ? 'Loading the current pull request revision for review'
+              : 'Inspect the current pull request diff before merging'}
+        onClick={() => void merge()}>{view.mergeLabel}</Button>
       <Button variant="default" disabled={!source.exportEvidence || !pullRequest} fullWidth
         title={source.exportEvidence ? undefined : 'The control plane holds no evidence bundle for GitHub items'}
         onClick={() => pullRequest && source.exportEvidence?.(pullRequest)}><IconDownload size={14} /> Export evidence</Button>
@@ -63,6 +85,8 @@ export function ReviewSummary({ source, context, copy, view, status, pullRequest
     <div className="reviews-governance-heading"><IconGitMerge size={15} /><b>Merge Governance</b></div>
     <div className="reviews-governance-row"><span>Merge strategy</span><b>{view.governance.strategy ?? 'Unavailable'}</b></div>
     <div className="reviews-governance-row"><span>Target branch</span><b>{view.governance.target || 'Unavailable'}</b></div>
+    {pullRequest && <div className="reviews-governance-row"><span>Inspected head</span>
+      <b>{inspectedHeadSHA?.slice(0, 12) ?? (diffLoading ? 'Loading' : 'Unavailable')}</b></div>}
     <div className="reviews-governance-row"><span>Policy</span><b>{view.governance.policy ?? 'Unavailable'}</b></div>
     <div className="reviews-governance-row"><span>Auto-merge (when ready)</span><Switch size="xs" aria-label="Auto-merge when ready"
       checked={source.autoMerge?.checked ?? false} disabled={!source.autoMerge}

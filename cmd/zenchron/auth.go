@@ -183,7 +183,7 @@ func (config *authConfig) authorize(r *http.Request) (requestAccess, int, string
 		return requestAccess{}, http.StatusForbidden, "invalid request origin"
 	}
 	if policy == nil {
-		return requestAccess{}, 0, ""
+		return requestAccess{user: strings.ToLower(user.Login)}, 0, ""
 	}
 	login := strings.ToLower(user.Login)
 	return requestAccess{enforced: true, user: login, admin: slices.Contains(policy.Admins, login),

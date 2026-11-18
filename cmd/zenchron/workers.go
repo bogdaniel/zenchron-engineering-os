@@ -137,6 +137,7 @@ func newMuxWithStores(
 	mux.HandleFunc("GET /api/v1/projects/{id}/workflow-run-history", registry.listGitHubWorkflowRunHistory)
 	mux.HandleFunc("GET /api/v1/projects/{id}/pull-requests/{number}/diff", registry.getGitHubPullRequestDiff)
 	mux.HandleFunc("POST /api/v1/projects/{id}/pull-requests/{number}/reviews", registry.reviewGitHubPullRequest)
+	mux.HandleFunc("POST /api/v1/projects/{id}/pull-requests/{number}/merge", registry.mergeGitHubPullRequest)
 	mux.HandleFunc("GET /api/v1/projects/{id}/issues", registry.listGitHubIssues)
 	mux.HandleFunc("POST /api/v1/projects/{id}/issues/{number}/comments", registry.commentGitHubIssue)
 	mux.HandleFunc("PATCH /api/v1/projects/{id}/issues/{number}", registry.updateGitHubIssue)

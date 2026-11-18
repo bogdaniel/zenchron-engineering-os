@@ -5,10 +5,12 @@ detail pane with the review pipeline and six detail tabs, and a summary pane wit
 review actions, and merge governance. Two data sources feed it ([One dashboard, two data modes](../architecture/dashboard-modes.md)).
 **Live** lists the open GitHub pull requests and issues of a connected GitHub.com checkout, loads the selected pull
 request's diff, and lists agent runs with the bounded diff of their isolated branch. Reviewers comment on, close, or
-reopen issues, submit a pull-request comment or request changes through the control plane, comment on an agent run,
-request a follow-up attempt on the same branch, cancel an active run, and read a run's evidence. **Mock** shows the
-approved fixtures and changes only this tab's state. Approval, merge, inbound GitHub reviews, checks on GitHub items,
-and policy results are not available from the control plane, and Live says so.
+reopen issues, submit a pull-request comment or request changes through the control plane, merge an eligible pull
+request through GitHub's protected merge endpoint, comment on an agent run, request a follow-up attempt on the same
+branch, cancel an active run, and read a run's evidence. **Mock** shows the approved fixtures and changes only this
+tab's state. Approval and auto-merge remain GitHub-only. Live reports merge refusal reasons from the control plane and
+GitHub. The merge endpoint verifies the signed-in operator's GitHub repository permission before using the control
+plane credential, and GitHub enforces branch protection.
 
 ## Feature diagram
 
@@ -26,17 +28,18 @@ flowchart LR
     Detail --> Evidence["RunEvidence · runEvidence.tsx"]
     Live -->|"GET /api/v1/projects/{id}/pull-requests"| API[(Go control plane)]
     Live -->|"GET /api/v1/projects/{id}/issues"| API
-    Page -->|"GET /api/v1/projects/{id}/pull-requests/{number}/diff"| API
+    Page -->|"GET /api/v1/projects/{id}/pull-requests/{number}/diff · inspected head SHA"| API
     Page -->|"GET /api/v1/agent-runs/{id}/diff"| API
     Shell["main.tsx"] -->|"GET /api/v1/projects, /api/v1/agent-runs"| API
     Shell -->|projects, runs| Page
     Live -->|"POST /api/v1/projects/{id}/pull-requests/{number}/reviews"| API
+    Live -->|"POST /api/v1/projects/{id}/pull-requests/{number}/merge · inspected head SHA"| API
     Live -->|"POST /api/v1/projects/{id}/issues/{number}/comments"| API
     Live -->|"PATCH /api/v1/projects/{id}/issues/{number}"| API
     Local -->|"POST /api/v1/agent-runs/{id}/comments, /request-changes, /cancel"| API
     Evidence -->|"GET /api/v1/agent-runs/{id}/events, /pull-request"| API
     Evidence -->|"POST /api/v1/agent-runs/{id}/sync-reviews, /publish"| API
-    API -->|open items, diff, review and issue writes| GitHub[GitHub REST API]
+    API -->|open items, head-bound diff, paged checks and reviews, operator permission, review / issue / protected merge writes| GitHub[GitHub REST API]
     API -->|request changes: requeue the same run and branch| Worker[Assigned local worker]
     GitHub -->|Markdown / HTML body| Render[marked, then DOMPurify; images removed]
     Render --> Summary
@@ -81,7 +84,9 @@ Live only:
   and Review Queue the agent-run branches with a captured diff. Avg. Review Time, Merge Success Rate, and Policy Gate
   Pass are Unavailable, and no trend graphics are drawn.
 - **Pull request.** Files Changed, Lines Added, and Lines Removed are counted from the loaded diff; Commits, Risk
-  Score, Evidence Completeness, Required checks, Merge strategy, and Policy are Unavailable; Target branch is the
+  Score, Evidence Completeness, displayed Required checks, Merge strategy, and Policy are Unavailable; the merge
+  request checks the current GitHub head, reviews, check runs, commit statuses, and the operator's GitHub permission
+  before GitHub enforces branch policy. Target branch is the
   pull request's base. The pipeline shows Open or Draft under Code review and Unavailable for the other stages. The
   six context cards and the AI Suggestions, Evidence, Checklist, and Approvals tabs state what is not synchronized.
   "Open pull request on GitHub" is in the overflow menu. Conversations submits a comment or a request for changes;
@@ -94,8 +99,16 @@ Live only:
   are available on terminal runs with diffs; the latter requires an online worker with the profile's coding CLI ready, `code.write`
   permission and a remaining attempt. "Cancel run" is enabled while the run is queued or running. The Evidence tab
   shows `RunEvidence` ([Issue to pull request](issue-to-pull-request.md)).
-- **Disabled with the reason.** New PR, Approve, Merge to protected branch, Export evidence, the bookmark, the date
-  range, and Auto-merge. Nothing in Live simulates a merge.
+- **Governed merge.** The diff request is bound to the selected full head SHA and rechecks the SHA around the diff
+  fetch. Merge stays disabled until that exact revision is displayed, then sends the inspected SHA. The control plane
+  requires a trusted human approval and successful CI evidence for that SHA from a check run or commit status, rejects
+  outstanding change requests, and requires GitHub to report the pull request clean and mergeable. It verifies the
+  signed-in operator has write, maintain, or admin permission on the repository before using its configured GitHub
+  credential. It reads the repository's enabled merge methods and asks GitHub to merge with the configured method;
+  GitHub still applies branch protection. Reviews and check runs are fully paged with a bounded fail-closed limit.
+  Success includes GitHub's merge commit and refreshes dashboard queries.
+- **Disabled with the reason.** New PR, Approve, Export evidence, the bookmark, the date range, and Auto-merge.
+  Nothing in Live simulates a merge.
 
 Mock only:
 
@@ -114,7 +127,8 @@ Mock only:
   Unavailable values, disabled controls, queue filters, search by branch, the reset menu, safe Markdown rendering, the
   pull-request diff and its statistics, a multi-file patch in Unified and Split, issue comment / close / reopen, both
   review actions with their run-sync messages and the exact write requests, the repository menu, a copied `?pull=`
-  link, a failed GitHub load without fixtures, and the phone layout without overflow.
+  link, a failed GitHub load without fixtures, a SHA-bound diff, an exact-head merge request and result, and the phone layout without
+  overflow.
 - `cd dashboard && npm run test:e2e -- e2e/reviews-preview.spec.ts`: the same frame in Mock with every local action,
   the Unified minimap, coloured change rows, Split view, the phone layout, and no API traffic beyond the session check.
 - `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Reviews'`: the approved frame geometry, the

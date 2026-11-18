@@ -79,8 +79,8 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
     ? selectedRunID ? (designPreview ? source.runs.items : runs).find((item) => item.id === selectedRunID)
       : source.runs.items[0] : undefined;
 
-  const liveDiff = useLivePullRequestDiff(!designPreview, source.project?.id, pullRequest?.number);
-  const pullRequestDiff = designPreview ? mockPullRequestDiff : liveDiff;
+  const liveDiff = useLivePullRequestDiff(!designPreview, source.project?.id, pullRequest?.number, pullRequest?.head.sha);
+  const pullRequestDiff = designPreview ? { ...mockPullRequestDiff, headSHA: pullRequest?.head.sha } : liveDiff;
   const runDiff = useQuery({
     queryKey: ['agent-run-diff', section, run?.id, run?.diff_attempt],
     queryFn: () => loadDiff(run!.id),
@@ -199,6 +199,7 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
         <Separator id="detail-summary-separator" className="reviews-resize-handle" aria-label="Resize review detail and summary" />
         <Panel id="summary" className="reviews-pane" minSize={stacked ? '300px' : '205px'}>
           <ReviewSummary source={source} view={view} pullRequest={pullRequest} issue={issue}
+            inspectedHeadSHA={pullRequestDiff.headSHA} diffLoading={pullRequestDiff.loading} diffError={pullRequestDiff.error}
             status={pullRequest && source.pullRequestStatus(pullRequest)}
             context={section === 'local-branches' ? 'Local branch context' : pullRequest ? 'GitHub pull request context'
               : issue ? 'GitHub issue context' : 'Select a GitHub item for context'}
