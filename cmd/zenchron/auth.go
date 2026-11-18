@@ -93,6 +93,11 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if r.Method == http.MethodGet && r.URL.Path == "/api/v1/system/status" &&
+			isLoopbackRequest(r) && localRequestOrigin(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if r.URL.Path == "/auth/github" && r.Method == http.MethodGet {
 			if config == nil {
 				http.Error(w, "GitHub sign-in is not configured", http.StatusNotFound)

@@ -1,0 +1,96 @@
+package main
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
+)
+
+func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
+	revision := strings.Repeat("a", 40)
+	t.Setenv("ZENCHRON_RELEASE_REVISION", revision)
+	updateFile := filepath.Join(t.TempDir(), "update.json")
+	if err := updater.WriteStatus(updateFile, updater.Status{State: "active", RunningRevision: revision}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENCHRON_UPDATE_STATUS_FILE", updateFile)
+	registry := newWorkerRegistry()
+	registry.workers["online"] = workerRecord{ID: "online", LastSeen: time.Now()}
+	registry.workers["offline"] = workerRecord{ID: "offline", LastSeen: time.Now().Add(-time.Minute)}
+	graphs := &workGraphStore{graphs: map[string]*workGraph{
+		"graph": {Status: graphBlocked, Units: []workUnit{
+			{State: unitQueued}, {State: unitRunning}, {State: unitWaiting}, {State: unitFailed},
+		}, Messages: []graphMessage{
+			{ID: "open", Type: messageDecisionRequest},
+			{ID: "resolved", Type: messageDecisionRequest},
+			{Type: messageDecisionResolution, Resolves: "resolved"},
+		}},
+	}}
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+	request.RemoteAddr = "127.0.0.1:4000"
+	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	response := httptest.NewRecorder()
+	writeLocalSystemStatus(response, request, registry, graphs)
+	var status systemStatus
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("system status response: decode error %v, HTTP %d", err, response.Code)
+	}
+	if status.Workers.Online != 1 || status.Workers.Total != 2 || status.Work.ActiveGraphs != 0 ||
+		status.Work.BlockedGraphs != 1 ||
+		status.Work.QueuedUnits != 1 || status.Work.RunningUnits != 1 || status.Work.WaitingUnits != 1 ||
+		status.Work.FailedUnits != 1 || status.Work.OpenDecisions != 1 || status.UpdateState != "active" {
+		t.Fatalf("system status = %#v", status)
+	}
+}
+
+func TestLocalSystemStatusRejectsRemoteAndCrossOriginRequests(t *testing.T) {
+	for name, request := range map[string]*http.Request{
+		"remote": func() *http.Request {
+			r := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+			r.RemoteAddr = "192.0.2.1:4000"
+			r.Header.Set("Origin", "http://127.0.0.1:8080")
+			return r
+		}(),
+		"cross origin": func() *http.Request {
+			r := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+			r.RemoteAddr = "127.0.0.1:4000"
+			r.Header.Set("Origin", "https://example.com")
+			return r
+		}(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			writeLocalSystemStatus(response, request, newWorkerRegistry(), newWorkGraphStore(nil, nil, nil, nil))
+			if response.Code != http.StatusForbidden {
+				t.Fatalf("system status HTTP = %d, want %d", response.Code, http.StatusForbidden)
+			}
+		})
+	}
+}
+
+func TestLocalSystemStatusPassesAuthOnlyForSameOriginLoopbackRead(t *testing.T) {
+	server := authHandler(newMux(), testAuthConfig())
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+	request.RemoteAddr = "127.0.0.1:4000"
+	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("local system status HTTP = %d, want %d", response.Code, http.StatusOK)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+	request.RemoteAddr = "192.0.2.1:4000"
+	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("remote system status HTTP = %d, want session auth %d", response.Code, http.StatusUnauthorized)
+	}
+}

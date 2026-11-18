@@ -135,6 +135,9 @@ func newMuxWithStores(
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "revision": os.Getenv("ZENCHRON_RELEASE_REVISION")})
 	})
+	mux.HandleFunc("GET /api/v1/system/status", func(w http.ResponseWriter, r *http.Request) {
+		writeLocalSystemStatus(w, r, registry, runs.graphs)
+	})
 	mux.HandleFunc("GET /api/v1/system/update", systemUpdateStatus)
 	mux.HandleFunc("GET /api/v1/system/update/active-runs", func(w http.ResponseWriter, r *http.Request) {
 		activeSystemRunCount(w, r, runs)
