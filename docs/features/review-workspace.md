@@ -9,7 +9,8 @@ reopen issues, submit a pull-request comment or request changes through the cont
 request through GitHub's protected merge endpoint, comment on an agent run, request a follow-up attempt on the same
 branch, cancel an active run, and read a run's evidence. **Mock** shows the approved fixtures and changes only this
 tab's state. Approval and auto-merge remain GitHub-only. Live reports merge refusal reasons from the control plane and
-GitHub, and GitHub enforces repository permissions and branch protection.
+GitHub. The merge endpoint verifies the signed-in operator's GitHub repository permission before using the control
+plane credential, and GitHub enforces branch protection.
 
 ## Feature diagram
 
@@ -38,7 +39,7 @@ flowchart LR
     Local -->|"POST /api/v1/agent-runs/{id}/comments, /request-changes, /cancel"| API
     Evidence -->|"GET /api/v1/agent-runs/{id}/events, /pull-request"| API
     Evidence -->|"POST /api/v1/agent-runs/{id}/sync-reviews, /publish"| API
-    API -->|open items, head-bound diff, paged checks and reviews, review / issue / protected merge writes| GitHub[GitHub REST API]
+    API -->|open items, head-bound diff, paged checks and reviews, operator permission, review / issue / protected merge writes| GitHub[GitHub REST API]
     API -->|request changes: requeue the same run and branch| Worker[Assigned local worker]
     GitHub -->|Markdown / HTML body| Render[marked, then DOMPurify; images removed]
     Render --> Summary
@@ -84,7 +85,8 @@ Live only:
   Pass are Unavailable, and no trend graphics are drawn.
 - **Pull request.** Files Changed, Lines Added, and Lines Removed are counted from the loaded diff; Commits, Risk
   Score, Evidence Completeness, displayed Required checks, Merge strategy, and Policy are Unavailable; the merge
-  request checks the current GitHub head, reviews, and checks before GitHub enforces branch policy. Target branch is the
+  request checks the current GitHub head, reviews, check runs, commit statuses, and the operator's GitHub permission
+  before GitHub enforces branch policy. Target branch is the
   pull request's base. The pipeline shows Open or Draft under Code review and Unavailable for the other stages. The
   six context cards and the AI Suggestions, Evidence, Checklist, and Approvals tabs state what is not synchronized.
   "Open pull request on GitHub" is in the overflow menu. Conversations submits a comment or a request for changes;
@@ -99,11 +101,12 @@ Live only:
   shows `RunEvidence` ([Issue to pull request](issue-to-pull-request.md)).
 - **Governed merge.** The diff request is bound to the selected full head SHA and rechecks the SHA around the diff
   fetch. Merge stays disabled until that exact revision is displayed, then sends the inspected SHA. The control plane
-  requires a trusted human approval and at least one successful check on that SHA, rejects outstanding change
-  requests, and refuses stale, draft, conflicting, blocked, and unsettled-check pull requests. It reads the repository's
-  enabled merge methods and asks GitHub to merge with the configured method; GitHub still applies repository
-  permissions and branch protection. Reviews and checks are fully paged with a bounded fail-closed limit. Success
-  includes GitHub's merge commit and refreshes dashboard queries.
+  requires a trusted human approval and successful CI evidence for that SHA from a check run or commit status, rejects
+  outstanding change requests, and requires GitHub to report the pull request clean and mergeable. It verifies the
+  signed-in operator has write, maintain, or admin permission on the repository before using its configured GitHub
+  credential. It reads the repository's enabled merge methods and asks GitHub to merge with the configured method;
+  GitHub still applies branch protection. Reviews and check runs are fully paged with a bounded fail-closed limit.
+  Success includes GitHub's merge commit and refreshes dashboard queries.
 - **Disabled with the reason.** New PR, Approve, Export evidence, the bookmark, the date range, and Auto-merge.
   Nothing in Live simulates a merge.
 

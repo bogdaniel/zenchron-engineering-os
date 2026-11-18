@@ -82,6 +82,30 @@ func TestAuthenticatedAPIMutationsRejectCrossOriginRequests(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedGitHubLoginIsAvailableWithoutRepositoryPolicy(t *testing.T) {
+	config := testAuthConfig()
+	user := authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	session, err := signSession(user, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := authHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"user": accessFor(r).user})
+	}), config)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/test", nil)
+	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	request.Header.Set("Origin", config.publicURL.String())
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	var access struct {
+		User string `json:"user"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &access); err != nil || response.Code != http.StatusOK ||
+		access.User != "engineer" {
+		t.Fatalf("authenticated access = %#v, HTTP %d, %v", access, response.Code, err)
+	}
+}
+
 func TestRequestOriginAcceptsImplicitHTTPSPort(t *testing.T) {
 	config := testAuthConfig()
 	config.publicURL = mustURL("https://zenchron.example:443")

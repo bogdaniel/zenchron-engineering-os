@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,6 +17,13 @@ type gitHubMergeResult struct {
 	SHA     string `json:"sha"`
 	Merged  bool   `json:"merged"`
 	Message string `json:"message"`
+}
+
+type gitHubCommitStatus struct {
+	State    string `json:"state"`
+	Statuses []struct {
+		State string `json:"state"`
+	} `json:"statuses"`
 }
 
 func (client gitHubClient) mergePullRequest(ctx context.Context, owner, repository string, number int, expectedHead, method string) (gitHubMergeResult, error) {
@@ -47,6 +55,11 @@ func (client gitHubClient) mergePullRequest(ctx context.Context, owner, reposito
 func (registry *workerRegistry) mergeGitHubPullRequest(w http.ResponseWriter, r *http.Request) {
 	if !localOrAuthorizedClient(r) {
 		http.Error(w, "GitHub pull request merges require an authorized local operator", http.StatusForbidden)
+		return
+	}
+	operator := accessFor(r).user
+	if operator == "" {
+		http.Error(w, "sign in with GitHub before merging a pull request", http.StatusForbidden)
 		return
 	}
 	owner, repository, ok := registry.projectRepository(w, r)
@@ -108,6 +121,11 @@ func (registry *workerRegistry) mergeGitHubPullRequest(w http.ResponseWriter, r 
 		http.Error(w, "current pull request checks are unavailable; nothing was merged", http.StatusBadGateway)
 		return
 	}
+	status, err := registry.github.commitStatus(r.Context(), owner, repository, input.HeadSHA)
+	if err != nil {
+		http.Error(w, "current pull request status checks are unavailable; nothing was merged", http.StatusBadGateway)
+		return
+	}
 	reviews, err := registry.github.pullRequestReviews(r.Context(), owner, repository, number)
 	if err != nil {
 		http.Error(w, "current pull request reviews are unavailable; nothing was merged", http.StatusBadGateway)
@@ -121,12 +139,17 @@ func (registry *workerRegistry) mergeGitHubPullRequest(w http.ResponseWriter, r 
 		http.Error(w, "a trusted human approval on the current pull request head is required", http.StatusConflict)
 		return
 	}
-	if !hasSuccessfulCheck(checks) {
+	if !hasSuccessfulCheck(checks, status) {
 		http.Error(w, "at least one successful CI check on the current pull request head is required", http.StatusConflict)
 		return
 	}
-	if check := unsettledCheck(checks); check != "" {
-		http.Error(w, "check "+check+" has not completed successfully", http.StatusConflict)
+	permission, err := registry.github.collaboratorPermission(r.Context(), owner, repository, operator)
+	if err != nil {
+		http.Error(w, "GitHub could not verify your repository merge permission; nothing was merged", http.StatusBadGateway)
+		return
+	}
+	if !canMergeWithPermission(permission) {
+		http.Error(w, "your GitHub account lacks write permission to merge this repository", http.StatusForbidden)
 		return
 	}
 	method, err := registry.github.pullRequestMergeMethod(r.Context(), owner, repository)
@@ -203,13 +226,49 @@ func hasCurrentApproval(reviews []gitHubReview, head string) bool {
 	return false
 }
 
-func hasSuccessfulCheck(checks []gitHubCheckRun) bool {
+func hasSuccessfulCheck(checks []gitHubCheckRun, status gitHubCommitStatus) bool {
 	for _, check := range checks {
 		if check.Status == "completed" && check.Conclusion == "success" {
 			return true
 		}
 	}
-	return false
+	if status.State == "success" {
+		return true
+	}
+	return slices.ContainsFunc(status.Statuses, func(check struct {
+		State string `json:"state"`
+	}) bool {
+		return check.State == "success"
+	})
+}
+
+func (client gitHubClient) commitStatus(ctx context.Context, owner, repository, commit string) (gitHubCommitStatus, error) {
+	var status gitHubCommitStatus
+	path := "/repos/" + owner + "/" + repository + "/commits/" + commit + "/status"
+	if err := client.get(ctx, path, nil, &status); err != nil {
+		return gitHubCommitStatus{}, err
+	}
+	return status, nil
+}
+
+func (client gitHubClient) collaboratorPermission(ctx context.Context, owner, repository, login string) (string, error) {
+	var result struct {
+		Permission string `json:"permission"`
+	}
+	path := "/repos/" + owner + "/" + repository + "/collaborators/" + url.PathEscape(login) + "/permission"
+	if err := client.get(ctx, path, nil, &result); err != nil {
+		return "", err
+	}
+	return result.Permission, nil
+}
+
+func canMergeWithPermission(permission string) bool {
+	switch permission {
+	case "write", "maintain", "admin":
+		return true
+	default:
+		return false
+	}
 }
 
 func (client gitHubClient) pullRequestMergeMethod(ctx context.Context, owner, repository string) (string, error) {
@@ -231,18 +290,6 @@ func (client gitHubClient) pullRequestMergeMethod(ctx context.Context, owner, re
 		return "rebase", nil
 	}
 	return "", errors.New("repository has no enabled merge method")
-}
-
-func unsettledCheck(checks []gitHubCheckRun) string {
-	for _, check := range checks {
-		if check.Status != "completed" {
-			return check.Name
-		}
-		if check.Conclusion != "success" && check.Conclusion != "neutral" && check.Conclusion != "skipped" {
-			return check.Name
-		}
-	}
-	return ""
 }
 
 func mergeFailureStatus(err error) int {
