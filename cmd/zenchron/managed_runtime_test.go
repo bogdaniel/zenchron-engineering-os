@@ -1,10 +1,14 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -12,6 +16,7 @@ import (
 	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 type managedTestTransport func(*http.Request) (*http.Response, error)
@@ -220,6 +225,83 @@ func TestInterruptedCandidateStartupCannotRollBackAfterPointerAdvance(t *testing
 	if err != nil || status.State != "blocked" || status.RunningRevision != "" ||
 		status.LastFailedRevision != candidate || !strings.Contains(status.BlockReason, "durable boundary") {
 		t.Fatalf("blocked recovery status = %#v, %v", status, err)
+	}
+}
+
+func TestBlockedActivationRecoverySurvivesSupervisorRestart(t *testing.T) {
+	const restartTestEnv = "ZENCHRON_TEST_BLOCKED_ACTIVATION_RESTART"
+	if os.Getenv(restartTestEnv) == "1" {
+		err := runManaged()
+		if err == nil || !strings.Contains(err.Error(), "control plane and worker were not started") {
+			t.Fatalf("blocked supervisor restart returned %v", err)
+		}
+		return
+	}
+
+	home := t.TempDir()
+	dataDir := filepath.Join(home, "state")
+	candidate := "abcdef0123456789abcdef0123456789abcdef01"
+	tree := "0123456789abcdef0123456789abcdef01234567"
+	marker := filepath.Join(home, "child-started")
+	releaseDir := filepath.Join(home, "releases", candidate)
+	controlPlane := "#!/bin/sh\nprintf started >> \"$ZENCHRON_BLOCKED_START_MARKER\"\nexit 0\n"
+	worker := controlPlane
+	dashboard := "<html>candidate</html>"
+	artifacts := map[string]string{"bin/zenchron": controlPlane, "bin/zenchron-worker": worker,
+		"dashboard/index.html": dashboard}
+	for path, content := range artifacts {
+		fullPath := filepath.Join(releaseDir, path)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(fullPath, []byte(content), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifest := updater.Manifest{Repository: "bogdaniel/zenchron-engineering-os", Commit: candidate, Tree: tree,
+		StateSchemaVersion: updater.StateSchemaVersion, ControlPlaneProtocolVersion: workerapi.ProtocolVersion,
+		WorkerProtocolVersion: workerapi.ProtocolVersion, Artifacts: make(map[string]string, len(artifacts))}
+	for path, content := range artifacts {
+		digest := sha256.Sum256([]byte(content))
+		manifest.Artifacts[path] = hex.EncodeToString(digest[:])
+	}
+	manifestData, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(releaseDir, "release.json"), manifestData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := updater.SetActiveRelease(home, candidate); err != nil {
+		t.Fatal(err)
+	}
+	status := updater.Status{State: "blocked", LatestRevision: candidate, LastFailedRevision: candidate,
+		BlockReason: activationRecoveryBlockedReason, LastFailureReason: activationRecoveryBlockedReason}
+	statusPath := filepath.Join(dataDir, "system-update.json")
+	if err := updater.WriteStatus(statusPath, status); err != nil {
+		t.Fatal(err)
+	}
+
+	command := exec.Command(os.Args[0], "-test.run=^TestBlockedActivationRecoverySurvivesSupervisorRestart$")
+	command.Env = withEnvironment(os.Environ(), map[string]string{
+		"ZENCHRON_MANAGED_HOME": home, "ZENCHRON_DATA_DIR": dataDir,
+		"ZENCHRON_BLOCKED_START_MARKER": marker, restartTestEnv: "1",
+	})
+	output, err := command.CombinedOutput()
+	if _, markerErr := os.Stat(marker); !errors.Is(markerErr, os.ErrNotExist) {
+		t.Fatalf("candidate child started after blocked supervisor restart; stat error=%v, output=%s", markerErr, output)
+	}
+	if err != nil {
+		t.Fatalf("blocked supervisor restart failed: %v\n%s", err, output)
+	}
+	active, err := updater.ActiveRelease(home)
+	if err != nil || active != candidate {
+		t.Fatalf("blocked supervisor restart changed active release to %q: %v", active, err)
+	}
+	after, err := updater.ReadStatus(statusPath)
+	if err != nil || after.State != status.State || after.RunningRevision != "" || after.LatestRevision != candidate ||
+		after.BlockReason != status.BlockReason || after.LastFailedRevision != candidate {
+		t.Fatalf("blocked status changed during supervisor restart: %#v, %v", after, err)
 	}
 }
 

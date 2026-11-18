@@ -23,9 +23,10 @@ import (
 )
 
 const (
-	updatePollInterval    = 5 * time.Minute
-	updateHealthTimeout   = 30 * time.Second
-	updateRunPollInterval = 2 * time.Second
+	updatePollInterval              = 5 * time.Minute
+	updateHealthTimeout             = 30 * time.Second
+	updateRunPollInterval           = 2 * time.Second
+	activationRecoveryBlockedReason = "Candidate release failed after the active release pointer crossed its durable boundary; automatic rollback is blocked"
 )
 
 type managedRuntime struct {
@@ -87,6 +88,10 @@ func runManaged() error {
 		runtime.status = status
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("read managed update status: %w", err)
+	}
+	if activationRecoveryBlocked(runtime.status) {
+		return fmt.Errorf("managed activation recovery for %s remains blocked; control plane and worker were not started: %s",
+			runtime.status.LatestRevision, runtime.status.BlockReason)
 	}
 	activationCandidate := runtime.status.State == "activating" && runtime.status.LatestRevision == commit &&
 		runtime.status.RunningRevision != "" && runtime.status.RunningRevision != commit
@@ -355,18 +360,22 @@ func (runtime *managedRuntime) restorePreviousRelease(startErr error) error {
 }
 
 func (runtime *managedRuntime) blockActivationRecovery(startErr error) error {
-	message := "Candidate release failed after the active release pointer crossed its durable boundary; automatic rollback is blocked"
 	runtime.status.State = "blocked"
 	runtime.status.Progress = ""
 	runtime.status.RunningRevision = ""
-	runtime.status.BlockReason = boundedUpdateReason(message)
+	runtime.status.BlockReason = activationRecoveryBlockedReason
 	runtime.status.LastFailureReason = runtime.status.BlockReason
 	runtime.status.LastFailure = time.Now().UTC()
 	runtime.status.LastFailedRevision = runtime.status.LatestRevision
 	if err := runtime.writeStatus(); err != nil {
-		return fmt.Errorf("%s: %v; persist blocked recovery status: %w", message, startErr, err)
+		return fmt.Errorf("%s: %v; persist blocked recovery status: %w", activationRecoveryBlockedReason, startErr, err)
 	}
-	return fmt.Errorf("%s: %w", message, startErr)
+	return fmt.Errorf("%s: %w", activationRecoveryBlockedReason, startErr)
+}
+
+func activationRecoveryBlocked(status updater.Status) bool {
+	return status.State == "blocked" && status.RunningRevision == "" &&
+		status.BlockReason == activationRecoveryBlockedReason
 }
 
 func (runtime *managedRuntime) activateRelease(commit string) error {

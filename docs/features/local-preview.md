@@ -29,7 +29,10 @@ waits for existing CLI attempts to finish. It stops the old worker before its co
 supervisor with the old release pointer still authoritative. The candidate starts the control plane in admission-paused
 mode, proves its HTTP identity, observes a matching worker heartbeat and serves the dashboard. Only after these checks
 does it atomically advance `active-release`, reopen admission and persist success. An interrupted pre-proof activation
-returns to the old release. Incompatible state or protocol versions stay blocked before service shutdown.
+returns to the old release. If recovery fails after the active pointer advances, the supervisor persists a blocked
+status. LaunchAgent may restart the supervisor, but it reads that marker and exits before starting either child; the
+blocked state and pointer remain unchanged until operator recovery. Incompatible state or protocol versions stay
+blocked before service shutdown.
 
 The local `status` command and Settings / System Update page read the same persisted status record. The dashboard
 reconnects to update progress, keeps Mock isolated from the API, and automatically reloads only after it observes a new
@@ -60,6 +63,11 @@ sequenceDiagram
     D->>CP: Reconnect and observe the new running revision
     CP-->>D: Serve the verified versioned dashboard
     S->>R: Atomically advance active pointer after health proof
+    opt Candidate recovery fails after pointer advancement
+        S->>S: Persist blocked status and exit
+        S->>S: LaunchAgent restarts supervisor
+        S->>R: Read blocked marker without starting child processes
+    end
     S->>CP: Reopen run admission and persist active status
     D->>D: Reload current URL to use the new dashboard bundle
 ```
