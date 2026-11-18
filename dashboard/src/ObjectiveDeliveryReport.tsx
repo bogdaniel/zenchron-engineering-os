@@ -111,9 +111,12 @@ function ReportDetails({ report }: { report: Report }) {
         {run.failure_recorded && <span>Failure recorded for this run.</span>}
       </div>)}
     </article>)}</div>
-    <p>Pull request: {report.pull_request_url
+    <h5>Execution and publication</h5>
+    <p>WorkGraph execution: {report.status}</p>
+    <p>Recorded pull request: {report.pull_request_url
       ? <a href={report.pull_request_url} target="_blank" rel="noreferrer">{report.pull_request_url}</a>
-      : report.units.find((unit) => unit.kind === 'integrate')?.reason || 'Unknown · no pull-request link was recorded.'}</p>
+      : <>{report.units.find((unit) => unit.kind === 'integrate')?.reason || 'No pull-request URL was recorded.'}
+        {' WorkGraph completion does not establish publication.'}</>}</p>
     <h5>Handoffs and decisions</h5>
     {report.handoffs.map((handoff, index) => <p key={`${handoff.run_id}-${handoff.attempt}-${index}`}>
       <b>{handoff.from}</b>{handoff.commit && <> · <code>{handoff.commit}</code></>} · {handoff.summary}

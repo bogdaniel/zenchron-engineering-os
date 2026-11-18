@@ -450,6 +450,10 @@ test('an objective plan approved in the dashboard runs through decision, review,
   const report = panel.getByRole('region', { name: 'Objective delivery report' });
   await report.getByRole('button', { name: 'View delivery report' }).click();
   await expect(report).toContainText('Approved plan revision 1');
+  await expect(report.getByRole('heading', { name: 'Execution and publication' })).toBeVisible();
+  await expect(report).toContainText(/WorkGraph execution: (active|blocked|completed|failed|cancelled)/);
+  await expect(report).toContainText('Recorded pull request: GitHub publication is not configured');
+  await expect(report).toContainText('WorkGraph completion does not establish publication.');
   await expect(report).toContainText(`Compiled from workflow ${created.workflowID} · version ${created.workflowVersion}`);
   await expect(report.getByRole('link', { name: created.workflowID, exact: true }))
     .toHaveAttribute('href', `/?workflow=${created.workflowID}&mode=live#workflows`);

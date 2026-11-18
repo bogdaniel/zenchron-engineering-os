@@ -62,6 +62,10 @@ flowchart LR
     Recorded values are not invented; unavailable or partial measurements are named here.
 - Top-level `pull_request_url` is included when the integrate unit has one. Otherwise it is omitted and never listed
   in `measurements.unknown`.
+- The dashboard labels WorkGraph execution status separately from the recorded pull-request link. A completed graph
+  without a PR link is not presented as published; it shows the integrate unit's recorded reason and says execution
+  completion does not establish publication. External PR state and publication authority remain unknown unless their
+  source records become available.
 
 ## Verification
 
@@ -73,7 +77,8 @@ flowchart LR
 | `TestPlanPinsProfileConfigurationAndRejectsStaleApproval` | The approved report source keeps profile/persona versions through restart and edits. |
 
 The Objective Workspace offers a typed JSON export. The browser validates its response shape before displaying or
-exporting it; partial usage and human-action measurements remain explicitly qualified.
+exporting it; partial usage and human-action measurements remain explicitly qualified. The browser acceptance also
+checks that execution completion and recorded pull-request evidence are displayed separately.
 
 Commands: `go test ./cmd/zenchron -run 'TestWorkGraphReport|TestPlanPinsProfileConfiguration' -count=1`; the
 focused Playwright acceptance lives in `dashboard/e2e/orchestration.spec.ts`.
