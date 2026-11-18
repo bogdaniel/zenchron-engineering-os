@@ -6,6 +6,11 @@ rm -rf "$data_dir"
 mkdir -m 700 "$data_dir"
 project_dir="$data_dir/projects/zenchron-engineering-os"
 mkdir -p "$project_dir"
+if [ "${ZENCHRON_E2E_EMPTY_WORKFLOWS:-false}" = true ]; then
+  state_version="$(go run ./cmd/zenchron build-info | sed -n 's/.*"state_schema_version":\([0-9][0-9]*\).*/\1/p')"
+  test -n "$state_version"
+  printf '{"version":%s,"items":{}}\n' "$state_version" > "$data_dir/workflows.json"
+fi
 git -C "$project_dir" init -b main
 git -C "$project_dir" config user.name "Zenchron E2E"
 git -C "$project_dir" config user.email "zenchron-e2e@example.invalid"
