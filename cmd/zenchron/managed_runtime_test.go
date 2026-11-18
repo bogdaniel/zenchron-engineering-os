@@ -96,6 +96,32 @@ func TestFailedCandidateWaitsForExplicitRetryOrNewMain(t *testing.T) {
 	}
 }
 
+func TestOnlyFailedUpdatesSuppressAutomaticRetry(t *testing.T) {
+	candidate := "abcdef0123456789abcdef0123456789abcdef01"
+	for _, test := range []struct {
+		state     string
+		wantDefer bool
+	}{
+		{state: "blocked"},
+		{state: "failed", wantDefer: true},
+	} {
+		t.Run(test.state, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "system-update.json")
+			runtime := &managedRuntime{statusPath: path, status: updater.Status{LatestRevision: candidate}}
+			if err := runtime.failUpdate(test.state, "transient fetch failure"); err == nil {
+				t.Fatal("update failure was not reported")
+			}
+			status, err := updater.ReadStatus(path)
+			if err != nil || status.State != test.state || status.LastFailureReason == "" {
+				t.Fatalf("persisted update status = %#v, %v", status, err)
+			}
+			if got := shouldDeferFailedCandidate(status, candidate, "previous", false); got != test.wantDefer {
+				t.Fatalf("automatic retry defer = %t, want %t", got, test.wantDefer)
+			}
+		})
+	}
+}
+
 func TestManagedRuntimePreservesCLIChildrenUntilActiveRunsReachSafeBoundary(t *testing.T) {
 	directory := t.TempDir()
 	firstActiveCount := make(chan struct{}, 1)
