@@ -125,10 +125,14 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	harness.restart()
 	replayed, _ := harness.deliveryReport(started.ID)
 	if original.PullRequest != nil {
-		original.PullRequest.ObservedAt = time.Time{}
+		observed := *original.PullRequest
+		observed.ObservedAt = time.Time{}
+		original.PullRequest = &observed
 	}
 	if replayed.PullRequest != nil {
-		replayed.PullRequest.ObservedAt = time.Time{}
+		observed := *replayed.PullRequest
+		observed.ObservedAt = time.Time{}
+		replayed.PullRequest = &observed
 	}
 	if !reflect.DeepEqual(replayed, original) {
 		t.Fatalf("report after restart = %#v, before restart %#v", replayed, original)
