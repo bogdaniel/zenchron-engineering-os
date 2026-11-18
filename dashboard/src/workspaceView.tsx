@@ -20,6 +20,7 @@ export type WorkspaceRoadmapRow = {
 export type WorkspaceObjectiveRow = { title: string; detail?: string; progress: number; done: boolean; href?: string };
 export type WorkspaceRepositoryRow = { name: string; detail?: string; branch: string };
 export type WorkspaceStatusRow = { name: string; state: string; detail?: string; href?: string; note?: string };
+export type WorkspaceHistoryRow = { id: string; title: string; state: string; detail: string; href: string };
 
 /** Display values for the selected product, in the same shape for Mock and Live. */
 export type WorkspaceView = {
@@ -59,6 +60,7 @@ export type WorkspaceView = {
   };
   releases: { rows: { name: string; state: string; version: string; progress: number; tone: string }[]; note?: WorkspaceNote };
   decisions: { rows: { name: string; state: string; time?: string; href?: string }[]; note?: WorkspaceNote };
+  history: { rows: WorkspaceHistoryRow[]; note?: WorkspaceNote };
   delivery: {
     ranges: string[];
     metrics: (range: string) => [label: string, value: string, delta: string][];
@@ -119,6 +121,13 @@ const environmentSchema = z.object({
     pull_request_url: z.string().optional() })),
   decisions: z.array(z.object({ graph_id: z.string().optional(), graph_status: z.string().optional(), message_id: z.string().optional(),
     objective_id: z.string(), question: z.string(), resolved_by: z.string().optional() })),
+  history: z.array(z.object({ id: z.string(), objective_id: z.string(), plan_revision: z.number().int().nonnegative(),
+    plan_hash: z.string(), workflow_id: z.string().optional(), workflow_version: z.number().int().nonnegative().optional(),
+    workflow_mode: z.string().optional(), assignments: z.array(z.object({ unit: z.string(), agent_id: z.string(),
+      profile_version: z.number().int().nonnegative(), persona_id: z.string().optional(),
+      persona_version: z.number().int().nonnegative().optional() })), revision: z.number().int().nonnegative(), status: z.string(),
+    created_at: z.string().datetime(), updated_at: z.string().datetime(), run_ids: z.array(z.string()),
+    handoffs: z.number().int().nonnegative(), findings: z.number().int().nonnegative() })),
 });
 type WorkspaceEnvironment = z.infer<typeof environmentSchema>;
 
@@ -279,6 +288,18 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
       href: item.graph_status === 'cancelled' ? undefined : livePageHref('objectives', { objective: item.objective_id, tab: 'plan',
         ...(item.graph_id ? { graph_id: item.graph_id } : {}), ...(item.message_id ? { decision: item.message_id } : {}) }) })) ?? [],
       note: environmentNote ?? (environment?.decisions.length ? undefined : { text: 'No decisions recorded in current WorkGraphs.' }) },
+    history: { rows: environment?.history.map((item) => {
+      const assignments = item.assignments.map((assignment) =>
+        `${assignment.unit}: ${assignment.agent_id} profile v${assignment.profile_version}` +
+        (assignment.persona_id ? ` · persona v${assignment.persona_version ?? 'unknown'}` : '')).join('; ');
+      const workflow = item.workflow_id ? `${item.workflow_id}${item.workflow_version ? ` v${item.workflow_version}` : ''}${item.workflow_mode ? ` · ${item.workflow_mode}` : ''}` : 'No workflow';
+      const title = facts.objectives?.find((objective) => objective.id === item.objective_id)?.title ?? item.objective_id;
+      return { id: item.id, title, state: statusLabel(item.status),
+        detail: `Plan r${item.plan_revision} · ${item.plan_hash.slice(0, 8)} · Graph r${item.revision} · ${workflow}` +
+          ` · Runs: ${item.run_ids.join(', ') || 'none'} · Handoffs ${item.handoffs} · Findings ${item.findings}` +
+          (assignments ? ` · ${assignments}` : ''),
+        href: livePageHref('objectives', { objective: item.objective_id, tab: 'plan', graph_id: item.id }) };
+    }) ?? [], note: environmentNote ?? (environment?.history.length ? undefined : { text: 'No WorkGraph history is recorded for this product.' }) },
     delivery: { ranges: [], metrics: () => [
       ['WorkGraphs', String(graphCount), 'current'], ['PR links', String(pullRequestCount), 'observed'],
       ['Findings', String(findingCount), 'recorded'], ['Handoffs', String(handoffCount), 'recorded'],

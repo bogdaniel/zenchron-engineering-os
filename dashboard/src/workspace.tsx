@@ -23,7 +23,7 @@ interface WorkspacePageProps extends WorkspaceFacts {
   designPreview?: boolean;
 }
 
-const tabs = ['Overview', 'Objectives', 'Repos', 'Files', 'Decisions', 'Templates'] as const;
+const tabs = ['Overview', 'Objectives', 'Repos', 'Files', 'Decisions', 'History', 'Templates'] as const;
 type WorkspaceTab = typeof tabs[number];
 const workspaceFoci = {
   'All sections': {
@@ -102,7 +102,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
   const { products } = source;
   const selected = products.find((product) => product.id === selectedID) ?? products[0];
   const view = source.view(selected?.id, roadmapQuarter);
-  const { metrics, roadmap, objectives, repositories, workflows, files, stakeholders, releases, decisions, delivery } = view;
+  const { metrics, roadmap, objectives, repositories, workflows, files, stakeholders, releases, decisions, history, delivery } = view;
   const visibleProducts = products.filter((product) => product.name.toLowerCase().includes(search.trim().toLowerCase())
     && (statusFilter === 'All' || product.state === statusFilter));
   const isFavorite = Boolean(selected && source.favorites.includes(selected.id));
@@ -222,7 +222,8 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
           onClick={() => setActiveTab(tab)} className={activeTab === tab ? 'active' : ''}>
           {tab === 'Overview' ? <IconHome size={13} /> : tab === 'Objectives' ? <IconTarget size={13} />
             : tab === 'Repos' ? <IconCode size={13} /> : tab === 'Files' ? <IconFolder size={13} />
-              : tab === 'Decisions' ? <IconGitBranch size={13} /> : <IconStack2 size={13} />}{tab}
+              : tab === 'Decisions' ? <IconGitBranch size={13} /> : tab === 'History' ? <IconHistory size={13} />
+                : <IconStack2 size={13} />}{tab}
         </button>)}
         <label className="workspace-mock-focus"><span>Workspace focus</span>
           <select aria-label="Workspace focus" value={focus} onChange={(event) => selectFocus(event.currentTarget.value as WorkspaceFocus)}>
@@ -315,6 +316,17 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
         {decisions.note ? <Note note={decisions.note} /> : <div className="workspace-mock-list decision-list">{decisions.rows.map(({ name, state, time, href }) => <div key={name}>
           <IconFileText size={13} /><b>{href ? <a href={href}>{name}</a> : name}</b>
           <Badge className={`workspace-mock-state ${stateClass(state)}`} variant="light">{state}</Badge>{time && <small>{time}</small>}</div>)}</div>}
+      </Card>
+      <Card className="history" title={`WorkGraph History (${history.rows.length})`} icon={<IconHistory size={15} />} action="View All"
+        onAction={() => setActiveTab('History')}
+        hidden={activeTab !== 'Overview' && activeTab !== 'History'}>
+        {history.note ? <Note note={history.note} /> : <div className="workspace-mock-list status-list history-list">
+          {(showAll ? history.rows : history.rows.slice(0, 5)).map((item) => <div key={item.id}>
+            <IconHistory size={13} aria-hidden="true" />
+            <b><a href={item.href}>{item.title}</a><small>{item.id}</small><small>{item.detail}</small></b>
+            <Badge className={`workspace-mock-state ${stateClass(item.state)}`} variant="light">{item.state}</Badge>
+          </div>)}
+        </div>}
       </Card>
       <Card className="analytics" title="Delivery Metrics" icon={<IconChartBar size={15} />}
         hidden={cardIsHidden('analytics', ['Overview'])}

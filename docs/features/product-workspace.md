@@ -2,10 +2,10 @@
 
 The Product Workspace manages durable products and links them to repositories reported by local workers. It has one
 layout, the approved design, in both data modes (see `docs/architecture/dashboard-modes.md`): a product directory, a
-product heading with actions, four metric cards, six section tabs, and nine cards (roadmap, objectives, repositories,
-workflows, files, stakeholders, release streams, decisions, delivery metrics). **Mock** fills it from fixtures and
-keeps every change in the browser tab. **Live** fills it from the control plane and says "Unavailable" where the
-control plane records nothing.
+product heading with actions, four metric cards, seven section tabs, and ten cards (roadmap, objectives, repositories,
+workflows, files, stakeholders, release streams, decisions, WorkGraph history, delivery metrics). **Mock** fills it
+from fixtures and keeps every change in the browser tab. **Live** fills it from the control plane and says "Unavailable"
+where the control plane records nothing.
 
 ## Feature diagram
 
@@ -40,6 +40,7 @@ flowchart LR
     Mock -->|"add or rename in fixture state"| Tab["This browser tab only"]
     CP --> Store[(products.json)]
     Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
+    Page -->|"History tab · exact plan links and frozen revisions"| Environment
     Execution -->|"GET /api/v1/work-graphs"| CP
     Execution -->|"POST /api/v1/work-graphs/{id}/decisions/{messageID}"| CP
     Execution -->|"recorded workflow/profile IDs and versions"| Report
@@ -72,7 +73,8 @@ Both modes:
   characters) and description (at most 2000) and shows a save error in place.
 - "Open repository inventory" in the Product actions menu goes to the Projects page.
 - Tabs narrow the cards: Objectives (roadmap and all objectives), Repos (all repositories and workflows), Files,
-  Decisions (decisions and stakeholders), Templates (workflow and agent templates, release streams).
+  Decisions (decisions and stakeholders), History (product-scoped WorkGraphs and frozen plan, workflow, profile, and
+  persona references), Templates (workflow and agent templates, release streams).
 - The roadmap has Roadmap and Timeline views and a "Quarterly" menu that chooses the first quarter shown.
 - A card with no rows shows one line saying why; failed requests are announced with `role="alert"`.
 
@@ -83,6 +85,10 @@ Mock:
   repository picker. No protected API request is sent.
 
 Live:
+
+- The History tab shows the product's durable WorkGraph references in newest-first order. Each opens the exact
+  objective plan and graph. The row exposes plan hash/revision, graph revision, frozen workflow and assignment
+  revisions, run IDs, handoffs, and findings; it does not copy run evidence.
 
 - Products come from `GET /api/v1/products`; create and edit use `POST` and `PUT /api/v1/products/{id}` and select the
   saved product. The editor links repositories from the worker inventory.
