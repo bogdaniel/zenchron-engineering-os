@@ -40,7 +40,13 @@ sequenceDiagram
     API->>API: Validate repository, PR number, event, body, configured auth
     API->>GH: GET pull request head branch
     API->>GH: POST /pulls/{number}/reviews
-    GH-->>API: Submitted review
+    alt GitHub accepts the requested review event
+        GH-->>API: Submitted review
+    else Run-linked REQUEST_CHANGES returns HTTP 422
+        GH-->>API: Request rejected
+        API->>GH: POST /pulls/{number}/reviews (COMMENT fallback)
+        GH-->>API: Comment submitted
+    end
     opt PR branch maps to an agent run
         API->>API: Match run ID and project from isolated branch
         API->>API: Persist dashboard review feedback on the run
@@ -94,7 +100,10 @@ the local diff available and is shown on the branch review. When a review is sub
 Zenchron-created PR, the control plane matches its isolated branch to the originating run and persists the comment.
 `REQUEST_CHANGES` requeues that same run and branch when the worker is online with the profile's coding CLI ready, the profile has write permission,
 and has attempts remaining. If the worker cannot accept another pass, the feedback is still stored and the dashboard
-reports that no run was queued. GitHub reviews made directly on github.com are not yet imported; webhook or provider
+reports that no run was queued. If GitHub rejects a run-linked `REQUEST_CHANGES` with HTTP 422, the control plane
+submits a `COMMENT` review instead, then records the change request on the run; the dashboard says GitHub recorded a
+comment while the run queued or stored the requested changes. Other HTTP 422 review failures identify the pull-request
+state and reviewer-permission check. GitHub reviews made directly on github.com are not yet imported; webhook or provider
 polling is not implemented. Approve and merge are not enabled; Reviews shows both controls disabled in Live and states
 the reason. Issue comments are submitted as top-level comments
 authored as the configured App or personal-token owner.
@@ -107,7 +116,8 @@ sufficient boundary.
 
 `go test ./cmd/zenchron -run 'TestGitHub' -count=1` verifies GitHub request headers, repository mapping, issue/PR
 separation, bounded PR diff reads, issue-comment and issue-state payloads, PR-number rejection, review payloads, and
-local-client/auth/event validation. It also verifies GitHub App JWT signature and claims, installation-token caching,
+local-client/auth/event validation, including the linked-run 422-to-comment fallback and persisted change request. It
+also verifies GitHub App JWT signature and claims, installation-token caching,
 configuration validation, and private-key file permissions using a local fake GitHub server. `cd dashboard && npm run test:e2e -- e2e/github-reviews.spec.ts` checks live queue rendering, issue comments,
 close/reopen, both provider review actions, and the write requests they send. The focused `home.spec.ts`
 Reviews test covers unavailable state and local-branch review. These checks use fixtures; a real provider write and

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -356,6 +357,8 @@ func TestGitHubReviewFeedbackReturnsToAgentRun(t *testing.T) {
 	t.Setenv("ZENCHRON_GITHUB_TOKEN", "test-token")
 	runID := "fedcbafedcbafedcbafedcbafedcbafe"
 	providerBranch := workerapi.AgentRunBranch(runID)
+	rejectChangeRequest := false
+	var reviewEvents []string
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			t.Errorf("GitHub authorization was not set")
@@ -370,6 +373,11 @@ func TestGitHubReviewFeedbackReturnsToAgentRun(t *testing.T) {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&review); err != nil || review.Body == "" {
 			t.Errorf("review request = %#v, decode error = %v", review, err)
+		}
+		reviewEvents = append(reviewEvents, review.Event)
+		if rejectChangeRequest && review.Event == "REQUEST_CHANGES" {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			return
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{}`))
@@ -414,12 +422,18 @@ func TestGitHubReviewFeedbackReturnsToAgentRun(t *testing.T) {
 	if comment["agent_run_linked"] != true || comment["agent_run_queued"] != false || store.items[runID].Status != "succeeded" {
 		t.Fatalf("GitHub comment sync = %#v, run = %#v", comment, store.items[runID])
 	}
+	rejectChangeRequest = true
 	changes := callReview("REQUEST_CHANGES", "Update the response to keep it backward compatible.")
 	item := store.items[runID]
-	if changes["agent_run_linked"] != true || changes["agent_run_queued"] != true || item.Status != "queued" ||
+	if changes["agent_run_linked"] != true || changes["agent_run_queued"] != true ||
+		changes["github_request_changes_recorded_as_comment"] != true || item.Status != "queued" ||
 		len(item.ReviewComments) != 2 || !item.ReviewComments[1].RequestChanges {
 		t.Fatalf("GitHub change request sync = %#v, run = %#v", changes, item)
 	}
+	if !slices.Equal(reviewEvents, []string{"COMMENT", "REQUEST_CHANGES", "COMMENT"}) {
+		t.Fatalf("GitHub review events = %#v", reviewEvents)
+	}
+	rejectChangeRequest = false
 	waitingRunID := "abcdefabcdefabcdefabcdefabcdef12"
 	store.items[waitingRunID] = agentRun{ID: waitingRunID, AgentID: profile.ID, AgentName: profile.Name,
 		ProjectID: testProjectID, ProjectName: "platform", WorkerID: testWorkerID, WorkerName: "worker",
@@ -438,6 +452,33 @@ func TestGitHubReviewFeedbackReturnsToAgentRun(t *testing.T) {
 	if waiting["agent_run_linked"] != true || waiting["agent_run_queued"] != false || waitingRun.Status != "succeeded" ||
 		len(waitingRun.ReviewComments) != 1 || !waitingRun.ReviewComments[0].RequestChanges {
 		t.Fatalf("offline worker review sync = %#v, run = %#v", waiting, waitingRun)
+	}
+}
+
+func TestGitHubPullRequestReview422ExplainsProviderRejection(t *testing.T) {
+	t.Setenv("ZENCHRON_GITHUB_TOKEN", "test-token")
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`{"number":23}`))
+			return
+		}
+		w.WriteHeader(http.StatusUnprocessableEntity)
+	}))
+	defer provider.Close()
+	registry := newWorkerRegistry()
+	registry.github.apiURL = provider.URL
+	registry.projects["worker:project"] = projectRecord{ID: testProjectID, GitRemote: "github.com/acme/platform"}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/projects/"+testProjectID+"/pull-requests/23/reviews",
+		strings.NewReader(`{"body":"Please update the PR","event":"REQUEST_CHANGES"}`))
+	request.RemoteAddr = "127.0.0.1:12345"
+	request.Header.Set("Content-Type", "application/json")
+	request.SetPathValue("id", testProjectID)
+	request.SetPathValue("number", "23")
+	response := httptest.NewRecorder()
+	registry.reviewGitHubPullRequest(response, request)
+	if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), "HTTP 422") ||
+		strings.Contains(response.Body.String(), "verify token permissions") {
+		t.Fatalf("HTTP 422 response = %d %q", response.Code, response.Body.String())
 	}
 }
 

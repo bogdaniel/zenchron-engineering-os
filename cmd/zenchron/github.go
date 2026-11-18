@@ -471,7 +471,24 @@ func (registry *workerRegistry) reviewGitHubPullRequest(w http.ResponseWriter, r
 		http.Error(w, "GitHub pull request details are unavailable; review was not submitted", http.StatusBadGateway)
 		return
 	}
-	if err := registry.github.submitPullRequestReview(r.Context(), owner, repository, number, input.Body, input.Event); err != nil {
+	runID := ""
+	if registry.runs != nil {
+		runID, _ = registry.runs.findByPullRequest("github.com/"+owner+"/"+repository, pull.Number)
+	}
+	recordedAsComment := false
+	err = registry.github.submitPullRequestReview(r.Context(), owner, repository, number, input.Body, input.Event)
+	if errors.Is(err, errGitHubUnprocessableEntity) && input.Event == "REQUEST_CHANGES" && runID != "" {
+		if err := registry.github.submitPullRequestReview(r.Context(), owner, repository, number, input.Body, "COMMENT"); err != nil {
+			http.Error(w, "GitHub rejected the change request and could not record a comment instead",
+				http.StatusBadGateway)
+			return
+		}
+		recordedAsComment = true
+	} else if errors.Is(err, errGitHubUnprocessableEntity) {
+		http.Error(w, "GitHub rejected this review (HTTP 422); check the pull request state and reviewer permissions",
+			http.StatusBadGateway)
+		return
+	} else if err != nil {
 		http.Error(w, "GitHub could not submit this review; verify token permissions and provider access", http.StatusBadGateway)
 		return
 	}
@@ -479,22 +496,21 @@ func (registry *workerRegistry) reviewGitHubPullRequest(w http.ResponseWriter, r
 		Status            string `json:"status"`
 		AgentRunLinked    bool   `json:"agent_run_linked"`
 		AgentRunQueued    bool   `json:"agent_run_queued"`
+		RecordedAsComment bool   `json:"github_request_changes_recorded_as_comment,omitempty"`
 		FeedbackSyncError string `json:"feedback_sync_error,omitempty"`
-	}{Status: "submitted"}
-	if registry.runs == nil {
+	}{Status: "submitted", RecordedAsComment: recordedAsComment}
+	if runID == "" {
 		writeJSON(w, http.StatusOK, result)
 		return
 	}
-	if runID, found := registry.runs.findByPullRequest("github.com/"+owner+"/"+repository, pull.Number); found {
-		run, status, message := registry.runs.recordReview(
-			accessFor(r), runID, r.PathValue("id"), input.Body, input.Event == "REQUEST_CHANGES", false,
-		)
-		if status == 0 {
-			result.AgentRunLinked = true
-			result.AgentRunQueued = run.Status == "queued"
-		} else if status != http.StatusNotFound {
-			result.FeedbackSyncError = message
-		}
+	run, status, message := registry.runs.recordReview(
+		accessFor(r), runID, r.PathValue("id"), input.Body, input.Event == "REQUEST_CHANGES", false,
+	)
+	if status == 0 {
+		result.AgentRunLinked = true
+		result.AgentRunQueued = run.Status == "queued"
+	} else if status != http.StatusNotFound {
+		result.FeedbackSyncError = message
 	}
 	writeJSON(w, http.StatusOK, result)
 }
