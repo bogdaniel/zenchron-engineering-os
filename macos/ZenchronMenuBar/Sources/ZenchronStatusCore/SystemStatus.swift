@@ -7,7 +7,20 @@ public struct SystemStatus: Decodable, Equatable {
     }
 
     public struct Work: Decodable, Equatable {
+        public struct ActiveGraph: Decodable, Equatable {
+            public let graphID: String
+            public let objectiveID: String
+            public let objectiveTitle: String
+
+            enum CodingKeys: String, CodingKey {
+                case graphID = "graph_id"
+                case objectiveID = "objective_id"
+                case objectiveTitle = "objective_title"
+            }
+        }
+
         public let activeGraphs: Int
+        public let activeGraph: ActiveGraph?
         public let blockedGraphs: Int
         public let queuedUnits: Int
         public let runningUnits: Int
@@ -17,6 +30,7 @@ public struct SystemStatus: Decodable, Equatable {
 
         enum CodingKeys: String, CodingKey {
             case activeGraphs = "active_graphs"
+            case activeGraph = "active_graph"
             case blockedGraphs = "blocked_graphs"
             case queuedUnits = "queued_units"
             case runningUnits = "running_units"
@@ -36,6 +50,22 @@ public struct SystemStatus: Decodable, Equatable {
         case revision, workers, work
         case dashboardURL = "dashboard_url"
         case updateState = "update_state"
+    }
+
+    public var activeWorkURL: URL? {
+        guard let graph = work.activeGraph,
+              var components = URLComponents(url: dashboardURL, resolvingAgainstBaseURL: false) else { return nil }
+        let deepLinkParameters = ["mode", "objective", "tab", "graph_id"]
+        var queryItems = (components.queryItems ?? []).filter { !deepLinkParameters.contains($0.name) }
+        queryItems.append(contentsOf: [
+            URLQueryItem(name: "mode", value: "live"),
+            URLQueryItem(name: "objective", value: graph.objectiveID),
+            URLQueryItem(name: "tab", value: "plan"),
+            URLQueryItem(name: "graph_id", value: graph.graphID),
+        ])
+        components.queryItems = queryItems
+        components.fragment = "objectives"
+        return components.url
     }
 
     public init(from decoder: Decoder) throws {

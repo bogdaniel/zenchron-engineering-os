@@ -17,15 +17,22 @@ type systemStatus struct {
 		Total  int `json:"total"`
 	} `json:"workers"`
 	Work struct {
-		ActiveGraphs  int `json:"active_graphs"`
-		BlockedGraphs int `json:"blocked_graphs"`
-		QueuedUnits   int `json:"queued_units"`
-		RunningUnits  int `json:"running_units"`
-		WaitingUnits  int `json:"waiting_units"`
-		FailedUnits   int `json:"failed_units"`
-		OpenDecisions int `json:"open_decisions"`
+		ActiveGraphs  int                   `json:"active_graphs"`
+		ActiveGraph   *systemStatusWorkItem `json:"active_graph,omitempty"`
+		BlockedGraphs int                   `json:"blocked_graphs"`
+		QueuedUnits   int                   `json:"queued_units"`
+		RunningUnits  int                   `json:"running_units"`
+		WaitingUnits  int                   `json:"waiting_units"`
+		FailedUnits   int                   `json:"failed_units"`
+		OpenDecisions int                   `json:"open_decisions"`
 	} `json:"work"`
 	UpdateState string `json:"update_state"`
+}
+
+type systemStatusWorkItem struct {
+	GraphID        string `json:"graph_id"`
+	ObjectiveID    string `json:"objective_id"`
+	ObjectiveTitle string `json:"objective_title"`
 }
 
 func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *workerRegistry, graphs *workGraphStore) {
@@ -46,9 +53,19 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 	registry.mu.RUnlock()
 
 	graphs.mu.Lock()
+	var activeGraphUpdatedAt time.Time
+	var activeGraphID string
 	for _, graph := range graphs.graphs {
 		if graph.Status == graphActive {
 			status.Work.ActiveGraphs++
+			if status.Work.ActiveGraph == nil || graph.UpdatedAt.After(activeGraphUpdatedAt) ||
+				(graph.UpdatedAt.Equal(activeGraphUpdatedAt) && graph.ID < activeGraphID) {
+				status.Work.ActiveGraph = &systemStatusWorkItem{
+					GraphID: graph.ID, ObjectiveID: graph.ObjectiveID, ObjectiveTitle: graph.ObjectiveTitle,
+				}
+				activeGraphUpdatedAt = graph.UpdatedAt
+				activeGraphID = graph.ID
+			}
 		} else if graph.Status == graphBlocked {
 			status.Work.BlockedGraphs++
 		}

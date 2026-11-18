@@ -24,13 +24,18 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 	registry.workers["online"] = workerRecord{ID: "online", LastSeen: time.Now()}
 	registry.workers["offline"] = workerRecord{ID: "offline", LastSeen: time.Now().Add(-time.Minute)}
 	graphs := &workGraphStore{graphs: map[string]*workGraph{
-		"graph": {Status: graphBlocked, Units: []workUnit{
-			{State: unitQueued}, {State: unitRunning}, {State: unitWaiting}, {State: unitFailed},
-		}, Messages: []graphMessage{
-			{ID: "open", Type: messageDecisionRequest},
-			{ID: "resolved", Type: messageDecisionRequest},
-			{Type: messageDecisionResolution, Resolves: "resolved"},
-		}},
+		"graph": {ID: "graph", ObjectiveID: "objective", ObjectiveTitle: "Ship the dashboard",
+			Status: graphBlocked, Units: []workUnit{
+				{State: unitQueued}, {State: unitRunning}, {State: unitWaiting}, {State: unitFailed},
+			}, Messages: []graphMessage{
+				{ID: "open", Type: messageDecisionRequest},
+				{ID: "resolved", Type: messageDecisionRequest},
+				{Type: messageDecisionResolution, Resolves: "resolved"},
+			}},
+		"active-older": {ID: "active-older", ObjectiveID: "objective-old", ObjectiveTitle: "Older objective",
+			Status: graphActive, UpdatedAt: time.Now().Add(-time.Minute)},
+		"active-newer": {ID: "active-newer", ObjectiveID: "objective-new", ObjectiveTitle: "Current objective",
+			Status: graphActive, UpdatedAt: time.Now()},
 	}}
 	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
 	request.RemoteAddr = "127.0.0.1:4000"
@@ -41,8 +46,10 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK {
 		t.Fatalf("system status response: decode error %v, HTTP %d", err, response.Code)
 	}
-	if status.Workers.Online != 1 || status.Workers.Total != 2 || status.Work.ActiveGraphs != 0 ||
-		status.Work.BlockedGraphs != 1 ||
+	if status.Workers.Online != 1 || status.Workers.Total != 2 || status.Work.ActiveGraphs != 2 ||
+		status.Work.BlockedGraphs != 1 || status.Work.ActiveGraph == nil ||
+		status.Work.ActiveGraph.GraphID != "active-newer" || status.Work.ActiveGraph.ObjectiveID != "objective-new" ||
+		status.Work.ActiveGraph.ObjectiveTitle != "Current objective" ||
 		status.Work.QueuedUnits != 1 || status.Work.RunningUnits != 1 || status.Work.WaitingUnits != 1 ||
 		status.Work.FailedUnits != 1 || status.Work.OpenDecisions != 1 || status.UpdateState != "active" {
 		t.Fatalf("system status = %#v", status)
@@ -71,6 +78,24 @@ func TestLocalSystemStatusRejectsRemoteAndCrossOriginRequests(t *testing.T) {
 				t.Fatalf("system status HTTP = %d, want %d", response.Code, http.StatusForbidden)
 			}
 		})
+	}
+}
+
+func TestLocalSystemStatusOmitsActiveGraphWhenNoWorkIsActive(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+	request.RemoteAddr = "127.0.0.1:4000"
+	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	graphs := &workGraphStore{graphs: map[string]*workGraph{
+		"blocked": {ID: "blocked", ObjectiveID: "objective", Status: graphBlocked},
+	}}
+	response := httptest.NewRecorder()
+	writeLocalSystemStatus(response, request, newWorkerRegistry(), graphs)
+	var status systemStatus
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("system status response: decode error %v, HTTP %d", err, response.Code)
+	}
+	if status.Work.ActiveGraphs != 0 || status.Work.ActiveGraph != nil {
+		t.Fatalf("inactive work status = %#v, want no active graph", status.Work)
 	}
 }
 

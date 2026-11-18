@@ -87,6 +87,12 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 "\(status.work.waitingUnits) waiting",
             ].joined(separator: " · ")
             menu.addItem(NSMenuItem(title: work, action: nil, keyEquivalent: ""))
+            if let activeGraph = status.work.activeGraph {
+                let title = activeGraph.objectiveTitle.isEmpty ? "Open active work" : "Open · \(activeGraph.objectiveTitle)"
+                let openWork = NSMenuItem(title: title, action: #selector(openActiveWork), keyEquivalent: "")
+                openWork.target = self
+                menu.addItem(openWork)
+            }
             let actions = [
                 "Action required",
                 "\(status.work.openDecisions) decisions",
@@ -136,6 +142,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openDashboard() {
         guard let status else { return }
         NSWorkspace.shared.open(status.dashboardURL)
+    }
+
+    @objc private func openActiveWork() {
+        guard let url = status?.activeWorkURL else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func startZenchron() {
