@@ -262,7 +262,8 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await dialog.getByRole('button', { name: 'Save product' }).click();
   await expect(page.locator('.workspace-mock-heading h1')).toHaveText('Nova Core');
   expect(writes).toEqual([{ method: 'PUT', path: `/api/v1/products/${novaID}`,
-    body: { name: 'Nova Core', description: 'Developer platform', repository_ids: [projectID] } }]);
+    body: { name: 'Nova Core', description: 'Developer platform', repository_ids: [projectID],
+      default_workflow_id: 'release' } }]);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.workspace-mock-directory')).toBeHidden();

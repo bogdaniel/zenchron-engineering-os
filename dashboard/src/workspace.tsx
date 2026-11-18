@@ -350,7 +350,8 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
           </svg>}</div>}
       </Card>
     </div>
-    <ProductEditor opened={editor !== null} product={editor?.productID ? source.editable(editor.productID) : undefined}
+    <ProductEditor opened={editor !== null} live={!designPreview}
+      product={editor?.productID ? source.editable(editor.productID) : undefined}
       projects={source.repositories} repositoryNote={source.editorNote} onClose={() => setEditor(null)}
       onSave={saveProduct} isSaving={source.saving} error={saveError} />
     <Modal opened={shareOpen} onClose={() => setShareOpen(false)} title="Share Product Workspace" centered>

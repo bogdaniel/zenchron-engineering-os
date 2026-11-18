@@ -33,6 +33,7 @@ export async function loadProducts() {
 
 type ProductEditorProps = {
   opened: boolean;
+  live: boolean;
   product: Pick<Product, 'id' | 'name' | 'description' | 'repository_ids' | 'default_workflow_id'> | undefined;
   projects: Project[] | undefined;
   /** Why repositories cannot be linked here; the picker is disabled while it is set. */
@@ -43,8 +44,10 @@ type ProductEditorProps = {
   error: string;
 };
 
-export function ProductEditor({ opened, product, projects, repositoryNote, onClose, onSave, isSaving, error }: ProductEditorProps) {
-  const workflows = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows, enabled: opened });
+export function ProductEditor({
+  opened, live, product, projects, repositoryNote, onClose, onSave, isSaving, error,
+}: ProductEditorProps) {
+  const workflows = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows, enabled: opened && live });
   const form = useForm<ProductInput>({
     initialValues: { name: '', description: '', repository_ids: [], default_workflow_id: '' },
     validate: (values) => {
@@ -79,12 +82,14 @@ export function ProductEditor({ opened, product, projects, repositoryNote, onClo
         <TextInput label="Product name" required {...form.getInputProps('name')} />
         <Textarea label="Description" mt="sm" autosize minRows={2} maxRows={4}
           {...form.getInputProps('description')} />
-        <Select label="Default workflow for new objectives" placeholder="Choose when proposing a plan"
-          data={workflows.data?.map((workflow) => ({ value: workflow.id, label: workflow.name })) ?? []}
-          clearable mt="sm" value={form.values.default_workflow_id || null}
-          onChange={(value) => form.setFieldValue('default_workflow_id', value ?? '')}
-          disabled={workflows.isLoading || workflows.isError} />
-        {workflows.isError && <Text className="form-error" role="alert">Workflow definitions could not be loaded.</Text>}
+        {live && <>
+          <Select label="Default workflow for new objectives" placeholder="Choose when proposing a plan"
+            data={workflows.data?.map((workflow) => ({ value: workflow.id, label: workflow.name })) ?? []}
+            clearable mt="sm" value={form.values.default_workflow_id || null}
+            onChange={(value) => form.setFieldValue('default_workflow_id', value ?? '')}
+            disabled={workflows.isLoading || workflows.isError} />
+          {workflows.isError && <Text className="form-error" role="alert">Workflow definitions could not be loaded.</Text>}
+        </>}
         <MultiSelect
           label="Repositories"
           description={repositoryNote ?? 'Only repository names and worker IDs are shared with the control plane.'}
