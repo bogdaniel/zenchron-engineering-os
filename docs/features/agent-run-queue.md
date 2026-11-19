@@ -47,6 +47,12 @@ sequenceDiagram
     API->>GH: Find or create PR for run branch and base
     GH-->>API: Pull-request number and URL
     API->>Store: Persist pull-request link
+    alt Publication state write fails for the same attempt
+      API->>Store: Release only that attempt's in-memory Publishing marker
+      Note over Store: Publishing is not persisted; restart reads it as false
+    else Run moved to a newer attempt
+      API-->>UI: Return 409 without changing the newer attempt's barrier
+    end
   end
   UI->>API: Read run history and selected branch diff
   API-->>UI: Current status and local diff
