@@ -168,6 +168,7 @@ for (const viewport of viewports) {
       reviews: [
         { id: 900, state: 'COMMENTED', user: { login: 'colleague' }, body: '', submitted_at: now },
         { id: 901, state: 'CHANGES_REQUESTED', user: { login: 'maintainer' }, body: 'Handle the empty body.', submitted_at: now },
+        { id: 902, state: 'COMMENTED', user: { login: 'maintainer' }, body: 'One extra thought.', submitted_at: now },
       ],
     })));
     await page.goto('/#reviews');
@@ -191,7 +192,9 @@ for (const viewport of viewports) {
     const checks = page.getByRole('region', { name: 'Pull request checks' });
     await expect(checks.getByRole('listitem')).toHaveText(['gosuccess', 'dashboardin_progress']);
     await expect(page.getByRole('region', { name: 'Pull request reviews' }).getByRole('listitem'))
-      .toHaveText(['colleagueCommented', 'maintainerChanges requested · follow-up attempt queued']);
+      .toHaveText([
+        'colleagueCommented', 'maintainerChanges requested · follow-up attempt queued', 'maintainerCommented',
+      ]);
     const attempts = page.getByRole('region', { name: 'Run attempts' });
     await expect(attempts.getByRole('listitem').first()).toContainText('Attempt 1Worker lease expired');
     await expect(attempts.getByRole('listitem').nth(1)).toContainText('Attempt 2Succeeded · commit aaaaaaaaaaaa');
