@@ -186,15 +186,26 @@ func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 	}
 	store.mu.Lock()
 	item, exists := store.items[runID]
-	store.mu.Unlock()
 	if !exists {
+		store.mu.Unlock()
 		http.NotFound(w, r)
 		return
 	}
 	if item.Status != "succeeded" || item.Publication != publicationPullRequestFailed {
+		store.mu.Unlock()
 		http.Error(w, "only a pushed run without a pull request can be published again", http.StatusConflict)
 		return
 	}
+	// The initial finish request and manual retries share one publication marker. Reserve it
+	// before calling GitHub so a second request cannot clear another publication's update barrier.
+	if item.Publishing {
+		store.mu.Unlock()
+		http.Error(w, "pull request publication is already in progress", http.StatusConflict)
+		return
+	}
+	item.Publishing = true // Process-local only: durable recovery uses publicationPullRequestFailed.
+	store.items[runID] = item
+	store.mu.Unlock()
 	item, status, message := store.publishResult(r.Context(), runID, true, false)
 	if status != 0 {
 		http.Error(w, message, status)
