@@ -20,7 +20,7 @@ const historyEntry = {
   created_at: createdAt, updated_at: createdAt, run_ids: ['run-1', 'run-2'], handoffs: 2, findings: 1,
 };
 const historyEntries = [historyEntry, ...Array.from({ length: 9 }, (_, index) => ({
-  ...historyEntry, id: String(index + 1).repeat(32),
+  ...historyEntry, id: String(index + 10).repeat(32),
 }))];
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
@@ -178,6 +178,7 @@ test('Product Workspace matches its desktop frame and filters products', async (
 });
 
 test('Live Product Workspace shows real data, honest gaps, and saves product edits', async ({ page }, testInfo) => {
+  expect(new Set(historyEntries.map(({ id }) => id)).size).toBe(historyEntries.length);
   await page.setViewportSize({ width: 1672, height: 941 });
   const writes = await useLiveFixtures(page, [nova, orion], false, 10);
   await page.goto('/#workspace');
