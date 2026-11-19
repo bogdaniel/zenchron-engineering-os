@@ -211,6 +211,7 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 	writeJSON(w, http.StatusOK, status)
 }
 
+// ponytail: scans at most maxAgentRuns retained records under the run lock; persist an aggregate if retention grows.
 func summarizeStoredRunUsage(runs *agentRunStore) *systemStatusUsage {
 	if runs == nil {
 		return nil
