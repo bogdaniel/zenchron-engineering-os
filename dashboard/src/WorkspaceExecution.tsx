@@ -24,16 +24,23 @@ function providerUsage(graphID: string, runIDs: string[], runs: AgentRun[] | und
 }
 
 /** The work graphs of a product's objectives. Mock shows the one sample graph. */
-export function WorkspaceExecution({ objectiveIDs, sampleData, agentRuns, agentRunsLoading = false, agentRunsError = false }: {
-  objectiveIDs: string[]; sampleData: boolean; agentRuns?: AgentRun[]; agentRunsLoading?: boolean; agentRunsError?: boolean;
+export function WorkspaceExecution({ objectiveIDs, objectivesLoading, objectivesError, sampleData, agentRuns,
+  agentRunsLoading = false, agentRunsError = false }: {
+  objectiveIDs: string[] | undefined; objectivesLoading: boolean; objectivesError: boolean; sampleData: boolean;
+  agentRuns?: AgentRun[]; agentRunsLoading?: boolean; agentRunsError?: boolean;
 }) {
   const mock = useMockOrchestration();
   const live = useLiveOrchestration(!sampleData);
   const source = sampleData ? mock : live;
-  const graphs = sampleData ? source.graphs : source.graphs.filter((graph) => objectiveIDs.includes(graph.objective_id));
+  const graphs = sampleData ? source.graphs : source.graphs.filter((graph) => objectiveIDs?.includes(graph.objective_id));
   if (source.loading) return <p className="workspace-mock-empty" role="status">Loading work graphs…</p>;
   if (source.failed) return <p className="workspace-mock-empty" role="alert">Work graphs could not be loaded.
     <Button size="compact-xs" variant="subtle" onClick={source.retry}>Retry</Button></p>;
+  if (!sampleData && !objectiveIDs) return objectivesError
+    ? <p className="workspace-mock-empty" role="alert">Product objectives could not be loaded. WorkGraph scope is unknown.</p>
+    : objectivesLoading
+      ? <p className="workspace-mock-empty" role="status">Loading product objectives…</p>
+      : <p className="workspace-mock-empty" role="status">Product objective scope is unavailable.</p>;
   if (!graphs.length) return <p className="workspace-mock-empty">
     No objective of this product has an approved plan. Propose one under Objectives → Plan.</p>;
   return <div className="workspace-execution">

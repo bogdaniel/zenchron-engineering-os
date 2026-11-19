@@ -10,7 +10,7 @@ const orion = { id: orionID, name: 'Orion Analytics', description: 'Data tools',
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
 /** Serves the Live workspace from fixtures and records every write the page attempts. */
-async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, orion]) {
+async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, orion], objectivesUnavailable = false) {
   const writes: { method: string; path: string; body: unknown }[] = [];
   await page.route('**/api/v1/**', (route) => route.fulfill(json([])));
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
@@ -42,7 +42,9 @@ async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, or
     id: 'c'.repeat(32), name: 'Mac Studio', status: 'online', last_seen: createdAt,
     providers: [{ id: 'codex-cli', version: 'codex 1.0', ready: true, sandboxed_commands: true }],
   }])));
-  await page.route('**/api/v1/objectives', (route) => route.fulfill(json([
+  await page.route('**/api/v1/objectives', (route) => objectivesUnavailable
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: '{}' })
+    : route.fulfill(json([
     { id: '1'.repeat(32), title: 'Ship Platform v3.0', description: '', owner: 'Alex', product: 'Nova Platform', product_id: novaID, status: 'on_track', progress: 78, due_date: '2026-12-15', created_at: createdAt, updated_at: createdAt },
     { id: '2'.repeat(32), title: 'Launch Agent SDK', description: '', owner: 'Priya', product: 'Nova Platform', product_id: novaID, status: 'at_risk', progress: 34, due_date: '2027-02-10', created_at: '2026-01-02T00:00:00Z', updated_at: '2026-01-02T00:00:00Z' },
     { id: '4'.repeat(32), title: 'Retire legacy API', description: '', owner: '', product: 'Nova Platform', product_id: novaID, status: 'completed', progress: 100, due_date: '', created_at: createdAt, updated_at: createdAt },
@@ -60,6 +62,21 @@ async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, or
     review_specialization: 'Code review', status: 'active', version: 1, updated_at: createdAt,
   }])));
   return writes;
+}
+
+for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: 'mobile', width: 390, height: 844 }]) {
+  test(`Product Workspace keeps execution scope unknown when its objectives fail (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await useLiveFixtures(page, [nova, orion], true);
+    await page.goto('/#workspace');
+    await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
+
+    await expect(page.getByText('Product objectives could not be loaded. WorkGraph scope is unknown.', { exact: true }))
+      .toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('No objective of this product has an approved plan.', { exact: false })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`workspace-objective-scope-${viewport.name}.png`), fullPage: true });
+  });
 }
 
 test('Product Workspace matches its desktop frame and filters products', async ({ page }) => {

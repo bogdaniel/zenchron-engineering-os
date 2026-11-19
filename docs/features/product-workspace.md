@@ -91,6 +91,9 @@ Live:
   ("N of M repositories online"), and the Product Health card.
 - "Open Objectives" counts the selected product's objectives that are not completed. The objectives card lists up to
   five of them with status and owner; the Objectives tab lists all of the product's objectives.
+- If the objective list fails before product scope is known, the execution panel reports that WorkGraph scope is
+  unknown instead of claiming the product has no approved plan. Existing cached objective IDs remain usable while
+  their refresh error is shown on the objective card.
 - The roadmap shows up to four of the product's earliest objectives due on or after the first quarter shown, across
   five quarters starting at the earliest due quarter. A bar runs from the objective's creation date to its due date and
   is coloured by status; it is not an estimate of when work starts. Today is marked when it falls in the quarters
