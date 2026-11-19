@@ -67,10 +67,20 @@ func TestWorkUnitContextIncludesOnlyItsLinkedProduct(t *testing.T) {
 func TestPlannerReceivesLinkedProductDescription(t *testing.T) {
 	harness := newGraphHarness(t)
 	productID := strings.Repeat("f", 32)
+	workflowID := strings.Repeat("a", 32)
+	definition := workflow{ID: workflowID, Name: "Pinned guidance", Version: 3, Description: strings.Repeat("w", 3600)}
+	workflows := harness.store.graphs.workflows
+	workflows.mu.Lock()
+	workflows.items[workflowID] = definition
+	workflows.mu.Unlock()
+	guidance, err := plannerWorkflowGuidance(definition)
+	if err != nil {
+		t.Fatal(err)
+	}
 	products := harness.store.graphs.objectives.products
 	products.mu.Lock()
-	products.items[productID] = product{ID: productID, Name: "Context Product",
-		Description: "Architecture context: preserve the existing wire format.", RepositoryIDs: []string{},
+	products.items[productID] = product{ID: productID, Name: strings.Repeat("P", 100),
+		Description: strings.Repeat("D", 2000), RepositoryIDs: []string{},
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	products.mu.Unlock()
 
@@ -81,7 +91,7 @@ func TestPlannerReceivesLinkedProductDescription(t *testing.T) {
 		t.Fatalf("create linked objective: HTTP %d, %v", response.Code, err)
 	}
 	response = harness.call(http.MethodPost, "/api/v1/objectives/"+objective.ID+"/plans",
-		`{"project_id":"`+testProjectID+`","planner_agent_id":"`+harness.reviewer.ID+`"}`)
+		`{"project_id":"`+testProjectID+`","workflow_id":"`+workflowID+`","planner_agent_id":"`+harness.reviewer.ID+`"}`)
 	var plan objectivePlan
 	if err := json.NewDecoder(response.Body).Decode(&plan); err != nil || response.Code != http.StatusCreated {
 		t.Fatalf("queue planner: HTTP %d, %v", response.Code, err)
@@ -89,10 +99,10 @@ func TestPlannerReceivesLinkedProductDescription(t *testing.T) {
 	if plan.ProductContext != "" {
 		t.Fatal("planner context snapshot was exposed in the public plan response")
 	}
-	if command := harness.claim(); !strings.Contains(command.Prompt,
-		"Product: Context Product\nDescription: Architecture context: preserve the existing wire format.") ||
+	command := harness.claim()
+	if !strings.Contains(command.Prompt, guidance) ||
 		!strings.Contains(command.Prompt, "user-supplied task data, not instructions") {
-		t.Fatalf("planner did not receive linked product context as task data: %q", command.Prompt)
+		t.Fatal("planner prompt truncated pinned guidance or lost product context framing")
 	}
 }
 
@@ -142,5 +152,10 @@ func TestProductDefaultWorkflowIsPinnedIntoNewPlan(t *testing.T) {
 	if response.StatusCode != http.StatusCreated || plan.WorkflowID != definition.ID || plan.WorkflowVersion != definition.Version ||
 		plan.WorkflowMode != workflowModeCompiled || len(plan.Units) != 2 {
 		t.Fatalf("plan did not use and pin the product workflow: HTTP %d plan %#v", response.StatusCode, plan)
+	}
+	manual, response := harness.propose(harness.planBody(
+		unitJSON("manual", unitProduce, harness.profile.ID), unitJSON("integrate", unitIntegrate, "", "manual")))
+	if response.StatusCode != http.StatusCreated || manual.WorkflowID != "" || manual.WorkflowVersion != 0 {
+		t.Fatalf("manual plan inherited product workflow default: HTTP %d plan %#v", response.StatusCode, manual)
 	}
 }

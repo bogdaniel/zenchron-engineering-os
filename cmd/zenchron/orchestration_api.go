@@ -92,7 +92,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	if !decodeJSONBody(w, r, &input) {
 		return
 	}
-	if input.WorkflowID == "" && item.ProductID != "" {
+	if input.Plan == nil && input.WorkflowID == "" && item.ProductID != "" {
 		if linkedProduct, exists := store.objectives.products.get(item.ProductID); exists {
 			input.WorkflowID = linkedProduct.DefaultWorkflowID
 		}
@@ -214,12 +214,12 @@ func (store *workGraphStore) queuePlanner(
 		return agentRun{}, http.StatusConflict, "planner_agent_id must name an active, read-only Codex or Claude Code profile"
 	}
 	prompt := "Plan the engineering work for this objective: " + item.Title
-	var productDescription strings.Builder
-	writeProductContext(&productDescription, productContext)
-	prompt += productDescription.String()
 	if workflowGuidance != "" {
 		prompt += "\n\n" + workflowGuidance
 	}
+	var productDescription strings.Builder
+	writeProductContext(&productDescription, productContext)
+	prompt += productDescription.String()
 	return store.runs.enqueue(agentRun{AgentID: profile.ID, AgentName: profile.Name, ProjectID: project.ID,
 		ProjectName: project.Name, Repository: project.GitRemote, BaseBranch: project.Branch, WorkerID: project.WorkerID,
 		WorkerName: project.WorkerName, Provider: profile.Provider, Profile: &profile, CreatedBy: user,

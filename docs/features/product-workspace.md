@@ -94,8 +94,8 @@ Live:
 
 - Products come from `GET /api/v1/products`; create and edit use `POST` and `PUT /api/v1/products/{id}` and select the
   saved product. The editor links repositories from the worker inventory and can store a default saved workflow. A
-  product default fills an omitted workflow choice for a new plan; the plan stores the selected workflow ID and
-  version so later product edits do not change existing plans.
+  product default fills an omitted workflow choice when a plan is compiled or delegated to a planner. An explicit
+  manual plan stays independent of that default; workflow identity and version are pinned only when selected.
 - A product's health is `Healthy` when at least one linked repository's worker is online, `Offline` when linked
   repositories are reported but none is online, `No repos` when nothing is linked, and `Unavailable` when no linked
   repository is in the current inventory. It appears as the directory badge, the status filter, the heading line
@@ -218,5 +218,5 @@ with the unit that asked, the question, and who resolved it.
   scopes, architecture/team references, and cross-product organization knowledge remain unimplemented because they
   require established authority/context boundaries.
 
-Verified by `go test ./cmd/zenchron -run 'Test(ProductEnvironment|WorkUnitContextIncludesOnlyItsLinkedProductDescription|PlannerReceivesLinkedProductDescription)' -count=1`,
+Verified by `go test ./cmd/zenchron -run 'Test(ProductEnvironment|WorkUnitContextIncludesOnlyItsLinkedProduct|PlannerReceivesLinkedProductDescription)' -count=1`,
 including product isolation, historical context across a restart, and product context delivery to planner and WorkUnits.
