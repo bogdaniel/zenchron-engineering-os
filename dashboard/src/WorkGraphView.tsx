@@ -34,7 +34,9 @@ export function UnitFacts({ unit, agent, planned = false, live = false }: {
   </>;
 }
 
-function Unit({ graph, unit, source }: { graph: WorkGraph; unit: WorkUnit; source: OrchestrationSource }) {
+function Unit({ graph, unit, source, showRunLinks }: {
+  graph: WorkGraph; unit: WorkUnit; source: OrchestrationSource; showRunLinks: boolean;
+}) {
   const [error, setError] = useState('');
   return <li className="work-unit">
     <UnitFacts unit={unit} agent={unit.agent_name ?? ''} />
@@ -45,6 +47,8 @@ function Unit({ graph, unit, source }: { graph: WorkGraph; unit: WorkUnit; sourc
       {unit.candidate && <span>candidate <code>{shortCommit(unit.candidate)}</code></span>}
       {unit.verdict && <span>verdict: {unit.verdict}</span>}
       {unit.run_ids.length > 0 && <span>{unit.run_ids.length} run{unit.run_ids.length === 1 ? '' : 's'}</span>}
+      {showRunLinks && unit.run_ids.map((runID) => <a key={runID} href={livePageHref('reviews', { run: runID })}
+        aria-label={`Open run ${runID} in Reviews`} title={runID}>Review run {shortCommit(runID)} ↗</a>)}
       {unit.pull_request_url && <a href={unit.pull_request_url} target="_blank" rel="noreferrer">
         <IconGitPullRequest size={12} aria-hidden="true" /> Open pull request ↗</a>}
       {unit.state === 'failed' && <Button size="compact-xs" variant="default" disabled={!source.retryUnit}
@@ -107,7 +111,9 @@ export function GraphMessages({ messages }: { messages: GraphMessage[] }) {
 }
 
 /** One work graph: status, every unit with its state and waiting reason, open decisions, and the messages. */
-export function WorkGraphView({ graph, source }: { graph: WorkGraph; source: OrchestrationSource }) {
+export function WorkGraphView({ graph, source, showRunLinks = false }: {
+  graph: WorkGraph; source: OrchestrationSource; showRunLinks?: boolean;
+}) {
   const [error, setError] = useState('');
   const finished = graph.status === 'completed' || graph.status === 'cancelled';
   const done = graph.units.filter((unit) => unit.state === 'completed').length;
@@ -123,7 +129,8 @@ export function WorkGraphView({ graph, source }: { graph: WorkGraph; source: Orc
     {error && <p className="work-unit-failure" role="alert">{error}</p>}
     {openDecisions(graph).map((request) => <Decision key={request.id} graph={graph} request={request} source={source} />)}
     <ul className="work-units" aria-label="Work units">
-      {graph.units.map((unit) => <Unit key={unit.key} graph={graph} unit={unit} source={source} />)}
+      {graph.units.map((unit) => <Unit key={unit.key} graph={graph} unit={unit} source={source}
+        showRunLinks={showRunLinks} />)}
     </ul>
     <GraphMessages messages={graph.messages} />
   </section>;

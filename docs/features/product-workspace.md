@@ -11,7 +11,7 @@ control plane records nothing.
 
 ```mermaid
 flowchart LR
-    Shell["App shell · main.tsx<br/>mode, projects, objectives, workers"] -->|"designPreview, WorkspaceFacts"| Page["WorkspacePage · workspace.tsx<br/>one layout, UI state"]
+    Shell["App shell · main.tsx<br/>mode, projects, objectives, workers, agent runs"] -->|"designPreview, WorkspaceFacts"| Page["WorkspacePage · workspace.tsx<br/>one layout, focus and UI state"]
     Page -->|"source.view(product, quarter)"| Source{"WorkspaceSource"}
     Source -->|Mock| Mock["useMockWorkspace<br/>workspace-preview-data.tsx · useState"]
     Source -->|Live| Live["useLiveWorkspace<br/>workspaceView.tsx · TanStack Query"]
@@ -21,6 +21,7 @@ flowchart LR
     Live -->|"GET /api/v1/personas"| CP
     Live -->|"GET /api/v1/products/{id}/environment"| CP
     Shell -->|"GET /api/v1/projects · GET /api/v1/objectives"| CP
+    Shell -->|"GET /api/v1/agent-runs"| CP
     Page -->|"Add / Edit product"| Editor["ProductEditor · productEditor.tsx"]
     Editor -->|"source.saveProduct"| Source
     Live -->|"POST /api/v1/products · PUT /api/v1/products/{id}"| CP
@@ -35,10 +36,12 @@ flowchart LR
     Report -->|"workflow ID"| Workflow["WorkflowsPage · current saved definition"]
     Report -->|"profile ID"| Agents["AgentsPage · current saved profile"]
     Report -->|"run ID"| Reviews["ReviewsPage · run evidence"]
+    Execution -->|"exact WorkUnit run ID"| Reviews
     Mock -->|"add or rename in fixture state"| Tab["This browser tab only"]
     CP --> Store[(products.json)]
     Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
     Execution -->|"GET /api/v1/work-graphs"| CP
+    Execution -->|"POST /api/v1/work-graphs/{id}/decisions/{messageID}"| CP
     Execution -->|"recorded workflow/profile IDs and versions"| Report
     Execution -->|"objective ID · Plan tab"| Plans
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
@@ -60,6 +63,9 @@ Both modes:
 - The directory lists products with a search box, a status filter, and "All Products (N)", which clears both. Below
   1050px the directory is hidden, as in the design; the Product actions (⋯) menu lists the products under "Switch
   product" so selection stays reachable.
+- "Workspace focus" narrows navigation and Overview cards for Product owner, Engineer, Designer, Security reviewer,
+  or Platform operator. It changes only the dashboard projection; it does not grant permissions or hide data from
+  APIs. Missing role-owned data remains visibly unavailable in its relevant view.
 - "＋ New Workspace", "＋ Add Product", and "Add another product" open the product editor; "Edit product" in the
   Product actions menu opens it for the selected product. The editor validates the name (required, at most 100
   characters) and description (at most 2000) and shows a save error in place.
@@ -85,6 +91,9 @@ Live:
   ("N of M repositories online"), and the Product Health card.
 - "Open Objectives" counts the selected product's objectives that are not completed. The objectives card lists up to
   five of them with status and owner; the Objectives tab lists all of the product's objectives.
+- If the objective list fails before product scope is known, the execution panel reports that WorkGraph scope is
+  unknown instead of claiming the product has no approved plan. Existing cached objective IDs remain usable while
+  their refresh error is shown on the objective card.
 - The roadmap shows up to four of the product's earliest objectives due on or after the first quarter shown, across
   five quarters starting at the earliest due quarter. A bar runs from the objective's creation date to its due date and
   is coloured by status; it is not an estimate of when work starts. Today is marked when it falls in the quarters
@@ -107,8 +116,11 @@ Live:
   The Plan tab then offers only online repository checkouts linked to that product; legacy objectives without a product
   keep the existing all-checkouts choice.
 - The Objectives tab projects each linked objective's current WorkGraph, pending decisions, findings, review and
-  integration states, and observed pull-request link from existing product-environment records. Opening an objective
-  shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
+  integration states, and observed pull-request link from existing product-environment records. Its WorkGraph view
+  resolves a pending decision against that exact graph and request through the existing governed API action. Opening
+  an objective shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
+- WorkGraph-linked run IDs are joined to the app shell's agent-run records to show provider-reported token totals and
+  cost with explicit run coverage. Providers that do not report cost remain unknown; budgets are not recorded here.
 - The selected product's environment projection supplies the pending-decision count, decision links, current
   WorkGraph/handoff/finding counts, and observed PR-link count. These are recorded counts, without a time trend or
   implied merge state. A failed projection shows an error, and a missing product shows an empty explanation.
@@ -121,6 +133,8 @@ Live:
   recorded workflow version and profile/persona assignments with links to the saved records. Current provider/model
   and profile status are labeled as current configuration, distinct from the executed versions. These relationships
   come from the product's objectives and WorkGraphs; workspace-wide definitions remain available separately.
+- Live WorkGraph units link each recorded run ID directly to its Reviews evidence. Mock execution fixtures do not
+  create Live run links.
 - Plan revisions link to their selected workflow and assigned profiles, with profile/persona versions labeled as
   planned configuration. Cross-page links preserve Live mode on local dashboards.
 - Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, and time-series
@@ -155,6 +169,10 @@ go test ./cmd/zenchron -run 'TestProducts|TestPersistentMuxRestoresObjectivesAnd
 cd dashboard && npm run test:e2e -- e2e/workspace.spec.ts e2e/workspace-preview.spec.ts
 cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Product Workspace groups live repositories'
 ```
+
+`workspace.spec.ts` checks that an inline Product Workspace decision submits the selected graph ID, request ID, and
+resolution to the existing action endpoint. The multi-WorkUnit provider and publication journey remains partially
+verified; deterministic fake-CLI coverage lives in `orchestration.spec.ts`.
 
 ## Product environment
 

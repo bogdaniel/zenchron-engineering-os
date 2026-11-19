@@ -156,7 +156,7 @@ export function ObjectivePlanPanel({ objectiveID, productID, sampleData }: {
   return <div className="work-panel" role="tabpanel">
     {source.readOnlyReason && <p className="work-unit-reason">{source.readOnlyReason}</p>}
     {(source.loading || source.plansLoading) && <p role="status">Loading existing work…</p>}
-    {graph && <><WorkGraphView graph={graph} source={source} />
+    {graph && <><WorkGraphView graph={graph} source={source} showRunLinks={!sampleData} />
       {!sampleData && <ObjectiveDeliveryReport graphID={graph.id} />}</>}
     <h4>Plan revisions</h4>
     {source.plansLoading ? <p role="status">Loading plan revisions…</p> : source.plans.length

@@ -10,7 +10,7 @@ const orion = { id: orionID, name: 'Orion Analytics', description: 'Data tools',
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
 /** Serves the Live workspace from fixtures and records every write the page attempts. */
-async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, orion]) {
+async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, orion], objectivesUnavailable = false) {
   const writes: { method: string; path: string; body: unknown }[] = [];
   await page.route('**/api/v1/**', (route) => route.fulfill(json([])));
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
@@ -42,7 +42,9 @@ async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, or
     id: 'c'.repeat(32), name: 'Mac Studio', status: 'online', last_seen: createdAt,
     providers: [{ id: 'codex-cli', version: 'codex 1.0', ready: true, sandboxed_commands: true }],
   }])));
-  await page.route('**/api/v1/objectives', (route) => route.fulfill(json([
+  await page.route('**/api/v1/objectives', (route) => objectivesUnavailable
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: '{}' })
+    : route.fulfill(json([
     { id: '1'.repeat(32), title: 'Ship Platform v3.0', description: '', owner: 'Alex', product: 'Nova Platform', product_id: novaID, status: 'on_track', progress: 78, due_date: '2026-12-15', created_at: createdAt, updated_at: createdAt },
     { id: '2'.repeat(32), title: 'Launch Agent SDK', description: '', owner: 'Priya', product: 'Nova Platform', product_id: novaID, status: 'at_risk', progress: 34, due_date: '2027-02-10', created_at: '2026-01-02T00:00:00Z', updated_at: '2026-01-02T00:00:00Z' },
     { id: '4'.repeat(32), title: 'Retire legacy API', description: '', owner: '', product: 'Nova Platform', product_id: novaID, status: 'completed', progress: 100, due_date: '', created_at: createdAt, updated_at: createdAt },
@@ -60,6 +62,21 @@ async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, or
     review_specialization: 'Code review', status: 'active', version: 1, updated_at: createdAt,
   }])));
   return writes;
+}
+
+for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: 'mobile', width: 390, height: 844 }]) {
+  test(`Product Workspace keeps execution scope unknown when its objectives fail (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await useLiveFixtures(page, [nova, orion], true);
+    await page.goto('/#workspace');
+    await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
+
+    await expect(page.getByText('Product objectives could not be loaded. WorkGraph scope is unknown.', { exact: true }))
+      .toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('No objective of this product has an approved plan.', { exact: false })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`workspace-objective-scope-${viewport.name}.png`), fullPage: true });
+  });
 }
 
 test('Product Workspace matches its desktop frame and filters products', async ({ page }) => {
@@ -232,6 +249,51 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
+test('Product Workspace focuses durable cards for each operator role', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await useLiveFixtures(page);
+  await page.goto('/?mode=live#workspace');
+  const focus = page.getByRole('combobox', { name: 'Workspace focus' });
+  const tabs = page.getByRole('navigation', { name: 'Product sections' });
+  const card = (name: string) => page.locator(`.workspace-mock-card.${name}`);
+
+  await focus.selectOption('Product owner');
+  await expect(card('objectives')).toBeVisible();
+  await expect(card('decisions')).toBeVisible();
+  await expect(card('repositories')).toBeHidden();
+  await focus.selectOption('Engineer');
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Objectives', 'Repos', 'Templates']);
+  await expect(card('repositories')).toBeVisible();
+  await expect(card('linked-workflows')).toBeVisible();
+  await expect(card('decisions')).toBeHidden();
+
+  await focus.selectOption('Designer');
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Objectives', 'Files']);
+  await expect(card('files')).toContainText('Unavailable: files and evidence');
+  await expect(card('decisions')).toBeHidden();
+
+  await focus.selectOption('Security reviewer');
+  await expect(focus).toHaveValue('Security reviewer');
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Objectives', 'Decisions']);
+  await expect(page.getByRole('heading', { name: 'Objectives (3)' })).toBeVisible();
+  await tabs.getByRole('button', { name: 'Decisions' }).click();
+  await expect(page.locator('.workspace-mock-grid')).toBeHidden();
+  await expect(card('decisions').getByRole('link', { name: 'Publish the revised export?' })).toBeVisible();
+  await expect(card('people')).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath('workspace-security-reviewer-desktop.png'), fullPage: true });
+
+  await focus.selectOption('Platform operator');
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Repos', 'Templates', 'Decisions']);
+  await tabs.getByRole('button', { name: 'Overview' }).click();
+  await expect(card('linked-workflows')).toBeVisible();
+  await expect(card('analytics')).toBeVisible();
+  await expect(card('files')).toBeHidden();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({ path: testInfo.outputPath('workspace-platform-operator-mobile.png'), fullPage: true });
+});
+
 test('Live Product Workspace rejects another product’s execution projection', async ({ page }) => {
   await useLiveFixtures(page);
   await page.route('**/api/v1/products/*/environment', (route) => route.fulfill(json({
@@ -243,6 +305,70 @@ test('Live Product Workspace rejects another product’s execution projection', 
     .toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.workspace-mock-metric.delivery strong')).toHaveText('Unavailable');
   await expect(page.locator('.workspace-mock')).not.toContainText('Other product decision');
+});
+
+test('Product Workspace links runs to Reviews and resolves decisions through its governed API action', async ({ page }, testInfo) => {
+  await useLiveFixtures(page);
+  await page.setViewportSize({ width: 1672, height: 941 });
+  const graphID = 'f'.repeat(32);
+  const objectiveID = '1'.repeat(32);
+  const graph: {
+    id: string; objective_id: string; objective_title: string; plan_revision: number; revision: number;
+    status: string; project_name: string; base_branch: string; max_parallel: number; created_at: string; updated_at: string;
+    units: { key: string; kind: string; title: string; instructions: string; acceptance: string[]; depends_on: string[];
+      capabilities: string[]; agent_id: string; agent_name: string; state: string; reason: string; run_ids: string[] }[];
+    messages: { id: string; type: string; from: string; to: string[]; run_id?: string; attempt?: number; body: string;
+      notes: string[]; created_at: string; resolves?: string; by?: string }[];
+  } = {
+    id: graphID, objective_id: objectiveID, objective_title: 'Ship Platform v3.0', plan_revision: 2,
+    revision: 3, status: 'blocked', project_name: 'nova-platform', base_branch: 'main', max_parallel: 2,
+    created_at: createdAt, updated_at: createdAt,
+    units: [{ key: 'api', kind: 'produce', title: 'Update export', instructions: 'Implement the API change.',
+      acceptance: [], depends_on: [], capabilities: ['code.write'], agent_id: 'd'.repeat(32),
+      agent_name: 'Code Reviewer', state: 'blocked', reason: 'Waiting for the operator decision.',
+      run_ids: ['9'.repeat(32), '8'.repeat(32)] }],
+    messages: [{ id: 'decision-1', type: 'decision_request', from: 'api', to: [], run_id: '9'.repeat(32), attempt: 1,
+      body: 'Publish the revised export?', notes: ['publish', 'hold'], created_at: createdAt }],
+  };
+  let action: { method: string; path: string; body: unknown; status?: number } | undefined;
+  await page.route('**/api/v1/work-graphs', (route) => route.fulfill(json([graph])));
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([{
+    id: '9'.repeat(32), agent_id: 'd'.repeat(32), agent_name: 'Code Reviewer', project_id: projectID,
+    project_name: 'nova-platform', worker_id: 'c'.repeat(32), worker_name: 'Mac Studio', branch: 'feature/export',
+    prompt: 'Update export', status: 'succeeded', attempts: 1, created_at: createdAt, updated_at: createdAt,
+    graph_id: graphID, unit_key: 'api', usage: { input_tokens: 1234, output_tokens: 567, cost_usd: 0.05 },
+  }])));
+  await page.route('**/api/v1/work-graphs/*/decisions/*', async (route) => {
+    action = { method: route.request().method(), path: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON() };
+    graph.messages = [...graph.messages, { id: 'decision-2', type: 'decision_resolution', from: 'local operator', to: ['api'],
+      resolves: 'decision-1', by: 'Local workspace', body: 'publish', notes: [], created_at: createdAt }];
+    graph.status = 'running';
+    await route.fulfill(json(graph));
+    action.status = 200;
+  });
+
+  await page.goto('/?mode=live#workspace');
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
+  const execution = page.getByRole('region', { name: 'Work graph for Ship Platform v3.0' });
+  const runID = '9'.repeat(32);
+  await expect(page.getByRole('status', { name: 'Provider usage for Ship Platform v3.0' }))
+    .toHaveText('Provider-reported usage (1 of 2 runs): 1,234 input / 567 output tokens · $0.05 provider-reported cost for 1 run');
+  await expect(execution.getByRole('link', { name: `Open run ${runID} in Reviews` }))
+    .toHaveAttribute('href', `/?run=${runID}&mode=live#reviews`);
+  await page.screenshot({ path: testInfo.outputPath('workspace-run-links-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({ path: testInfo.outputPath('workspace-run-links-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  const decision = execution.getByRole('form', { name: 'Decision for api' });
+  await expect(decision).toContainText('Publish the revised export?');
+  await decision.getByRole('button', { name: 'publish' }).click();
+  await decision.getByRole('button', { name: 'Resolve decision' }).click();
+  await expect.poll(() => action).toEqual({
+    method: 'POST', path: `/api/v1/work-graphs/${graphID}/decisions/decision-1`,
+    body: { resolution: 'publish' }, status: 200,
+  });
 });
 
 test('local Live product navigation stays Live when opening objective creation', async ({ page }, testInfo) => {

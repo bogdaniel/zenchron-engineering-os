@@ -380,7 +380,7 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await page.goto('/?mode=live#workspace');
   await page.locator('.workspace-mock-product').filter({ hasText: 'E2E product' }).click();
   await page.getByRole('combobox', { name: 'Objective repository' }).click();
-  await page.getByRole('option').first().click();
+  await page.getByRole('listbox').getByRole('option').first().click();
   await page.getByRole('combobox', { name: 'Objective workflow' }).click();
   await page.getByRole('option', { name: `E2E executable flow · v${created.workflowVersion}` }).click();
   await page.getByRole('link', { name: 'Create objective for E2E product' }).click();

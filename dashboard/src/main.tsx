@@ -312,6 +312,9 @@ function App() {
               objectivesError={objectives.isError}
               workers={workers.data}
               workersLoading={workers.isLoading}
+              agentRuns={agentRuns.data}
+              agentRunsLoading={agentRuns.isLoading}
+              agentRunsError={agentRuns.isError}
             />
           ) : activePage === 'objectives' ? <ObjectivesPage sampleData={previewPage} /> : ['integrations', 'settings'].includes(activePage) ? (
             <SystemPage

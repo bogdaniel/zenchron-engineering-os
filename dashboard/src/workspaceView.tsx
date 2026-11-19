@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { loadAgents, loadPersonas } from './agentsData';
+import type { AgentRun } from './agentsData';
 import { profileReadiness } from './agentReadiness';
 import { livePageHref } from './livePageHref';
 import type { RunWorker } from './agentRunQueue';
@@ -95,6 +96,9 @@ export interface WorkspaceFacts {
   objectivesError: boolean;
   workers?: RunWorker[];
   workersLoading?: boolean;
+  agentRuns?: AgentRun[];
+  agentRunsLoading?: boolean;
+  agentRunsError?: boolean;
 }
 
 const unavailable = 'Unavailable';
