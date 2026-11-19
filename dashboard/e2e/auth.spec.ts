@@ -25,6 +25,15 @@ test('keeps the selected Live dashboard destination through sign-in', async ({ p
     '/auth/github?return=%2F%3Fmode%3Dlive%26objective%3Dobjective-1%26tab%3Dplan%26graph_id%3Dgraph-2%23objectives');
 });
 
+test('drops an oversized selection but keeps the valid page and mode through sign-in', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) =>
+    route.fulfill({ status: 401, body: 'authentication required' }));
+  const oversizedTab = 'a'.repeat(257);
+  await page.goto(`/?mode=live&tab=${oversizedTab}#agents`);
+  await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toHaveAttribute('href',
+    '/auth/github?return=%2F%3Fmode%3Dlive%23agents');
+});
+
 test('keeps the dashboard shell visible until a failed session check can be retried', async ({ page }) => {
   let sessionChecks = 0;
   let protectedRequests = 0;

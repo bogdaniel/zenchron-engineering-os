@@ -62,8 +62,9 @@ flowchart LR
   response means the local service is responding but its status is not authorized. It offers **Open Dashboard for
   access**, using the canonical local dashboard URL, so the operator can sign in there. The companion does not share
   the browser session; its own status remains unavailable until a secure session-sharing path exists. When a selected
-  dashboard deep link prompts for GitHub sign-in, OAuth returns to that same-origin objective route after sign-in;
-  the return path is constrained to dashboard selection fields and authenticated state binds it to the OAuth flow.
+  dashboard deep link prompts for GitHub sign-in, OAuth returns to the same-origin page and mode after sign-in.
+  Invalid or oversized selections are omitted so one bad value does not discard valid navigation; the server still
+  validates the final return path and binds it to the OAuth flow.
 - Cancelled WorkGraphs remain in history but their unresolved decisions are excluded from actionable status counts and
   menu links. Blocked WorkGraphs still expose unanswered decisions.
 - **Open Dashboard** uses the canonical URL returned by the control plane, after validating its host and port.
@@ -99,6 +100,15 @@ packaging attempts can publish only one top-level bundle; a losing attempt repor
 nested bundles. Move it to a
 stable user-controlled location before enabling Launch at Login; registering a temporary build path would leave a
 broken login item after the bundle moves. Quit exits only the menu-bar process.
+
+## Release signing
+
+The ad-hoc signature is for local packaging checks only. For distribution outside the Mac App Store, sign the app and
+each executable with a **Developer ID Application** certificate. Apple's notarization guidance requires a Developer
+ID signature, Hardened Runtime, and a secure timestamp; submit the finished app or distribution archive with
+`notarytool`, wait for an accepted result, then staple and verify the ticket before release. The current package
+script does not do those steps, and this repository has no verified notarized release. See Apple's [Developer ID
+signing guidance](https://developer.apple.com/developer-id/) and [notarization requirements](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
 
 GitHub CI's macOS job runs the Swift tests and packages the app. It does not exercise the menu UI, Login Items,
 Developer ID signing, notarization, or update/restart behavior.
