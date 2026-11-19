@@ -1,10 +1,9 @@
 # Product workspace
 
-The Product Workspace manages durable products and links them to repositories reported by local workers. It has one
-layout, the approved design, in both data modes (see `docs/architecture/dashboard-modes.md`): a product directory, a
-product heading with actions, four metric cards, six section tabs, and nine cards (roadmap, objectives, repositories,
-workflows, files, stakeholders, release streams, decisions, delivery metrics). **Mock** fills it from fixtures and
-keeps every change in the browser tab. **Live** fills it from the control plane and says "Unavailable" where the
+The Product Workspace manages durable products and links them to repositories reported by local workers. The approved
+layout has a product directory, a product heading with actions, four metric cards, six section tabs, and nine cards.
+**Mock** keeps that layout, fills it from fixtures, and keeps every change in the browser tab. **Live** adds a History
+tab and card for product-scoped WorkGraphs, fills data from the control plane, and says "Unavailable" where the
 control plane records nothing.
 
 ## Feature diagram
@@ -26,11 +25,11 @@ flowchart LR
     Editor -->|"source.saveProduct"| Source
     Live -->|"POST /api/v1/products · PUT /api/v1/products/{id}"| CP
     Page -->|"Create objective for selected product"| Objective["ObjectivesPage · product_id prefilled"]
-    Page -->|"linked checkout + saved workflow selection"| Start["WorkspaceObjectiveStart"]
+    Page -->|"product default + linked checkout"| Start["WorkspaceObjectiveStart"]
     Start -->|"project/workflow IDs carried to Plan form"| Plans
     Objective -->|"create objective, then select repository and workflow in Plan"| Plans["ObjectivePlanPanel"]
     Plans -->|"POST /api/v1/objectives/{id}/plans"| CP
-    Plans -->|"planned workflow and profile links"| Workflow
+    Plans -->|"product config revision, workflow and profile snapshots"| Workflow
     Plans -->|"planned profile and persona versions"| Agents
     Plans --> Report["ObjectiveDeliveryReport"]
     Report -->|"workflow ID"| Workflow["WorkflowsPage · current saved definition"]
@@ -40,6 +39,7 @@ flowchart LR
     Mock -->|"add or rename in fixture state"| Tab["This browser tab only"]
     CP --> Store[(products.json)]
     Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
+    Live -->|"History tab · exact plan links and frozen revisions"| Environment
     Execution -->|"GET /api/v1/work-graphs"| CP
     Execution -->|"POST /api/v1/work-graphs/{id}/decisions/{messageID}"| CP
     Execution -->|"recorded workflow/profile IDs and versions"| Report
@@ -47,6 +47,12 @@ flowchart LR
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
     Environment --> Store
     Environment --> Graphs[(objectives.json · work-graphs.json)]
+    Store -->|"read product context, revision and default workflow"| CP
+    CP -->|"resolve default only for new plans; pin workflow version"| Graphs
+    Graphs -->|"matching objective, revision and hash"| RunContext["planner / WorkUnit runContext"]
+    Graphs -->|"durable planner-run link gates worker claim"| RunContext
+    RunContext -->|"reconcile unlinked planner runs after restart"| CP
+    Graphs -->|"frozen product/workflow/profile/persona revision references"| Environment
     Page -->|"Product actions → Open repository inventory"| Projects["#projects"]
 ```
 
@@ -83,8 +89,15 @@ Mock:
 
 Live:
 
+- The History tab shows the product's durable WorkGraph references in newest-first order. Each opens the exact
+  objective plan and graph. The row exposes plan hash/revision, graph revision, frozen workflow and assignment
+  revisions, run IDs, handoffs, and findings; it does not copy run evidence. The Mock preview keeps its existing
+  layout and does not invent WorkGraph history.
+
 - Products come from `GET /api/v1/products`; create and edit use `POST` and `PUT /api/v1/products/{id}` and select the
-  saved product. The editor links repositories from the worker inventory.
+  saved product. The editor links repositories from the worker inventory and can store a default saved workflow. A
+  product default fills an omitted workflow choice when a plan is compiled or delegated to a planner. An explicit
+  manual plan stays independent of that default; workflow identity and version are pinned only when selected.
 - A product's health is `Healthy` when at least one linked repository's worker is online, `Offline` when linked
   repositories are reported but none is online, `No repos` when nothing is linked, and `Unavailable` when no linked
   repository is in the current inventory. It appears as the directory badge, the status filter, the heading line
@@ -122,8 +135,10 @@ Live:
 - WorkGraph-linked run IDs are joined to the app shell's agent-run records to show provider-reported token totals and
   cost with explicit run coverage. Providers that do not report cost remain unknown; budgets are not recorded here.
 - The selected product's environment projection supplies the pending-decision count, decision links, current
-  WorkGraph/handoff/finding counts, and observed PR-link count. These are recorded counts, without a time trend or
-  implied merge state. A failed projection shows an error, and a missing product shows an empty explanation.
+  WorkGraph/handoff/finding counts, observed PR-link count, and a newest-first list of its historical WorkGraphs.
+  History entries reference the durable graph, plan hash/revision, product configuration revision, graph revision, run IDs, status and timestamps;
+  evidence bodies remain in their owning graph. These are recorded facts, without a time trend or implied merge state.
+  A failed projection shows an error, and a missing product shows an empty explanation.
 - Delivery report workflow and profile links open the referenced saved record using
   `/?workflow=<id>&mode=live#workflows` and `/?profile=<id>&mode=live#agents`. The Live mode parameter keeps local
   navigation from switching to Mock.
@@ -137,6 +152,11 @@ Live:
   create Live run links.
 - Plan revisions link to their selected workflow and assigned profiles, with profile/persona versions labeled as
   planned configuration. Cross-page links preserve Live mode on local dashboards.
+- A planner and each WorkUnit receive the linked product description captured when the plan revision was proposed.
+  The snapshot is part of the plan hash and does not change when the current product description is edited; it is
+  passed as user-supplied task data, not as instructions. Unlinked objectives receive no product context.
+- Planner runs receive workflow guidance from the same pinned plan. A planner run cannot be claimed until its link is
+  durable; after restart, an unlinked planner run is cancelled before workers can claim it.
 - Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, and time-series
   delivery trends. The favorite star and the delivery range are disabled with a reason. Sharing shows the page link
   and says no invitation is sent.
@@ -145,15 +165,17 @@ Live:
 
 ## Data boundaries
 
-- Products, descriptions, and repository ID links persist in `products.json`; product names are unique without regard to
-  case.
+- Products, descriptions, default workflow IDs, configuration revisions, and repository ID links persist in `products.json`; product names are
+  unique without regard to case.
 - Repository IDs are stable for a worker identity and checkout path. Names, branches, worker names, and heartbeat state
   come from current worker inventory; local paths remain on the worker. Only repository names and worker IDs are shared
   with the control plane.
-- New fields are additive: prior profile records without personas and prior plans without configuration snapshots load
-  with their previous behavior. The strict state reader rejects unknown fields, so rolling back after personas or pinned
-  plans have been saved, or after saving a workflow with the `integrate` node, requires restoring pre-upgrade copies of
-  `agents.json`, `work-graphs.json`, and `workflows.json`; retain a local data-directory backup before a downgrade.
+- New fields are additive: prior products without a default workflow, profile records without personas, and plans
+  without configuration snapshots load
+  with their previous behavior. The strict state reader rejects unknown fields, so rolling back after personas, pinned
+  plans, product-context snapshots/default workflows, or workflows with the `integrate` node have been saved requires
+  restoring pre-upgrade copies of `agents.json`, `products.json`, `work-graphs.json`, and `workflows.json`; retain a
+  local data-directory backup before a downgrade.
 - A worker restart does not erase product configuration. Moving a checkout changes its ID and requires relinking.
 - Objectives link to products by ID. Unlinked and legacy free-text objectives remain visible on the Objectives page.
 - File search, evidence artifacts, decisions, stakeholder membership, release streams, and delivery history require
@@ -161,13 +183,16 @@ Live:
 
 ## Verification
 
-Focused Go tests cover product validation, create/update/list, and restart persistence. The E2E checks cover the Live
-layout with isolated API fixtures, the create flow against the real control plane, and the Mock layout:
+Focused Go tests cover product validation, create/update/list, default-workflow plan pinning, and restart persistence.
+The E2E checks cover the Live layout with isolated API fixtures, the default workflow carried into objective creation,
+the create flow against the real control plane, and the Mock layout:
 
 ```sh
-go test ./cmd/zenchron -run 'TestProducts|TestPersistentMuxRestoresObjectivesAndWorkflows'
-cd dashboard && npm run test:e2e -- e2e/workspace.spec.ts e2e/workspace-preview.spec.ts
-cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Product Workspace groups live repositories'
+go test ./cmd/zenchron -run 'TestProducts|TestProductDefaultWorkflow|TestPersistentMuxRestoresObjectivesAndWorkflows'
+cd dashboard
+npm run test:e2e -- e2e/workspace.spec.ts e2e/workspace-preview.spec.ts
+npm run test:e2e -- e2e/workspace.spec.ts --grep 'local Live product navigation stays Live when opening objective creation'
+npm run test:e2e -- e2e/home.spec.ts --grep 'Product Workspace groups live repositories'
 ```
 
 `workspace.spec.ts` checks that an inline Product Workspace decision submits the selected graph ID, request ID, and
@@ -177,13 +202,33 @@ verified; deterministic fake-CLI coverage lives in `orchestration.spec.ts`.
 ## Product environment
 
 `GET /api/v1/products/{id}/environment` returns the engineering world of one product by reference: its repository
-ids; each objective linked to it with its status, the number of plan revisions, and the id, status, plan revision,
-handoff and finding counts, and pull-request URL of its newest work graph; and every decision asked in those graphs
+ids and current configuration revision; each objective linked to it with its status, the number of plan revisions,
+and the id, status, plan revision,
+handoff and finding counts, and pull-request URL of its newest work graph; every visible WorkGraph in newest-first
+history order with its plan hash/revision, product configuration revision, graph revision, run IDs, status and timestamps, workflow identity/version,
+and each assigned unit's agent profile/persona identity and frozen revision; and every decision asked in those graphs
 with the unit that asked, the question, and who resolved it.
 
 - It is a projection of the product, objective, plan, and work-graph records and stores nothing.
+- Historical work survives a control-plane restart through the existing durable WorkGraph store; history entries
+  point to the graph and run records rather than copying their evidence bodies.
+- Workflow and agent/persona references come from the approved plan snapshot recorded in each WorkGraph. Editing a
+  current profile or workflow does not change the historical reference. The product environment does not own product
+  defaults or copy configuration contents.
+- A plan revision snapshots the linked product description and includes it in the plan hash. Planning runs and
+  WorkUnit attempts use that same text across retries; editing a product affects only later plan revisions. The text
+  is user-supplied task data and does not grant authority or change the result contract.
+- Planner workflow guidance is persisted with its plan revision and delivered separately from the bounded run prompt.
+  A planner's durable plan link gates worker claim, and reconciliation cancels any planner run left unlinked after a
+  crash between the run-store and plan-store writes.
+- Configuration revision advances when product name, description, default workflow, or repository links change. Each
+  plan pins the revision alongside its product context and the environment projection associates that revision with
+  the historical WorkGraph. Older product records without the field read as revision 1.
 - Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
 - A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
-- Not implemented: product history, configuration, knowledge entries, and promotion between scopes.
+- Only the default workflow is currently product-scoped configuration. Other configuration, knowledge entries, promotion between
+  scopes, architecture/team references, and cross-product organization knowledge remain unimplemented because they
+  require established authority/context boundaries.
 
-Verified by `go test ./cmd/zenchron -run TestProductEnvironment -count=1`.
+Verified by `go test ./cmd/zenchron -run 'Test(ProductEnvironment|WorkUnitContextIncludesOnlyItsLinkedProduct|PlannerReceivesLinkedProductDescription)' -count=1`,
+including product isolation, historical context across a restart, and product context delivery to planner and WorkUnits.

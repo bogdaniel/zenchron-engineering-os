@@ -38,6 +38,10 @@ func (store *workGraphStore) reconcileAll() bool {
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	if status, message := store.runs.cancelUnlinkedPlannerRuns(store.plannerRunIDsLocked()); status != 0 {
+		log.Printf("could not recover unlinked planner runs: %s", message)
+		return false
+	}
 	changed := store.admitPlansLocked()
 	cancellationsPersisted := true
 	// Oldest graph first, so graphs queue their runs in the order they were approved.
@@ -76,6 +80,27 @@ func (store *workGraphStore) reconcileAll() bool {
 		log.Printf("could not persist work graphs: %v", err)
 	}
 	return cancellationsPersisted
+}
+
+func (store *workGraphStore) plannerRunIDs() map[string]struct{} {
+	if store == nil {
+		return map[string]struct{}{}
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return store.plannerRunIDsLocked()
+}
+
+func (store *workGraphStore) plannerRunIDsLocked() map[string]struct{} {
+	runs := make(map[string]struct{})
+	for _, plans := range store.plans {
+		for _, plan := range plans {
+			if plan.PlannerRunID != "" {
+				runs[plan.PlannerRunID] = struct{}{}
+			}
+		}
+	}
+	return runs
 }
 
 func (store *workGraphStore) reconcile(graph *workGraph) {

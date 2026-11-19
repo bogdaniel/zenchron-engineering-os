@@ -5,12 +5,29 @@ const orionID = 'b'.repeat(32);
 const projectID = 'c'.repeat(32);
 const personaID = 'e'.repeat(32);
 const createdAt = '2026-01-01T00:00:00Z';
-const nova = { id: novaID, name: 'Nova Platform', description: 'Developer platform', repository_ids: [projectID], created_at: createdAt, updated_at: createdAt };
-const orion = { id: orionID, name: 'Orion Analytics', description: 'Data tools', repository_ids: [], created_at: createdAt, updated_at: createdAt };
+type ProductFixture = { id: string; name: string; description: string; repository_ids: string[];
+  default_workflow_id?: string; created_at: string; updated_at: string };
+const nova: ProductFixture = { id: novaID, name: 'Nova Platform', description: 'Developer platform', repository_ids: [projectID],
+  default_workflow_id: 'release', created_at: createdAt, updated_at: createdAt };
+const orion: ProductFixture = { id: orionID, name: 'Orion Analytics', description: 'Data tools', repository_ids: [],
+  created_at: createdAt, updated_at: createdAt };
+const historyEntry = {
+  id: '9'.repeat(32), objective_id: '1'.repeat(32), plan_revision: 3, plan_hash: 'a'.repeat(40),
+  product_configuration_revision: 2,
+  workflow_id: 'release', workflow_version: 2, workflow_mode: 'automatic',
+  assignments: [{ unit: 'build', agent_id: 'd'.repeat(32), profile_version: 1,
+    persona_id: personaID, persona_version: 4 }], revision: 8, status: 'completed',
+  created_at: createdAt, updated_at: createdAt, run_ids: ['run-1', 'run-2'], handoffs: 2, findings: 1,
+};
+const historyEntries = [historyEntry, ...Array.from({ length: 9 }, (_, index) => ({
+  ...historyEntry, id: String(index + 10).repeat(32),
+}))];
 const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
 /** Serves the Live workspace from fixtures and records every write the page attempts. */
-async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, orion], objectivesUnavailable = false) {
+async function useLiveFixtures(
+  page: Page, products: ProductFixture[] = [nova, orion], objectivesUnavailable = false, historyCount = 1,
+) {
   const writes: { method: string; path: string; body: unknown }[] = [];
   await page.route('**/api/v1/**', (route) => route.fulfill(json([])));
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
@@ -25,6 +42,7 @@ async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, or
   });
   await page.route('**/api/v1/products/*/environment', (route) => route.fulfill(json({
     product_id: route.request().url().includes(novaID) ? novaID : orionID,
+    configuration_revision: 7,
     objectives: route.request().url().includes(novaID) ? [{
       graph_id: 'f'.repeat(32), graph_status: 'running', findings: 2, handoffs: 1,
       pull_request_url: 'https://github.com/zenchron/nova-platform/pull/42',
@@ -33,6 +51,7 @@ async function useLiveFixtures(page: Page, products: (typeof nova)[] = [nova, or
       graph_id: 'f'.repeat(32), message_id: 'decision-1', objective_id: '1'.repeat(32),
       question: 'Publish the revised export?', resolved_by: '',
     }] : [],
+    history: route.request().url().includes(novaID) ? historyEntries.slice(0, historyCount) : [],
   })));
   await page.route('**/api/v1/projects', (route) => route.fulfill(json([{
     id: projectID, name: 'nova-platform', branch: 'main', git_remote: 'github.com/zenchron/nova-platform',
@@ -159,8 +178,9 @@ test('Product Workspace matches its desktop frame and filters products', async (
 });
 
 test('Live Product Workspace shows real data, honest gaps, and saves product edits', async ({ page }, testInfo) => {
+  expect(new Set(historyEntries.map(({ id }) => id)).size).toBe(historyEntries.length);
   await page.setViewportSize({ width: 1672, height: 941 });
-  const writes = await useLiveFixtures(page);
+  const writes = await useLiveFixtures(page, [nova, orion], false, 10);
   await page.goto('/#workspace');
 
   await expect(page.locator('.workspace-mock-meta')).toContainText('Healthy');
@@ -185,6 +205,24 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(page.locator('.workspace-mock-card.analytics')).toContainText('Findings2 recorded');
   await expect(page.locator('.workspace-mock-card.decisions').getByRole('link', { name: 'Publish the revised export?' }))
     .toHaveAttribute('href', `/?objective=${'1'.repeat(32)}&tab=plan&graph_id=${'f'.repeat(32)}&decision=decision-1&mode=live#objectives`);
+  const workGraph = page.locator('.workspace-mock-card.history');
+  await expect(workGraph.locator('.history-list > div')).toHaveCount(5);
+  await workGraph.getByRole('button', { name: 'View All' }).click();
+  await expect(workGraph.locator('.history-list > div')).toHaveCount(10);
+  await expect(workGraph).toContainText('Plan r3 · aaaaaaaa · Product config r2 · Graph r8 · release v2 · automatic');
+  await expect(workGraph).toContainText('Runs: run-1, run-2 · Handoffs 2 · Findings 1');
+  await expect(workGraph.getByRole('link', { name: 'Ship Platform v3.0' }).first())
+    .toHaveAttribute('href', `/?objective=${'1'.repeat(32)}&tab=plan&graph_id=${'9'.repeat(32)}&mode=live#objectives`);
+  await expect(workGraph).toContainText(`build: ${'d'.repeat(32)} profile v1 · persona v4`);
+  await expect(workGraph.locator('.history-list > div').last()).toBeVisible();
+  expect(await workGraph.evaluate((card) => card.scrollHeight <= card.clientHeight + 1)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('workspace-history-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  expect(await workGraph.evaluate((card) => card.scrollHeight <= card.clientHeight + 1)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('workspace-history-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Overview' }).click();
   await page.screenshot({ path: testInfo.outputPath('workspace-environment-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
@@ -238,7 +276,8 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await dialog.getByRole('button', { name: 'Save product' }).click();
   await expect(page.locator('.workspace-mock-heading h1')).toHaveText('Nova Core');
   expect(writes).toEqual([{ method: 'PUT', path: `/api/v1/products/${novaID}`,
-    body: { name: 'Nova Core', description: 'Developer platform', repository_ids: [projectID] } }]);
+    body: { name: 'Nova Core', description: 'Developer platform', repository_ids: [projectID],
+      default_workflow_id: 'release' } }]);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.workspace-mock-directory')).toBeHidden();
@@ -246,6 +285,8 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await page.getByRole('menuitem', { name: 'Orion Analytics' }).click();
   await expect(page.locator('.workspace-mock-heading h1')).toHaveText('Orion Analytics');
   await expect(page.locator('.workspace-mock-card.repositories')).toContainText('No repositories linked yet.');
+  await expect(page.locator('.workspace-mock-card.history')).toContainText('No WorkGraph history is recorded for this product.');
+  await expect(page.locator('.workspace-mock-card.history')).not.toContainText('run-1');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
@@ -292,6 +333,27 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.screenshot({ path: testInfo.outputPath('workspace-platform-operator-mobile.png'), fullPage: true });
+
+});
+
+test('Live Product Workspace saves a default workflow and carries it into objective creation', async ({ page }) => {
+  const productWithoutDefault = { ...nova };
+  delete productWithoutDefault.default_workflow_id;
+  const writes = await useLiveFixtures(page, [productWithoutDefault, orion]);
+  await page.goto('/?mode=live#workspace');
+  await page.getByRole('button', { name: 'Product actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit product' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Edit product' });
+  await dialog.getByRole('combobox', { name: 'Default workflow for new objectives' }).click();
+  await page.getByRole('option', { name: 'Release train' }).click();
+  await dialog.getByRole('button', { name: 'Save product' }).click();
+  expect(writes).toEqual([{ method: 'PUT', path: `/api/v1/products/${novaID}`,
+    body: { name: 'Nova Platform', description: 'Developer platform', repository_ids: [projectID],
+      default_workflow_id: 'release' } }]);
+
+  await page.getByRole('link', { name: 'Create objective for Nova Platform' }).click();
+  await expect(page).toHaveURL(/workflow=release/);
 });
 
 test('Live Product Workspace rejects another product’s execution projection', async ({ page }) => {
@@ -381,6 +443,7 @@ test('local Live product navigation stays Live when opening objective creation',
   await expect(page.getByRole('link', { name: 'Create objective for Nova Platform' })).toBeVisible();
   await page.getByRole('link', { name: 'Create objective for Nova Platform' }).click();
   await expect(page).toHaveURL(/mode=live.*#objectives$/);
+  await expect(page).toHaveURL(/workflow=release/);
   await expect(page.getByRole('dialog', { name: 'New objective' }).getByRole('combobox', { name: 'Product' }))
     .toHaveValue('Nova Platform');
 });

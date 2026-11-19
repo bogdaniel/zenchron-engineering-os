@@ -81,3 +81,36 @@ func (store *agentRunStore) cancelGraphRuns(graphID string) (int, string) {
 	}
 	return 0, ""
 }
+
+func (store *agentRunStore) cancelUnlinkedPlannerRuns(linked map[string]struct{}) (int, string) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	previous := make(map[string]agentRun)
+	now := time.Now().UTC()
+	for id, item := range store.items {
+		if !item.ObjectivePlanner || (item.Status != "queued" && item.Status != "running") {
+			continue
+		}
+		if _, exists := linked[id]; exists {
+			continue
+		}
+		previous[id] = item
+		if item.Status == "queued" {
+			item.Status, item.Error = "cancelled", "Cancelled because its objective plan was not persisted."
+		} else {
+			item.CancelRequested = true
+		}
+		item.UpdatedAt = now
+		store.items[id] = item
+	}
+	if len(previous) == 0 {
+		return 0, ""
+	}
+	if err := store.persistLocked(); err != nil {
+		for id, item := range previous {
+			store.items[id] = item
+		}
+		return http.StatusInternalServerError, "could not persist orphan planner run recovery"
+	}
+	return 0, ""
+}

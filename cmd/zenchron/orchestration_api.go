@@ -67,7 +67,7 @@ func (store *workGraphStore) listPlans(w http.ResponseWriter, r *http.Request) {
 		return !access.allows(plan.Repository)
 	})
 	for index := range plans {
-		plans[index].ProfileSnapshots = nil
+		plans[index] = publicPlan(plans[index])
 	}
 	slices.Reverse(plans)
 	body := encodeResponse(plans)
@@ -91,6 +91,18 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	}
 	if !decodeJSONBody(w, r, &input) {
 		return
+	}
+	var linkedProduct product
+	if item.ProductID != "" {
+		var exists bool
+		linkedProduct, exists = store.objectives.products.get(item.ProductID)
+		if !exists {
+			http.Error(w, "the objective's linked product is unavailable", http.StatusConflict)
+			return
+		}
+	}
+	if input.Plan == nil && input.WorkflowID == "" && item.ProductID != "" {
+		input.WorkflowID = linkedProduct.DefaultWorkflowID
 	}
 	access := accessFor(r)
 	project, online := store.runs.registry.onlineProject(strings.ToLower(input.ProjectID))
@@ -120,9 +132,17 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	}
 	plan := objectivePlan{ObjectiveID: item.ID, ProjectID: project.ID, Repository: project.GitRemote, WorkflowID: input.WorkflowID,
 		Status: planProposed, CreatedBy: access.user, CreatedAt: time.Now().UTC()}
+	if item.ProductID != "" {
+		plan.ProductContext = "Product: " + linkedProduct.Name
+		plan.ProductConfigurationRevision = linkedProduct.configurationRevision()
+		if linkedProduct.Description != "" {
+			plan.ProductContext += "\nDescription: " + linkedProduct.Description
+		}
+	}
 	if definition != nil {
 		plan.WorkflowVersion = definition.Version
 	}
+	plannerAgentID, plannerGuidance := "", ""
 	switch {
 	case input.Plan != nil && input.PlannerAgentID == "":
 		profiles := store.agentProfiles()
@@ -133,7 +153,8 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		plan.planProposal, plan.ProfileSnapshots = *input.Plan, snapshots
-		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, *input.Plan)
+		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.ProductContext,
+			plan.ProductConfigurationRevision, *input.Plan)
 	case input.Plan == nil && input.PlannerAgentID == "" && definition != nil:
 		profiles := store.agentProfiles()
 		proposal, problems := compileWorkflow(*definition, profiles)
@@ -148,24 +169,20 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		}
 		plan.planProposal = proposal
 		plan.WorkflowMode = workflowModeCompiled
-		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, proposal)
+		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.ProductContext,
+			plan.ProductConfigurationRevision, proposal)
 	case input.Plan == nil && input.PlannerAgentID != "":
-		guidance := ""
 		if definition != nil {
 			var err error
-			guidance, err = plannerWorkflowGuidance(*definition)
+			plannerGuidance, err = plannerWorkflowGuidance(*definition)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 			plan.WorkflowMode = workflowModeGuidance
+			plan.WorkflowGuidance = plannerGuidance
 		}
-		run, status, message := store.queuePlanner(item, project, strings.ToLower(input.PlannerAgentID), access.user, guidance)
-		if status != 0 {
-			http.Error(w, message, status)
-			return
-		}
-		plan.Status, plan.PlannerRunID = planPlanning, run.ID
+		plannerAgentID = strings.ToLower(input.PlannerAgentID)
 	default:
 		http.Error(w, "provide either plan or planner_agent_id", http.StatusBadRequest)
 		return
@@ -177,31 +194,46 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusOK, publicPlan(approved))
 		return
 	}
+	var plannerRunID string
+	if plannerAgentID != "" {
+		run, status, message := store.queuePlanner(item, project, plannerAgentID, access.user)
+		if status != 0 {
+			http.Error(w, message, status)
+			return
+		}
+		plannerRunID = run.ID
+		plan.Status, plan.PlannerRunID = planPlanning, run.ID
+	}
 	plan.Revision = len(store.plans[item.ID]) + 1
 	store.plans[item.ID] = append(store.plans[item.ID], plan)
 	if err := store.persistLocked(); err != nil {
 		store.plans[item.ID] = store.plans[item.ID][:plan.Revision-1]
+		if plannerRunID != "" {
+			if _, status, message := store.runs.cancelRun(plannerRunID); status != 0 {
+				http.Error(w, "could not persist the plan or cancel its planner run: "+message, http.StatusInternalServerError)
+				return
+			}
+		}
 		http.Error(w, "could not persist the plan", http.StatusInternalServerError)
 		return
 	}
 	plan.ProfileSnapshots = nil
-	writeJSON(w, http.StatusCreated, plan)
+	writeJSON(w, http.StatusCreated, publicPlan(plan))
 }
 
 // queuePlanner queues the run in which a read-only agent proposes a plan for the objective.
-func (store *workGraphStore) queuePlanner(item objective, project projectRecord, agentID, user, workflowGuidance string) (agentRun, int, string) {
+func (store *workGraphStore) queuePlanner(
+	item objective, project projectRecord, agentID, user string,
+) (agentRun, int, string) {
 	profile, exists := store.agentProfiles()[agentID]
 	if !exists || profile.Status != "active" || !workerapi.IsCLIProvider(profile.Provider) || slices.Contains(profile.Tools, "code.write") {
 		return agentRun{}, http.StatusConflict, "planner_agent_id must name an active, read-only Codex or Claude Code profile"
 	}
 	prompt := "Plan the engineering work for this objective: " + item.Title
-	if workflowGuidance != "" {
-		prompt += "\n\n" + workflowGuidance
-	}
 	return store.runs.enqueue(agentRun{AgentID: profile.ID, AgentName: profile.Name, ProjectID: project.ID,
 		ProjectName: project.Name, Repository: project.GitRemote, BaseBranch: project.Branch, WorkerID: project.WorkerID,
 		WorkerName: project.WorkerName, Provider: profile.Provider, Profile: &profile, CreatedBy: user,
-		Prompt: truncateUTF8(prompt, 5000)})
+		ObjectivePlanner: true, Prompt: prompt})
 }
 
 // executingPlanLocked returns the approved plan of an objective whose graph has not finished.
@@ -244,7 +276,8 @@ func (store *workGraphStore) admitPlansLocked() bool {
 				if len(plan.Problems) > 0 {
 					plan.Status = planInvalid
 				}
-				plan.Hash = planHash(plan.ProjectID, plan.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.planProposal)
+				plan.Hash = planHash(plan.ProjectID, plan.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode,
+					plan.ProductContext, plan.ProductConfigurationRevision, plan.planProposal)
 			}
 		}
 	}
@@ -348,7 +381,7 @@ func encodeResponse(value any) []byte {
 }
 
 func publicPlan(plan objectivePlan) objectivePlan {
-	plan.ProfileSnapshots = nil
+	plan.ProfileSnapshots, plan.ProductContext, plan.WorkflowGuidance = nil, "", ""
 	return plan
 }
 

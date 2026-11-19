@@ -92,6 +92,8 @@ type agentRun struct {
 	// GraphID and UnitKey name the WorkUnit this run executes; both are empty for a run started directly.
 	GraphID string `json:"graph_id,omitempty"`
 	UnitKey string `json:"unit_key,omitempty"`
+	// ObjectivePlanner runs are claimable only after a durable objective plan links their ID.
+	ObjectivePlanner bool `json:"objective_planner,omitempty"`
 	// ReviewRecovery marks the one automatic same-assignment retry allowed after an invocation failure.
 	ReviewRecovery bool `json:"review_recovery,omitempty"`
 	// Merge makes this an integration run that combines admitted candidates instead of starting a provider.
@@ -430,10 +432,10 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 	// A worker asking for work is what moves WorkGraphs forward: finished units are admitted and the
 	// runnable frontier is queued before the oldest queued run is leased.
 	if !store.graphs.reconcileAll() {
-		http.Error(w, "could not persist cancellation for a cancelled work graph", http.StatusInternalServerError)
+		http.Error(w, "could not persist run recovery before claiming work", http.StatusInternalServerError)
 		return
 	}
-	selected, status, message := store.lease(worker, accessFor(r))
+	selected, status, message := store.lease(worker, accessFor(r), store.graphs.plannerRunIDs())
 	if status != 0 {
 		http.Error(w, message, status)
 		return
@@ -463,7 +465,7 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 }
 
 // lease hands the worker its oldest queued run, or a run with an empty id when nothing is queued for it.
-func (store *agentRunStore) lease(worker workerRecord, access requestAccess) (agentRun, int, string) {
+func (store *agentRunStore) lease(worker workerRecord, access requestAccess, plannerRunIDs map[string]struct{}) (agentRun, int, string) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	now := time.Now().UTC()
@@ -481,7 +483,8 @@ func (store *agentRunStore) lease(worker workerRecord, access requestAccess) (ag
 		// A run waits in the queue until its worker reports the provider it needs, and is never handed to
 		// a worker whose grant for the repository has been removed since the run was created. An
 		// integration run starts no provider.
-		if item.WorkerID == worker.ID && item.Status == "queued" &&
+		_, plannerLinked := plannerRunIDs[item.ID]
+		if item.WorkerID == worker.ID && item.Status == "queued" && (!item.ObjectivePlanner || plannerLinked) &&
 			(len(item.Merge) > 0 || workerRunsProfile(worker, *item.Profile)) &&
 			access.allows(item.Repository) &&
 			(selected.ID == "" || item.CreatedAt.Before(selected.CreatedAt)) {
