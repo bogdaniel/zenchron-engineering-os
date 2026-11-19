@@ -83,6 +83,9 @@ func (store *workGraphStore) reconcileAll() bool {
 }
 
 func (store *workGraphStore) plannerRunIDs() map[string]struct{} {
+	if store == nil {
+		return map[string]struct{}{}
+	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	return store.plannerRunIDsLocked()
