@@ -248,5 +248,5 @@ test('local Settings section shares the preview cards and marks its navigation a
   await expect(page.locator('#system-preview-policy')).toBeInViewport();
   await page.getByRole('button', { name: 'Model Providers' }).click();
   await expect(page).toHaveURL(/#integrations$/);
-  await expect(page.locator('.system-preview-provider')).toHaveCount(3);
+  await expect(page.locator('.system-preview-provider')).toHaveCount(10);
 });
