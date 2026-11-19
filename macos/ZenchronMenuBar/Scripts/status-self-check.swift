@@ -4,7 +4,8 @@ import Foundation
 struct StatusSelfCheck {
     static func main() throws {
         let valid = Data("""
-        {"dashboard_url":"http://127.0.0.1:8080/?mode=live","workers":{"online":1,"total":2},
+        {"dashboard_url":"http://127.0.0.1:8080/?mode=live","dashboard_available":true,
+         "workers":{"online":1,"total":2},
          "work":{"active_graphs":1,"active_graph":{"graph_id":"graph-7","objective_id":"objective-2",
          "objective_title":"Ship the dashboard"},"active_graph_links":[{"graph_id":"graph-7",
          "objective_id":"objective-2","objective_title":"Ship the dashboard"}],"decisions":[{"id":"decision-4",
@@ -49,12 +50,18 @@ struct StatusSelfCheck {
         assert(actionRequired.indicator == .actionRequired)
         assert(updating.indicator == .updating)
         assert(workerOffline.indicator == .degraded)
+        let dashboardUnavailable = try decodeSystemStatus(fixture(dashboardAvailable: "false"))
+        let dashboardUnknown = try decodeSystemStatus(fixture(dashboardAvailable: nil))
+        assert(dashboardUnavailable.indicator == .degraded)
+        assert(dashboardUnknown.indicator == .degraded)
     }
 
     private static func fixture(updateState: String = "idle", onlineWorkers: Int = 1, totalWorkers: Int = 1,
-                                 activeGraphs: Int = 0, openDecisions: Int = 0) -> Data {
-        Data("""
-        {"dashboard_url":"http://127.0.0.1:8080/?mode=live",
+                                 activeGraphs: Int = 0, openDecisions: Int = 0,
+                                 dashboardAvailable: String? = "true") -> Data {
+        let dashboardField = dashboardAvailable.map { "\"dashboard_available\":\($0)," } ?? ""
+        return Data("""
+        {"dashboard_url":"http://127.0.0.1:8080/?mode=live",\(dashboardField)
          "workers":{"online":\(onlineWorkers),"total":\(totalWorkers)},
          "work":{"active_graphs":\(activeGraphs),"blocked_graphs":0,"queued_units":0,"running_units":0,
          "waiting_units":0,"failed_units":0,"open_decisions":\(openDecisions)},"update_state":"\(updateState)"}

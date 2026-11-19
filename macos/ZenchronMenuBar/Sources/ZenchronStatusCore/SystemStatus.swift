@@ -104,6 +104,7 @@ public struct SystemStatus: Decodable, Equatable {
 
     public let revision: String?
     public let dashboardURL: URL
+    public let dashboardAvailable: Bool?
     public let workers: Workers
     public let work: Work
     public let updateState: String
@@ -117,6 +118,7 @@ public struct SystemStatus: Decodable, Equatable {
         case "failed", "blocked", "unavailable", "unknown": return .degraded
         default: break
         }
+        if dashboardAvailable != true { return .degraded }
         if workers.online < workers.total { return .degraded }
         if work.openDecisions > 0 || work.failedUnits > 0 || work.blockedGraphs > 0 { return .actionRequired }
         if work.activeGraphs > 0 || work.queuedUnits > 0 || work.runningUnits > 0 { return .active }
@@ -126,6 +128,7 @@ public struct SystemStatus: Decodable, Equatable {
     enum CodingKeys: String, CodingKey {
         case revision, workers, work
         case dashboardURL = "dashboard_url"
+        case dashboardAvailable = "dashboard_available"
         case updateState = "update_state"
         case updateRevision = "update_revision"
         case updateProgress = "update_progress"
@@ -171,6 +174,7 @@ public struct SystemStatus: Decodable, Equatable {
                 debugDescription: "status returned a non-canonical dashboard address")
         }
         dashboardURL = Self.canonicalDashboardURL
+        dashboardAvailable = try values.decodeIfPresent(Bool.self, forKey: .dashboardAvailable)
         workers = try values.decode(Workers.self, forKey: .workers)
         work = try values.decode(Work.self, forKey: .work)
         updateState = try values.decode(String.self, forKey: .updateState)

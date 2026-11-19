@@ -70,6 +70,40 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 	}
 }
 
+func TestLocalSystemStatusReportsDashboardAvailability(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		create    bool
+		directory bool
+		available bool
+	}{{name: "index present", create: true, available: true}, {name: "index missing"},
+		{name: "index is not a file", directory: true}} {
+		t.Run(test.name, func(t *testing.T) {
+			directory := t.TempDir()
+			if test.create {
+				if err := os.WriteFile(filepath.Join(directory, "index.html"), []byte("dashboard"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if test.directory {
+				if err := os.Mkdir(filepath.Join(directory, "index.html"), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("ZENCHRON_DASHBOARD_DIR", directory)
+			response := httptest.NewRecorder()
+			writeLocalSystemStatus(response, localStatusTestRequest(t), newWorkerRegistry(), newWorkGraphStore(nil, nil, nil, nil))
+			var status systemStatus
+			if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK {
+				t.Fatalf("system status response: decode error %v, HTTP %d", err, response.Code)
+			}
+			if status.DashboardAvailable != test.available {
+				t.Fatalf("dashboard available = %t, want %t", status.DashboardAvailable, test.available)
+			}
+		})
+	}
+}
+
 func TestLocalSystemStatusOmitsUnknownProviderReadiness(t *testing.T) {
 	registry := newWorkerRegistry()
 	registry.workers["online"] = workerRecord{ID: "online", LastSeen: time.Now()}

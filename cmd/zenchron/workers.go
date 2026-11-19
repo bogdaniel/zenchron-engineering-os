@@ -225,7 +225,7 @@ func registerDashboard(mux *http.ServeMux, directory string) {
 				return
 			}
 			path = filepath.Join(directory, "index.html")
-			if _, err := os.Stat(path); err != nil {
+			if !dashboardIndexAvailable(directory) {
 				http.Error(w, "dashboard assets are unavailable", http.StatusServiceUnavailable)
 				return
 			}
@@ -235,6 +235,14 @@ func registerDashboard(mux *http.ServeMux, directory string) {
 		}
 		http.ServeFile(w, r, path)
 	})
+}
+
+func dashboardIndexAvailable(directory string) bool {
+	if strings.TrimSpace(directory) == "" {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(directory, "index.html"))
+	return err == nil && info.Mode().IsRegular()
 }
 
 func (registry *workerRegistry) ready(w http.ResponseWriter, _ *http.Request) {

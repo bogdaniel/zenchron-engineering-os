@@ -13,9 +13,10 @@ import (
 )
 
 type systemStatus struct {
-	Revision     string `json:"revision,omitempty"`
-	DashboardURL string `json:"dashboard_url"`
-	Workers      struct {
+	Revision           string `json:"revision,omitempty"`
+	DashboardURL       string `json:"dashboard_url"`
+	DashboardAvailable bool   `json:"dashboard_available"`
+	Workers            struct {
 		Online    int                    `json:"online"`
 		Total     int                    `json:"total"`
 		Providers []systemStatusProvider `json:"providers,omitempty"`
@@ -74,7 +75,8 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 	}
 
 	status := systemStatus{Revision: strings.TrimSpace(os.Getenv("ZENCHRON_RELEASE_REVISION")),
-		DashboardURL: "http://127.0.0.1:8080/?mode=live", UpdateState: "unknown"}
+		DashboardURL:       "http://127.0.0.1:8080/?mode=live",
+		DashboardAvailable: dashboardIndexAvailable(os.Getenv("ZENCHRON_DASHBOARD_DIR")), UpdateState: "unknown"}
 	registry.mu.RLock()
 	status.Workers.Total = len(registry.workers)
 	providers := make(map[string]systemStatusProvider)

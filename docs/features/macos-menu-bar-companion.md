@@ -11,6 +11,7 @@ flowchart LR
   LaunchAgent[Mode 0600 managed LaunchAgent plist] -->|Local status credential| Companion
   LaunchAgent -->|Credential fallback for older supervisor environments| API
   Companion -->|Credential header · loopback only| API
+  API -->|Typed health, dashboard, work and update projection| Companion
   API -->|Signed-in administrator when access policy is enabled| Auth[Existing session and access policy]
   API --> Workers[(Worker registry)]
   API --> Graphs[(WorkGraph store)]
@@ -32,6 +33,9 @@ flowchart LR
   by online workers, active and blocked graphs,
   queued/running/waiting/failed units, pending decisions, and the recorded updater state. When available, it also
   shows the candidate revision and current progress; blocked or failed updates include the recorded reason.
+- Dashboard availability is reported from the installed release's regular `index.html` file. Missing or older-server
+  availability evidence is shown as unavailable/unknown and degrades the icon rather than implying the dashboard is
+  healthy.
 - The menu-bar icon distinguishes connected/idle, active work, action required, updating, degraded, and disconnected
   states from those same API fields. Update failure or worker loss cannot display as a healthy idle icon.
 - When work is active, the menu offers the five most recently updated active WorkGraphs. Each opens its exact

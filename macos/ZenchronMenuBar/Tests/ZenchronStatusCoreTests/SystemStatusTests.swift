@@ -12,11 +12,13 @@ final class SystemStatusTests: XCTestCase {
         XCTAssertEqual(try status(updateState: "activating").indicator, .updating)
         XCTAssertEqual(try status(updateState: "blocked").indicator, .degraded)
         XCTAssertEqual(try status(onlineWorkers: 0, totalWorkers: 1).indicator, .degraded)
+        XCTAssertEqual(try status(dashboardAvailable: "false").indicator, .degraded)
+        XCTAssertEqual(try status(dashboardAvailable: nil).indicator, .degraded)
     }
 
     func testDecodesRecordedStatusAndCanonicalDashboardURL() throws {
         let data = Data("""
-        {"revision":"abc123","dashboard_url":"http://127.0.0.1:8080/?mode=live",
+        {"revision":"abc123","dashboard_url":"http://127.0.0.1:8080/?mode=live","dashboard_available":true,
          "workers":{"online":1,"total":2,"providers":[
          {"id":"codex-cli","ready_workers":1,"reported_workers":2},
          {"id":"claude-code","ready_workers":0,"reported_workers":1}]},
@@ -31,6 +33,7 @@ final class SystemStatusTests: XCTestCase {
         """.utf8)
         let status = try decodeSystemStatus(data)
         XCTAssertEqual(status.workers.online, 1)
+        XCTAssertEqual(status.dashboardAvailable, true)
         XCTAssertEqual(status.workers.providers?.map(\.readyWorkers), [1, 0])
         XCTAssertEqual(status.work.queuedUnits, 2)
         XCTAssertEqual(status.updateState, "blocked")
@@ -102,9 +105,10 @@ final class SystemStatusTests: XCTestCase {
 
     private func status(updateState: String = "idle", onlineWorkers: Int = 1, totalWorkers: Int = 1,
                         activeGraphs: Int = 0, blockedGraphs: Int = 0, queuedUnits: Int = 0,
-                        openDecisions: Int = 0) throws -> SystemStatus {
+                        openDecisions: Int = 0, dashboardAvailable: String? = "true") throws -> SystemStatus {
+        let dashboardField = dashboardAvailable.map { "\"dashboard_available\":\($0)," } ?? ""
         let data = Data("""
-        {"dashboard_url":"http://127.0.0.1:8080/?mode=live",
+        {"dashboard_url":"http://127.0.0.1:8080/?mode=live",\(dashboardField)
          "workers":{"online":\(onlineWorkers),"total":\(totalWorkers)},
          "work":{"active_graphs":\(activeGraphs),"blocked_graphs":\(blockedGraphs),
          "queued_units":\(queuedUnits),"running_units":0,

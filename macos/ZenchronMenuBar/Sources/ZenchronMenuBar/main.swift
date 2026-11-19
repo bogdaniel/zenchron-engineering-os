@@ -102,6 +102,8 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(NSMenuItem(title: title, action: nil, keyEquivalent: ""))
         if let status {
+            let dashboard = status.dashboardAvailable.map { $0 ? "available" : "unavailable" } ?? "unknown"
+            menu.addItem(NSMenuItem(title: "Dashboard · \(dashboard)", action: nil, keyEquivalent: ""))
             let workers = "Workers · \(status.workers.online) online / \(status.workers.total)"
             menu.addItem(NSMenuItem(title: workers, action: nil, keyEquivalent: ""))
             if let providers = status.workers.providers {
