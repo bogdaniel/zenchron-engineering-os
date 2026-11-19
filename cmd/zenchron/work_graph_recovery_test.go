@@ -223,6 +223,34 @@ func TestDecisionRequestBlocksItsUnitUntilAPersonResolvesIt(t *testing.T) {
 	}
 }
 
+func TestRetryUnitRejectsAnExhaustedRunBudget(t *testing.T) {
+	harness := newGraphHarness(t)
+	graph := harness.start(harness.twoProducerPlan())
+	harness.store.graphs.mu.Lock()
+	stored := harness.store.graphs.graphs[graph.ID]
+	unit := stored.unit("api")
+	unit.RunIDs = make([]string, maxUnitRuns)
+	for index := range unit.RunIDs {
+		unit.RunIDs[index] = strings.Repeat("a", 32)
+	}
+	unit.Failure, stored.Status = "The unit used all of its runs.", graphFailed
+	revision := stored.Revision
+	harness.store.graphs.mu.Unlock()
+
+	path := "/api/v1/work-graphs/" + graph.ID + "/units/api/retry"
+	response := harness.call(http.MethodPost, path, "")
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "used all") {
+		t.Fatalf("retry of exhausted unit returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+	harness.store.graphs.mu.Lock()
+	defer harness.store.graphs.mu.Unlock()
+	stored = harness.store.graphs.graphs[graph.ID]
+	unit = stored.unit("api")
+	if stored.Revision != revision || unit.Failure == "" || unit.Restart {
+		t.Fatalf("rejected retry changed graph revision or failure state: %#v", unit)
+	}
+}
+
 func TestCancellingAGraphStopsItsRunsAndFailedUnitsBlockTheirDependents(t *testing.T) {
 	harness := newGraphHarness(t)
 	graph := harness.start(harness.twoProducerPlan())
