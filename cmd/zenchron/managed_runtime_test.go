@@ -143,7 +143,6 @@ func TestOnlyFailedUpdatesSuppressAutomaticRetry(t *testing.T) {
 	}
 }
 
-
 func TestManagedRuntimePreservesCLIChildrenUntilActiveRunsReachSafeBoundary(t *testing.T) {
 	directory := t.TempDir()
 	firstActiveCount := make(chan struct{}, 1)
