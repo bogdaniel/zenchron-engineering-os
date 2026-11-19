@@ -170,6 +170,9 @@ func (store *workGraphStore) plannerContext(runID string) string {
 			} else if objective.Product != "" {
 				context.WriteString("Product: " + objective.Product + "\n")
 			}
+			if plan.WorkflowGuidance != "" {
+				context.WriteString("\n\n" + plan.WorkflowGuidance + "\n")
+			}
 			context.WriteString("\nAgent profiles you may assign:\n")
 			store.agents.mu.RLock()
 			for _, profile := range store.agents.items {

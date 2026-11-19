@@ -83,6 +83,7 @@ type objectivePlan struct {
 	WorkflowID       string                  `json:"workflow_id,omitempty"`
 	WorkflowVersion  int                     `json:"workflow_version,omitempty"`
 	WorkflowMode     string                  `json:"workflow_mode,omitempty"`
+	WorkflowGuidance string                  `json:"workflow_guidance,omitempty"`
 	ProfileSnapshots map[string]agentProfile `json:"profile_snapshots,omitempty"`
 	// Hash identifies the plan's content, so an unchanged plan is recognized and not approved twice.
 	Hash string `json:"hash,omitempty"`

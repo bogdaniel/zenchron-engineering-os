@@ -180,6 +180,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 				return
 			}
 			plan.WorkflowMode = workflowModeGuidance
+			plan.WorkflowGuidance = plannerGuidance
 		}
 		plannerAgentID = strings.ToLower(input.PlannerAgentID)
 	default:
@@ -195,7 +196,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	}
 	var plannerRunID string
 	if plannerAgentID != "" {
-		run, status, message := store.queuePlanner(item, project, plannerAgentID, access.user, plannerGuidance)
+		run, status, message := store.queuePlanner(item, project, plannerAgentID, access.user)
 		if status != 0 {
 			http.Error(w, message, status)
 			return
@@ -222,20 +223,17 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 
 // queuePlanner queues the run in which a read-only agent proposes a plan for the objective.
 func (store *workGraphStore) queuePlanner(
-	item objective, project projectRecord, agentID, user, workflowGuidance string,
+	item objective, project projectRecord, agentID, user string,
 ) (agentRun, int, string) {
 	profile, exists := store.agentProfiles()[agentID]
 	if !exists || profile.Status != "active" || !workerapi.IsCLIProvider(profile.Provider) || slices.Contains(profile.Tools, "code.write") {
 		return agentRun{}, http.StatusConflict, "planner_agent_id must name an active, read-only Codex or Claude Code profile"
 	}
 	prompt := "Plan the engineering work for this objective: " + item.Title
-	if workflowGuidance != "" {
-		prompt += "\n\n" + workflowGuidance
-	}
 	return store.runs.enqueue(agentRun{AgentID: profile.ID, AgentName: profile.Name, ProjectID: project.ID,
 		ProjectName: project.Name, Repository: project.GitRemote, BaseBranch: project.Branch, WorkerID: project.WorkerID,
 		WorkerName: project.WorkerName, Provider: profile.Provider, Profile: &profile, CreatedBy: user,
-		Prompt: truncateUTF8(prompt, 5000)})
+		ObjectivePlanner: true, Prompt: prompt})
 }
 
 // executingPlanLocked returns the approved plan of an objective whose graph has not finished.
@@ -383,8 +381,7 @@ func encodeResponse(value any) []byte {
 }
 
 func publicPlan(plan objectivePlan) objectivePlan {
-	plan.ProfileSnapshots = nil
-	plan.ProductContext = ""
+	plan.ProfileSnapshots, plan.ProductContext, plan.WorkflowGuidance = nil, "", ""
 	return plan
 }
 

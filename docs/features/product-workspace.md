@@ -50,6 +50,8 @@ flowchart LR
     Store -->|"read product context, revision and default workflow"| CP
     CP -->|"resolve default only for new plans; pin workflow version"| Graphs
     Graphs -->|"matching objective, revision and hash"| RunContext["planner / WorkUnit runContext"]
+    Graphs -->|"durable planner-run link gates worker claim"| RunContext
+    RunContext -->|"reconcile unlinked planner runs after restart"| CP
     Graphs -->|"frozen product/workflow/profile/persona revision references"| Environment
     Page -->|"Product actions → Open repository inventory"| Projects["#projects"]
 ```
@@ -153,6 +155,8 @@ Live:
 - A planner and each WorkUnit receive the linked product description captured when the plan revision was proposed.
   The snapshot is part of the plan hash and does not change when the current product description is edited; it is
   passed as user-supplied task data, not as instructions. Unlinked objectives receive no product context.
+- Planner runs receive workflow guidance from the same pinned plan. A planner run cannot be claimed until its link is
+  durable; after restart, an unlinked planner run is cancelled before workers can claim it.
 - Unavailable, with the reason on the card: files and evidence, stakeholders, release streams, and time-series
   delivery trends. The favorite star and the delivery range are disabled with a reason. Sharing shows the page link
   and says no invitation is sent.
@@ -213,6 +217,9 @@ with the unit that asked, the question, and who resolved it.
 - A plan revision snapshots the linked product description and includes it in the plan hash. Planning runs and
   WorkUnit attempts use that same text across retries; editing a product affects only later plan revisions. The text
   is user-supplied task data and does not grant authority or change the result contract.
+- Planner workflow guidance is persisted with its plan revision and delivered separately from the bounded run prompt.
+  A planner's durable plan link gates worker claim, and reconciliation cancels any planner run left unlinked after a
+  crash between the run-store and plan-store writes.
 - Configuration revision advances when product name, description, default workflow, or repository links change. Each
   plan pins the revision alongside its product context and the environment projection associates that revision with
   the historical WorkGraph. Older product records without the field read as revision 1.

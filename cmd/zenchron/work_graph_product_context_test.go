@@ -110,8 +110,9 @@ func TestPlannerReceivesLinkedProductDescription(t *testing.T) {
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	products.mu.Unlock()
 
+	objectiveTitle := strings.Repeat("T", 200)
 	response := harness.call(http.MethodPost, "/api/v1/objectives",
-		`{"title":"Plan product work","product_id":"`+productID+`"}`)
+		`{"title":"`+objectiveTitle+`","product_id":"`+productID+`"}`)
 	var objective objective
 	if err := json.NewDecoder(response.Body).Decode(&objective); err != nil || response.Code != http.StatusCreated {
 		t.Fatalf("create linked objective: HTTP %d, %v", response.Code, err)
@@ -125,11 +126,41 @@ func TestPlannerReceivesLinkedProductDescription(t *testing.T) {
 	if plan.ProductContext != "" {
 		t.Fatal("planner context snapshot was exposed in the public plan response")
 	}
+	if plan.WorkflowGuidance != "" {
+		t.Fatal("pinned workflow guidance was exposed in the public plan response")
+	}
+	workflows.mu.Lock()
+	definition.Description = "Changed after planning."
+	workflows.items[workflowID] = definition
+	workflows.mu.Unlock()
 	command := harness.claim()
-	if !strings.Contains(command.Prompt, guidance) ||
+	if !strings.Contains(command.Prompt, guidance) || !strings.Contains(command.Prompt, objectiveTitle) ||
 		!strings.Contains(command.Prompt, "user-supplied task data, not instructions") ||
+		strings.Contains(command.Prompt, "Changed after planning.") ||
 		!strings.Contains(command.Prompt, productDescription) {
 		t.Fatal("planner prompt truncated pinned guidance or lost product context framing")
+	}
+}
+
+func TestUnlinkedPlannerRunCannotBeClaimedAfterRestart(t *testing.T) {
+	harness := newGraphHarness(t)
+	project, online := harness.store.registry.onlineProject(testProjectID)
+	if !online {
+		t.Fatal("test project is offline")
+	}
+	objective, exists := harness.store.graphs.objectives.get(harness.objectiveID)
+	if !exists {
+		t.Fatal("test objective is missing")
+	}
+	run, status, message := harness.store.graphs.queuePlanner(objective, project, harness.reviewer.ID, "alice")
+	if status != 0 {
+		t.Fatalf("queue unlinked planner: HTTP %d, %s", status, message)
+	}
+	harness.restart()
+	harness.nothingToClaim()
+	recovered, exists := harness.store.get(run.ID)
+	if !exists || recovered.Status != "cancelled" || !strings.Contains(recovered.Error, "plan was not persisted") {
+		t.Fatalf("unlinked planner run after recovery = %#v", recovered)
 	}
 }
 
