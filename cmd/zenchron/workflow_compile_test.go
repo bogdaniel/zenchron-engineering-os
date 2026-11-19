@@ -137,17 +137,42 @@ func TestSavedWorkflowCompilesToVersionedObjectivePlan(t *testing.T) {
 }
 
 func TestCompileWorkflowRejectsUnsupportedNodesCyclesAndIneligibleAgents(t *testing.T) {
-	readonlyID := strings.Repeat("d", 32)
+	harness := newGraphHarness(t)
+	created := harness.call(http.MethodPost, "/api/v1/workflows", `{"name":"Validation","description":"Test invalid graphs"}`)
+	var definition workflow
+	if err := json.NewDecoder(created.Body).Decode(&definition); err != nil || created.Code != http.StatusCreated {
+		t.Fatalf("create workflow: decode error %v, HTTP %d", err, created.Code)
+	}
+	validate := func(candidate workflow) []string {
+		t.Helper()
+		body, err := json.Marshal(struct {
+			Nodes []workflowNode `json:"nodes"`
+			Edges []workflowEdge `json:"edges"`
+		}{candidate.Nodes, candidate.Edges})
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := harness.call(http.MethodPost, "/api/v1/workflows/"+definition.ID+"/validate", string(body))
+		var result struct {
+			Valid    bool     `json:"valid"`
+			Problems []string `json:"problems"`
+		}
+		if err := json.NewDecoder(response.Body).Decode(&result); err != nil || response.Code != http.StatusOK {
+			t.Fatalf("validate workflow: decode error %v, HTTP %d", err, response.Code)
+		}
+		if result.Valid != (len(result.Problems) == 0) {
+			t.Fatalf("validation result contradicts problems: %#v", result)
+		}
+		return result.Problems
+	}
 	base := workflow{Nodes: []workflowNode{
 		{ID: "start", Type: "trigger", Data: workflowNodeData{Label: "Start"}},
-		{ID: "build", Type: "agent-task", Data: workflowNodeData{Label: "Build", AgentID: readonlyID}},
+		{ID: "build", Type: "agent-task", Data: workflowNodeData{Label: "Build", AgentID: harness.reviewer.ID}},
 		{ID: "merge", Type: "integrate", Data: workflowNodeData{Label: "Integrate"}},
 	}, Edges: []workflowEdge{
 		{ID: "a", Source: "start", Target: "build"}, {ID: "b", Source: "build", Target: "merge"},
 	}}
-	agents := map[string]agentProfile{readonlyID: {ID: readonlyID, Name: "Reader", Provider: workerapi.ProviderCodex,
-		Model: "default", Status: "active", Tools: []string{"git.read"}}}
-	_, problems := compileWorkflow(base, agents)
+	problems := validate(base)
 	if !strings.Contains(strings.Join(problems, " "), "lacks code.write") {
 		t.Fatalf("ineligible profile problems = %v", problems)
 	}
@@ -155,16 +180,48 @@ func TestCompileWorkflowRejectsUnsupportedNodesCyclesAndIneligibleAgents(t *test
 	unsupported := base
 	unsupported.Nodes = append(append([]workflowNode{}, base.Nodes...), workflowNode{ID: "condition", Type: "condition", Data: workflowNodeData{Label: "Condition"}})
 	unsupported.Edges = append(append([]workflowEdge{}, base.Edges...), workflowEdge{ID: "c", Source: "merge", Target: "condition"})
-	_, problems = compileWorkflow(unsupported, agents)
+	problems = validate(unsupported)
 	if !strings.Contains(strings.Join(problems, " "), "design-only") {
 		t.Fatalf("unsupported node problems = %v", problems)
 	}
 
 	cycle := base
 	cycle.Edges = append(append([]workflowEdge{}, base.Edges...), workflowEdge{ID: "c", Source: "merge", Target: "build"})
-	_, problems = compileWorkflow(cycle, agents)
+	problems = validate(cycle)
 	if !strings.Contains(strings.Join(problems, " "), "cycle") {
 		t.Fatalf("cycle problems = %v", problems)
+	}
+
+	definition.Nodes, definition.Edges = unsupported.Nodes, unsupported.Edges
+	saveBody, err := json.Marshal(struct {
+		Name        string         `json:"name"`
+		Description string         `json:"description"`
+		Status      string         `json:"status"`
+		Nodes       []workflowNode `json:"nodes"`
+		Edges       []workflowEdge `json:"edges"`
+	}{definition.Name, definition.Description, definition.Status, definition.Nodes, definition.Edges})
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := harness.call(http.MethodPut, "/api/v1/workflows/"+definition.ID, string(saveBody))
+	if saved.Code != http.StatusOK {
+		t.Fatalf("save unsupported workflow returned HTTP %d: %s", saved.Code, saved.Body)
+	}
+	body, err := json.Marshal(struct {
+		ProjectID  string `json:"project_id"`
+		WorkflowID string `json:"workflow_id"`
+	}{testProjectID, definition.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, response := harness.propose(string(body))
+	responseBody, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil || response.StatusCode != http.StatusBadRequest || !strings.Contains(string(responseBody), "design-only") {
+		t.Fatalf("unsupported workflow proposal returned HTTP %d: %s (read error %v)", response.StatusCode, responseBody, err)
+	}
+	if plans := decodeList[objectivePlan](t, harness.call(http.MethodGet, "/api/v1/objectives/"+harness.objectiveID+"/plans", "")); len(plans) != 0 {
+		t.Fatalf("invalid workflow persisted a plan: %#v", plans)
 	}
 }
 

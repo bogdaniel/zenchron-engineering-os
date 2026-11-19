@@ -425,6 +425,15 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await proposeForm.getByRole('button', { name: 'Propose plan' }).click();
   const revision = panel.getByRole('list', { name: 'Units of revision 1' });
   await expect(revision.locator(':scope > li')).toHaveCount(4);
+  const plannedUnits = revision.locator(':scope > li');
+  await expect(plannedUnits.locator('.work-unit-title')).toHaveText([
+    'step-1API producer', 'step-2UI producer', 'step-3Independent review', 'step-4Integrate',
+  ]);
+  await expect(plannedUnits.nth(0)).toContainText('Orchestration writer one');
+  await expect(plannedUnits.nth(1)).toContainText('Orchestration writer two');
+  await expect(plannedUnits.nth(2)).toContainText('Orchestration reviewer');
+  await expect(plannedUnits.nth(2)).toContainText('after step-2');
+  await expect(plannedUnits.nth(3)).toContainText('after step-1, step-3');
   await expect(panel).toContainText(`Compiled from workflow ${created.workflowID} · version ${created.workflowVersion}`);
   await expect(panel).toContainText('Orchestration writer one');
   await expect(revision).toContainText(`Planned persona ${created.personaID} · v1`);
@@ -445,6 +454,8 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(messages).toContainText('by local operator');
   await expect(messages).toContainText('E2E finding', { timeout: 120_000 });
   await expect(panel.getByRole('region', { name: 'Work graph for Orchestrated export' })).toContainText('4 of 4 units done', { timeout: 180_000 });
+  await expect(units.getByRole('listitem').nth(0)).toContainText('completed');
+  await expect(units.getByRole('listitem').nth(1)).toContainText('completed');
   await expect(units.getByRole('listitem').nth(2)).toContainText('verdict: accept');
   await expect(units.getByRole('listitem').nth(3)).toContainText('GitHub publication is not configured');
   const report = panel.getByRole('region', { name: 'Objective delivery report' });
