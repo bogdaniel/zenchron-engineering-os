@@ -25,7 +25,9 @@ flowchart LR
   Validate -->|profile/persona versions and private prompt snapshots| Pins[Approved plan revision]
   Plans --> Graphs[(work-graphs.json<br/>plans, graphs, messages)]
   Graphs <--> Reconcile["work_graph_reconcile.go<br/>admit, frontier, project"]
-  Reconcile -->|enqueue, requeueForUnit, cancelRun| Runs[(agent-runs.json<br/>the only queue)]
+  Reconcile -->|enqueue, requeueForUnit, batch cancel| Runs[(agent-runs.json<br/>the only queue)]
+  Plans -->|persist cancellation intent first| Graphs
+  Reconcile -->|retry cancelled graph run stops before lease| Runs
   subgraph Worker["zenchron-worker (ZENCHRON_WORKER_CONCURRENCY slots)"]
     Dispatch[dispatch] --> Agent["agent run<br/>worktree + Codex or Claude Code"]
     Dispatch --> Merge["integration run<br/>worktree + git merge"]
@@ -97,7 +99,9 @@ flowchart LR
 - A produce unit that depends on a produce unit starts from that unit's branch.
 - A failed unit blocks the units that depend on it; other units finish. `POST .../units/{key}/retry` starts a fresh run
   for a failed unit; a retried producer continues from its previous branch.
-- `POST .../cancel` cancels the graph and its queued and running runs.
+- `POST .../cancel` persists the graph intent before cancelling runs. Queued and running run changes share one
+  atomic run-store write; a failed write leaves the graph cancelled and reconciliation retries before workers can lease
+  more work, including after restart. A failed intent write leaves every run unchanged.
 - After a restart the run store requeues interrupted attempts, and the graph adopts any run that was queued for a unit
   but not yet recorded on it, so no work is queued twice.
 

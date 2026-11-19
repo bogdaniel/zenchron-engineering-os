@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"log"
 	"net/http"
 	"slices"
 	"strconv"
@@ -414,6 +413,13 @@ func (store *workGraphStore) mayRead(access requestAccess, graph *workGraph) boo
 // who may see the objective and dispatch work to the graph's worker may change a graph; worker
 // credentials are confined to the worker routes and can never reach these handlers.
 func (store *workGraphStore) change(w http.ResponseWriter, r *http.Request, apply func(graph *workGraph) (int, string)) {
+	store.changeAfterCommit(w, r, apply, nil)
+}
+
+func (store *workGraphStore) changeAfterCommit(
+	w http.ResponseWriter, r *http.Request, apply func(graph *workGraph) (int, string),
+	afterCommit func(graphID string) (int, string),
+) {
 	access := accessFor(r)
 	store.mu.Lock()
 	graph := store.graphs[strings.ToLower(r.PathValue("id"))]
@@ -427,37 +433,42 @@ func (store *workGraphStore) change(w http.ResponseWriter, r *http.Request, appl
 		http.Error(w, "this work graph runs on another user's worker", http.StatusForbidden)
 		return
 	}
+	updated := *graph
+	updated.Units, updated.Messages = slices.Clone(graph.Units), slices.Clone(graph.Messages)
 	// A refused change must leave the graph untouched, so apply validates before it mutates.
-	if status, message := apply(graph); status != 0 {
+	if status, message := apply(&updated); status != 0 {
 		store.mu.Unlock()
 		http.Error(w, message, status)
 		return
 	}
-	graph.Revision, graph.UpdatedAt = graph.Revision+1, time.Now().UTC()
+	updated.Revision, updated.UpdatedAt = updated.Revision+1, time.Now().UTC()
+	store.graphs[updated.ID] = &updated
 	if err := store.persistLocked(); err != nil {
-		log.Printf("could not persist work graph %s: %v", graph.ID, err)
+		store.graphs[graph.ID] = graph
+		store.mu.Unlock()
+		http.Error(w, "could not persist work graph", http.StatusInternalServerError)
+		return
 	}
 	store.mu.Unlock()
+	if afterCommit != nil {
+		if status, message := afterCommit(updated.ID); status != 0 {
+			http.Error(w, message, status)
+			return
+		}
+	}
 	store.reconcileAll()
-	store.writeGraph(w, http.StatusOK, graph.ID)
+	store.writeGraph(w, http.StatusOK, updated.ID)
 }
 
 // cancelGraph stops a graph: nothing further is queued and its active runs are cancelled.
 func (store *workGraphStore) cancelGraph(w http.ResponseWriter, r *http.Request) {
-	store.change(w, r, func(graph *workGraph) (int, string) {
+	store.changeAfterCommit(w, r, func(graph *workGraph) (int, string) {
 		if graph.Status == graphCompleted || graph.Status == graphCancelled {
 			return http.StatusConflict, "the work graph has already finished"
 		}
 		graph.Status = graphCancelled
-		for _, run := range store.runs.unitRuns(graph.ID) {
-			if activeRun(run) {
-				// A run that finished in the meantime needs no cancellation.
-				store.runs.cancelRun(run.ID)
-			}
-		}
-		graph.project(store.runs.unitRuns(graph.ID), false)
 		return 0, ""
-	})
+	}, store.runs.cancelGraphRuns)
 }
 
 // retryUnit gives a failed unit a fresh run with fresh attempts.
