@@ -20,7 +20,7 @@ import (
 
 const (
 	workerOnlineWindow   = 15 * time.Second
-	maxJSONRequestBody   = 1 << 20
+	maxJSONRequestBody   = workerapi.MaxJSONRequestBodySize
 	maxProjectsPerWorker = 1000
 	maxWorkerProviders   = 8
 )

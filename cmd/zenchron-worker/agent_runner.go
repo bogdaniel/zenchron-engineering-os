@@ -329,7 +329,7 @@ const (
 // finish retries failed deliveries and only treats a conflict as delivered when the server confirms
 // that this attempt's result was already accepted.
 func (runner *agentRunner) finish(ctx context.Context, runID string, result workerapi.AgentRunResult) error {
-	body, err := json.Marshal(result)
+	body, err := encodeAgentRunResult(result)
 	if err != nil {
 		return fmt.Errorf("encode agent run result: %w", err)
 	}
@@ -360,6 +360,48 @@ func (runner *agentRunner) finish(ctx context.Context, runID string, result work
 		}
 	}
 	return fmt.Errorf("send agent run result: %w", lastErr)
+}
+
+func encodeAgentRunResult(result workerapi.AgentRunResult) ([]byte, error) {
+	encode := func(result workerapi.AgentRunResult) ([]byte, error) {
+		var body bytes.Buffer
+		encoder := json.NewEncoder(&body)
+		encoder.SetEscapeHTML(false)
+		if err := encoder.Encode(result); err != nil {
+			return nil, err
+		}
+		return bytes.TrimSuffix(body.Bytes(), []byte{'\n'}), nil
+	}
+	body, err := encode(result)
+	if err != nil || len(body) <= workerapi.MaxJSONRequestBodySize {
+		return body, err
+	}
+	if result.Diff == nil {
+		return nil, fmt.Errorf("encoded agent run result exceeds %d bytes", workerapi.MaxJSONRequestBodySize)
+	}
+
+	diff := []rune(*result.Diff)
+	low, high := 0, len(diff)
+	var bounded []byte
+	for low <= high {
+		middle := low + (high-low)/2
+		truncated := string(diff[:middle])
+		candidate := result
+		candidate.Diff, candidate.DiffTruncated = &truncated, true
+		encoded, err := encode(candidate)
+		if err != nil {
+			return nil, err
+		}
+		if len(encoded) <= workerapi.MaxJSONRequestBodySize {
+			bounded, low = encoded, middle+1
+			continue
+		}
+		high = middle - 1
+	}
+	if bounded == nil {
+		return nil, fmt.Errorf("agent run result exceeds %d bytes without its diff", workerapi.MaxJSONRequestBodySize)
+	}
+	return bounded, nil
 }
 
 func (runner *agentRunner) finishDelay() time.Duration {
