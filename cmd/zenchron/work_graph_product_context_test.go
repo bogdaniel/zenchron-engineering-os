@@ -94,15 +94,28 @@ func TestPlannerReceivesLinkedProductDescription(t *testing.T) {
 	productID := strings.Repeat("f", 32)
 	workflowID := strings.Repeat("a", 32)
 	productDescription := strings.Repeat("D", 2000)
-	definition := workflow{ID: workflowID, Name: "Pinned guidance", Version: 3, Description: strings.Repeat("w", 3600)}
+	definition := workflow{ID: workflowID, Name: "Pinned guidance", Version: 3}
+	var guidance string
+	var err error
+	for size := maxPlannerWorkflowGuidanceBytes; size >= 0; size-- {
+		definition.Description = strings.Repeat("w", size)
+		guidance, err = plannerWorkflowGuidance(definition)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		t.Fatalf("find maximum accepted workflow guidance: %v", err)
+	}
+	oversized := definition
+	oversized.Description += "w"
+	if _, err := plannerWorkflowGuidance(oversized); err == nil {
+		t.Fatal("workflow guidance one byte above the serialized limit was accepted")
+	}
 	workflows := harness.store.graphs.workflows
 	workflows.mu.Lock()
 	workflows.items[workflowID] = definition
 	workflows.mu.Unlock()
-	guidance, err := plannerWorkflowGuidance(definition)
-	if err != nil {
-		t.Fatal(err)
-	}
 	products := harness.store.graphs.objectives.products
 	products.mu.Lock()
 	products.items[productID] = product{ID: productID, Name: strings.Repeat("P", 100),
