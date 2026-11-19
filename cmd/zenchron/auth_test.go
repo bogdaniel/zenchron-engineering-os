@@ -256,7 +256,25 @@ func TestGitHubOAuthReturnsToBoundDashboardDestination(t *testing.T) {
 		t.Fatalf("OAuth callback returned HTTP %d to %q, want %q", callback.Code,
 			callback.Header().Get("Location"), returnTo)
 	}
-	for _, invalidReturn := range []string{"//attacker.example/path", "/?token=private"} {
+	agentsReturnTo := "/?mode=live#agents"
+	agentsStart := httptest.NewRecorder()
+	server.ServeHTTP(agentsStart, httptest.NewRequest(http.MethodGet,
+		"/auth/github?return="+url.QueryEscape(agentsReturnTo), nil))
+	agentsCookie := agentsStart.Result().Cookies()[0]
+	agentsAuthorizeURL, err := url.Parse(agentsStart.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse agents authorization URL: %v", err)
+	}
+	agentsCallback := httptest.NewRecorder()
+	agentsRequest := httptest.NewRequest(http.MethodGet,
+		"/auth/github/callback?code=one-time-code&state="+url.QueryEscape(agentsAuthorizeURL.Query().Get("state")), nil)
+	agentsRequest.AddCookie(agentsCookie)
+	server.ServeHTTP(agentsCallback, agentsRequest)
+	if agentsCallback.Code != http.StatusSeeOther || agentsCallback.Header().Get("Location") != agentsReturnTo {
+		t.Fatalf("agents OAuth callback returned HTTP %d to %q, want %q", agentsCallback.Code,
+			agentsCallback.Header().Get("Location"), agentsReturnTo)
+	}
+	for _, invalidReturn := range []string{"//attacker.example/path", "/?token=private", "/?mode=live#attacker"} {
 		start := httptest.NewRecorder()
 		server.ServeHTTP(start, httptest.NewRequest(http.MethodGet,
 			"/auth/github?return="+url.QueryEscape(invalidReturn), nil))

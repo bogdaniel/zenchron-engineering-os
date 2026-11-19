@@ -15,8 +15,7 @@ func isDashboardReturnPath(value string) bool {
 	}
 	target, err := url.Parse(value)
 	if err != nil || target.Scheme != "" || target.Host != "" || target.User != nil || target.Opaque != "" ||
-		target.Path != "/" ||
-		(target.Fragment != "" && target.Fragment != "objectives") {
+		target.Path != "/" || (target.Fragment != "" && !isDashboardPage(target.Fragment)) {
 		return false
 	}
 	query, err := url.ParseQuery(target.RawQuery)
@@ -34,6 +33,16 @@ func isDashboardReturnPath(value string) bool {
 		}
 	}
 	return true
+}
+
+func isDashboardPage(page string) bool {
+	switch page {
+	case "overview", "objectives", "workflows", "agents", "projects", "workspace", "reviews",
+		"integrations", "reports", "settings", "login":
+		return true
+	default:
+		return false
+	}
 }
 
 func encodeOAuthStateCookie(state, returnTo string, key []byte) string {
