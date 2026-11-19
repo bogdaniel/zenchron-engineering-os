@@ -189,9 +189,10 @@ the create flow against the real control plane, and the Mock layout:
 
 ```sh
 go test ./cmd/zenchron -run 'TestProducts|TestProductDefaultWorkflow|TestPersistentMuxRestoresObjectivesAndWorkflows'
-cd dashboard && npm run test:e2e -- e2e/workspace.spec.ts e2e/workspace-preview.spec.ts
-cd dashboard && npm run test:e2e -- e2e/workspace.spec.ts --grep 'local Live product navigation stays Live when opening objective creation'
-cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Product Workspace groups live repositories'
+cd dashboard
+npm run test:e2e -- e2e/workspace.spec.ts e2e/workspace-preview.spec.ts
+npm run test:e2e -- e2e/workspace.spec.ts --grep 'local Live product navigation stays Live when opening objective creation'
+npm run test:e2e -- e2e/home.spec.ts --grep 'Product Workspace groups live repositories'
 ```
 
 `workspace.spec.ts` checks that an inline Product Workspace decision submits the selected graph ID, request ID, and

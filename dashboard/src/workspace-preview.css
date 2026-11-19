@@ -183,7 +183,8 @@
 .workspace-mock-list.history-list b { overflow: visible; white-space: normal; overflow-wrap: anywhere; }
 .workspace-mock-list.history-list b small { font-size: 9px; line-height: 1.35; overflow-wrap: anywhere; white-space: normal; }
 .workspace-mock-list.history-list > div > svg { flex: 0 0 auto; }
-.workspace-mock-bottom.history > .workspace-mock-card.history { grid-column: 1 / -1; min-height: 220px; }
+.workspace-mock-bottom.history { grid-auto-rows: auto; }
+.workspace-mock-bottom.history > .workspace-mock-card.history { grid-column: 1 / -1; height: auto; min-height: 220px; }
 .workspace-mock-state { min-height: 15px; padding: 0 5px; border: 0; border-radius: 8px; color: #3cdaa1; background: #14392e; font-size: 8px; text-transform: none; }
 .workspace-mock-state.scheduled, .workspace-mock-state.pending, .workspace-mock-state.draft,
 .workspace-mock-state.loading, .workspace-mock-state.unavailable,
