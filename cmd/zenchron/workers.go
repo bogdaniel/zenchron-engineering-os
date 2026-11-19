@@ -127,6 +127,7 @@ func newMuxWithStores(
 ) http.Handler {
 	registry.runs = runs
 	products.repositoryOf = registry.repositoryOf
+	products.workflows = workflows
 	if runs.graphs == nil {
 		runs.graphs = newWorkGraphStore(runs, objectives, agents, workflows)
 	}

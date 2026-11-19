@@ -117,6 +117,7 @@ function mockView(selected: MockProduct | undefined, quarter = defaultQuarter): 
       name: isFirst ? title : [`Adopt layered architecture for ${name}`, `Move ${name} GA to Jan 27`,
         `Use feature flags for ${name}`, `Defer custom permissions for ${name}`][row], state, time,
     })) },
+    history: { rows: [], note: { text: 'WorkGraph history is unavailable in this preview fixture.' } },
     delivery: {
       ranges: Object.keys(deliveryMetrics),
       metrics: (range) => deliveryRows.map(([label, delta], row) => [label, (deliveryMetrics[range] ?? deliveryMetrics['Last 8 weeks'])[row], delta]),

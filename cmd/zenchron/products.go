@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -12,12 +13,14 @@ import (
 )
 
 type product struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Description   string    `json:"description"`
-	RepositoryIDs []string  `json:"repository_ids"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID                    string    `json:"id"`
+	Name                  string    `json:"name"`
+	Description           string    `json:"description"`
+	ConfigurationRevision int       `json:"configuration_revision"`
+	DefaultWorkflowID     string    `json:"default_workflow_id,omitempty"`
+	RepositoryIDs         []string  `json:"repository_ids"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
 	// CreatedBy is the GitHub login that created the product under an access policy.
 	CreatedBy string `json:"created_by,omitempty"`
 	// AccessRepositories maps each linked project id to its repository, recorded when the project is
@@ -33,6 +36,7 @@ type productStore struct {
 	path  string
 	// repositoryOf resolves a project id to its repository; set when the store is wired to the registry.
 	repositoryOf func(projectID string) (string, bool)
+	workflows    *workflowStore
 }
 
 // visible reports whether the caller may see and edit a product: an administrator, anyone who may touch
@@ -56,7 +60,15 @@ func (item product) visible(access requestAccess) bool {
 // public is the product as returned by the API.
 func (item product) public() product {
 	item.AccessRepositories = nil
+	item.ConfigurationRevision = item.configurationRevision()
 	return item
+}
+
+func (item product) configurationRevision() int {
+	if item.ConfigurationRevision < 1 {
+		return 1
+	}
+	return item.ConfigurationRevision
 }
 
 // accessRepositories returns the repository of every linked project. Under an access policy a product
@@ -131,8 +143,13 @@ func validStoredProduct(item product) bool {
 	id, err := hex.DecodeString(item.ID)
 	if err != nil || len(id) != 16 || item.ID != strings.ToLower(item.ID) ||
 		strings.TrimSpace(item.Name) == "" || len(item.Name) > 100 || len(item.Description) > 2000 ||
-		item.RepositoryIDs == nil || item.CreatedAt.IsZero() || item.UpdatedAt.IsZero() {
+		item.RepositoryIDs == nil || item.ConfigurationRevision < 0 || item.CreatedAt.IsZero() || item.UpdatedAt.IsZero() {
 		return false
+	}
+	if item.DefaultWorkflowID != "" {
+		if len(item.DefaultWorkflowID) > 100 || strings.TrimSpace(item.DefaultWorkflowID) != item.DefaultWorkflowID {
+			return false
+		}
 	}
 	seen := make(map[string]struct{}, len(item.RepositoryIDs))
 	for _, repositoryID := range item.RepositoryIDs {
@@ -171,9 +188,10 @@ func (store *productStore) get(id string) (product, bool) {
 
 func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Name          string   `json:"name"`
-		Description   string   `json:"description"`
-		RepositoryIDs []string `json:"repository_ids"`
+		Name              string   `json:"name"`
+		Description       string   `json:"description"`
+		RepositoryIDs     []string `json:"repository_ids"`
+		DefaultWorkflowID string   `json:"default_workflow_id"`
 	}
 	if !decodeJSONBody(w, r, &input) {
 		return
@@ -187,6 +205,11 @@ func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 	repositoryIDs, ok := normalizeRepositoryIDs(input.RepositoryIDs)
 	if !ok {
 		http.Error(w, "repository_ids must contain unique 32-character hexadecimal ids", http.StatusBadRequest)
+		return
+	}
+	input.DefaultWorkflowID = strings.TrimSpace(input.DefaultWorkflowID)
+	if input.DefaultWorkflowID != "" && !store.validWorkflow(input.DefaultWorkflowID) {
+		http.Error(w, "default_workflow_id must identify a saved workflow", http.StatusBadRequest)
 		return
 	}
 	access := accessFor(r)
@@ -203,7 +226,8 @@ func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	item := product{
 		ID: hex.EncodeToString(idBytes), Name: input.Name, Description: input.Description,
-		RepositoryIDs: repositoryIDs, CreatedAt: now, UpdatedAt: now,
+		ConfigurationRevision: 1, RepositoryIDs: repositoryIDs, DefaultWorkflowID: input.DefaultWorkflowID,
+		CreatedAt: now, UpdatedAt: now,
 		CreatedBy: access.user, AccessRepositories: accessRepositories,
 	}
 	store.mu.Lock()
@@ -231,9 +255,10 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Name          string   `json:"name"`
-		Description   string   `json:"description"`
-		RepositoryIDs []string `json:"repository_ids"`
+		Name              string   `json:"name"`
+		Description       string   `json:"description"`
+		RepositoryIDs     []string `json:"repository_ids"`
+		DefaultWorkflowID *string  `json:"default_workflow_id"`
 	}
 	if !decodeJSONBody(w, r, &input) {
 		return
@@ -248,6 +273,13 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		http.Error(w, "repository_ids must contain unique 32-character hexadecimal ids", http.StatusBadRequest)
 		return
+	}
+	if input.DefaultWorkflowID != nil {
+		*input.DefaultWorkflowID = strings.TrimSpace(*input.DefaultWorkflowID)
+		if *input.DefaultWorkflowID != "" && !store.validWorkflow(*input.DefaultWorkflowID) {
+			http.Error(w, "default_workflow_id must identify a saved workflow", http.StatusBadRequest)
+			return
+		}
 	}
 	access := accessFor(r)
 	store.mu.Lock()
@@ -271,7 +303,15 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 	}
 	item := previous
 	item.Name, item.Description, item.RepositoryIDs = input.Name, input.Description, repositoryIDs
+	if input.DefaultWorkflowID != nil {
+		item.DefaultWorkflowID = *input.DefaultWorkflowID
+	}
 	item.AccessRepositories = accessRepositories
+	item.ConfigurationRevision = previous.configurationRevision()
+	if item.Name != previous.Name || item.Description != previous.Description ||
+		item.DefaultWorkflowID != previous.DefaultWorkflowID || !slices.Equal(item.RepositoryIDs, previous.RepositoryIDs) {
+		item.ConfigurationRevision++
+	}
 	item.UpdatedAt = time.Now().UTC()
 	store.items[id] = item
 	if err := store.persistLocked(); err != nil {
@@ -282,6 +322,16 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 	}
 	store.mu.Unlock()
 	writeJSON(w, http.StatusOK, item.public())
+}
+
+func (store *productStore) validWorkflow(id string) bool {
+	if store.workflows == nil {
+		return false
+	}
+	store.workflows.mu.RLock()
+	defer store.workflows.mu.RUnlock()
+	_, exists := store.workflows.items[id]
+	return exists
 }
 
 // nameExists compares only with products the caller can see, so the answer does not reveal the name of

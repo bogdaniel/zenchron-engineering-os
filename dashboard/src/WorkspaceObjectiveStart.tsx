@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Select } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { loadWorkflows } from './workflowModel';
@@ -6,12 +6,13 @@ import type { Project } from './projects';
 import { livePageHref } from './livePageHref';
 
 /** Carries product configuration into the existing objective and plan flow. */
-export function WorkspaceObjectiveStart({ productID, productName, projects }: {
-  productID: string; productName: string; projects: Project[];
+export function WorkspaceObjectiveStart({ productID, productName, projects, defaultWorkflowID }: {
+  productID: string; productName: string; projects: Project[]; defaultWorkflowID?: string;
 }) {
   const workflows = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows });
   const [projectID, setProjectID] = useState<string | null>(null);
-  const [workflowID, setWorkflowID] = useState<string | null>(null);
+  const [workflowID, setWorkflowID] = useState<string | null>(defaultWorkflowID ?? null);
+  useEffect(() => setWorkflowID(defaultWorkflowID ?? null), [defaultWorkflowID]);
   const parameters = new URLSearchParams({ create: '1', product_id: productID });
   if (projectID && projects.some((project) => project.id === projectID)) parameters.set('project', projectID);
   if (workflowID && workflows.data?.some((workflow) => workflow.id === workflowID)) parameters.set('workflow', workflowID);
