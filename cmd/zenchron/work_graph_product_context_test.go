@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -62,6 +63,30 @@ func TestWorkUnitContextIncludesOnlyItsLinkedProduct(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestPlannerRunIsCancelledWhenPlanCannotBePersisted(t *testing.T) {
+	harness := newGraphHarness(t)
+	path := harness.store.graphs.path
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	response := harness.call(http.MethodPost, "/api/v1/objectives/"+harness.objectiveID+"/plans",
+		`{"project_id":"`+testProjectID+`","planner_agent_id":"`+harness.reviewer.ID+`"}`)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("plan persistence failure = HTTP %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+	if len(harness.store.graphs.plans[harness.objectiveID]) != 0 {
+		t.Fatal("failed plan persistence left an in-memory plan")
+	}
+	for _, run := range harness.store.items {
+		if run.Status != "cancelled" {
+			t.Fatalf("orphaned planner run status = %q, want cancelled", run.Status)
+		}
+		return
+	}
+	t.Fatal("planner run was not enqueued")
 }
 
 func TestPlannerReceivesLinkedProductDescription(t *testing.T) {

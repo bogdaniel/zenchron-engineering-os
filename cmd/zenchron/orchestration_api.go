@@ -139,6 +139,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	if definition != nil {
 		plan.WorkflowVersion = definition.Version
 	}
+	plannerAgentID, plannerGuidance := "", ""
 	switch {
 	case input.Plan != nil && input.PlannerAgentID == "":
 		profiles := store.agentProfiles()
@@ -166,23 +167,16 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		plan.WorkflowMode = workflowModeCompiled
 		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.ProductContext, proposal)
 	case input.Plan == nil && input.PlannerAgentID != "":
-		guidance := ""
 		if definition != nil {
 			var err error
-			guidance, err = plannerWorkflowGuidance(*definition)
+			plannerGuidance, err = plannerWorkflowGuidance(*definition)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 			plan.WorkflowMode = workflowModeGuidance
 		}
-		run, status, message := store.queuePlanner(item, project, strings.ToLower(input.PlannerAgentID),
-			access.user, guidance)
-		if status != 0 {
-			http.Error(w, message, status)
-			return
-		}
-		plan.Status, plan.PlannerRunID = planPlanning, run.ID
+		plannerAgentID = strings.ToLower(input.PlannerAgentID)
 	default:
 		http.Error(w, "provide either plan or planner_agent_id", http.StatusBadRequest)
 		return
@@ -194,10 +188,26 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusOK, publicPlan(approved))
 		return
 	}
+	var plannerRunID string
+	if plannerAgentID != "" {
+		run, status, message := store.queuePlanner(item, project, plannerAgentID, access.user, plannerGuidance)
+		if status != 0 {
+			http.Error(w, message, status)
+			return
+		}
+		plannerRunID = run.ID
+		plan.Status, plan.PlannerRunID = planPlanning, run.ID
+	}
 	plan.Revision = len(store.plans[item.ID]) + 1
 	store.plans[item.ID] = append(store.plans[item.ID], plan)
 	if err := store.persistLocked(); err != nil {
 		store.plans[item.ID] = store.plans[item.ID][:plan.Revision-1]
+		if plannerRunID != "" {
+			if _, status, message := store.runs.cancelRun(plannerRunID); status != 0 {
+				http.Error(w, "could not persist the plan or cancel its planner run: "+message, http.StatusInternalServerError)
+				return
+			}
+		}
 		http.Error(w, "could not persist the plan", http.StatusInternalServerError)
 		return
 	}
