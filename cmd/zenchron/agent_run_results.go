@@ -47,6 +47,9 @@ func (store *agentRunStore) finish(w http.ResponseWriter, r *http.Request) {
 		if item.WorkerID == workerID && !access.allows(item.Repository) {
 			return http.StatusForbidden, "this worker is no longer approved for the run's repository"
 		}
+		if item.WorkerID == workerID && item.ResultAttempt == input.Attempts && item.ResultAttempt > 0 {
+			return http.StatusConflict, workerapi.AgentRunResultAlreadyAccepted
+		}
 		return store.applyResult(item, workerID, input)
 	})
 	if status != 0 {
