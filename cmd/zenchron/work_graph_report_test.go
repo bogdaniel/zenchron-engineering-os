@@ -49,13 +49,25 @@ func TestWorkGraphReportRequiresExplicitGitHubPRState(t *testing.T) {
 		checksCode int
 		want       bool
 		wantChecks bool
+		wantRuns   int
 	}{
 		{name: "missing draft", body: `{` + valid + `,"merged_at":null}`},
 		{name: "missing merged timestamp", body: `{` + valid + `,"draft":false}`},
 		{name: "invalid merged timestamp", body: `{` + valid + `,"draft":false,"merged_at":false}`},
-		{name: "explicit false and null", body: `{` + valid + `,"draft":false,"merged_at":null}`, want: true, wantChecks: true},
+		{name: "explicit false and null", body: `{` + valid + `,"draft":false,"merged_at":null}`, want: true, wantChecks: true, wantRuns: 1},
 		{name: "mismatched candidate check head", body: `{` + valid + `,"draft":false,"merged_at":null}`,
 			checksBody: `{"check_runs":[{"name":"go","status":"completed","head_sha":"` + commit(7) + `"}]}`, want: true},
+		{name: "waiting and completed candidate checks", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{"check_runs":[{"name":"waiting","status":"waiting","head_sha":"` + commit(4) + `"},` +
+				`{"name":"go","status":"completed","head_sha":"` + commit(4) + `"}]}`, want: true, wantChecks: true, wantRuns: 2},
+		{name: "unknown candidate check status", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{"check_runs":[{"name":"go","status":"unknown","head_sha":"` + commit(4) + `"}]}`, want: true},
+		{name: "missing candidate check array", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{}`, want: true},
+		{name: "null candidate check array", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{"check_runs":null}`, want: true},
+		{name: "empty candidate check array", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{"check_runs":[]}`, want: true, wantChecks: true},
 		{name: "unavailable candidate checks", body: `{` + valid + `,"draft":false,"merged_at":null}`,
 			checksCode: http.StatusBadGateway, want: true},
 	} {
@@ -93,6 +105,9 @@ func TestWorkGraphReportRequiresExplicitGitHubPRState(t *testing.T) {
 			}
 			if test.wantChecks != (report.PullRequest != nil && report.PullRequest.CandidateChecks != nil) {
 				t.Fatalf("candidate checks = %#v, want present %t", report.PullRequest, test.wantChecks)
+			}
+			if test.wantChecks && len(report.PullRequest.CandidateChecks.Runs) != test.wantRuns {
+				t.Fatalf("candidate check runs = %#v, want %d", report.PullRequest.CandidateChecks.Runs, test.wantRuns)
 			}
 			if !test.wantChecks && !slices.Contains(report.UnknownEvidence, "candidate_checks") {
 				t.Fatalf("unavailable candidate checks were not marked unknown: %v", report.UnknownEvidence)

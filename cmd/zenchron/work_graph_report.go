@@ -129,9 +129,16 @@ func (report *deliveryReport) observePullRequest(ctx context.Context, repository
 		runs := make([]reportCheckRun, 0, len(checks))
 		valid := true
 		for _, check := range checks {
-			if check.HeadSHA != unit.Candidate || strings.TrimSpace(check.Name) == "" ||
-				(check.Status != "queued" && check.Status != "in_progress" && check.Status != "completed") {
+			if check.HeadSHA != unit.Candidate || strings.TrimSpace(check.Name) == "" {
 				valid = false
+				break
+			}
+			switch check.Status {
+			case "queued", "in_progress", "completed", "waiting", "requested", "pending":
+			default:
+				valid = false
+			}
+			if !valid {
 				break
 			}
 			runs = append(runs, reportCheckRun{Name: check.Name, Status: check.Status, Conclusion: check.Conclusion})

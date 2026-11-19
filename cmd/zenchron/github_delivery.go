@@ -89,14 +89,24 @@ func (client gitHubClient) commitCheckRuns(ctx context.Context, owner, repositor
 	path := "/repos/" + owner + "/" + repository + "/commits/" + commit + "/check-runs"
 	for page := 1; page <= maxGitHubPages; page++ {
 		var result struct {
-			CheckRuns []gitHubCheckRun `json:"check_runs"`
+			CheckRuns json.RawMessage `json:"check_runs"`
 		}
 		query := url.Values{"per_page": {"100"}, "page": {strconv.Itoa(page)}}
 		if err := client.get(ctx, path, query, &result); err != nil {
 			return nil, err
 		}
-		checks = append(checks, result.CheckRuns...)
-		if len(result.CheckRuns) < 100 {
+		if len(result.CheckRuns) == 0 {
+			return nil, errors.New("GitHub check runs response omitted check_runs")
+		}
+		var current []gitHubCheckRun
+		if err := json.Unmarshal(result.CheckRuns, &current); err != nil {
+			return nil, fmt.Errorf("decode GitHub check runs: %w", err)
+		}
+		if current == nil {
+			return nil, errors.New("GitHub check runs response has null check_runs")
+		}
+		checks = append(checks, current...)
+		if len(current) < 100 {
 			return checks, nil
 		}
 	}

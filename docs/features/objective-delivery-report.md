@@ -20,7 +20,7 @@ flowchart LR
   GitHub -->|Yes: bounded read-only lookup| API[GitHub pull request API]
   GitHub -->|No or lookup unavailable| Unknown[Keep external PR state unknown]
   API -->|Validated state and head SHA| Compute
-  Compute -->|GET candidate commit check-runs| ChecksAPI[GitHub check runs API]
+  Compute -->|GET /repos/{owner}/{repo}/commits/{sha}/check-runs| ChecksAPI[GitHub check runs API]
   ChecksAPI -->|Checks bound to the integrated SHA| Compute
   Compute --> Response[JSON response]
   Response --> ReportUI[ObjectiveDeliveryReport.tsx]
