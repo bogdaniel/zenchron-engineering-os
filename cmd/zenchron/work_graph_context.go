@@ -155,8 +155,7 @@ func (store *workGraphStore) candidateDiff(graphID string, target *workUnit) str
 	return diff.String()
 }
 
-// plannerContext tells a planning run what it may plan with: the objective, the product, the agent
-// profiles it may assign, and the rules its plan is validated against. Workflow guidance is pinned in its run prompt.
+// plannerContext carries the frozen product and assignment context alongside the planner's stored prompt.
 func (store *workGraphStore) plannerContext(runID string) string {
 	for objectiveID, plans := range store.plans {
 		for _, plan := range plans {
@@ -166,7 +165,9 @@ func (store *workGraphStore) plannerContext(runID string) string {
 			objective, _ := store.objectives.get(objectiveID)
 			var context strings.Builder
 			fmt.Fprintf(&context, "\n\nObjective: %s\n%s\n", objective.Title, objective.Description)
-			if objective.Product != "" {
+			if plan.ProductContext != "" {
+				writeProductContext(&context, plan.ProductContext)
+			} else if objective.Product != "" {
 				context.WriteString("Product: " + objective.Product + "\n")
 			}
 			context.WriteString("\nAgent profiles you may assign:\n")

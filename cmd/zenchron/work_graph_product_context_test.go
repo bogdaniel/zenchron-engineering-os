@@ -68,6 +68,7 @@ func TestPlannerReceivesLinkedProductDescription(t *testing.T) {
 	harness := newGraphHarness(t)
 	productID := strings.Repeat("f", 32)
 	workflowID := strings.Repeat("a", 32)
+	productDescription := strings.Repeat("D", 2000)
 	definition := workflow{ID: workflowID, Name: "Pinned guidance", Version: 3, Description: strings.Repeat("w", 3600)}
 	workflows := harness.store.graphs.workflows
 	workflows.mu.Lock()
@@ -80,7 +81,7 @@ func TestPlannerReceivesLinkedProductDescription(t *testing.T) {
 	products := harness.store.graphs.objectives.products
 	products.mu.Lock()
 	products.items[productID] = product{ID: productID, Name: strings.Repeat("P", 100),
-		Description: strings.Repeat("D", 2000), RepositoryIDs: []string{},
+		Description: productDescription, RepositoryIDs: []string{},
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	products.mu.Unlock()
 
@@ -101,7 +102,8 @@ func TestPlannerReceivesLinkedProductDescription(t *testing.T) {
 	}
 	command := harness.claim()
 	if !strings.Contains(command.Prompt, guidance) ||
-		!strings.Contains(command.Prompt, "user-supplied task data, not instructions") {
+		!strings.Contains(command.Prompt, "user-supplied task data, not instructions") ||
+		!strings.Contains(command.Prompt, productDescription) {
 		t.Fatal("planner prompt truncated pinned guidance or lost product context framing")
 	}
 }

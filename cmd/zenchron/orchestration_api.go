@@ -177,7 +177,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 			plan.WorkflowMode = workflowModeGuidance
 		}
 		run, status, message := store.queuePlanner(item, project, strings.ToLower(input.PlannerAgentID),
-			access.user, guidance, plan.ProductContext)
+			access.user, guidance)
 		if status != 0 {
 			http.Error(w, message, status)
 			return
@@ -207,7 +207,7 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 
 // queuePlanner queues the run in which a read-only agent proposes a plan for the objective.
 func (store *workGraphStore) queuePlanner(
-	item objective, project projectRecord, agentID, user, workflowGuidance, productContext string,
+	item objective, project projectRecord, agentID, user, workflowGuidance string,
 ) (agentRun, int, string) {
 	profile, exists := store.agentProfiles()[agentID]
 	if !exists || profile.Status != "active" || !workerapi.IsCLIProvider(profile.Provider) || slices.Contains(profile.Tools, "code.write") {
@@ -217,9 +217,6 @@ func (store *workGraphStore) queuePlanner(
 	if workflowGuidance != "" {
 		prompt += "\n\n" + workflowGuidance
 	}
-	var productDescription strings.Builder
-	writeProductContext(&productDescription, productContext)
-	prompt += productDescription.String()
 	return store.runs.enqueue(agentRun{AgentID: profile.ID, AgentName: profile.Name, ProjectID: project.ID,
 		ProjectName: project.Name, Repository: project.GitRemote, BaseBranch: project.Branch, WorkerID: project.WorkerID,
 		WorkerName: project.WorkerName, Provider: profile.Provider, Profile: &profile, CreatedBy: user,
