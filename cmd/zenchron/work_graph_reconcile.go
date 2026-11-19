@@ -29,16 +29,17 @@ const (
 // reconcileAll brings every unfinished graph up to date with the run store: it admits finished
 // attempts, queues the runnable frontier, and projects unit states. It is idempotent, so it is safe to
 // call after any event and after a restart; nothing else moves a graph forward.
-func (store *workGraphStore) reconcileAll() {
+func (store *workGraphStore) reconcileAll() bool {
 	if store == nil {
-		return
+		return true
 	}
 	if store.runs != nil && store.runs.isQuiesced() {
-		return
+		return true
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	changed := store.admitPlansLocked()
+	cancellationsPersisted := true
 	// Oldest graph first, so graphs queue their runs in the order they were approved.
 	graphs := make([]*workGraph, 0, len(store.graphs))
 	for _, graph := range store.graphs {
@@ -54,7 +55,10 @@ func (store *workGraphStore) reconcileAll() {
 		// Encoding a graph cannot fail: it holds only strings, numbers, times, and slices of them.
 		before, _ := json.Marshal(graph)
 		if graph.Status == graphCancelled {
-			// Nothing is admitted or queued any more; units only follow their runs as those stop.
+			if status, message := store.runs.cancelGraphRuns(graph.ID); status != 0 {
+				log.Printf("could not reconcile cancelled work graph %s: %s", graph.ID, message)
+				cancellationsPersisted = false
+			}
 			graph.project(store.runs.unitRuns(graph.ID), false)
 		} else {
 			store.reconcile(graph)
@@ -64,13 +68,14 @@ func (store *workGraphStore) reconcileAll() {
 		}
 	}
 	if !changed {
-		return
+		return cancellationsPersisted
 	}
 	// The run store already holds whatever was queued; the next reconcile adopts those runs and
 	// repeats the projection, so a failed write loses nothing.
 	if err := store.persistLocked(); err != nil {
 		log.Printf("could not persist work graphs: %v", err)
 	}
+	return cancellationsPersisted
 }
 
 func (store *workGraphStore) reconcile(graph *workGraph) {

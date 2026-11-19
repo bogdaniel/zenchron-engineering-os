@@ -427,7 +427,10 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 	}
 	// A worker asking for work is what moves WorkGraphs forward: finished units are admitted and the
 	// runnable frontier is queued before the oldest queued run is leased.
-	store.graphs.reconcileAll()
+	if !store.graphs.reconcileAll() {
+		http.Error(w, "could not persist cancellation for a cancelled work graph", http.StatusInternalServerError)
+		return
+	}
 	selected, status, message := store.lease(worker, accessFor(r))
 	if status != 0 {
 		http.Error(w, message, status)
