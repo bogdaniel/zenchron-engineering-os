@@ -7,7 +7,7 @@ plane, worker, dashboard, updater, or store. One per-user lock limits the proces
 
 ```mermaid
 flowchart LR
-  Companion[Zenchron menu-bar app] -->|GET /api/v1/system/status| API[Managed control plane]
+  Companion[Zenchron menu-bar app] -->|GET /api/v1/system/status · 15 s open/connected, otherwise 30 s| API[Managed control plane]
   LaunchAgent[Mode 0600 managed LaunchAgent plist] -->|Local status credential| Companion
   LaunchAgent -->|Credential fallback for older supervisor environments| API
   Companion -->|Credential header · loopback only| API
@@ -66,7 +66,9 @@ flowchart LR
   unhealthy, or unrelated service on port 8080 is not opened. Quit exits only the menu-bar process.
 - A process lock prevents another companion instance for the same user from adding a second icon.
 - **Launch at Login** is opt-in and uses `SMAppService.mainApp`. The menu reflects macOS registration state, directs approval-required cases to System Settings, and reports registration errors. It never starts or stops the engineering services.
-- Status refreshes continue while the menu is tracking and older network responses cannot overwrite a newer refresh.
+- The app polls every 15 seconds while its menu is open and connected, and every 30 seconds while closed or disconnected,
+  so the visible icon can reflect loss of the local service without busy polling. Older network responses cannot
+  overwrite a newer refresh.
   Decision rows include requester and decision ID so same-title decisions remain distinguishable.
 
 ## Build and run

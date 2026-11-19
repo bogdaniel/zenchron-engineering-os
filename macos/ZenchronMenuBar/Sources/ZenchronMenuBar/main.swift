@@ -42,6 +42,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var instanceLock: InstanceLock?
     private var statusItem: NSStatusItem?
     private var timer: Timer?
+    private var menuVisible = false
     private var status: SystemStatus?
     private var message = "Checking Zenchron…"
     private var requiresOperatorSession = false
@@ -64,6 +65,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         item.menu = menu
         statusItem = item
+        armPollingTimer()
         Task { await refresh() }
     }
 
@@ -73,23 +75,24 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        menuVisible = true
         armPollingTimer()
         Task { await refresh() }
     }
 
     private func armPollingTimer() {
         timer?.invalidate()
-        let interval: TimeInterval = status == nil ? 30 : 15
+        let interval = SystemStatus.refreshInterval(menuVisible: menuVisible, connected: status != nil)
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
-        RunLoop.main.add(timer, forMode: .eventTracking)
+        RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
 
     func menuDidClose(_ menu: NSMenu) {
-        timer?.invalidate()
-        timer = nil
+        menuVisible = false
+        armPollingTimer()
     }
 
     private func addStatusItems(to menu: NSMenu) {

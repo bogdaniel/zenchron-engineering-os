@@ -2,6 +2,12 @@ import Foundation
 
 public struct SystemStatus: Decodable, Equatable {
     public static let canonicalDashboardURL = URL(string: "http://127.0.0.1:8080/?mode=live")!
+    private static let visibleRefreshInterval: TimeInterval = 15
+    private static let backgroundRefreshInterval: TimeInterval = 30
+
+    public static func refreshInterval(menuVisible: Bool, connected: Bool) -> TimeInterval {
+        menuVisible && connected ? visibleRefreshInterval : backgroundRefreshInterval
+    }
 
     public enum Indicator: Equatable {
         case connected

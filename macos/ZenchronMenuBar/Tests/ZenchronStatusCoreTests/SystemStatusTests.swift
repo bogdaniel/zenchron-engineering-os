@@ -3,6 +3,13 @@ import XCTest
 @testable import ZenchronStatusCore
 
 final class SystemStatusTests: XCTestCase {
+    func testStatusRefreshCadenceKeepsClosedIconCurrentWithoutBusyPolling() {
+        XCTAssertEqual(SystemStatus.refreshInterval(menuVisible: true, connected: true), 15)
+        XCTAssertEqual(SystemStatus.refreshInterval(menuVisible: true, connected: false), 30)
+        XCTAssertEqual(SystemStatus.refreshInterval(menuVisible: false, connected: true), 30)
+        XCTAssertEqual(SystemStatus.refreshInterval(menuVisible: false, connected: false), 30)
+    }
+
     func testStatusIndicatorReflectsWorkUpdateAndWorkerState() throws {
         XCTAssertEqual(try status().indicator, .connected)
         XCTAssertEqual(try status(activeGraphs: 1).indicator, .active)

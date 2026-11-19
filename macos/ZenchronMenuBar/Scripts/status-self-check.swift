@@ -17,6 +17,10 @@ struct StatusSelfCheck {
         let status = try decodeSystemStatus(valid)
         assert(status.workers.online == 1 && status.work.queuedUnits == 2 && status.updateState == "blocked")
         assert(status.indicator == .degraded)
+        assert(SystemStatus.refreshInterval(menuVisible: true, connected: true) == 15)
+        assert(SystemStatus.refreshInterval(menuVisible: true, connected: false) == 30)
+        assert(SystemStatus.refreshInterval(menuVisible: false, connected: true) == 30)
+        assert(SystemStatus.refreshInterval(menuVisible: false, connected: false) == 30)
         assert(status.updateRevision == String(repeating: "a", count: 40) && status.updateReason == "active runs must finish")
         assert(status.work.activeGraphLinks?.first.flatMap(status.activeWorkURL(for:))?.absoluteString ==
             "http://127.0.0.1:8080/?mode=live&objective=objective-2&tab=plan&graph_id=graph-7#objectives")
