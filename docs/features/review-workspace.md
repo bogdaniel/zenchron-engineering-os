@@ -16,7 +16,7 @@ plane credential, and GitHub enforces branch protection.
 
 ```mermaid
 flowchart LR
-    User[Developer or reviewer] --> Page["ReviewsPage · reviews.tsx<br/>one layout, search / filter / selection state"]
+    User[Developer or reviewer] --> Page["ReviewsPage · reviews.tsx<br/>one layout, search / filter / pinned selection state"]
     Page -->|reads| Source{"ReviewsSource · reviewsView.ts"}
     Source -->|Mock| Mock["useMockReviews · review-preview.tsx<br/>fixtures, useState only, no requests"]
     Source -->|Live| Live["useLiveReviews · reviewsView.ts<br/>TanStack Query"]
@@ -61,7 +61,8 @@ Both modes:
   overflow menu resets search and the queue filter.
 - **Queue.** Pull requests and issues are selectable cards with number, state, title, author, branch, and update date.
   Search matches number, title, author, and (for pull requests) source branch in the loaded list; the chips filter it.
-  The pager states that there is one page.
+  The pager states that there is one page. Selection stays pinned while search, filters, or refreshed ordering change;
+  when that item is hidden, its detail actions are unavailable until it is visible or another item is selected.
 - **Detail.** The header shows the item, its state, and for a pull request the bookmark, copy-link, and overflow
   actions. A copied link carries `?pull=<number>` and opens that pull request. The diff bar names the file (or the
   number of files), the added and removed line counts, and the Split / Unified switch. A one-file patch omits its Git
@@ -93,6 +94,8 @@ Live only:
   feedback on a Zenchron pull request is attached to its run, and an eligible request for changes queues a follow-up.
 - **Issue.** Labels, the link to GitHub, and the description; Conversations comments on the issue and closes or
   reopens it.
+- **Selection safety.** Changing the selected pull request, issue, or run clears its unsent draft and action feedback.
+  A hidden selected item never falls through to the first visible row, so writes cannot silently target a different item.
 - **Local branch.** Agent runs in an AG Grid. The detail shows the run's diff in read-only Monaco with its commit, the
   128 KiB truncation notice, and the pull-request link or publication state; counts come from the loaded diff and are
   lower bounds when it is truncated. Each run stores up to ten comments of 1,000 bytes. Comments and request-changes
@@ -125,7 +128,8 @@ Mock only:
 
 - `cd dashboard && npm run test:e2e -- e2e/github-reviews.spec.ts`: the frame in Live with real counts and honest
   Unavailable values, disabled controls, queue filters, search by branch, the reset menu, safe Markdown rendering, the
-  pull-request diff and its statistics, a multi-file patch in Unified and Split, issue comment / close / reopen, both
+  pull-request diff and its statistics, selection pinning and draft clearing when search hides or changes the item, a
+  multi-file patch in Unified and Split, issue comment / close / reopen, both
   review actions with their run-sync messages and the exact write requests, the repository menu, a copied `?pull=`
   link, a failed GitHub load without fixtures, a SHA-bound diff, an exact-head merge request and result, and the phone layout without
   overflow.
