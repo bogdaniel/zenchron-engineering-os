@@ -25,7 +25,9 @@ flowchart LR
   Validate -->|profile/persona versions and private prompt snapshots| Pins[Approved plan revision]
   Plans --> Graphs[(work-graphs.json<br/>plans, graphs, messages)]
   Graphs <--> Reconcile["work_graph_reconcile.go<br/>admit, frontier, project"]
-  Reconcile -->|enqueue, requeueForUnit, cancelRun| Runs[(agent-runs.json<br/>the only queue)]
+  Reconcile -->|enqueue, requeueForUnit, batch cancel| Runs[(agent-runs.json<br/>the only queue)]
+  Plans -->|persist cancellation intent first| Graphs
+  Reconcile -->|retry cancelled graph run stops before lease| Runs
   subgraph Worker["zenchron-worker (ZENCHRON_WORKER_CONCURRENCY slots)"]
     Dispatch[dispatch] --> Agent["agent run<br/>worktree + Codex or Claude Code"]
     Dispatch --> Merge["integration run<br/>worktree + git merge"]
@@ -97,7 +99,9 @@ flowchart LR
 - A produce unit that depends on a produce unit starts from that unit's branch.
 - A failed unit blocks the units that depend on it; other units finish. `POST .../units/{key}/retry` starts a fresh run
   for a failed unit; a retried producer continues from its previous branch.
-- `POST .../cancel` cancels the graph and its queued and running runs.
+- `POST .../cancel` persists the graph intent before cancelling runs. Queued and running run changes share one
+  atomic run-store write; a failed write leaves the graph cancelled and reconciliation retries before workers can lease
+  more work, including after restart. A failed intent write leaves every run unchanged.
 - After a restart the run store requeues interrupted attempts, and the graph adopts any run that was queued for a unit
   but not yet recorded on it, so no work is queued twice.
 
@@ -127,7 +131,8 @@ flowchart LR
 ### Integration and publication
 
 - The integrate unit starts when its dependencies are settled, with every produce unit's branch and admitted commit as
-  inputs in plan order.
+  inputs in plan order. Every producer must be settled, including producers reached only through transitive
+  dependencies; an active retry cannot be paired with its previous candidate.
 - The worker refuses inputs whose branch moved, aborts a conflicting merge and reports the branch and files, and
   otherwise commits the merges, runs the repository's verification commands on the result, and reports the commit.
 - A conflict becomes a finding for the producer whose branch did not merge, and integration runs again after that
@@ -174,6 +179,7 @@ Focused Go tests, through the HTTP API with a fake GitHub (`go test ./cmd/zenchr
 | `TestProducerIsNotCompleteWithoutAnAdmittedHandoff` | A successful exit is not completion; attempts bound the retries; dependents are blocked |
 | `TestWorkGraphRecoversAfterRestartWithoutQueueingWorkTwice` | Restart recovery and adoption of an unrecorded run |
 | `TestIntegrationConflictGoesToItsOwnerAndStaleInputsFailVisibly` | Conflict routing, re-integration, stale inputs, unit retry |
+| `TestIntegrationWaitsForRetriedTransitiveProducer` | Integration waits while a retried transitive producer is queued and uses its new branch with its new admitted commit |
 | `TestDecisionRequestBlocksItsUnitUntilAPersonResolvesIt`, `TestOnlyAnAuthorizedPersonCanResolveADecision` | Durable decisions, resume, and who may resolve |
 | `TestCancellingAGraphStopsItsRunsAndFailedUnitsBlockTheirDependents`, `TestCancelledGraphFollowsItsRunningRunUntilItStops` | Cancellation and failure propagation |
 | `TestPublicationPassIsBoundToTheReviewedCommitAndAFailedPushIsRetried` | Only the reviewed commit is published; a failed push is retried |

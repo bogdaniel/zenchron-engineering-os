@@ -29,16 +29,17 @@ const (
 // reconcileAll brings every unfinished graph up to date with the run store: it admits finished
 // attempts, queues the runnable frontier, and projects unit states. It is idempotent, so it is safe to
 // call after any event and after a restart; nothing else moves a graph forward.
-func (store *workGraphStore) reconcileAll() {
+func (store *workGraphStore) reconcileAll() bool {
 	if store == nil {
-		return
+		return true
 	}
 	if store.runs != nil && store.runs.isQuiesced() {
-		return
+		return true
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	changed := store.admitPlansLocked()
+	cancellationsPersisted := true
 	// Oldest graph first, so graphs queue their runs in the order they were approved.
 	graphs := make([]*workGraph, 0, len(store.graphs))
 	for _, graph := range store.graphs {
@@ -54,7 +55,10 @@ func (store *workGraphStore) reconcileAll() {
 		// Encoding a graph cannot fail: it holds only strings, numbers, times, and slices of them.
 		before, _ := json.Marshal(graph)
 		if graph.Status == graphCancelled {
-			// Nothing is admitted or queued any more; units only follow their runs as those stop.
+			if status, message := store.runs.cancelGraphRuns(graph.ID); status != 0 {
+				log.Printf("could not reconcile cancelled work graph %s: %s", graph.ID, message)
+				cancellationsPersisted = false
+			}
 			graph.project(store.runs.unitRuns(graph.ID), false)
 		} else {
 			store.reconcile(graph)
@@ -64,13 +68,14 @@ func (store *workGraphStore) reconcileAll() {
 		}
 	}
 	if !changed {
-		return
+		return cancellationsPersisted
 	}
 	// The run store already holds whatever was queued; the next reconcile adopts those runs and
 	// repeats the projection, so a failed write loses nothing.
 	if err := store.persistLocked(); err != nil {
 		log.Printf("could not persist work graphs: %v", err)
 	}
+	return cancellationsPersisted
 }
 
 func (store *workGraphStore) reconcile(graph *workGraph) {
@@ -145,9 +150,17 @@ func (graph *workGraph) settled(unit *workUnit, runs map[string]agentRun) bool {
 		target := graph.unit(unit.DependsOn[0])
 		// A verdict counts only for the handoff the review started from.
 		return unit.Verdict == "accept" && unit.Seen >= target.HandoffAt && graph.settled(target, runs)
+	case unitIntegrate:
+		return graph.producersSettled(runs) && unit.Candidate != "" && !graph.integrationDue(unit)
 	default:
 		return unit.Candidate != "" && !graph.integrationDue(unit)
 	}
+}
+
+func (graph *workGraph) producersSettled(runs map[string]agentRun) bool {
+	return !slices.ContainsFunc(graph.producers(), func(producer *workUnit) bool {
+		return !graph.settled(producer, runs)
+	})
 }
 
 // integrationDue reports whether a producer handed off after the integrate unit last combined them.
@@ -168,6 +181,9 @@ func (graph *workGraph) frontier(runs map[string]agentRun, publishable bool) []u
 		dependenciesSettled := !slices.ContainsFunc(unit.DependsOn, func(key string) bool {
 			return !graph.settled(graph.unit(key), runs)
 		})
+		if unit.Kind == unitIntegrate {
+			dependenciesSettled = dependenciesSettled && graph.producersSettled(runs)
+		}
 		_, undecided := graph.openDecision(unit.Key)
 		switch {
 		case unit.Kind == unitProduce && (!started || unit.Restart):
@@ -368,7 +384,7 @@ func (graph *workGraph) unitState(unit *workUnit, runs map[string]agentRun, publ
 func (graph *workGraph) integrationState(unit *workUnit, run agentRun, runs map[string]agentRun, publishable bool) (string, string) {
 	unit.PullRequestURL = run.PullRequestURL
 	switch {
-	case unit.Candidate == "" || graph.integrationDue(unit):
+	case !graph.producersSettled(runs) || unit.Candidate == "" || graph.integrationDue(unit):
 		return unitWaiting, "Waiting for every produced candidate to be admitted."
 	case !graph.reviewed(unit, runs):
 		return unitWaiting, "Waiting for review of the integrated candidate."

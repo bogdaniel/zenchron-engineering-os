@@ -80,7 +80,9 @@ export function ReviewQueue({ source, section, items, searching, search, onSearc
   const total = section === 'pull-requests' ? source.pullRequestTotal
     : section === 'issues' ? (listing.loading || listing.failed ? undefined : String(listing.items.length)) : String(runs.length);
   const title = section === 'pull-requests' ? 'Pull Requests' : section === 'issues' ? 'Issues' : 'Local branches';
-  const pageNote = section === 'pull-requests' ? source.pagination.note : `${total ?? 0} ${nouns[section]}`;
+  const pageNote = section === 'pull-requests' ? source.pagination.note
+    : section === 'issues' && listing.complete === false ? 'Showing newest 100; results may be incomplete.'
+      : `${total ?? 0} ${nouns[section]}`;
   return <PanelCard className="reviews-queue" withBorder>
     <PanelHeading className="reviews-panel-heading" title={total === undefined ? title : `${title} (${total})`}
       description={local ? 'Active requests and isolated agent changes' : source.project?.git_remote ?? 'GitHub project data'}
@@ -126,7 +128,7 @@ export function ReviewQueue({ source, section, items, searching, search, onSearc
     <nav className="reviews-preview-pagination" aria-label={`${title} pages`}>
       <button type="button" disabled aria-label="Previous page" title={source.pagination.reason}>‹</button>
       <button type="button" disabled aria-current="page" aria-label="Page 1 of 1" className="selected">1</button>
-      <span>{pageNote}</span>
+      <span role={section === 'issues' && listing.complete === false ? 'status' : undefined}>{pageNote}</span>
       <button type="button" disabled aria-label="Next page" title={source.pagination.reason}>›</button>
     </nav>
   </PanelCard>;

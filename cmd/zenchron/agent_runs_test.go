@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,6 +13,45 @@ import (
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
+
+func TestAgentRunSnapshotPersistsAtMaximumRunCount(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-runs.json")
+	store := newAgentRunStore(newWorkerRegistry(), newAgentProfileStore())
+	store.path = path
+	now := time.Now().UTC()
+	agentID := strings.Repeat("a", 32)
+	for index := 0; index < maxAgentRuns; index++ {
+		id := fmt.Sprintf("%032x", index+1)
+		profile := agentProfile{ID: agentID, Name: "Engineer", Provider: workerapi.ProviderCodex, Model: "default",
+			Status: "active", SystemPrompt: strings.Repeat("p", 20_000), GoalPrompt: strings.Repeat("g", 5_000),
+			Version: 1, UpdatedAt: now, Tools: []string{"code.write"}}
+		store.items[id] = agentRun{ID: id, AgentID: agentID, AgentName: "Engineer", ProjectID: testProjectID,
+			ProjectName: "platform", Branch: "zenchron/agent-run/" + id, WorkerID: testWorkerID, WorkerName: "worker",
+			Prompt: strings.Repeat("t", 5_000), Output: strings.Repeat("o", 20_000),
+			IssueContext: strings.Repeat("i", maxIssueContextSize), Result: strings.Repeat("r", workerapi.MaxResultSize),
+			ResultAttempt: 1, Status: "succeeded", Attempts: 1, CreatedAt: now, UpdatedAt: now, Profile: &profile}
+	}
+	if err := store.persistLocked(); err != nil {
+		t.Fatalf("persist maximum run snapshot: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Size() <= maxStateFileSize || info.Size() > maxAgentRunStateFileSize {
+		t.Fatalf("maximum run snapshot size = %v, error %v", info, err)
+	}
+	reopened, err := openAgentRunStore(path, store.registry, store.agents)
+	if err != nil {
+		t.Fatalf("reopen maximum run snapshot: %v", err)
+	}
+	if len(reopened.items) != maxAgentRuns {
+		t.Fatalf("reopened %d runs, want %d", len(reopened.items), maxAgentRuns)
+	}
+	if _, status, message := reopened.update("00000000000000000000000000000001", func(item *agentRun) (int, string) {
+		item.Output = "updated"
+		return 0, ""
+	}); status != 0 {
+		t.Fatalf("update maximum run snapshot returned HTTP %d: %s", status, message)
+	}
+}
 
 const (
 	testWorkerID  = "0123456789abcdef0123456789abcdef"

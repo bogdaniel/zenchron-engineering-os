@@ -44,3 +44,40 @@ func (store *agentRunStore) cancelRun(runID string) (agentRun, int, string) {
 		return 0, ""
 	})
 }
+
+// cancelGraphRuns persists every cancellation for a graph in one run-store write.
+func (store *agentRunStore) cancelGraphRuns(graphID string) (int, string) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	previous := make(map[string]agentRun)
+	now := time.Now().UTC()
+	for id, item := range store.items {
+		if item.GraphID != graphID {
+			continue
+		}
+		switch item.Status {
+		case "queued":
+			previous[id] = item
+			item.Status, item.Error, item.UpdatedAt = "cancelled", "Cancelled before worker claim.", now
+		case "running":
+			if item.CancelRequested {
+				continue
+			}
+			previous[id] = item
+			item.CancelRequested, item.UpdatedAt = true, now
+		default:
+			continue
+		}
+		store.items[id] = item
+	}
+	if len(previous) == 0 {
+		return 0, ""
+	}
+	if err := store.persistLocked(); err != nil {
+		for id, item := range previous {
+			store.items[id] = item
+		}
+		return http.StatusInternalServerError, "could not persist work-graph run cancellations"
+	}
+	return 0, ""
+}

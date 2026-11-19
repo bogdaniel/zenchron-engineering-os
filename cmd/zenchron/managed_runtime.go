@@ -534,7 +534,10 @@ func (runtime *managedRuntime) stopChildren() error {
 func (runtime *managedRuntime) failUpdate(state, reason string) error {
 	runtime.status.State, runtime.status.Progress, runtime.status.BlockReason = state, "", boundedUpdateReason(reason)
 	runtime.status.LastFailure = time.Now().UTC()
-	runtime.status.LastFailedRevision, runtime.status.LastFailureReason = runtime.status.LatestRevision, runtime.status.BlockReason
+	if state == "failed" {
+		runtime.status.LastFailedRevision = runtime.status.LatestRevision
+	}
+	runtime.status.LastFailureReason = runtime.status.BlockReason
 	if err := runtime.writeStatus(); err != nil {
 		return err
 	}
@@ -559,7 +562,7 @@ func readReleaseTree(home, commit string) string {
 
 func boundedUpdateReason(reason string) string {
 	if len(reason) > 500 {
-		return reason[:500]
+		return strings.ToValidUTF8(reason[:500], "")
 	}
 	return reason
 }
