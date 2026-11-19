@@ -17,6 +17,7 @@ const diffSchema = z.object({ run_id: z.string(), diff: z.string(), truncated: z
 const pullRequestDiffSchema = z.object({ head_sha: z.string(), diff: z.string().max(1 << 20) });
 const reviewResultSchema = z.object({
   agent_run_linked: z.boolean().optional(), agent_run_queued: z.boolean().optional(),
+  github_request_changes_recorded_as_comment: z.boolean().optional(),
   feedback_sync_error: z.string().optional(),
 });
 const mergeResultSchema = z.object({ commit_sha: z.string(), head_sha: z.string(), message: z.string() });
@@ -248,9 +249,17 @@ export function useLiveReviews(
         const result = reviewResultSchema.parse(await response.json());
         await queryClient.invalidateQueries({ queryKey: ['github-pull-requests', project.id] });
         await queryClient.invalidateQueries({ queryKey: ['agent-runs'] });
-        if (result.feedback_sync_error) return 'Review submitted to GitHub, but run feedback could not sync.';
+        if (result.feedback_sync_error) return result.github_request_changes_recorded_as_comment
+          ? 'GitHub recorded a comment, but run feedback could not sync.'
+          : 'Review submitted to GitHub, but run feedback could not sync.';
         if (event === 'COMMENT') {
           return result.agent_run_linked ? 'Comment submitted to GitHub and attached to the agent run.' : 'Comment submitted to GitHub.';
+        }
+        if (result.github_request_changes_recorded_as_comment) {
+          if (!result.agent_run_linked) return 'GitHub recorded a comment, but the agent run could not be linked.';
+          return result.agent_run_queued
+            ? 'GitHub recorded a comment; the agent run queued the requested changes.'
+            : 'GitHub recorded a comment; run feedback was stored, but the agent is not eligible for another pass yet.';
         }
         if (result.agent_run_queued) return 'Changes requested on GitHub; agent run queued.';
         return result.agent_run_linked

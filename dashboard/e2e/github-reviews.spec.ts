@@ -77,6 +77,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   const issueStates: string[] = [];
   let issueState = 'open';
   let canQueue = true;
+  let requestChangesRecordedAsComment = false;
   await page.route('**/api/v1/projects', (route) => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify([{
@@ -132,6 +133,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       status: 'submitted', agent_run_linked: true,
       agent_run_queued: review.event === 'REQUEST_CHANGES' && canQueue,
+      github_request_changes_recorded_as_comment: requestChangesRecordedAsComment,
     }) });
   });
   const writes: string[] = [];
@@ -316,8 +318,10 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Comment submitted to GitHub and attached to the agent run.');
   await page.getByLabel('GitHub pull request review').fill('Please add retry coverage before merging.');
+  requestChangesRecordedAsComment = true;
   await page.locator('.reviews-detail-tab-panel').getByRole('button', { name: 'Request changes' }).click();
-  await expect(page.getByRole('status')).toHaveText('Changes requested on GitHub; agent run queued.');
+  await expect(page.getByRole('status')).toHaveText('GitHub recorded a comment; the agent run queued the requested changes.');
+  requestChangesRecordedAsComment = false;
   canQueue = false;
   await page.getByLabel('GitHub pull request review').fill('Keep this feedback until the worker is available.');
   await page.locator('.reviews-detail-tab-panel').getByRole('button', { name: 'Request changes' }).click();
