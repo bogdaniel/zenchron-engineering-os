@@ -9,7 +9,7 @@ const executionSchema = z.object({
   run_id: z.string(), status: z.string(), profile_id: z.string().optional(), profile_name: z.string().optional(),
   profile_version: z.number().optional(), persona_id: z.string().optional(), persona_name: z.string().optional(),
   persona_version: z.number().optional(), provider: z.string().optional(), provider_version: z.string().optional(),
-  attempts: z.number(), candidate_commit: z.string().optional(), review_verdict: z.string().optional(),
+  attempts: z.number(), candidate_commit: z.string().optional(), candidate_tree_sha: z.string().optional(), review_verdict: z.string().optional(),
   verification: z.string().optional(), publication: z.string().optional(), pull_request_url: z.string().optional(),
   failure_recorded: z.boolean().optional(),
 });
@@ -35,10 +35,15 @@ const reportSchema = z.object({
     runs_with_usage: z.number(), runs_with_cost: z.number(), unknown: z.array(z.string()) }),
   unknown_evidence: z.array(z.string()).default([]),
   pull_request_url: z.string().optional(),
+  pull_request_external_state: z.object({ number: z.number(), state: z.enum(['open', 'closed']), draft: z.boolean(),
+    merged: z.boolean(), head_sha: z.string(), candidate_matches_head: z.boolean().optional(), observed_at: z.string(),
+    candidate_checks: z.object({ head_sha: z.string(), observed_at: z.string(), runs: z.array(z.object({ name: z.string(),
+      status: z.string(), conclusion: z.string().optional() })) }).optional() }).optional(),
 });
 type Report = z.infer<typeof reportSchema>;
 const unknownEvidenceLabels: Record<string, string> = {
   candidate_tree_sha: 'candidate tree SHA',
+  candidate_checks: 'GitHub checks for the integrated candidate',
   publication_authority: 'publication authority',
   pull_request_external_state: 'current pull request state',
 };
@@ -105,15 +110,36 @@ function ReportDetails({ report }: { report: Report }) {
           {run.provider && ` · ${run.provider}${run.provider_version ? ` ${run.provider_version}` : ''}`}</span>
         <span>Worker-reported verification: {run.verification || 'Not run'}</span>
         {run.candidate_commit && <span>Commit <code>{run.candidate_commit}</code></span>}
+        {run.candidate_tree_sha && <span>Tree <code>{run.candidate_tree_sha}</code></span>}
         {run.review_verdict && <span>Review verdict: {run.review_verdict}</span>}
         {run.publication && <span>Publication state: {run.publication}</span>}
         {run.pull_request_url && <a href={run.pull_request_url} target="_blank" rel="noreferrer">Open pull request ↗</a>}
         {run.failure_recorded && <span>Failure recorded for this run.</span>}
       </div>)}
     </article>)}</div>
-    <p>Pull request: {report.pull_request_url
+    <h5>Execution and publication</h5>
+    <p>WorkGraph execution: {report.status}</p>
+    <p>Recorded pull request: {report.pull_request_url
       ? <a href={report.pull_request_url} target="_blank" rel="noreferrer">{report.pull_request_url}</a>
-      : report.units.find((unit) => unit.kind === 'integrate')?.reason || 'Unknown · no pull-request link was recorded.'}</p>
+      : <>{report.units.find((unit) => unit.kind === 'integrate')?.reason || 'No pull-request URL was recorded.'}
+        {' WorkGraph completion does not establish publication.'}</>}</p>
+    {report.pull_request_external_state && <p aria-label="Observed GitHub pull request state">
+      GitHub reports pull request #{report.pull_request_external_state.number} {report.pull_request_external_state.state}
+      {report.pull_request_external_state.merged ? ' and merged' : ''}{report.pull_request_external_state.draft ? ' as a draft' : ''} · head{' '}
+      <code>{report.pull_request_external_state.head_sha}</code>
+      {report.pull_request_external_state.candidate_matches_head === undefined ? ' · candidate match unknown'
+        : report.pull_request_external_state.candidate_matches_head ? ' · matches the integrated candidate' : ' · differs from the integrated candidate'}
+      {' · observed '}{new Date(report.pull_request_external_state.observed_at).toLocaleString()}
+    </p>}
+    {report.pull_request_external_state?.candidate_checks && <div aria-label="GitHub checks for integrated candidate">
+      <p>GitHub checks for candidate <code>{report.pull_request_external_state.candidate_checks.head_sha}</code>
+        {' · observed '}{new Date(report.pull_request_external_state.candidate_checks.observed_at).toLocaleString()}</p>
+      {report.pull_request_external_state.candidate_checks.runs.length === 0
+        ? <p>No check runs were reported for this candidate.</p>
+        : <ul>{report.pull_request_external_state.candidate_checks.runs.map((check, index) => <li key={`${check.name}-${index}`}>
+          {check.name}{' · '}{check.status}{check.conclusion ? ` · ${check.conclusion}` : ''}
+        </li>)}</ul>}
+    </div>}
     <h5>Handoffs and decisions</h5>
     {report.handoffs.map((handoff, index) => <p key={`${handoff.run_id}-${handoff.attempt}-${index}`}>
       <b>{handoff.from}</b>{handoff.commit && <> · <code>{handoff.commit}</code></>} · {handoff.summary}

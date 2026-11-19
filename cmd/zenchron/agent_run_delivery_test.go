@@ -28,6 +28,7 @@ type deliveryHarness struct {
 	mu             sync.Mutex
 	pullCreates    int
 	failPullCreate bool
+	failPullStatus bool
 	pulls          []string
 	pullHead       string
 	checkHead      string
@@ -100,12 +101,16 @@ func (harness *deliveryHarness) serveGitHub(w http.ResponseWriter, r *http.Reque
 		w.WriteHeader(http.StatusCreated)
 		_, _ = io.WriteString(w, pull)
 	case r.Method == http.MethodGet && r.URL.Path == repository+"/pulls/23":
-		_, _ = fmt.Fprintf(w, `{"number":23,"state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"sha":%q}}`, harness.pullHead)
+		if harness.failPullStatus {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{"number":23,"state":"open","draft":true,"merged_at":null,"html_url":"https://github.com/acme/platform/pull/23","head":{"sha":%q}}`, harness.pullHead)
 	case r.Method == http.MethodGet && r.URL.Path == repository+"/pulls/23/reviews":
 		_, _ = io.WriteString(w, harness.reviews)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, repository+"/commits/") && strings.HasSuffix(r.URL.Path, "/check-runs"):
 		harness.checkHead = strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, repository+"/commits/"), "/check-runs")
-		_, _ = io.WriteString(w, `{"check_runs":[{"name":"go","status":"completed","conclusion":"success"}]}`)
+		_, _ = fmt.Fprintf(w, `{"check_runs":[{"name":"go","status":"completed","conclusion":"success","head_sha":%q}]}`, harness.checkHead)
 	case r.Method == http.MethodPost && r.URL.Path == repository+"/issues":
 		w.WriteHeader(http.StatusCreated)
 		_, _ = io.WriteString(w, `{"number":9,"title":"New defect","html_url":"https://github.com/acme/platform/issues/9"}`)

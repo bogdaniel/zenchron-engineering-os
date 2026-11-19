@@ -12,8 +12,16 @@ flowchart LR
   Graphs --> Visibility{Objective visible and repository access?}
   Visibility -->|No: 404| NotFound[Not found]
   Visibility -->|Yes| Runs[(agent-runs.json<br/>runs, attempts, usage)]
+  Worker[CLI worker] -->|PUT /api/v1/workers/{workerID}/agent-runs/{requestID}| ResultAPI[agent_run_results.go finish handler]
+  ResultAPI -->|Validated result and attempt evidence| Runs
   Graphs --> Compute[work_graph_report.go<br/>pure computation]
   Runs --> Compute
+  Compute --> GitHub{Recorded PR URL matches graph repository?}
+  GitHub -->|Yes: bounded read-only lookup| API[GitHub pull request API]
+  GitHub -->|No or lookup unavailable| Unknown[Keep external PR state unknown]
+  API -->|Validated state and head SHA| Compute
+  Compute -->|GET /repos/{owner}/{repo}/commits/{sha}/check-runs| ChecksAPI[GitHub check runs API]
+  ChecksAPI -->|Checks bound to the integrated SHA| Compute
   Compute --> Response[JSON response]
   Response --> ReportUI[ObjectiveDeliveryReport.tsx]
   ReportUI -->|Export JSON| Download[Typed report download]
@@ -22,8 +30,9 @@ flowchart LR
 
 ## Behavior
 
-- `GET /api/v1/work-graphs/{id}/report` returns a report from durable records only. It never reconciles or persists.
-  An unknown graph id or a graph the caller may not read returns 404.
+- `GET /api/v1/work-graphs/{id}/report` returns a report from durable records plus a bounded, read-only GitHub lookup
+  when a recorded canonical PR URL matches the graph repository. It never reconciles or persists. An unknown graph id
+  or a graph the caller may not read returns 404.
 - Top-level `graph_id`, `objective_id`, `objective_title`, `plan_revision`, and `status` identify the graph and its
   objective and report the graph's plan revision and status.
 - Top-level `units` is an array. Each unit has `key`, `kind`, `agent_name`, and `state`; `candidate` and `verdict` are
@@ -32,12 +41,18 @@ flowchart LR
   run's provider and, when recorded, a space and its provider version.
 - `approved_plan` records the approved revision, content hash, summary, approver, and approval time. Workflow identity
   and version come from the compiled plan and graph. Each execution reports the recorded profile and persona IDs,
-  names and versions, provider, candidate commit, worker-reported verification, review verdict, publication state, PR
-  link, attempts, and failures. Verification belongs to that run; it is not an independent assurance record.
+  names and versions, provider, candidate commit and its Git tree SHA when reported, worker-reported verification,
+  review verdict, publication state, PR link, attempts, and failures. Tree evidence is considered known only when the
+  successful integration run's tree accompanies the selected candidate commit. Verification belongs to that run; it
+  is not an independent assurance record.
   Handoffs, decisions and unresolved steps are shown from immutable WorkGraph messages and state.
-- `unknown_evidence` names evidence the current records cannot establish: candidate tree SHA, publication authority,
-  and current pull request state. A PR URL or recorded publication result does not establish whether GitHub still
-  considers the PR open, merged, or closed.
+- `unknown_evidence` names evidence the available sources cannot establish. Candidate tree SHA remains unknown until a
+  successful integration run records it for the selected candidate. Publication authority remains unknown. Current PR
+  state is read from GitHub only when the recorded canonical PR URL matches the graph repository; unavailable or
+  invalid responses leave it unknown. The report includes the observed state, draft/merged flags, head SHA, observation
+  time, and whether the PR head matches the integrated candidate when one is recorded. GitHub checks are read by the
+  exact integrated candidate SHA and include their own observation time; unavailable or mismatched check results stay
+  unknown. This read does not change stored graph or run state.
 - Top-level `measurements` contains:
   - `unit_count`: number of units.
   - `run_count`: number of all run ids, including ids without a stored run.
@@ -62,18 +77,23 @@ flowchart LR
     Recorded values are not invented; unavailable or partial measurements are named here.
 - Top-level `pull_request_url` is included when the integrate unit has one. Otherwise it is omitted and never listed
   in `measurements.unknown`.
+- The dashboard labels WorkGraph execution status separately from the recorded pull-request link and observed GitHub
+  state. A completed graph without a PR link is not presented as published; it shows the integrate unit's recorded
+  reason and says execution completion does not establish publication. Publication authority remains unknown.
 
 ## Verification
 
 | Test | Proves |
 |---|---|
-| `TestWorkGraphReportMeasuresACompletedRun` | Measures a completed run. |
+| `TestWorkGraphReportMeasuresACompletedRun` | Measures a completed run, reports GitHub PR state, detects head mismatch, keeps failed lookups unknown, and reconstructs the same durable report after reopening graph and run stores. |
 | `TestWorkGraphReportOmitsWhatWasNotRecorded` | Omits unrecorded measurements and lists them in `unknown`. |
+| `TestWorkGraphReportRequiresExplicitGitHubPRState` | Missing or malformed PR fields and candidate checks remain unknown; explicit false/null PR fields remain valid. |
 | `TestWorkGraphReportIsHiddenFromOtherCallers` | A caller who may not read the graph receives no report. |
 | `TestPlanPinsProfileConfigurationAndRejectsStaleApproval` | The approved report source keeps profile/persona versions through restart and edits. |
 
 The Objective Workspace offers a typed JSON export. The browser validates its response shape before displaying or
-exporting it; partial usage and human-action measurements remain explicitly qualified.
+exporting it; partial usage and human-action measurements remain explicitly qualified. The browser acceptance also
+checks observed PR state, candidate-head mismatch, and publication authority separately from execution completion.
 
 Commands: `go test ./cmd/zenchron -run 'TestWorkGraphReport|TestPlanPinsProfileConfiguration' -count=1`; the
 focused Playwright acceptance lives in `dashboard/e2e/orchestration.spec.ts`.

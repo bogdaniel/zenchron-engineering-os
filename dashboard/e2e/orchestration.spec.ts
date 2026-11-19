@@ -124,6 +124,37 @@ test('plan proposal refuses unknown workflow and unlinked checkout address selec
   await expect(page.getByRole('combobox', { name: 'Repository checkout' })).toBeVisible();
 });
 
+for (const viewport of viewports) {
+  test(`delivery report distinguishes observed GitHub PR state from a changed candidate (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await mockOrchestration(page, { graphs: [graph], plans: [plan] });
+    await page.route(`**/api/v1/work-graphs/${graphID}/report`, (route) => route.fulfill(json({
+      graph_id: graphID, objective_id: objectiveID, objective_title: objective.title, plan_revision: 1,
+      status: 'completed', approved_plan: { revision: 1, status: 'approved', hash: 'h', summary: 'One producer, one review.' },
+      units: [], handoffs: [], decisions: [], outstanding_steps: [],
+      measurements: { unit_count: 0, run_count: 0, attempt_count: 0, failed_attempts: 0, review_rounds: 0, findings: 0,
+        remediation_passes: 0, decisions_requested: 0, decisions_resolved: 0, human_actions: 0,
+        human_actions_complete: false, max_concurrency: 0, runs_with_usage: 0, runs_with_cost: 0, unknown: [] },
+      unknown_evidence: ['publication_authority'], pull_request_url: 'https://github.com/acme/platform/pull/23',
+      pull_request_external_state: { number: 23, state: 'open', draft: true, merged: false,
+        head_sha: 'd'.repeat(40), candidate_matches_head: false, observed_at: now,
+        candidate_checks: { head_sha: 'c'.repeat(40), observed_at: now,
+          runs: [{ name: 'go', status: 'completed', conclusion: 'success' }] } },
+    })));
+    await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
+    await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+    const report = page.getByRole('region', { name: 'Objective delivery report' });
+    await report.getByRole('button', { name: 'View delivery report' }).click();
+    await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('pull request #23 open as a draft');
+    await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('differs from the integrated candidate');
+    await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('observed');
+    await expect(report.getByLabel('GitHub checks for integrated candidate')).toContainText('go · completed · success');
+    await expect(report).toContainText('Unknown evidence: publication authority');
+    expect(await noHorizontalScroll(page)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`delivery-report-${viewport.name}.png`), fullPage: true });
+  });
+}
+
 const noHorizontalScroll = (page: Page) => page.evaluate(() =>
   document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
@@ -461,6 +492,10 @@ test('an objective plan approved in the dashboard runs through decision, review,
   const report = panel.getByRole('region', { name: 'Objective delivery report' });
   await report.getByRole('button', { name: 'View delivery report' }).click();
   await expect(report).toContainText('Approved plan revision 1');
+  await expect(report.getByRole('heading', { name: 'Execution and publication' })).toBeVisible();
+  await expect(report).toContainText(/WorkGraph execution: (active|blocked|completed|failed|cancelled)/);
+  await expect(report).toContainText('Recorded pull request: GitHub publication is not configured');
+  await expect(report).toContainText('WorkGraph completion does not establish publication.');
   await expect(report).toContainText(`Compiled from workflow ${created.workflowID} · version ${created.workflowVersion}`);
   await expect(report.getByRole('link', { name: created.workflowID, exact: true }))
     .toHaveAttribute('href', `/?workflow=${created.workflowID}&mode=live#workflows`);
@@ -469,7 +504,8 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(report).toContainText('E2E CSV specialist v1');
   await expect(report).toContainText('codex-cli');
   await expect(report).toContainText('Worker-reported verification: not_configured');
-  await expect(report).toContainText('Unknown evidence: candidate tree SHA, publication authority, current pull request state');
+  await expect(report).toContainText('Unknown evidence: GitHub checks for the integrated candidate, publication authority, current pull request state');
+  await expect(report.locator('.objective-delivery-run').filter({ hasText: /Tree/ }).first()).toBeVisible();
   await expect(report.locator('a[href$="#reviews"]').first()).toHaveAttribute('href', /^\/\?run=.+&mode=live#reviews$/);
   await expect(report).toContainText('CSV');
   await expect(report).toContainText('GitHub publication is not configured');
@@ -493,10 +529,12 @@ test('an objective plan approved in the dashboard runs through decision, review,
   });
   if (!exported) throw new Error('Delivery JSON export did not create a download payload');
   const delivery = JSON.parse(exported) as { workflow_id: string; workflow_mode: string; unknown_evidence: string[];
-    units: { executions: { verification?: string }[] }[] };
+    units: { kind: string; executions: { verification?: string; candidate_commit?: string; candidate_tree_sha?: string }[] }[] };
   expect(delivery.workflow_id).toBe(created.workflowID);
   expect(delivery.workflow_mode).toBe('compiled');
-  expect(delivery.unknown_evidence).toContain('candidate_tree_sha');
+  expect(delivery.unknown_evidence).not.toContain('candidate_tree_sha');
+  expect(delivery.units.filter((unit) => unit.kind === 'integrate').flatMap((unit) => unit.executions)
+    .some((run) => run.candidate_commit && run.candidate_tree_sha)).toBe(true);
   expect(delivery.units.flatMap((unit) => unit.executions).some((run) => run.verification === 'not_configured')).toBe(true);
   expect(exported).not.toContain('system_prompt');
   await page.screenshot({ path: testInfo.outputPath('objective-report-desktop.png'), fullPage: true });

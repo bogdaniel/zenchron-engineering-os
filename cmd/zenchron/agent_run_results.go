@@ -17,7 +17,8 @@ func validAgentRunResult(input workerapi.AgentRunResult) bool {
 		len(input.Output) <= 20000 && len(input.Error) <= 255 &&
 		(input.Diff == nil || len(*input.Diff) <= maxAgentRunDiffSize) &&
 		input.Attempts >= 1 && input.Attempts <= maxAgentRunAttempts &&
-		validCommitSHA(input.CommitSHA) && validCommitSHA(input.BaseCommit) &&
+		validCommitSHA(input.CommitSHA) && validCommitSHA(input.CommitTreeSHA) && validCommitSHA(input.BaseCommit) &&
+		(input.CommitTreeSHA == "" || input.CommitSHA != "") &&
 		!(input.BranchPushed && input.BranchPushFailed) && len(input.ProviderVersion) <= 100 &&
 		workerapi.ValidTerminationReason(input.TerminationReason) && workerapi.ValidVerification(input.Verification) &&
 		len(input.Result) <= workerapi.MaxResultSize &&
@@ -94,7 +95,7 @@ func (store *agentRunStore) applyResult(item *agentRun, workerID string, input w
 		item.Publication, item.Publishing = publicationPullRequestFailed, item.PullRequestEnabled
 	}
 	if input.CommitSHA != "" {
-		item.CommitSHA = input.CommitSHA
+		item.CommitSHA, item.CommitTreeSHA = input.CommitSHA, input.CommitTreeSHA
 	}
 	if input.BaseCommit != "" {
 		item.BaseCommit = input.BaseCommit

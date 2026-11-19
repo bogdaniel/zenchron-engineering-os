@@ -45,6 +45,7 @@ type agentRun struct {
 	Branch             string            `json:"branch"`
 	BaseBranch         string            `json:"base_branch,omitempty"`
 	CommitSHA          string            `json:"commit_sha,omitempty"`
+	CommitTreeSHA      string            `json:"commit_tree_sha,omitempty"`
 	DiffAttempt        int               `json:"diff_attempt,omitempty"`
 	DiffAvailable      bool              `json:"diff_available,omitempty"`
 	DiffTruncated      bool              `json:"diff_truncated,omitempty"`
@@ -221,7 +222,8 @@ func validStoredAgentRun(item agentRun) bool {
 	return err == nil && len(id) == 16 && agentErr == nil && len(agentID) == 16 &&
 		projectErr == nil && len(projectID) == 16 && workerErr == nil && len(workerID) == 16 &&
 		item.AgentName != "" && item.ProjectName != "" && item.WorkerName != "" &&
-		validCommitSHA(item.CommitSHA) &&
+		validCommitSHA(item.CommitSHA) && validCommitSHA(item.CommitTreeSHA) &&
+		(item.CommitTreeSHA == "" || item.CommitSHA != "") &&
 		len(item.Prompt) > 0 && len(item.Prompt) <= 5000 && len(item.Output) <= 20000 && len(item.Error) <= 255 &&
 		len(item.PullRequestURL) <= 2048 && len(item.PullRequestError) <= 255 && item.PullRequestNumber >= 0 &&
 		(item.PullRequestURL == "" || (strings.HasPrefix(item.PullRequestURL, "https://github.com/") && item.PullRequestNumber > 0)) &&

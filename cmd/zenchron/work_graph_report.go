@@ -1,7 +1,12 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -28,6 +33,30 @@ type deliveryReport struct {
 	Measurements    deliveryMeasurements `json:"measurements"`
 	UnknownEvidence []string             `json:"unknown_evidence"`
 	PullRequestURL  string               `json:"pull_request_url,omitempty"`
+	PullRequest     *reportPullRequest   `json:"pull_request_external_state,omitempty"`
+}
+
+type reportPullRequest struct {
+	Number               int                    `json:"number"`
+	State                string                 `json:"state"`
+	Draft                bool                   `json:"draft"`
+	Merged               bool                   `json:"merged"`
+	HeadSHA              string                 `json:"head_sha"`
+	CandidateMatchesHead *bool                  `json:"candidate_matches_head,omitempty"`
+	CandidateChecks      *reportCandidateChecks `json:"candidate_checks,omitempty"`
+	ObservedAt           time.Time              `json:"observed_at"`
+}
+
+type reportCandidateChecks struct {
+	HeadSHA    string           `json:"head_sha"`
+	ObservedAt time.Time        `json:"observed_at"`
+	Runs       []reportCheckRun `json:"runs"`
+}
+
+type reportCheckRun struct {
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion,omitempty"`
 }
 
 type reportPlan struct {
@@ -37,6 +66,118 @@ type reportPlan struct {
 	Summary    string     `json:"summary"`
 	ApprovedBy string     `json:"approved_by,omitempty"`
 	ApprovedAt *time.Time `json:"approved_at,omitempty"`
+}
+
+// observePullRequest reads current state from GitHub without changing the durable report source.
+// When GitHub is unavailable or the recorded link does not match this graph's repository, the
+// existing unknown-evidence marker remains authoritative.
+func (report *deliveryReport) observePullRequest(ctx context.Context, repository string, client gitHubClient) {
+	if report.PullRequestURL == "" {
+		return
+	}
+	owner, repositoryName, ok := githubRepositoryParts(repository)
+	if !ok {
+		return
+	}
+	number, ok := reportPullRequestNumber(report.PullRequestURL, owner, repositoryName)
+	if !ok {
+		return
+	}
+	path := "/repos/" + owner + "/" + repositoryName + "/pulls/" + strconv.Itoa(number)
+	body, err := client.requestBytes(ctx, http.MethodGet, path, "application/vnd.github+json", nil, nil)
+	if err != nil {
+		return
+	}
+	var pull struct {
+		Number  int             `json:"number"`
+		State   string          `json:"state"`
+		HTMLURL string          `json:"html_url"`
+		Draft   *bool           `json:"draft"`
+		Merged  json.RawMessage `json:"merged_at"`
+		Head    struct {
+			SHA string `json:"sha"`
+		} `json:"head"`
+	}
+	if err := json.Unmarshal(body, &pull); err != nil || pull.Number != number || (pull.State != "open" && pull.State != "closed") ||
+		!fullGitSHA(pull.Head.SHA) || pull.Draft == nil || len(pull.Merged) == 0 || !json.Valid(pull.Merged) {
+		return
+	}
+	merged := string(pull.Merged) != "null"
+	if merged {
+		var mergedAt string
+		if json.Unmarshal(pull.Merged, &mergedAt) != nil {
+			return
+		}
+		if _, err := time.Parse(time.RFC3339, mergedAt); err != nil {
+			return
+		}
+	}
+	responseNumber, matchesRepository := reportPullRequestNumber(pull.HTMLURL, owner, repositoryName)
+	if !matchesRepository || responseNumber != number {
+		return
+	}
+	state := &reportPullRequest{Number: number, State: pull.State, Draft: *pull.Draft,
+		Merged: merged, HeadSHA: pull.Head.SHA, ObservedAt: time.Now().UTC()}
+	for _, unit := range report.Units {
+		if unit.Kind != unitIntegrate || !fullGitSHA(unit.Candidate) {
+			continue
+		}
+		checks, err := client.commitCheckRuns(ctx, owner, repositoryName, unit.Candidate)
+		if err != nil {
+			break
+		}
+		runs := make([]reportCheckRun, 0, len(checks))
+		valid := true
+		for _, check := range checks {
+			if check.HeadSHA != unit.Candidate || strings.TrimSpace(check.Name) == "" {
+				valid = false
+				break
+			}
+			switch check.Status {
+			case "queued", "in_progress", "completed", "waiting", "requested", "pending":
+			default:
+				valid = false
+			}
+			if !valid {
+				break
+			}
+			runs = append(runs, reportCheckRun{Name: check.Name, Status: check.Status, Conclusion: check.Conclusion})
+		}
+		if !valid {
+			break
+		}
+		state.CandidateChecks = &reportCandidateChecks{HeadSHA: unit.Candidate, ObservedAt: time.Now().UTC(), Runs: runs}
+		report.UnknownEvidence = slices.DeleteFunc(report.UnknownEvidence, func(evidence string) bool {
+			return evidence == "candidate_checks"
+		})
+		break
+	}
+	for _, unit := range report.Units {
+		if unit.Kind != unitIntegrate || unit.Candidate == "" {
+			continue
+		}
+		matches := strings.EqualFold(pull.Head.SHA, unit.Candidate)
+		state.CandidateMatchesHead = &matches
+		break
+	}
+	report.PullRequest = state
+	report.UnknownEvidence = slices.DeleteFunc(report.UnknownEvidence, func(evidence string) bool {
+		return evidence == "pull_request_external_state"
+	})
+}
+
+func reportPullRequestNumber(value, owner, repository string) (int, bool) {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme != "https" || !strings.EqualFold(parsed.Host, "github.com") ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return 0, false
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) != 4 || !strings.EqualFold(parts[0], owner) || !strings.EqualFold(parts[1], repository) || parts[2] != "pull" {
+		return 0, false
+	}
+	number, err := strconv.Atoi(parts[3])
+	return number, err == nil && number > 0
 }
 
 type reportUnit struct {
@@ -69,6 +210,7 @@ type reportExecution struct {
 	Verification    string `json:"verification,omitempty"`
 	Attempts        int    `json:"attempts"`
 	CandidateCommit string `json:"candidate_commit,omitempty"`
+	CandidateTree   string `json:"candidate_tree_sha,omitempty"`
 	ReviewVerdict   string `json:"review_verdict,omitempty"`
 	Publication     string `json:"publication,omitempty"`
 	PullRequestURL  string `json:"pull_request_url,omitempty"`
@@ -131,7 +273,7 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 		WorkflowMode: graph.WorkflowMode,
 		Status:       graph.Status, Units: make([]reportUnit, 0, len(graph.Units)), Handoffs: []reportHandoff{},
 		Decisions: []reportDecision{}, Outstanding: []reportOutstanding{},
-		UnknownEvidence: []string{"candidate_tree_sha", "publication_authority", "pull_request_external_state"}}
+		UnknownEvidence: []string{"candidate_tree_sha", "candidate_checks", "publication_authority", "pull_request_external_state"}}
 	if plan != nil {
 		report.ApprovedPlan = reportPlan{Revision: plan.Revision, Status: plan.Status, Hash: plan.Hash, Summary: plan.Summary,
 			ApprovedBy: plan.ApprovedBy, ApprovedAt: plan.ApprovedAt}
@@ -144,6 +286,11 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 		attempts = append(attempts, unitAttempts...)
 		summary := summarizeUnit(unit, runs)
 		summary.Executions = summarizeExecutions(unit, runs)
+		if unit.Kind == unitIntegrate && hasCandidateTree(unit, runs) {
+			report.UnknownEvidence = slices.DeleteFunc(report.UnknownEvidence, func(evidence string) bool {
+				return evidence == "candidate_tree_sha"
+			})
+		}
 		report.Units = append(report.Units, summary)
 		if unit.State != unitCompleted {
 			report.Outstanding = append(report.Outstanding, reportOutstanding{Key: unit.Key, State: unit.State,
@@ -186,6 +333,16 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	return report
 }
 
+func hasCandidateTree(unit workUnit, runs map[string]agentRun) bool {
+	for _, id := range unit.RunIDs {
+		run := runs[id]
+		if run.Status == "succeeded" && run.CommitSHA == unit.Candidate && run.CommitTreeSHA != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecution {
 	executions := make([]reportExecution, 0, len(unit.RunIDs))
 	for _, id := range unit.RunIDs {
@@ -194,7 +351,7 @@ func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecut
 			continue
 		}
 		execution := reportExecution{RunID: id, Status: run.Status, Attempts: run.Attempts,
-			CandidateCommit: run.CommitSHA, Provider: run.Provider, ProviderVersion: run.ProviderVersion,
+			CandidateCommit: run.CommitSHA, CandidateTree: run.CommitTreeSHA, Provider: run.Provider, ProviderVersion: run.ProviderVersion,
 			Verification: run.Verification, Publication: run.Publication, PullRequestURL: run.PullRequestURL,
 			FailureRecorded: run.Error != ""}
 		if run.Profile != nil {

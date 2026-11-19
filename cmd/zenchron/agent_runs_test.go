@@ -114,6 +114,11 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid commit id returned HTTP %d", response.Code)
 	}
+	response = call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+first.ID,
+		`{"status":"succeeded","attempts":1,"commit_tree_sha":"`+strings.Repeat("b", 40)+`"}`)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("tree without commit returned HTTP %d", response.Code)
+	}
 	tooLargeDiff, err := json.Marshal(map[string]any{
 		"status": "succeeded", "attempts": 1, "diff": strings.Repeat("x", maxAgentRunDiffSize+1),
 	})
@@ -199,15 +204,39 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 		t.Fatalf("follow-up claim = %#v, decode error = %v, HTTP %d", second, err, response.Code)
 	}
 	commitSHA := strings.Repeat("a", 40)
+	treeSHA := strings.Repeat("c", 40)
 	response = call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+second.ID,
-		`{"status":"succeeded","output":"Review addressed","attempts":2,"commit_sha":"`+commitSHA+`","diff":"diff --git a/README.md b/README.md\n+Addressed\n"}`)
-	if response.Code != http.StatusOK {
+		`{"status":"succeeded","output":"Review addressed","attempts":2,"commit_sha":"`+commitSHA+`","commit_tree_sha":"`+treeSHA+`","diff":"diff --git a/README.md b/README.md\n+Addressed\n"}`)
+	var treeEvidence agentRun
+	if err := json.NewDecoder(response.Body).Decode(&treeEvidence); err != nil || response.Code != http.StatusOK ||
+		treeEvidence.CommitSHA != commitSHA || treeEvidence.CommitTreeSHA != treeSHA {
 		t.Fatalf("finish follow-up returned HTTP %d: %s", response.Code, response.Body.String())
 	}
 	response = call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+first.ID,
 		`{"status":"succeeded","output":"stale","attempts":1}`)
 	if response.Code != http.StatusConflict {
 		t.Fatalf("duplicate result returned HTTP %d", response.Code)
+	}
+	response = call(http.MethodPost, "/api/v1/agent-runs/"+first.ID+"/request-changes",
+		`{"comment":"Publish a replacement candidate without tree evidence."}`)
+	var queuedAgain agentRun
+	if err := json.NewDecoder(response.Body).Decode(&queuedAgain); err != nil || response.Code != http.StatusOK ||
+		queuedAgain.Status != "queued" || queuedAgain.Attempts != 2 {
+		t.Fatalf("request another candidate = %#v, decode error = %v, HTTP %d", queuedAgain, err, response.Code)
+	}
+	response = call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", "")
+	var third workerapi.AgentRunCommand
+	if err := json.NewDecoder(response.Body).Decode(&third); err != nil || response.Code != http.StatusOK || third.Attempts != 3 {
+		t.Fatalf("claim replacement candidate = %#v, decode error = %v, HTTP %d", third, err, response.Code)
+	}
+	replacementSHA := strings.Repeat("d", 40)
+	response = call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+third.ID,
+		`{"status":"succeeded","output":"Replacement candidate","attempts":3,"commit_sha":"`+replacementSHA+`"}`)
+	var replacement agentRun
+	if err := json.NewDecoder(response.Body).Decode(&replacement); err != nil || response.Code != http.StatusOK ||
+		replacement.CommitSHA != replacementSHA || replacement.CommitTreeSHA != "" {
+		t.Fatalf("replacement candidate retained stale tree evidence: %#v, decode error %v, HTTP %d",
+			replacement, err, response.Code)
 	}
 	restored, err := openAgentRunStore(store.path, newWorkerRegistry(), agents)
 	if err != nil {
@@ -218,7 +247,8 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 		t.Fatalf("restored run = %#v, want succeeded with its profile snapshot", restored.items[queued.ID])
 	}
 	if !restored.items[queued.ID].DiffAvailable || restored.items[queued.ID].DiffAttempt != 2 ||
-		len(restored.items[queued.ID].ReviewComments) != 2 || restored.items[queued.ID].CommitSHA != commitSHA {
+		len(restored.items[queued.ID].ReviewComments) != 3 || restored.items[queued.ID].CommitSHA != replacementSHA ||
+		restored.items[queued.ID].CommitTreeSHA != "" {
 		t.Fatalf("restored diff metadata = %#v", restored.items[queued.ID])
 	}
 }

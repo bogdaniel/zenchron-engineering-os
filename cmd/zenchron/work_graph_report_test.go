@@ -3,11 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
@@ -37,6 +40,85 @@ func reportedUnit(t *testing.T, report deliveryReport, key string) reportUnit {
 	return report.Units[index]
 }
 
+func TestWorkGraphReportRequiresExplicitGitHubPRState(t *testing.T) {
+	valid := `"number":23,"state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"sha":"` + commit(4) + `"}`
+	for _, test := range []struct {
+		name       string
+		body       string
+		checksBody string
+		checksCode int
+		want       bool
+		wantChecks bool
+		wantRuns   int
+	}{
+		{name: "missing draft", body: `{` + valid + `,"merged_at":null}`},
+		{name: "missing merged timestamp", body: `{` + valid + `,"draft":false}`},
+		{name: "invalid merged timestamp", body: `{` + valid + `,"draft":false,"merged_at":false}`},
+		{name: "explicit false and null", body: `{` + valid + `,"draft":false,"merged_at":null}`, want: true, wantChecks: true, wantRuns: 1},
+		{name: "mismatched candidate check head", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{"check_runs":[{"name":"go","status":"completed","head_sha":"` + commit(7) + `"}]}`, want: true},
+		{name: "waiting and completed candidate checks", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{"check_runs":[{"name":"waiting","status":"waiting","head_sha":"` + commit(4) + `"},` +
+				`{"name":"go","status":"completed","head_sha":"` + commit(4) + `"}]}`, want: true, wantChecks: true, wantRuns: 2},
+		{name: "unknown candidate check status", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{"check_runs":[{"name":"go","status":"unknown","head_sha":"` + commit(4) + `"}]}`, want: true},
+		{name: "missing candidate check array", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{}`, want: true},
+		{name: "null candidate check array", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{"check_runs":null}`, want: true},
+		{name: "empty candidate check array", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{"check_runs":[]}`, want: true, wantChecks: true},
+		{name: "unavailable candidate checks", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksCode: http.StatusBadGateway, want: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			report := deliveryReport{PullRequestURL: "https://github.com/acme/platform/pull/23",
+				Units:           []reportUnit{{Kind: unitIntegrate, Candidate: commit(4)}},
+				UnknownEvidence: []string{"pull_request_external_state", "candidate_checks"}}
+			report.observePullRequest(t.Context(), "github.com/acme/platform", gitHubClient{
+				apiURL: "https://api.github.com", client: &http.Client{Transport: updateTestTransport(
+					func(request *http.Request) (*http.Response, error) {
+						status, responseBody := http.StatusOK, test.body
+						if strings.HasSuffix(request.URL.Path, "/check-runs") {
+							if request.URL.Path != "/repos/acme/platform/commits/"+commit(4)+"/check-runs" {
+								t.Fatalf("candidate check path = %s", request.URL.Path)
+							}
+							status, responseBody = test.checksCode, test.checksBody
+							if status == 0 {
+								status = http.StatusOK
+							}
+							if responseBody == "" {
+								responseBody = `{"check_runs":[{"name":"go","status":"completed","conclusion":"success","head_sha":"` + commit(4) + `"}]}`
+							}
+						} else if request.URL.Path != "/repos/acme/platform/pulls/23" {
+							t.Fatalf("request path = %s", request.URL.Path)
+						}
+						return &http.Response{StatusCode: status, Header: make(http.Header),
+							Body: io.NopCloser(strings.NewReader(responseBody)), Request: request}, nil
+					})},
+			})
+			if (report.PullRequest != nil) != test.want {
+				t.Fatalf("observed PR = %#v, want present %t", report.PullRequest, test.want)
+			}
+			if test.want && (report.PullRequest.Draft || report.PullRequest.Merged || slices.Contains(report.UnknownEvidence, "pull_request_external_state")) {
+				t.Fatalf("explicit false/null state = %#v, unknown=%v", report.PullRequest, report.UnknownEvidence)
+			}
+			if test.wantChecks != (report.PullRequest != nil && report.PullRequest.CandidateChecks != nil) {
+				t.Fatalf("candidate checks = %#v, want present %t", report.PullRequest, test.wantChecks)
+			}
+			if test.wantChecks && len(report.PullRequest.CandidateChecks.Runs) != test.wantRuns {
+				t.Fatalf("candidate check runs = %#v, want %d", report.PullRequest.CandidateChecks.Runs, test.wantRuns)
+			}
+			if !test.wantChecks && !slices.Contains(report.UnknownEvidence, "candidate_checks") {
+				t.Fatalf("unavailable candidate checks were not marked unknown: %v", report.UnknownEvidence)
+			}
+			if !test.want && !slices.Contains(report.UnknownEvidence, "pull_request_external_state") {
+				t.Fatalf("missing or invalid state removed unknown evidence: %v", report.UnknownEvidence)
+			}
+		})
+	}
+}
+
 func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	harness := newGraphHarness(t)
 	started := harness.start(harness.reviewedPlan())
@@ -60,8 +142,9 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
 		Verification: workerapi.VerificationPassed, Result: string(merged)})
 	harness.verdict(harness.claimUnit("review-all"), commit(4), `{"review":{"verdict":"accept"}}`)
-	harness.report(harness.claimUnit("integrate"), workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9),
+	harness.report(harness.claimUnit("integrate"), workerapi.AgentRunResult{CommitSHA: commit(4), CommitTreeSHA: commit(5), BaseCommit: commit(9),
 		Output: "Merged.", Verification: workerapi.VerificationPassed, BranchPushed: true, Result: string(merged)})
+	harness.pullHead = commit(4)
 
 	before := harness.graph()
 	report, body := harness.deliveryReport(started.ID)
@@ -106,13 +189,71 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 		len(review.RunIDs) != 2 || review.Attempts != 2 || !slices.Equal(review.Providers, []string{workerapi.ProviderCodex}) {
 		t.Fatalf("ui unit = %#v, review unit = %#v", uiUnit, review)
 	}
-	if !slices.Equal(report.UnknownEvidence, []string{"candidate_tree_sha", "publication_authority", "pull_request_external_state"}) {
+	if !slices.Equal(report.UnknownEvidence, []string{"publication_authority"}) {
 		t.Fatalf("unrecorded evidence = %v", report.UnknownEvidence)
+	}
+	if report.PullRequest == nil || report.PullRequest.State != "open" || !report.PullRequest.Draft || report.PullRequest.Merged ||
+		report.PullRequest.HeadSHA != commit(4) || report.PullRequest.CandidateMatchesHead == nil || !*report.PullRequest.CandidateMatchesHead ||
+		report.PullRequest.ObservedAt.IsZero() || slices.Contains(report.UnknownEvidence, "pull_request_external_state") {
+		t.Fatalf("external pull request state = %#v; unknown evidence = %v", report.PullRequest, report.UnknownEvidence)
+	}
+	if integration := reportedUnit(t, report, "integrate"); len(integration.Executions) != 1 ||
+		integration.Executions[0].CandidateTree != commit(5) {
+		t.Fatalf("integration tree provenance = %#v", integration.Executions)
+	}
+	original := report
+	harness.restart()
+	replayed, _ := harness.deliveryReport(started.ID)
+	// GitHub observation time changes per read; durable report evidence should not.
+	if original.PullRequest != nil {
+		observed := *original.PullRequest
+		observed.ObservedAt = time.Time{}
+		if observed.CandidateChecks != nil {
+			checks := *observed.CandidateChecks
+			checks.ObservedAt = time.Time{}
+			observed.CandidateChecks = &checks
+		}
+		original.PullRequest = &observed
+	}
+	if replayed.PullRequest != nil {
+		observed := *replayed.PullRequest
+		observed.ObservedAt = time.Time{}
+		if observed.CandidateChecks != nil {
+			checks := *observed.CandidateChecks
+			checks.ObservedAt = time.Time{}
+			observed.CandidateChecks = &checks
+		}
+		replayed.PullRequest = &observed
+	}
+	if !reflect.DeepEqual(replayed, original) {
+		t.Fatalf("report after restart = %#v, before restart %#v", replayed, original)
 	}
 
 	// Reading the report changed nothing about the graph.
 	if after := harness.graph(); after.Revision != before.Revision || !after.UpdatedAt.Equal(before.UpdatedAt) {
 		t.Fatalf("graph moved from revision %d at %s to revision %d at %s", before.Revision, before.UpdatedAt, after.Revision, after.UpdatedAt)
+	}
+	harness.store.graphs.mu.Lock()
+	graph := harness.store.graphs.graphs[started.ID]
+	for index := range graph.Units {
+		if graph.Units[index].Kind == unitIntegrate {
+			graph.Units[index].Candidate = commit(6)
+		}
+	}
+	harness.store.graphs.mu.Unlock()
+	stale, _ := harness.deliveryReport(started.ID)
+	if !slices.Contains(stale.UnknownEvidence, "candidate_tree_sha") {
+		t.Fatalf("tree for another candidate was accepted: %v", stale.UnknownEvidence)
+	}
+	harness.pullHead = commit(7)
+	changed, _ := harness.deliveryReport(started.ID)
+	if changed.PullRequest == nil || changed.PullRequest.CandidateMatchesHead == nil || *changed.PullRequest.CandidateMatchesHead {
+		t.Fatalf("changed external PR head was not distinguished from the candidate: %#v", changed.PullRequest)
+	}
+	harness.failPullStatus = true
+	unavailable, _ := harness.deliveryReport(started.ID)
+	if unavailable.PullRequest != nil || !slices.Contains(unavailable.UnknownEvidence, "pull_request_external_state") {
+		t.Fatalf("unavailable GitHub state was presented as observed: %#v, unknown=%v", unavailable.PullRequest, unavailable.UnknownEvidence)
 	}
 }
 

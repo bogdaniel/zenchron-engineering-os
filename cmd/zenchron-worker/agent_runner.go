@@ -265,6 +265,11 @@ func (runner *agentRunner) deliver(
 		result.Status = "succeeded"
 		return result
 	}
+	result.CommitTreeSHA, err = gitOutput(gitCtx, "-C", worktree, "rev-parse", "--verify", result.CommitSHA+"^{tree}")
+	if err != nil {
+		return failed(result, workerapi.TerminationWorkerError, "Could not read the committed candidate tree.")
+	}
+	result.CommitTreeSHA = strings.TrimSpace(result.CommitTreeSHA)
 	reporter.emit("status", "Committed "+result.CommitSHA[:12]+" on the run branch.")
 	result.Verification = runVerification(ctx, workspace, runner.config.verificationCommands(project.Remote),
 		runner.limits.verification, reporter.emit)
