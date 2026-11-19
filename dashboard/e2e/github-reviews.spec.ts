@@ -16,11 +16,14 @@ test('Reviews replaces the loading overlay after an empty GitHub response', asyn
     status: 200, contentType: 'application/json', body: '[]',
   }));
   await page.route(`**/api/v1/projects/${projectID}/issues`, (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: '[]',
+    status: 200, contentType: 'application/json', headers: { 'X-Zenchron-Complete': 'false' }, body: '[]',
   }));
   await page.goto('/#reviews');
   await expect(page.locator('.reviews-grid-wrap')).toContainText('No open pull requests in this repository.');
   await expect(page.locator('.reviews-grid-wrap')).not.toContainText('Loading GitHub items');
+  await page.getByRole('button', { name: 'Issues' }).click();
+  await expect(page.getByRole('navigation', { name: 'Issues pages' }).getByRole('status'))
+    .toHaveText('Showing newest 100; results may be incomplete.');
 });
 
 test('Live Reviews merges the exact inspected pull request head through the control plane', async ({ page }) => {
@@ -74,6 +77,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   const issueStates: string[] = [];
   let issueState = 'open';
   let canQueue = true;
+  let requestChangesRecordedAsComment = false;
   await page.route('**/api/v1/projects', (route) => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify([{
@@ -129,6 +133,7 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       status: 'submitted', agent_run_linked: true,
       agent_run_queued: review.event === 'REQUEST_CHANGES' && canQueue,
+      github_request_changes_recorded_as_comment: requestChangesRecordedAsComment,
     }) });
   });
   const writes: string[] = [];
@@ -250,6 +255,21 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(page.locator('.reviews-provider-card')).toContainText('Improve agent review flow');
   await expect(page.locator('.reviews-detail-heading p')).toHaveCSS('font-size', '11px');
   const search = page.getByRole('textbox', { name: 'Search pull requests' });
+  await page.getByRole('button', { name: 'All 2' }).click();
+  await page.getByRole('button', { name: 'Conversations' }).click();
+  await page.getByLabel('GitHub pull request review').fill('Draft for the selected PR 42');
+  await search.fill('43');
+  await expect(page.locator('.reviews-detail-heading')).toContainText('No open pull requests');
+  await expect(page.getByLabel('GitHub pull request review')).toHaveCount(0);
+  await search.fill('');
+  await expect(page.locator('.reviews-detail-heading')).toContainText('#42 Improve agent review flow');
+  await expect(page.getByLabel('GitHub pull request review')).toHaveValue('');
+  await page.locator('.reviews-provider-card').filter({ hasText: '#43' }).click();
+  await expect(page.locator('.reviews-detail-heading')).toContainText('#43 Add review checklist coverage');
+  await expect(page.getByLabel('GitHub pull request review')).toHaveValue('');
+  await page.locator('.reviews-provider-card').filter({ hasText: '#42' }).click();
+  await expect(page.locator('.reviews-detail-heading')).toContainText('#42 Improve agent review flow');
+  await detailTabs.getByRole('button', { name: 'Code changes' }).click();
   await search.fill('42');
   await expect(page.locator('.reviews-provider-card')).toContainText('Improve agent review flow');
   await search.fill(`agent-run/${runID}`);
@@ -298,8 +318,10 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Comment submitted to GitHub and attached to the agent run.');
   await page.getByLabel('GitHub pull request review').fill('Please add retry coverage before merging.');
+  requestChangesRecordedAsComment = true;
   await page.locator('.reviews-detail-tab-panel').getByRole('button', { name: 'Request changes' }).click();
-  await expect(page.getByRole('status')).toHaveText('Changes requested on GitHub; agent run queued.');
+  await expect(page.getByRole('status')).toHaveText('GitHub recorded a comment; the agent run queued the requested changes.');
+  requestChangesRecordedAsComment = false;
   canQueue = false;
   await page.getByLabel('GitHub pull request review').fill('Keep this feedback until the worker is available.');
   await page.locator('.reviews-detail-tab-panel').getByRole('button', { name: 'Request changes' }).click();

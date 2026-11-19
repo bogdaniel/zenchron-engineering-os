@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -325,11 +326,10 @@ const (
 	finishRetryDelay = 3 * time.Second
 )
 
-// finish delivers the result. A dropped connection or a server error would otherwise discard hours of
-// work and repeat the whole run, so those are retried a few times. A conflict after an unanswered send
-// means the earlier send was applied.
+// finish retries failed deliveries and only treats a conflict as delivered when the server confirms
+// that this attempt's result was already accepted.
 func (runner *agentRunner) finish(ctx context.Context, runID string, result workerapi.AgentRunResult) error {
-	body, err := json.Marshal(result)
+	body, err := encodeAgentRunResult(result)
 	if err != nil {
 		return fmt.Errorf("encode agent run result: %w", err)
 	}
@@ -339,14 +339,15 @@ func (runner *agentRunner) finish(ctx context.Context, runID string, result work
 	client.Timeout = time.Minute
 	var lastErr error
 	for attempt := 1; attempt <= finishAttempts; attempt++ {
-		status, err := putJSON(ctx, &client, endpoint, body)
+		status, responseBody, err := putJSON(ctx, &client, endpoint, body)
 		switch {
 		case err == nil && status == http.StatusOK:
 			return nil
-		case err == nil && status == http.StatusConflict && lastErr != nil:
+		case err == nil && status == http.StatusConflict && lastErr != nil &&
+			strings.TrimSpace(responseBody) == workerapi.AgentRunResultAlreadyAccepted:
 			return nil
 		case err == nil && status < http.StatusInternalServerError:
-			return fmt.Errorf("agent run result returned HTTP %d", status)
+			return fmt.Errorf("agent run result returned HTTP %d: %s", status, strings.TrimSpace(responseBody))
 		case err != nil:
 			lastErr = err
 		default:
@@ -361,6 +362,48 @@ func (runner *agentRunner) finish(ctx context.Context, runID string, result work
 	return fmt.Errorf("send agent run result: %w", lastErr)
 }
 
+func encodeAgentRunResult(result workerapi.AgentRunResult) ([]byte, error) {
+	encode := func(result workerapi.AgentRunResult) ([]byte, error) {
+		var body bytes.Buffer
+		encoder := json.NewEncoder(&body)
+		encoder.SetEscapeHTML(false)
+		if err := encoder.Encode(result); err != nil {
+			return nil, err
+		}
+		return bytes.TrimSuffix(body.Bytes(), []byte{'\n'}), nil
+	}
+	body, err := encode(result)
+	if err != nil || len(body) <= workerapi.MaxJSONRequestBodySize {
+		return body, err
+	}
+	if result.Diff == nil {
+		return nil, fmt.Errorf("encoded agent run result exceeds %d bytes", workerapi.MaxJSONRequestBodySize)
+	}
+
+	diff := []rune(*result.Diff)
+	low, high := 0, len(diff)
+	var bounded []byte
+	for low <= high {
+		middle := low + (high-low)/2
+		truncated := string(diff[:middle])
+		candidate := result
+		candidate.Diff, candidate.DiffTruncated = &truncated, true
+		encoded, err := encode(candidate)
+		if err != nil {
+			return nil, err
+		}
+		if len(encoded) <= workerapi.MaxJSONRequestBodySize {
+			bounded, low = encoded, middle+1
+			continue
+		}
+		high = middle - 1
+	}
+	if bounded == nil {
+		return nil, fmt.Errorf("agent run result exceeds %d bytes without its diff", workerapi.MaxJSONRequestBodySize)
+	}
+	return bounded, nil
+}
+
 func (runner *agentRunner) finishDelay() time.Duration {
 	if runner.finishRetryDelay > 0 {
 		return runner.finishRetryDelay
@@ -368,16 +411,20 @@ func (runner *agentRunner) finishDelay() time.Duration {
 	return finishRetryDelay
 }
 
-func putJSON(ctx context.Context, client *http.Client, endpoint string, body []byte) (int, error) {
+func putJSON(ctx context.Context, client *http.Client, endpoint string, body []byte) (int, string, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	request.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	defer response.Body.Close()
-	return response.StatusCode, nil
+	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 1024))
+	if err != nil {
+		return response.StatusCode, "", err
+	}
+	return response.StatusCode, string(responseBody), nil
 }

@@ -105,9 +105,11 @@ func run() error {
 	runner.slots = make(chan struct{}, concurrency)
 	// Runs stop with ctx; the worker exits only after each has released its worktree.
 	defer runner.running.Wait()
-	for _, provider := range runner.providers {
-		provider.detect(ctx)
-	}
+	providersDetected := detectProvidersAsync(ctx, runner.providers)
+	defer func() {
+		stop()
+		<-providersDetected
+	}()
 	ticker := time.NewTicker(workerHeartbeatInterval)
 	defer ticker.Stop()
 	for {
@@ -115,12 +117,24 @@ func run() error {
 		if err != nil {
 			log.Printf("project discovery failed: %v", err)
 		} else {
-			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects), Providers: runner.providerStatuses(),
+			providersReady := false
+			select {
+			case <-providersDetected:
+				providersReady = true
+			default:
+			}
+			var providers []workerapi.ProviderStatus
+			if providersReady {
+				providers = runner.providerStatuses()
+			}
+			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects), Providers: providers,
 				ProtocolVersion: workerapi.ProtocolVersion, ReleaseRevision: os.Getenv("ZENCHRON_RELEASE_REVISION")}
 			if err := sendHeartbeat(ctx, runner.client, baseURL, workerID, heartbeat); err != nil {
 				log.Printf("worker heartbeat failed: %v", err)
-			} else if err := runner.dispatch(ctx, projects); err != nil {
-				log.Printf("worker command failed: %v", err)
+			} else if providersReady {
+				if err := runner.dispatch(ctx, projects); err != nil {
+					log.Printf("worker command failed: %v", err)
+				}
 			}
 		}
 		select {
@@ -129,6 +143,17 @@ func run() error {
 		case <-ticker.C:
 		}
 	}
+}
+
+func detectProvidersAsync(ctx context.Context, providers map[string]*cliProvider) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for _, provider := range providers {
+			provider.detect(ctx)
+		}
+	}()
+	return done
 }
 
 const (

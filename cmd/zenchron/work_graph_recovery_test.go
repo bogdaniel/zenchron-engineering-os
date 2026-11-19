@@ -61,6 +61,65 @@ func TestWorkGraphRecoversAfterRestartWithoutQueueingWorkTwice(t *testing.T) {
 	}
 }
 
+func TestIntegrationWaitsForRetriedTransitiveProducer(t *testing.T) {
+	harness := newGraphHarness(t)
+	graph := harness.start(harness.planBody(
+		unitJSON("api", unitProduce, harness.profile.ID),
+		unitJSON("ui", unitProduce, harness.second.ID, "api"),
+		unitJSON("review-api", unitReview, harness.reviewer.ID, "api"),
+		unitJSON("integrate", unitIntegrate, "", "ui")))
+	api := harness.claimUnit("api")
+	harness.handOff(api, commit(1), "api")
+	ui, review := harness.claimUnit("ui"), harness.claimUnit("review-api")
+	harness.verdict(review, commit(1), blockAPI)
+	failedAttempt := harness.claimUnit("api")
+	harness.report(failedAttempt, workerapi.AgentRunResult{
+		CommitSHA: commit(1), BaseCommit: commit(9), Output: "No handoff.",
+	})
+	lastAttempt := harness.claimUnit("api")
+	if lastAttempt.Attempts != 3 {
+		t.Fatalf("last producer attempt = %d, want 3", lastAttempt.Attempts)
+	}
+	harness.handOff(ui, commit(2), "ui")
+	harness.report(lastAttempt, workerapi.AgentRunResult{
+		CommitSHA: commit(1), BaseCommit: commit(9), Output: "No handoff.",
+	})
+	graph = harness.graph()
+	if unit := graph.unit("api"); unit.Failure == "" || graph.unit("integrate").State != unitBlocked {
+		t.Fatalf("exhausted producer did not block integration: %#v", unit)
+	}
+	retryPath := "/api/v1/work-graphs/" + graph.ID + "/units/api/retry"
+	if response := harness.call(http.MethodPost, retryPath, ""); response.Code != http.StatusOK {
+		t.Fatalf("retry returned HTTP %d", response.Code)
+	}
+	graph = harness.graph()
+	apiUnit := graph.unit("api")
+	if len(apiUnit.RunIDs) == 0 {
+		t.Fatal("producer retry did not create a run")
+	}
+	retried, exists := harness.store.get(apiUnit.RunIDs[len(apiUnit.RunIDs)-1])
+	if !exists || retried.ID == api.ID || retried.Branch == api.Branch || retried.Status != "queued" {
+		t.Fatalf("retry did not queue a fresh producer run and branch: %#v", retried)
+	}
+	if graph.unit("api").State != unitQueued || graph.unit("api").Candidate != commit(1) ||
+		graph.unit("integrate").State != unitWaiting || len(graph.unit("integrate").RunIDs) != 0 || harness.pullCreates != 0 {
+		t.Fatalf("integration advanced during producer retry: api %#v, integrate %#v, pull requests %d",
+			graph.unit("api"), graph.unit("integrate"), harness.pullCreates)
+	}
+	retriedAPI := harness.claimUnit("api")
+	harness.handOff(retriedAPI, commit(3), "api retry")
+	graph = harness.graph()
+	integrationUnit := graph.unit("integrate")
+	if len(integrationUnit.RunIDs) == 0 {
+		t.Fatal("integration did not start after every producer settled")
+	}
+	integration, exists := harness.store.get(integrationUnit.RunIDs[0])
+	if !exists || len(integration.Merge) != 2 || integration.Merge[0].Branch != retriedAPI.Branch ||
+		integration.Merge[0].Commit != commit(3) {
+		t.Fatalf("integration inputs pair a producer branch with a stale candidate: %#v", integration.Merge)
+	}
+}
+
 func TestIntegrationConflictGoesToItsOwnerAndStaleInputsFailVisibly(t *testing.T) {
 	harness := newGraphHarness(t)
 	harness.start(harness.twoProducerPlan())
@@ -161,6 +220,34 @@ func TestDecisionRequestBlocksItsUnitUntilAPersonResolvesIt(t *testing.T) {
 	if later := harness.claimUnit("api"); later.Attempts != 3 || !strings.Contains(later.Prompt, "Use a comma.") ||
 		!strings.Contains(later.Prompt, "Add a header.") {
 		t.Fatalf("pass after the handoff = attempt %d, prompt %q", later.Attempts, later.Prompt)
+	}
+}
+
+func TestRetryUnitRejectsAnExhaustedRunBudget(t *testing.T) {
+	harness := newGraphHarness(t)
+	graph := harness.start(harness.twoProducerPlan())
+	harness.store.graphs.mu.Lock()
+	stored := harness.store.graphs.graphs[graph.ID]
+	unit := stored.unit("api")
+	unit.RunIDs = make([]string, maxUnitRuns)
+	for index := range unit.RunIDs {
+		unit.RunIDs[index] = strings.Repeat("a", 32)
+	}
+	unit.Failure, stored.Status = "The unit used all of its runs.", graphFailed
+	revision := stored.Revision
+	harness.store.graphs.mu.Unlock()
+
+	path := "/api/v1/work-graphs/" + graph.ID + "/units/api/retry"
+	response := harness.call(http.MethodPost, path, "")
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "used all") {
+		t.Fatalf("retry of exhausted unit returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+	harness.store.graphs.mu.Lock()
+	defer harness.store.graphs.mu.Unlock()
+	stored = harness.store.graphs.graphs[graph.ID]
+	unit = stored.unit("api")
+	if stored.Revision != revision || unit.Failure == "" || unit.Restart {
+		t.Fatalf("rejected retry changed graph revision or failure state: %#v", unit)
 	}
 }
 

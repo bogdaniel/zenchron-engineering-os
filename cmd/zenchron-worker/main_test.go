@@ -8,7 +8,9 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
@@ -79,6 +81,65 @@ func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
 			Projects: wireProjects([]discoveredProject{project})}); err != nil {
 		t.Fatalf("sendHeartbeat: %v", err)
 	}
+}
+
+func TestProviderDetectionDoesNotBlockWorkerHeartbeat(t *testing.T) {
+	binDir := t.TempDir()
+	if err := os.WriteFile(binDir+"/fake-cli", []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+":"+os.Getenv("PATH"))
+	started := make(chan struct{})
+	release := make(chan struct{})
+	provider := &cliProvider{
+		binary: "fake-cli", versionArgs: []string{"--version"}, readyArgs: []string{"auth"},
+		isReady: func([]byte, error) bool { return true },
+		confinement: func(context.Context, string) error {
+			close(started)
+			<-release
+			return nil
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := detectProvidersAsync(ctx, map[string]*cliProvider{"fake": provider})
+	var releaseOnce sync.Once
+	stopDetection := func() {
+		cancel()
+		releaseOnce.Do(func() { close(release) })
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("provider detection did not stop after its blocked probe was released")
+		}
+	}
+	t.Cleanup(stopDetection)
+	select {
+	case <-started:
+	case <-done:
+		t.Fatal("provider detection exited before reaching the blocked confinement probe")
+	case <-time.After(5 * time.Second):
+		t.Fatal("provider detection did not reach the confinement probe")
+	}
+	select {
+	case <-done:
+		t.Fatal("provider detection completed before the blocked probe was released")
+	default:
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	baseURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sendHeartbeat(context.Background(), server.Client(), baseURL,
+		"0123456789abcdef0123456789abcdef", workerapi.Heartbeat{ProtocolVersion: workerapi.ProtocolVersion,
+			ReleaseRevision: "main-test"}); err != nil {
+		t.Fatalf("heartbeat while provider detection is blocked: %v", err)
+	}
+	stopDetection()
 }
 
 func TestWorkerHTTPClientAddsBearerCredential(t *testing.T) {

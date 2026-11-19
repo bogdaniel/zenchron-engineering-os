@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
@@ -93,6 +94,52 @@ func TestFailedCandidateWaitsForExplicitRetryOrNewMain(t *testing.T) {
 	}
 	if shouldDeferFailedCandidate(status, failed, failed, false) {
 		t.Fatal("currently running failed revision remained in failed state")
+	}
+}
+
+func TestFailUpdatePersistsUTF8SafeBoundedReason(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "system-update.json")
+	runtime := &managedRuntime{statusPath: path, status: updater.Status{LatestRevision: "0123456789abcdef0123456789abcdef01234567"}}
+	reason := strings.Repeat("a", 499) + "✓" + strings.Repeat("x", 20)
+	if err := runtime.failUpdate("failed", reason); err == nil {
+		t.Fatal("failed update was reported as successful")
+	}
+	status, err := updater.ReadStatus(path)
+	if err != nil {
+		t.Fatalf("read persisted update status: %v", err)
+	}
+	if len(status.LastFailureReason) > 500 || !utf8.ValidString(status.LastFailureReason) {
+		t.Fatalf("persisted failure reason has invalid size or encoding: %d bytes, valid UTF-8=%t",
+			len(status.LastFailureReason), utf8.ValidString(status.LastFailureReason))
+	}
+	if status.LastFailureReason != strings.Repeat("a", 499) {
+		t.Fatalf("persisted failure reason = %q, want truncated text before split rune", status.LastFailureReason)
+	}
+}
+
+func TestOnlyFailedUpdatesSuppressAutomaticRetry(t *testing.T) {
+	candidate := "abcdef0123456789abcdef0123456789abcdef01"
+	for _, test := range []struct {
+		state     string
+		wantDefer bool
+	}{
+		{state: "blocked"},
+		{state: "failed", wantDefer: true},
+	} {
+		t.Run(test.state, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "system-update.json")
+			runtime := &managedRuntime{statusPath: path, status: updater.Status{LatestRevision: candidate}}
+			if err := runtime.failUpdate(test.state, "transient fetch failure"); err == nil {
+				t.Fatal("update failure was not reported")
+			}
+			status, err := updater.ReadStatus(path)
+			if err != nil || status.State != test.state || status.LastFailureReason == "" {
+				t.Fatalf("persisted update status = %#v, %v", status, err)
+			}
+			if got := shouldDeferFailedCandidate(status, candidate, "previous", false); got != test.wantDefer {
+				t.Fatalf("automatic retry defer = %t, want %t", got, test.wantDefer)
+			}
+		})
 	}
 }
 

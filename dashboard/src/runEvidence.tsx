@@ -60,8 +60,12 @@ type Review = { id: number; state: string; author: string };
 function outstanding(checks: Check[], reviews: Review[]) {
   const failing = checks.filter((check) => check.status === 'completed' && !passingConclusions.includes(check.conclusion ?? '')).length;
   const pending = checks.filter((check) => check.status !== 'completed').length;
-  // The newest review of each reviewer is the one that counts.
-  const latest = new Map(reviews.map((review) => [review.author, review.state.toLowerCase()]));
+  // A comment-only review does not change the reviewer's outstanding decision.
+  const latest = new Map<string, string>();
+  for (const review of reviews) {
+    const state = review.state.toLowerCase();
+    if (state === 'approved' || state === 'changes_requested' || state === 'dismissed') latest.set(review.author, state);
+  }
   const requesters = [...latest].filter(([, state]) => state === 'changes_requested').map(([author]) => author);
   const parts = [
     failing ? `${failing} failing check${failing === 1 ? '' : 's'}` : '',

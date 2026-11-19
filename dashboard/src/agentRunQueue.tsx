@@ -49,7 +49,10 @@ export function runReadiness(provider: string | undefined, worker: RunWorker | u
 async function loadIssueOptions(projectID: string) {
   const response = await fetch(`/api/v1/projects/${projectID}/issues`);
   if (!response.ok) throw new Error(`GitHub issues are unavailable (${response.status})`);
-  return issueOptionsSchema.parse(await response.json());
+  return {
+    items: issueOptionsSchema.parse(await response.json()),
+    complete: response.headers.get('X-Zenchron-Complete') !== 'false',
+  };
 }
 
 /** Lets a run start from an open GitHub issue of the selected project. Choosing none keeps a prompt-only run. */
@@ -74,15 +77,18 @@ export function RunIssueSelect({ projectID, value, onChange }: {
     },
     onSuccess: (issue) => {
       // GitHub's issue list can lag behind creation, so the new issue is added to the cached list directly.
-      queryClient.setQueryData<z.infer<typeof issueOptionsSchema>>(['run-issue-options', projectID],
-        (current) => [issue, ...(current ?? []).filter((item) => item.number !== issue.number)]);
+      queryClient.setQueryData<Awaited<ReturnType<typeof loadIssueOptions>>>(['run-issue-options', projectID],
+        (current) => ({
+          items: [issue, ...(current?.items ?? []).filter((item) => item.number !== issue.number)],
+          complete: current?.complete ?? true,
+        }));
       onChange(issue.number);
       setTitle('');
       setBody('');
       setDrafting(false);
     },
   });
-  const options = (issues.data ?? []).map((issue) => ({ value: String(issue.number), label: `#${issue.number} ${issue.title}` }));
+  const options = (issues.data?.items ?? []).map((issue) => ({ value: String(issue.number), label: `#${issue.number} ${issue.title}` }));
   return <>
     <Select label="GitHub issue (optional)" data={options} value={value === null ? null : String(value)}
       onChange={(selected) => onChange(selected === null ? null : Number(selected))}
@@ -90,6 +96,9 @@ export function RunIssueSelect({ projectID, value, onChange }: {
       disabled={!options.length} searchable clearable nothingFoundMessage="No matching issue" />
     {issues.isError && <Text className="agents-issue-note" role="status">
       GitHub issues are unavailable for this project; the run can still start from a task prompt.
+    </Text>}
+    {issues.data?.complete === false && <Text className="agents-issue-note" role="status">
+      The issue list is incomplete. Choose from the newest 100 issues or open GitHub to find another issue.
     </Text>}
     {value !== null && <Text className="agents-issue-note" role="status">
       The agent receives the issue text and the pull request will close issue #{value}.

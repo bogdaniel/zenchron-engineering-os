@@ -21,6 +21,7 @@ const (
 	maxAgentRuns              = 200
 	maxAgentRunAttempts       = 3
 	maxAgentRunDiffSize       = 128 << 10
+	maxAgentRunStateFileSize  = 64 << 20
 	maxIssueContextSize       = 12_000
 	runAdmissionPausedMessage = "run admission is paused for a managed release transition"
 )
@@ -33,7 +34,7 @@ const (
 	publicationNoChanges         = "no_changes"
 )
 
-// ponytail: 200 runs × 3 attempts × 128 KiB bounds diff storage; add retention if run history grows.
+// ponytail: 64 MiB run-state ceiling; externalize large run fields before increasing run or field limits.
 
 type agentRun struct {
 	ID                 string            `json:"id"`
@@ -185,7 +186,7 @@ func openAgentRunStore(path string, registry *workerRegistry, agents *agentProfi
 		Version int                 `json:"version"`
 		Items   map[string]agentRun `json:"items"`
 	}
-	exists, err := loadStateFile(path, &state)
+	exists, err := loadStateFileWithLimit(path, &state, maxAgentRunStateFileSize)
 	if err != nil {
 		return nil, fmt.Errorf("load agent runs: %w", err)
 	}
@@ -266,10 +267,10 @@ func (store *agentRunStore) persistLocked() error {
 	if store.path == "" {
 		return nil
 	}
-	return writeStateFile(store.path, struct {
+	return writeStateFileWithLimit(store.path, struct {
 		Version int                 `json:"version"`
 		Items   map[string]agentRun `json:"items"`
-	}{stateFileVersion, store.items})
+	}{stateFileVersion, store.items}, maxAgentRunStateFileSize)
 }
 
 // authorized hides a run from callers who may not touch its repository, exactly as if it did not exist.

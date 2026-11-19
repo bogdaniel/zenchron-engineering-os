@@ -236,13 +236,14 @@ func TestPullRequestPublicationRetriesWithoutDuplicates(t *testing.T) {
 		failed.PullRequestNumber != 0 || failed.PullRequestError == "" {
 		t.Fatalf("run after GitHub failure = %#v, HTTP %d", failed, status)
 	}
-	if _, status := harness.finish(run.ID, pushedResult); status != http.StatusConflict {
-		t.Fatalf("repeated worker result returned HTTP %d, want conflict", status)
+	response := harness.call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+run.ID, pushedResult)
+	if response.Code != http.StatusConflict || strings.TrimSpace(response.Body.String()) != "agent run result was already accepted" {
+		t.Fatalf("repeated worker result = HTTP %d, %q", response.Code, response.Body.String())
 	}
 	harness.mu.Lock()
 	harness.failPullCreate = false
 	harness.mu.Unlock()
-	response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", "")
+	response = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", "")
 	var published agentRun
 	if err := json.NewDecoder(response.Body).Decode(&published); err != nil || response.Code != http.StatusOK ||
 		published.Publication != publicationPublished || published.PullRequestNumber != 23 || published.PullRequestError != "" {
@@ -259,6 +260,57 @@ func TestPullRequestPublicationRetriesWithoutDuplicates(t *testing.T) {
 	defer harness.mu.Unlock()
 	if harness.pullCreates != 2 {
 		t.Fatalf("GitHub received %d pull request creations, want one failure and one success", harness.pullCreates)
+	}
+}
+
+func TestPullRequestPublicationDoesNotOverwriteANewerAttempt(t *testing.T) {
+	for _, path := range []string{"worker result", "manual retry"} {
+		t.Run(path, func(t *testing.T) {
+			harness := newDeliveryHarness(t, workerapi.ProviderCodex)
+			run := harness.createIssueRun()
+			harness.claim()
+			var expected agentRun
+			if path == "manual retry" {
+				harness.failPullCreate = true
+				if finished, status := harness.finish(run.ID, pushedResult); status != http.StatusOK ||
+					finished.Publication != publicationPullRequestFailed {
+					t.Fatalf("initial publication = %#v, HTTP %d", finished, status)
+				}
+				harness.mu.Lock()
+				harness.failPullCreate = false
+				harness.mu.Unlock()
+			}
+			harness.duringPullCreate = func() {
+				response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/request-changes", `{"comment":"Revise the change."}`)
+				if response.Code != http.StatusOK {
+					t.Errorf("request changes during publication returned HTTP %d", response.Code)
+				}
+				if command := harness.claim(); command.Attempts != 2 {
+					t.Errorf("claimed attempt %d during publication, want 2", command.Attempts)
+				}
+				harness.store.mu.Lock()
+				expected = harness.store.items[run.ID]
+				harness.store.mu.Unlock()
+			}
+
+			var status int
+			if path == "manual retry" {
+				status = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", "").Code
+			} else {
+				_, status = harness.finish(run.ID, pushedResult)
+			}
+			if status != http.StatusConflict {
+				t.Fatalf("publication after attempt changed returned HTTP %d, want conflict", status)
+			}
+			harness.store.mu.Lock()
+			current := harness.store.items[run.ID]
+			harness.store.mu.Unlock()
+			if current.Status != expected.Status || current.Attempts != expected.Attempts || current.Publication != expected.Publication ||
+				current.PullRequestError != expected.PullRequestError || current.PullRequestNumber != expected.PullRequestNumber ||
+				current.Publishing != expected.Publishing {
+				t.Fatalf("late publication changed attempt 2: %#v", current)
+			}
+		})
 	}
 }
 
