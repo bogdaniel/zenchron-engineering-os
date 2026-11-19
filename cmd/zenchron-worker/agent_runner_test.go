@@ -36,9 +36,12 @@ type runHarness struct {
 	// progressStatus, when set, is returned for every progress report after the first.
 	progressStatus int
 	// finishFailures is how many result deliveries fail with a server error before one succeeds.
-	finishFailures int
-	finishCalls    int
-	finishBodySize int64
+	finishFailures              int
+	finishAcceptedBeforeTimeout bool
+	finishDropResponse          bool
+	finishConflictBody          string
+	finishCalls                 int
+	finishBodySize              int64
 	// queue, when set, is handed out one command per claim instead of repeating command.
 	queue []workerapi.AgentRunCommand
 }
@@ -133,7 +136,24 @@ func (harness *runHarness) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		harness.finishCalls++
 		if harness.finishCalls <= harness.finishFailures {
+			if harness.finishAcceptedBeforeTimeout {
+				harness.results = append(harness.results, result)
+			}
+			if harness.finishDropResponse {
+				connection, _, err := w.(http.Hijacker).Hijack()
+				if err != nil {
+					harness.t.Errorf("drop finish response: %v", err)
+					return
+				}
+				_ = connection.Close()
+				return
+			}
 			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		if harness.finishConflictBody != "" {
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, harness.finishConflictBody)
 			return
 		}
 		harness.results = append(harness.results, result)
@@ -373,22 +393,6 @@ func TestStaleLeaseStopsAttemptWithoutReportingResult(t *testing.T) {
 	projects := []discoveredProject{{ID: agentRunTestID, Name: "repository", Path: harness.repository}}
 	if removed, _, err := cleanupWorktrees(context.Background(), root, projects); err != nil || len(removed) != 0 {
 		t.Fatalf("cleanup removed interrupted worktree %v, error %v", removed, err)
-	}
-}
-
-func TestResultDeliveryIsRetriedAfterServerErrors(t *testing.T) {
-	harness := newRunHarness(t, fakeChangeScript, nil)
-	harness.runner.finishRetryDelay, harness.finishFailures = 10*time.Millisecond, 2
-	if err := harness.process(); err != nil {
-		t.Fatalf("process run: %v", err)
-	}
-	if result := harness.result(); result.Status != "succeeded" || harness.finishCalls != 3 {
-		t.Fatalf("result = %#v after %d deliveries", result, harness.finishCalls)
-	}
-	exhausted := newRunHarness(t, fakeChangeScript, nil)
-	exhausted.runner.finishRetryDelay, exhausted.finishFailures = 10*time.Millisecond, 99
-	if err := exhausted.process(); err == nil || exhausted.finishCalls != finishAttempts {
-		t.Fatalf("exhausted delivery error = %v after %d deliveries", err, exhausted.finishCalls)
 	}
 }
 

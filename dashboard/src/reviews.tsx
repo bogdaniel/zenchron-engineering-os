@@ -1,7 +1,7 @@
 import { Button, Menu, Modal, TextInput } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import {
   IconChevronDown, IconClockHour4, IconCode, IconDots, IconFileText, IconGitBranch, IconGitMerge, IconGitPullRequest,
@@ -58,11 +58,10 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
   const [activeTab, setActiveTab] = useState<string>(requestedRunID ? 'local-branches' : 'pull-requests');
   const [detailTab, setDetailTab] = useState<DetailTab>(requestedRunID ? 'evidence' : 'code-changes');
   const [selectedRunID, setSelectedRunID] = useState<string | null>(requestedRunID);
-  const [selectedNumber, setSelectedNumber] = useState(pullRequestFromAddress);
+  const [selectedNumbers, setSelectedNumbers] = useState({ 'pull-requests': pullRequestFromAddress(), issues: null as number | null });
+  const selectedNumber = section === 'local-branches' ? null : selectedNumbers[section];
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
-  const [draft, setDraft] = useState('');
-  const [message, setMessage] = useState('');
   const [newPullRequest, setNewPullRequest] = useState<{ title: string; branch: string } | null>(null);
 
   const term = search.trim().toLowerCase();
@@ -72,12 +71,42 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
       && (filter === 'all' || source.pullRequestStatus(item).value === filter));
   const visibleIssues = source.issues.items.filter((item) =>
     matches(`${item.number} ${item.title} ${item.user.login}`) && (filter === 'all' || item.state === filter));
-  const pick = <T extends { number: number }>(items: T[]) => items.find((item) => item.number === selectedNumber) ?? items[0];
+  const pick = <T extends { number: number }>(items: T[]) => selectedNumber === null
+    ? items[0] : items.find((item) => item.number === selectedNumber);
   const pullRequest = section === 'pull-requests' ? pick(visiblePullRequests) : undefined;
   const issue = section === 'issues' ? pick(visibleIssues) : undefined;
   const run = section === 'local-branches'
     ? selectedRunID ? (designPreview ? source.runs.items : runs).find((item) => item.id === selectedRunID)
       : source.runs.items[0] : undefined;
+  useEffect(() => {
+    if (section !== 'local-branches' && selectedNumber === null && (pullRequest || issue)) {
+      setSelectedNumbers((previous) => ({ ...previous, [section]: (pullRequest ?? issue)!.number }));
+    }
+    if (section === 'local-branches' && selectedRunID === null && run) setSelectedRunID(run.id);
+  }, [section, selectedNumber, selectedRunID, pullRequest?.number, issue?.number, run?.id]);
+
+  const selectionKey = section === 'pull-requests' ? `${source.repository}:pr:${pullRequest?.number ?? ''}`
+    : section === 'issues' ? `${source.repository}:issue:${issue?.number ?? ''}`
+      : `run:${run?.id ?? ''}`;
+  const [feedbackTarget, setFeedbackTarget] = useState('');
+  const [message, setMessage] = useState('');
+  const [draft, setDraft] = useState('');
+  useEffect(() => {
+    if (feedbackTarget === selectionKey) return;
+    setFeedbackTarget(selectionKey);
+    setDraft('');
+    setMessage('');
+  }, [feedbackTarget, selectionKey]);
+  const selectionMessage = feedbackTarget === selectionKey ? message : '';
+  const selectionDraft = feedbackTarget === selectionKey ? draft : '';
+  const setSelectionMessage = (value: string) => {
+    setFeedbackTarget(selectionKey);
+    setMessage(value);
+  };
+  const setSelectionDraft = (value: string) => {
+    setFeedbackTarget(selectionKey);
+    setDraft(value);
+  };
 
   const liveDiff = useLivePullRequestDiff(!designPreview, source.project?.id, pullRequest?.number, pullRequest?.head.sha);
   const pullRequestDiff = designPreview ? { ...mockPullRequestDiff, headSHA: pullRequest?.head.sha } : liveDiff;
@@ -97,29 +126,28 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
   const view = section === 'local-branches'
     ? { ...pullRequestView, stats: runStats ?? {}, governance: { target: run?.base_branch } } : pullRequestView;
 
-  const clearSelectionState = () => {
-    setMessage('');
-    setDraft('');
-  };
   const openQueue = (next: ReviewSection) => {
     setSection(next);
     setActiveTab(next);
     setDetailTab('code-changes');
     setSearch('');
     setFilter('all');
-    clearSelectionState();
   };
   const resetFilters = () => {
     setSearch('');
     setFilter('all');
+    setFeedbackTarget(section === 'pull-requests' ? `${source.repository}:pr:${selectedNumber ?? source.pullRequests.items[0]?.number ?? ''}`
+      : section === 'issues' ? `${source.repository}:issue:${selectedNumber ?? source.issues.items[0]?.number ?? ''}`
+        : `run:${selectedRunID ?? source.runs.items[0]?.id ?? ''}`);
     setMessage(source.resetFilters());
   };
   const createPullRequest = () => {
     const title = newPullRequest?.title.trim();
     const branch = newPullRequest?.branch.trim();
     if (!title || !branch || !source.createPullRequest) return;
-    setSelectedNumber(source.createPullRequest(title, branch));
+    const number = source.createPullRequest(title, branch);
     openQueue('pull-requests');
+    setSelectedNumbers((previous) => ({ ...previous, 'pull-requests': number }));
     setNewPullRequest(null);
   };
   const tabCounts: Record<ReviewSection, string | undefined> = {
@@ -164,7 +192,11 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
             {source.repositoryLabel} <IconChevronDown size={13} />
           </Button></Menu.Target>
           <Menu.Dropdown>{source.repositories.map((repository) => <Menu.Item key={repository.value}
-            onClick={() => { source.chooseRepository(repository.value); clearSelectionState(); }}>{repository.label}</Menu.Item>)}</Menu.Dropdown>
+            onClick={() => {
+              source.chooseRepository(repository.value);
+              setSelectedNumbers({ 'pull-requests': null, issues: null });
+              setSelectedRunID(null);
+            }}>{repository.label}</Menu.Item>)}</Menu.Dropdown>
         </Menu>
         <Menu withinPortal position="bottom-end">
           <Menu.Target><Button className="reviews-filter reviews-preview-filter" variant="default" aria-label="More review filters"><IconDots size={15} /></Button></Menu.Target>
@@ -187,14 +219,16 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
           <ReviewQueue source={source} section={section} items={section === 'issues' ? visibleIssues : visiblePullRequests}
             searching={Boolean(term)} search={search} onSearch={setSearch} filter={filter} onFilter={setFilter}
             selectedNumber={(pullRequest ?? issue)?.number}
-            onSelect={(number) => { setSelectedNumber(number); clearSelectionState(); }}
-            onSelectRun={setSelectedRunID} onNewPullRequest={() => setNewPullRequest({ title: '', branch: '' })} />
+            onSelect={(number) => setSelectedNumbers((previous) => section === 'issues'
+              ? { ...previous, issues: number } : { ...previous, 'pull-requests': number })}
+            onSelectRun={setSelectedRunID}
+            onNewPullRequest={() => setNewPullRequest({ title: '', branch: '' })} />
         </Panel>
         <Separator id="queue-detail-separator" className="reviews-resize-handle" aria-label="Resize pull request queue and review detail" />
         <Panel id="detail" className="reviews-pane" minSize="340px">
-          <ReviewDetail source={source} section={section} view={view} pullRequest={pullRequest} issue={issue} run={run}
+          <ReviewDetail key={selectionKey} source={source} section={section} view={view} pullRequest={pullRequest} issue={issue} run={run}
             pullRequestDiff={pullRequestDiff} runDiff={runDiff} detailTab={detailTab} onDetailTab={setDetailTab}
-            draft={{ value: draft, set: setDraft }} message={message} onMessage={setMessage} />
+            draft={{ value: selectionDraft, set: setSelectionDraft }} message={selectionMessage} onMessage={setSelectionMessage} />
         </Panel>
         <Separator id="detail-summary-separator" className="reviews-resize-handle" aria-label="Resize review detail and summary" />
         <Panel id="summary" className="reviews-pane" minSize={stacked ? '300px' : '205px'}>
@@ -205,7 +239,7 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
               : issue ? 'GitHub issue context' : 'Select a GitHub item for context'}
             copy={section === 'local-branches' ? run?.output ?? run?.error ?? 'Select a local branch to review its agent run.'
               : (pullRequest ?? issue)?.body ?? 'Select a GitHub item to review its description.'}
-            onOpenConversations={() => setDetailTab('conversations')} onMessage={setMessage} />
+            onOpenConversations={() => setDetailTab('conversations')} onMessage={setSelectionMessage} />
         </Panel>
       </Group>
       <Modal opened={newPullRequest !== null} onClose={() => setNewPullRequest(null)} title="New pull request · preview only" centered>

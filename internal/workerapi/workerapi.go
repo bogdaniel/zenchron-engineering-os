@@ -11,6 +11,8 @@ const (
 	// MaxJSONRequestBodySize is the largest JSON request body accepted by the control plane.
 	MaxJSONRequestBodySize = 1 << 20
 
+	AgentRunResultAlreadyAccepted = "agent run result was already accepted"
+
 	agentRunBranchPrefix = "zenchron/agent-run/"
 
 	MaxProgressEvents   = 50

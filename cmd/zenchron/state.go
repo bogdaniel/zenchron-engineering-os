@@ -30,6 +30,10 @@ func controlPlaneDataDirectory() (string, error) {
 }
 
 func loadStateFile(path string, target any) (bool, error) {
+	return loadStateFileWithLimit(path, target, maxStateFileSize)
+}
+
+func loadStateFileWithLimit(path string, target any, limit int64) (bool, error) {
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
@@ -37,15 +41,15 @@ func loadStateFile(path string, target any) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("inspect state file: %w", err)
 	}
-	if !info.Mode().IsRegular() || info.Size() > maxStateFileSize {
-		return false, fmt.Errorf("state file is not regular or exceeds %d bytes", maxStateFileSize)
+	if !info.Mode().IsRegular() || info.Size() > limit {
+		return false, fmt.Errorf("state file is not regular or exceeds %d bytes", limit)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("read state file: %w", err)
 	}
-	if len(data) > maxStateFileSize {
-		return false, fmt.Errorf("state file exceeds %d bytes", maxStateFileSize)
+	if int64(len(data)) > limit {
+		return false, fmt.Errorf("state file exceeds %d bytes", limit)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
@@ -59,12 +63,16 @@ func loadStateFile(path string, target any) (bool, error) {
 }
 
 func writeStateFile(path string, value any) (err error) {
+	return writeStateFileWithLimit(path, value, maxStateFileSize)
+}
+
+func writeStateFileWithLimit(path string, value any, limit int64) (err error) {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("encode state: %w", err)
 	}
-	if len(data) > maxStateFileSize {
-		return fmt.Errorf("state exceeds %d bytes", maxStateFileSize)
+	if int64(len(data)) > limit {
+		return fmt.Errorf("state exceeds %d bytes", limit)
 	}
 	temp, err := os.CreateTemp(filepath.Dir(path), ".zenchron-state-*.tmp")
 	if err != nil {

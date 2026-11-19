@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -325,9 +326,8 @@ const (
 	finishRetryDelay = 3 * time.Second
 )
 
-// finish delivers the result. A dropped connection or a server error would otherwise discard hours of
-// work and repeat the whole run, so those are retried a few times. A conflict after an unanswered send
-// means the earlier send was applied.
+// finish retries failed deliveries and only treats a conflict as delivered when the server confirms
+// that this attempt's result was already accepted.
 func (runner *agentRunner) finish(ctx context.Context, runID string, result workerapi.AgentRunResult) error {
 	body, err := encodeAgentRunResult(result)
 	if err != nil {
@@ -339,14 +339,15 @@ func (runner *agentRunner) finish(ctx context.Context, runID string, result work
 	client.Timeout = time.Minute
 	var lastErr error
 	for attempt := 1; attempt <= finishAttempts; attempt++ {
-		status, err := putJSON(ctx, &client, endpoint, body)
+		status, responseBody, err := putJSON(ctx, &client, endpoint, body)
 		switch {
 		case err == nil && status == http.StatusOK:
 			return nil
-		case err == nil && status == http.StatusConflict && lastErr != nil:
+		case err == nil && status == http.StatusConflict && lastErr != nil &&
+			strings.TrimSpace(responseBody) == workerapi.AgentRunResultAlreadyAccepted:
 			return nil
 		case err == nil && status < http.StatusInternalServerError:
-			return fmt.Errorf("agent run result returned HTTP %d", status)
+			return fmt.Errorf("agent run result returned HTTP %d: %s", status, strings.TrimSpace(responseBody))
 		case err != nil:
 			lastErr = err
 		default:
@@ -410,16 +411,20 @@ func (runner *agentRunner) finishDelay() time.Duration {
 	return finishRetryDelay
 }
 
-func putJSON(ctx context.Context, client *http.Client, endpoint string, body []byte) (int, error) {
+func putJSON(ctx context.Context, client *http.Client, endpoint string, body []byte) (int, string, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	request.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	defer response.Body.Close()
-	return response.StatusCode, nil
+	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 1024))
+	if err != nil {
+		return response.StatusCode, "", err
+	}
+	return response.StatusCode, string(responseBody), nil
 }

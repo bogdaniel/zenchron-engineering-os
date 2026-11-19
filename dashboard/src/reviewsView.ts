@@ -17,6 +17,7 @@ const diffSchema = z.object({ run_id: z.string(), diff: z.string(), truncated: z
 const pullRequestDiffSchema = z.object({ head_sha: z.string(), diff: z.string().max(1 << 20) });
 const reviewResultSchema = z.object({
   agent_run_linked: z.boolean().optional(), agent_run_queued: z.boolean().optional(),
+  github_request_changes_recorded_as_comment: z.boolean().optional(),
   feedback_sync_error: z.string().optional(),
 });
 const mergeResultSchema = z.object({ commit_sha: z.string(), head_sha: z.string(), message: z.string() });
@@ -35,7 +36,10 @@ export async function loadDiff(runID: string) {
 async function loadGitHubItems<T>(projectID: string, kind: 'issues' | 'pull-requests', schema: z.ZodType<T>) {
   const response = await fetch(`/api/v1/projects/${projectID}/${kind}`);
   if (!response.ok) throw new Error((await response.text()).trim() || `Could not load GitHub ${kind} (${response.status})`);
-  return schema.parse(await response.json());
+  return {
+    items: schema.parse(await response.json()),
+    complete: response.headers.get('X-Zenchron-Complete') !== 'false',
+  };
 }
 
 async function sendJSON(path: string, method: 'POST' | 'PATCH', body: unknown, failure: string) {
@@ -63,7 +67,7 @@ export function summarizeDiff(diff: string) {
   return { files, added, removed, path };
 }
 
-export type Listing<T> = { items: T[]; loading: boolean; failed: boolean; syncing: boolean };
+export type Listing<T> = { items: T[]; loading: boolean; failed: boolean; syncing: boolean; complete?: boolean };
 /** A pull request's place in the queue. `tone` colours the card badge; a source without review states leaves it out. */
 export type QueueStatus = { value: string; label: string; tone?: string };
 export type ReviewSignals = {
@@ -182,17 +186,21 @@ export function useLiveReviews(
     queryFn: () => loadGitHubItems(project!.id, 'issues', issueSchema),
     enabled: enabled && Boolean(project), refetchInterval: 60_000,
   });
-  const pulls = pullRequests.data ?? [];
+  const pulls = pullRequests.data?.items ?? [];
   const count = (value: number | undefined, query: { isLoading: boolean }) =>
     value ?? (query.isLoading ? '…' : 'Unavailable');
-  const inReview = pullRequests.data?.filter((item) => liveStatus(item).value === 'open').length;
+  const inReview = pullRequests.data?.items.filter((item) => liveStatus(item).value === 'open').length;
   const localBranches = runs.items.filter((run) => run.diff_available || ['queued', 'running', 'cancelled'].includes(run.status));
-  const listing = <T>(query: { data?: T[]; isLoading: boolean; isError: boolean; isFetching: boolean }): Listing<T> =>
-    ({ items: query.data ?? [], loading: query.isLoading, failed: query.isError, syncing: query.isFetching });
+  const listing = <T>(query: {
+    data?: { items: T[]; complete: boolean }; isLoading: boolean; isError: boolean; isFetching: boolean;
+  }): Listing<T> => ({
+    items: query.data?.items ?? [], complete: query.data?.complete,
+    loading: query.isLoading, failed: query.isError, syncing: query.isFetching,
+  });
   return {
     sections: ['pull-requests', 'issues', 'local-branches'],
     metrics: [
-      { value: count(pullRequests.data?.length, pullRequests) },
+      { value: count(pullRequests.data?.items.length, pullRequests) },
       { value: count(inReview, pullRequests) },
       { value: runs.loading ? '…' : runs.failed ? 'Unavailable' : localBranches.filter((run) => run.diff_available).length },
       { value: 'Unavailable' }, { value: 'Unavailable' }, { value: 'Unavailable' },
@@ -241,9 +249,17 @@ export function useLiveReviews(
         const result = reviewResultSchema.parse(await response.json());
         await queryClient.invalidateQueries({ queryKey: ['github-pull-requests', project.id] });
         await queryClient.invalidateQueries({ queryKey: ['agent-runs'] });
-        if (result.feedback_sync_error) return 'Review submitted to GitHub, but run feedback could not sync.';
+        if (result.feedback_sync_error) return result.github_request_changes_recorded_as_comment
+          ? 'GitHub recorded a comment, but run feedback could not sync.'
+          : 'Review submitted to GitHub, but run feedback could not sync.';
         if (event === 'COMMENT') {
           return result.agent_run_linked ? 'Comment submitted to GitHub and attached to the agent run.' : 'Comment submitted to GitHub.';
+        }
+        if (result.github_request_changes_recorded_as_comment) {
+          if (!result.agent_run_linked) return 'GitHub recorded a comment, but the agent run could not be linked.';
+          return result.agent_run_queued
+            ? 'GitHub recorded a comment; the agent run queued the requested changes.'
+            : 'GitHub recorded a comment; run feedback was stored, but the agent is not eligible for another pass yet.';
         }
         if (result.agent_run_queued) return 'Changes requested on GitHub; agent run queued.';
         return result.agent_run_linked
