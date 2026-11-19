@@ -9,7 +9,8 @@ API/worker port 8083.
 Installation checks PATH before replacing an earlier command. It retires only executable binaries whose Go build
 identity belongs to Zenchron Engineering or this repository, preserving a `.legacy` recovery copy before installing
 the stable launcher. An unrelated command that would win PATH is left untouched and blocks installation with its path;
-`zenchron-engineering doctor` reports the canonical entrypoint, resolved command, active revision and shadowing paths.
+`zenchron-engineering doctor` reports the canonical entrypoint, resolved command, active revision and shadowing paths,
+and verifies that the public launcher still targets the managed installation.
 The installer never overwrites an arbitrary executable or changes adopted-controller authority records.
 
 The dashboard has one React application. `?mode=mock` selects sample data; `?mode=live` selects the managed API.
@@ -43,6 +44,7 @@ running revision.
 ```mermaid
 sequenceDiagram
     participant I as Local installer
+    participant C as Doctor command
     participant GH as Trusted GitHub main
     participant S as Managed supervisor
     participant R as Versioned release store
@@ -52,6 +54,9 @@ sequenceDiagram
     participant U as system-update.json
     participant A as agent-runs.json and in-memory admission
     I->>I: Validate canonical entrypoint and PATH without changing them
+    C->>C: Resolve PATH and inspect shadowing commands
+    C->>R: Verify the active release
+    C->>C: Compare canonical launcher bytes with the managed template
     I->>R: Build and verify the initial trusted release
     I->>I: Retire recognized legacy shadows and install stable launcher
     I->>S: Install one stable command and one managed LaunchAgent

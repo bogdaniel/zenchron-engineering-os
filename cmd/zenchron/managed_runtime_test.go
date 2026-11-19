@@ -430,13 +430,33 @@ func TestReleasePointerAdvancesOnlyAfterDashboardProof(t *testing.T) {
 	root := t.TempDir()
 	old := "0123456789abcdef0123456789abcdef01234567"
 	candidate := "abcdef0123456789abcdef0123456789abcdef01"
+	userHome := t.TempDir()
+	t.Setenv("HOME", userHome)
+	t.Setenv("PATH", filepath.Join(userHome, ".local", "bin")+string(os.PathListSeparator)+"/usr/bin:/bin")
 	for _, revision := range []string{old, candidate} {
-		if err := os.MkdirAll(filepath.Join(root, "releases", revision), 0o700); err != nil {
+		binary := filepath.Join(root, "releases", revision, "bin", "zenchron")
+		if err := os.MkdirAll(filepath.Dir(binary), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		contents := "#!/bin/sh\nprintf '%s %s' '" + revision + "' \"$ZENCHRON_MANAGED_HOME\"\n"
+		if err := os.WriteFile(binary, []byte(contents), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := updater.SetActiveRelease(root, old); err != nil {
 		t.Fatal(err)
+	}
+	entrypoint, err := installStableEntrypoint(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entrypointInfo, err := os.Stat(entrypoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command(entrypoint, "inspect-self").Output(); err != nil ||
+		strings.TrimSpace(string(output)) != old+" "+root {
+		t.Fatalf("initial public command returned %q, %v", output, err)
 	}
 	makeRuntime := func(statusCode, admissionStatus int, status updater.Status) *managedRuntime {
 		return &managedRuntime{home: root, statusPath: filepath.Join(root, "data", "system-update.json"),
@@ -470,6 +490,14 @@ func TestReleasePointerAdvancesOnlyAfterDashboardProof(t *testing.T) {
 	}
 	if active, err := updater.ActiveRelease(root); err != nil || active != candidate {
 		t.Fatalf("verified activation pointer = %q, %v", active, err)
+	}
+	if output, err := exec.Command("zenchron-engineering", "inspect-self").Output(); err != nil ||
+		strings.TrimSpace(string(output)) != candidate+" "+root {
+		t.Fatalf("public command after activation returned %q, %v", output, err)
+	}
+	currentEntrypointInfo, err := os.Stat(entrypoint)
+	if err != nil || !os.SameFile(entrypointInfo, currentEntrypointInfo) {
+		t.Fatalf("activation replaced the public entrypoint: %v", err)
 	}
 	if ready.status.State != "active" || ready.status.RunningRevision != candidate {
 		t.Fatalf("verified activation status = %#v", ready.status)

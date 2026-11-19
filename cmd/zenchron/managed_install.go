@@ -8,6 +8,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
@@ -195,12 +197,7 @@ func installStableEntrypoint(home string) (string, error) {
 	if err := migrateShadowingZenchronCommands(path); err != nil {
 		return "", err
 	}
-	script := "#!/bin/sh\n" + managedEntrypointMarker + "\nset -eu\nroot=" + shellQuote(home) + "\n"
-	script += "revision=$(cat \"$root/active-release\")\n"
-	script += "case \"$revision\" in " + strings.Repeat("[0-9a-f]", 40) + ") ;; *) echo 'invalid Zenchron release pointer' >&2; exit 1 ;; esac\n"
-	script += "export ZENCHRON_MANAGED_HOME=\"$root\"\n"
-	script += "exec \"$root/releases/$revision/bin/zenchron\" \"$@\"\n"
-	contents := []byte(script)
+	contents := managedEntrypointContents(home)
 	if err := verifyReplaceableEntrypoint(path, contents); err != nil {
 		return "", err
 	}
@@ -213,6 +210,15 @@ func installStableEntrypoint(home string) (string, error) {
 		return "", fmt.Errorf("install canonical Zenchron command: %w", err)
 	}
 	return path, nil
+}
+
+func managedEntrypointContents(home string) []byte {
+	script := "#!/bin/sh\n" + managedEntrypointMarker + "\nset -eu\nroot=" + shellQuote(home) + "\n"
+	script += "revision=$(cat \"$root/active-release\")\n"
+	script += "case \"$revision\" in " + strings.Repeat("[0-9a-f]", 40) + ") ;; *) echo 'invalid Zenchron release pointer' >&2; exit 1 ;; esac\n"
+	script += "export ZENCHRON_MANAGED_HOME=\"$root\"\n"
+	script += "exec \"$root/releases/$revision/bin/zenchron\" \"$@\"\n"
+	return []byte(script)
 }
 
 func localEntrypointPath() (string, error) {
@@ -571,6 +577,8 @@ func showManagedDoctor() error {
 			Repository: repository, Commit: active, Tree: readReleaseTree(home, active),
 		}); err != nil {
 			activeErr = fmt.Errorf("active release verification failed: %w", err)
+		} else if err := syscall.Access(activeBinary, 1); err != nil {
+			activeErr = fmt.Errorf("active release executable is not executable: %w", err)
 		}
 	}
 	paths, pathErr := commandPaths()
@@ -584,10 +592,12 @@ func showManagedDoctor() error {
 		}
 		shadowing = append(shadowing, path)
 	}
-	reachesActive := lookupErr == nil && activeErr == nil && sameFile(resolved, canonical)
+	expectedEntrypoint := managedEntrypointContents(home)
+	entrypointInfo, entrypointErr := readManagedEntrypoint(canonical, expectedEntrypoint)
+	reachesActive := lookupErr == nil && activeErr == nil && entrypointErr == nil && sameFileInfo(entrypointInfo, resolved) && sameFileInfo(entrypointInfo, canonical)
 	report := map[string]any{"canonical_entrypoint": canonical, "resolved_entrypoint": resolved,
 		"active_revision": active, "active_binary": activeBinary, "reaches_active": reachesActive,
-		"shadowing_entries": shadowing}
+		"entrypoint_valid": entrypointErr == nil, "shadowing_entries": shadowing}
 	encoded, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return err
@@ -599,10 +609,45 @@ func showManagedDoctor() error {
 	if activeErr != nil {
 		return fmt.Errorf("managed active release is unavailable: %w", activeErr)
 	}
+	if entrypointErr != nil {
+		return fmt.Errorf("canonical Zenchron entrypoint is invalid: %w", entrypointErr)
+	}
 	if !reachesActive {
 		return errors.New("PATH resolves zenchron-engineering to a shadowing entry instead of the canonical release")
 	}
 	return nil
+}
+
+func readManagedEntrypoint(path string, expected []byte) (os.FileInfo, error) {
+	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	file := os.NewFile(uintptr(fd), path)
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("canonical Zenchron command is not a regular file")
+	}
+	contents, err := io.ReadAll(io.LimitReader(file, int64(len(expected)+1)))
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(contents, expected) {
+		return nil, errors.New("canonical Zenchron command does not match the managed launcher")
+	}
+	return info, nil
+}
+
+func sameFileInfo(opened os.FileInfo, path string) bool {
+	if opened == nil {
+		return false
+	}
+	current, err := os.Stat(path)
+	return err == nil && os.SameFile(opened, current)
 }
 
 func commandPaths() ([]string, error) {
