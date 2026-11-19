@@ -11,11 +11,16 @@ struct StatusSelfCheck {
          "objective_id":"objective-2","objective_title":"Ship the dashboard"}],"decisions":[{"id":"decision-4",
          "graph_id":"graph-7","objective_id":"objective-2","objective_title":"Ship the dashboard",
          "from":"reviewer"}],"blocked_graphs":0,"queued_units":2,"running_units":1,
-         "waiting_units":1,"failed_units":0,"open_decisions":1},"update_state":"blocked",
+         "waiting_units":1,"failed_units":0,"open_decisions":1},
+         "usage":{"runs":3,"runs_with_usage":2,"input_tokens":200,"output_tokens":40,
+         "runs_with_cost":1,"cost_usd":0.25},"update_state":"blocked",
          "update_revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","update_reason":"active runs must finish"}
         """.utf8)
         let status = try decodeSystemStatus(valid)
         assert(status.workers.online == 1 && status.work.queuedUnits == 2 && status.updateState == "blocked")
+        assert(status.usage?.runs == 3 && status.usage?.runsWithUsage == 2)
+        assert(status.usage?.inputTokens == 200 && status.usage?.outputTokens == 40)
+        assert(status.usage?.runsWithCost == 1 && status.usage?.costUSD == 0.25)
         assert(status.indicator == .degraded)
         assert(SystemStatus.refreshInterval(menuVisible: true, connected: true) == 15)
         assert(SystemStatus.refreshInterval(menuVisible: true, connected: false) == 30)

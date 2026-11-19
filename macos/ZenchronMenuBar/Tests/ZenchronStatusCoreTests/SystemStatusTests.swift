@@ -35,6 +35,8 @@ final class SystemStatusTests: XCTestCase {
          "objective_title":"Ship the dashboard"}],"decisions":[{"id":"decision-4","graph_id":"graph-7",
          "objective_id":"objective-2","objective_title":"Ship the dashboard","from":"reviewer"}],
          "waiting_units":1,"failed_units":0,"open_decisions":1},
+         "usage":{"runs":3,"runs_with_usage":2,"input_tokens":200,"output_tokens":40,
+         "runs_with_cost":1,"cost_usd":0.25},
          "update_state":"blocked","update_revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
          "update_reason":"active runs must finish"}
         """.utf8)
@@ -43,6 +45,12 @@ final class SystemStatusTests: XCTestCase {
         XCTAssertEqual(status.dashboardAvailable, true)
         XCTAssertEqual(status.workers.providers?.map(\.readyWorkers), [1, 0])
         XCTAssertEqual(status.work.queuedUnits, 2)
+        XCTAssertEqual(status.usage?.runs, 3)
+        XCTAssertEqual(status.usage?.runsWithUsage, 2)
+        XCTAssertEqual(status.usage?.inputTokens, 200)
+        XCTAssertEqual(status.usage?.outputTokens, 40)
+        XCTAssertEqual(status.usage?.runsWithCost, 1)
+        XCTAssertEqual(status.usage?.costUSD, 0.25)
         XCTAssertEqual(status.updateState, "blocked")
         XCTAssertEqual(status.updateRevision, String(repeating: "a", count: 40))
         XCTAssertEqual(status.updateReason, "active runs must finish")
@@ -61,6 +69,16 @@ final class SystemStatusTests: XCTestCase {
          {"id":"codex-cli","ready_workers":2,"reported_workers":1}]},
          "work":{"active_graphs":0,"blocked_graphs":0,"queued_units":0,"running_units":0,
          "waiting_units":0,"failed_units":0,"open_decisions":0},"update_state":"unknown"}
+        """.utf8)
+        XCTAssertThrowsError(try decodeSystemStatus(data))
+    }
+
+    func testRejectsUsageCoverageThatExceedsRetainedRunCount() {
+        let data = Data("""
+        {"dashboard_url":"http://127.0.0.1:8080/?mode=live","workers":{"online":0,"total":0},
+         "work":{"active_graphs":0,"blocked_graphs":0,"queued_units":0,"running_units":0,
+         "waiting_units":0,"failed_units":0,"open_decisions":0},
+         "usage":{"runs":1,"runs_with_usage":2,"runs_with_cost":0},"update_state":"unknown"}
         """.utf8)
         XCTAssertThrowsError(try decodeSystemStatus(data))
     }

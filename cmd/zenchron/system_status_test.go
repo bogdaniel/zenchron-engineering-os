@@ -30,7 +30,13 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 	}}
 	registry.workers["offline"] = workerRecord{ID: "offline", LastSeen: time.Now().Add(-time.Minute),
 		Providers: []workerapi.ProviderStatus{{ID: workerapi.ProviderCodex, Ready: true}}}
-	graphs := &workGraphStore{graphs: map[string]*workGraph{
+	cost := 0.25
+	runs := &agentRunStore{items: map[string]agentRun{
+		"with-cost":    {ID: "with-cost", Usage: &workerapi.Usage{InputTokens: 120, OutputTokens: 30, CostUSD: &cost}},
+		"without-cost": {ID: "without-cost", Usage: &workerapi.Usage{InputTokens: 80, OutputTokens: 10}},
+		"unknown":      {ID: "unknown"},
+	}}
+	graphs := &workGraphStore{runs: runs, graphs: map[string]*workGraph{
 		"graph": {ID: "graph", ObjectiveID: "objective", ObjectiveTitle: "Ship the dashboard",
 			Status: graphBlocked, Units: []workUnit{
 				{State: unitQueued}, {State: unitRunning}, {State: unitWaiting}, {State: unitFailed},
@@ -65,8 +71,26 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 		status.Work.Decisions[0].GraphID != "graph" || status.Work.Decisions[0].ObjectiveID != "objective" ||
 		status.Work.QueuedUnits != 1 || status.Work.RunningUnits != 1 || status.Work.WaitingUnits != 1 ||
 		status.Work.FailedUnits != 1 || status.Work.OpenDecisions != 1 || status.UpdateState != "active" ||
-		status.UpdateRevision != revision || status.UpdateProgress != "Release is active" {
+		status.UpdateRevision != revision || status.UpdateProgress != "Release is active" ||
+		status.Usage == nil || status.Usage.Runs != 3 || status.Usage.RunsWithUsage != 2 ||
+		status.Usage.InputTokens == nil || *status.Usage.InputTokens != 200 ||
+		status.Usage.OutputTokens == nil || *status.Usage.OutputTokens != 40 ||
+		status.Usage.RunsWithCost != 1 || status.Usage.CostUSD == nil || *status.Usage.CostUSD != cost {
 		t.Fatalf("system status = %#v", status)
+	}
+}
+
+func TestLocalSystemStatusLeavesUnreportedUsageUnknown(t *testing.T) {
+	runs := &agentRunStore{items: map[string]agentRun{"unknown": {ID: "unknown"}}}
+	response := httptest.NewRecorder()
+	writeLocalSystemStatus(response, localStatusTestRequest(t), newWorkerRegistry(), newWorkGraphStore(runs, nil, nil, nil))
+	var status systemStatus
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("system status response: decode error %v, HTTP %d", err, response.Code)
+	}
+	if status.Usage == nil || status.Usage.Runs != 1 || status.Usage.RunsWithUsage != 0 ||
+		status.Usage.InputTokens != nil || status.Usage.OutputTokens != nil || status.Usage.CostUSD != nil {
+		t.Fatalf("unreported usage was represented as known: %#v", status.Usage)
 	}
 }
 

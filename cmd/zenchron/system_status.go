@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/hmac"
+	"math"
 	"net/http"
 	"os"
 	"sort"
@@ -33,10 +34,20 @@ type systemStatus struct {
 		FailedUnits      int                    `json:"failed_units"`
 		OpenDecisions    int                    `json:"open_decisions"`
 	} `json:"work"`
-	UpdateState    string `json:"update_state"`
-	UpdateRevision string `json:"update_revision,omitempty"`
-	UpdateProgress string `json:"update_progress,omitempty"`
-	UpdateReason   string `json:"update_reason,omitempty"`
+	Usage          *systemStatusUsage `json:"usage,omitempty"`
+	UpdateState    string             `json:"update_state"`
+	UpdateRevision string             `json:"update_revision,omitempty"`
+	UpdateProgress string             `json:"update_progress,omitempty"`
+	UpdateReason   string             `json:"update_reason,omitempty"`
+}
+
+type systemStatusUsage struct {
+	Runs          int      `json:"runs"`
+	RunsWithUsage int      `json:"runs_with_usage"`
+	InputTokens   *int64   `json:"input_tokens,omitempty"`
+	OutputTokens  *int64   `json:"output_tokens,omitempty"`
+	RunsWithCost  int      `json:"runs_with_cost"`
+	CostUSD       *float64 `json:"cost_usd,omitempty"`
 }
 
 const maxSystemStatusLinks = 5
@@ -179,6 +190,7 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 	if len(status.Work.Decisions) > maxSystemStatusLinks {
 		status.Work.Decisions = status.Work.Decisions[:maxSystemStatusLinks]
 	}
+	status.Usage = summarizeStoredRunUsage(graphs.runs)
 	if path := strings.TrimSpace(os.Getenv("ZENCHRON_UPDATE_STATUS_FILE")); path != "" {
 		if update, err := updater.ReadStatus(path); err != nil {
 			status.UpdateState = "unavailable"
@@ -197,6 +209,51 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, status)
+}
+
+func summarizeStoredRunUsage(runs *agentRunStore) *systemStatusUsage {
+	if runs == nil {
+		return nil
+	}
+
+	const maxTokenTotal = int64(1<<63 - 1)
+	usage := &systemStatusUsage{}
+	var inputTokens, outputTokens int64
+	var costUSD float64
+	tokensValid, costValid := true, true
+
+	runs.mu.Lock()
+	defer runs.mu.Unlock()
+	for _, run := range runs.items {
+		usage.Runs++
+		if run.Usage == nil {
+			continue
+		}
+		usage.RunsWithUsage++
+		if tokensValid {
+			if run.Usage.InputTokens > maxTokenTotal-inputTokens || run.Usage.OutputTokens > maxTokenTotal-outputTokens {
+				tokensValid = false
+			} else {
+				inputTokens += run.Usage.InputTokens
+				outputTokens += run.Usage.OutputTokens
+			}
+		}
+		if run.Usage.CostUSD == nil {
+			continue
+		}
+		usage.RunsWithCost++
+		if costValid {
+			costUSD += *run.Usage.CostUSD
+			costValid = !math.IsInf(costUSD, 0) && !math.IsNaN(costUSD)
+		}
+	}
+	if usage.RunsWithUsage > 0 && tokensValid {
+		usage.InputTokens, usage.OutputTokens = &inputTokens, &outputTokens
+	}
+	if usage.RunsWithCost > 0 && costValid {
+		usage.CostUSD = &costUSD
+	}
+	return usage
 }
 
 func localStatusCredential() string {

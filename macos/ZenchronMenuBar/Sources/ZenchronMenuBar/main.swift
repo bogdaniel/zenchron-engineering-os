@@ -121,6 +121,19 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 "\(status.work.waitingUnits) waiting",
             ].joined(separator: " · ")
             menu.addItem(NSMenuItem(title: work, action: nil, keyEquivalent: ""))
+            if let usage = status.usage {
+                let tokens = usage.inputTokens.flatMap { input in
+                    usage.outputTokens.map { output in
+                        "\(input) in / \(output) out · \(usage.runsWithUsage)/\(usage.runs) stored runs"
+                    }
+                } ?? "tokens unknown · \(usage.runsWithUsage)/\(usage.runs) stored runs"
+                let cost = usage.costUSD.map {
+                    String(format: "$%.4f · cost %d/%d runs", $0, usage.runsWithCost, usage.runs)
+                } ?? "cost unknown · \(usage.runsWithCost)/\(usage.runs) runs"
+                menu.addItem(NSMenuItem(title: "Usage · \(tokens) · \(cost)", action: nil, keyEquivalent: ""))
+            } else {
+                menu.addItem(NSMenuItem(title: "Usage · unavailable", action: nil, keyEquivalent: ""))
+            }
             for graph in status.work.activeGraphLinks ?? (status.work.activeGraph.map { [$0] } ?? []) {
                 let title = graph.objectiveTitle.isEmpty ? "Open active work" : "Open · \(graph.objectiveTitle)"
                 if let url = status.activeWorkURL(for: graph) {

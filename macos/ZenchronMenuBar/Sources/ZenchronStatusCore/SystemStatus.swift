@@ -108,11 +108,30 @@ public struct SystemStatus: Decodable, Equatable {
         }
     }
 
+    public struct Usage: Decodable, Equatable {
+        public let runs: Int
+        public let runsWithUsage: Int
+        public let inputTokens: Int64?
+        public let outputTokens: Int64?
+        public let runsWithCost: Int
+        public let costUSD: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case runs
+            case runsWithUsage = "runs_with_usage"
+            case inputTokens = "input_tokens"
+            case outputTokens = "output_tokens"
+            case runsWithCost = "runs_with_cost"
+            case costUSD = "cost_usd"
+        }
+    }
+
     public let revision: String?
     public let dashboardURL: URL
     public let dashboardAvailable: Bool?
     public let workers: Workers
     public let work: Work
+    public let usage: Usage?
     public let updateState: String
     public let updateRevision: String?
     public let updateProgress: String?
@@ -133,6 +152,7 @@ public struct SystemStatus: Decodable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case revision, workers, work
+        case usage
         case dashboardURL = "dashboard_url"
         case dashboardAvailable = "dashboard_available"
         case updateState = "update_state"
@@ -183,6 +203,7 @@ public struct SystemStatus: Decodable, Equatable {
         dashboardAvailable = try values.decodeIfPresent(Bool.self, forKey: .dashboardAvailable)
         workers = try values.decode(Workers.self, forKey: .workers)
         work = try values.decode(Work.self, forKey: .work)
+        usage = try values.decodeIfPresent(Usage.self, forKey: .usage)
         updateState = try values.decode(String.self, forKey: .updateState)
         updateRevision = try values.decodeIfPresent(String.self, forKey: .updateRevision)
         updateProgress = try values.decodeIfPresent(String.self, forKey: .updateProgress)
@@ -195,6 +216,10 @@ public struct SystemStatus: Decodable, Equatable {
               work.activeGraphs >= 0, work.blockedGraphs >= 0, work.queuedUnits >= 0,
               work.runningUnits >= 0, work.waitingUnits >= 0, work.failedUnits >= 0,
               work.openDecisions >= 0, validUpdateStates.contains(updateState),
+              usage.map({ $0.runs >= 0 && $0.runsWithUsage >= 0 && $0.runsWithUsage <= $0.runs &&
+                  $0.runsWithCost >= 0 && $0.runsWithCost <= $0.runs &&
+                  ($0.inputTokens.map { $0 >= 0 } ?? true) && ($0.outputTokens.map { $0 >= 0 } ?? true) &&
+                  ($0.costUSD.map { $0 >= 0 && $0.isFinite } ?? true) }) ?? true,
               updateRevision.map({ $0.count == 40 && $0.allSatisfy(\.isHexDigit) }) ?? true,
               updateProgress.map({ $0.count <= 500 }) ?? true,
               updateReason.map({ $0.count <= 500 }) ?? true else {

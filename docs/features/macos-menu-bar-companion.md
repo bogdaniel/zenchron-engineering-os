@@ -11,10 +11,11 @@ flowchart LR
   LaunchAgent[Mode 0600 managed LaunchAgent plist] -->|Local status credential| Companion
   LaunchAgent -->|Credential fallback for older supervisor environments| API
   Companion -->|Credential header · loopback only| API
-  API -->|Typed health, dashboard, work and update projection| Companion
+  API -->|Typed health, dashboard, work, recorded usage and update projection| Companion
   API -->|Signed-in administrator when access policy is enabled| Auth[Existing session and access policy]
   API --> Workers[(Worker registry)]
   API --> Graphs[(WorkGraph store)]
+  API --> Runs[(Retained agent-run records)]
   API --> Update[(Updater status file)]
   Companion -->|Open Dashboard| Browser[Canonical Live dashboard URL]
   Companion -->|Open Dashboard for access after 401 or 403| Browser
@@ -33,6 +34,9 @@ flowchart LR
   by online workers, active and blocked graphs,
   queued/running/waiting/failed units, pending decisions, and the recorded updater state. When available, it also
   shows the candidate revision and current progress; blocked or failed updates include the recorded reason.
+- Usage totals come only from the retained agent-run records. The menu shows how many retained runs reported token
+  usage and cost; missing provider data and totals that cannot be represented safely remain unknown. These are not
+  all-time totals and do not estimate provider billing.
 - Dashboard availability is reported from the installed release's regular `index.html` file. Missing or older-server
   availability evidence is shown as unavailable/unknown and degrades the icon rather than implying the dashboard is
   healthy.
@@ -100,6 +104,7 @@ Developer ID signing, notarization, or update/restart behavior.
 This is a partial #387 implementation. Authenticated installations currently require a signed-in administrator for
 the menu status API, but the companion does not yet share the browser session; unauthenticated single-user local mode
 works. The app bundle is locally ad-hoc signed, not Developer ID signed or notarized; the feature does not yet
-install/update a stable managed app path or verify login-item approval, updater-generation reconnect, CPU/memory, or
-token/cost telemetry. The control-plane API and app are macOS-local; CI on non-macOS hosts does not exercise the menu UI.
+install/update a stable managed app path or verify login-item approval, updater-generation reconnect, or CPU/memory.
+Token/cost telemetry is limited to available retained run records. The control-plane API and app are macOS-local; CI
+on non-macOS hosts does not exercise the menu UI.
 No live restart/wake/update acceptance is claimed.
