@@ -110,8 +110,15 @@ func (store *agentRunStore) applyResult(item *agentRun, workerID string, input w
 // request. GitHub is called without holding the store lock.
 func (store *agentRunStore) publishResult(ctx context.Context, runID string, pushed, pushFailed bool) (agentRun, int, string) {
 	store.mu.Lock()
-	item := store.items[runID]
+	item, exists := store.items[runID]
 	store.mu.Unlock()
+	if !exists {
+		return agentRun{}, http.StatusNotFound, "agent run not found"
+	}
+	if item.Status != "succeeded" {
+		return agentRun{}, http.StatusConflict, "only a succeeded agent run can be published"
+	}
+	attempt := item.Attempts
 	publication, publishError, number, pullURL := "", "", 0, ""
 	switch {
 	case item.CommitSHA == "":
@@ -131,6 +138,9 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 		}
 	}
 	item, status, message := store.update(runID, func(item *agentRun) (int, string) {
+		if item.Status != "succeeded" || item.Attempts != attempt {
+			return http.StatusConflict, "agent run changed while its pull request was being created"
+		}
 		item.Publication, item.PullRequestError, item.Publishing = publication, publishError, false
 		if number > 0 {
 			item.PullRequestNumber, item.PullRequestURL = number, pullURL
@@ -138,7 +148,7 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 		return 0, ""
 	})
 	if status != 0 {
-		return agentRun{}, status, "pull request state could not be persisted"
+		return agentRun{}, status, message
 	}
 	event := "Publication: " + publication
 	if pullURL != "" {
