@@ -617,3 +617,84 @@ test('Reports shows the cost providers reported for agent runs and never a fixtu
   await expect(page.locator('.agent-spend-panel .reports-empty-chart'))
     .toContainText('Agent run data unavailable.', { timeout: 20_000 });
 });
+
+test('Reports keeps a run on the exact time-range boundary in its spend chart', async ({ page }) => {
+  const now = Date.now();
+  const boundaryRun = {
+    id: 'boundary', agent_id: 'a'.repeat(32), agent_name: 'Reviewer', project_id: 'b'.repeat(32),
+    project_name: 'Platform', worker_id: 'c'.repeat(32), worker_name: 'Mac', branch: 'agent/boundary',
+    prompt: 'Review changes.', status: 'succeeded', attempts: 1,
+    created_at: new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(now).toISOString(), usage: { input_tokens: 10, output_tokens: 5, cost_usd: 0.25 },
+  };
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify([boundaryRun]) }));
+  await page.clock.install({ time: new Date(now) });
+  await page.goto('/#reports');
+  await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
+
+  await page.getByRole('combobox', { name: 'Time Range' }).click();
+  await page.getByRole('option', { name: 'Last 90 Days' }).click();
+  await page.clock.setFixedTime(new Date(now));
+  await page.getByRole('button', { name: 'Apply Filters' }).click();
+
+  await expect(page.locator('.agent-spend-panel .reports-spend-chart')).toBeVisible();
+  await expect(page.locator('.agent-spend-panel .reports-spend-chart'))
+    .toHaveAttribute('aria-label', 'Agent spend reported by providers for 1 runs');
+  await expect(page.locator('.reports-page')).toBeVisible();
+});
+
+test('Reports render errors stay inside the page shell and can be retried', async ({ page }) => {
+  const createdAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify([{
+      id: 'render-error', agent_id: 'a'.repeat(32), agent_name: 'Reviewer', project_id: 'b'.repeat(32),
+      project_name: 'Platform', worker_id: 'c'.repeat(32), worker_name: 'Mac', branch: 'agent/render-error',
+      prompt: 'Review changes.', status: 'succeeded', attempts: 1, created_at: createdAt, updated_at: createdAt,
+      usage: { input_tokens: 10, output_tokens: 5, cost_usd: 0.25 },
+    }]) }));
+  await page.setViewportSize({ width: 1672, height: 941 });
+  const localURL = new URL(test.info().project.use.baseURL as string);
+  localURL.hostname = '127.0.0.1';
+  localURL.searchParams.set('mode', 'live');
+  localURL.hash = '#reports';
+  await page.goto(localURL.toString());
+  await expect(page.locator('.agent-spend-panel .reports-spend-chart')).toBeVisible();
+  await page.getByRole('combobox', { name: 'Time Range' }).click();
+  await page.getByRole('option', { name: 'Last 90 Days' }).click();
+  await page.evaluate(() => {
+    const datePrototype = Date.prototype as Date & { originalLocalDate?: Date['toLocaleDateString'] };
+    datePrototype.originalLocalDate = Date.prototype.toLocaleDateString;
+    Date.prototype.toLocaleDateString = () => { throw new Error('forced report render failure'); };
+  });
+  await page.getByRole('button', { name: 'Apply Filters' }).click();
+
+  await expect(page.getByRole('alert')).toContainText('This page could not be displayed');
+  await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.evaluate(() => {
+    const datePrototype = Date.prototype as Date & { originalLocalDate?: Date['toLocaleDateString'] };
+    if (datePrototype.originalLocalDate) Date.prototype.toLocaleDateString = datePrototype.originalLocalDate;
+  });
+  await page.getByRole('radiogroup', { name: 'Data mode' }).getByText('Mock', { exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Time Range' }).click();
+  await page.getByRole('option', { name: 'Last 90 Days' }).click();
+  await page.evaluate(() => {
+    Date.prototype.toLocaleDateString = () => { throw new Error('forced report render failure'); };
+  });
+  await page.getByRole('button', { name: 'Apply Filters' }).click();
+  await expect(page.getByRole('alert')).toContainText('This page could not be displayed');
+  await page.evaluate(() => {
+    const datePrototype = Date.prototype as Date & { originalLocalDate?: Date['toLocaleDateString'] };
+    if (datePrototype.originalLocalDate) Date.prototype.toLocaleDateString = datePrototype.originalLocalDate;
+  });
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.locator('.agent-spend-panel .reports-spend-chart')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
+});

@@ -562,7 +562,7 @@ func readReleaseTree(home, commit string) string {
 
 func boundedUpdateReason(reason string) string {
 	if len(reason) > 500 {
-		return reason[:500]
+		return strings.ToValidUTF8(reason[:500], "")
 	}
 	return reason
 }

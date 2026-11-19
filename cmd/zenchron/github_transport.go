@@ -3,12 +3,15 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 )
+
+var errGitHubUnprocessableEntity = errors.New("GitHub returned HTTP 422")
 
 func (client gitHubClient) authConfigured() bool {
 	return client.token != "" || client.appAuth != nil && client.appAuth.configured()
@@ -66,6 +69,9 @@ func (client gitHubClient) requestBytesWithToken(
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
+		if response.StatusCode == http.StatusUnprocessableEntity {
+			return nil, errGitHubUnprocessableEntity
+		}
 		return nil, fmt.Errorf("GitHub returned HTTP %d", response.StatusCode)
 	}
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, maxGitHubResponseSize+1))

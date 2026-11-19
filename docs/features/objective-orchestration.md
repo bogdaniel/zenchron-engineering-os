@@ -127,7 +127,8 @@ flowchart LR
 ### Integration and publication
 
 - The integrate unit starts when its dependencies are settled, with every produce unit's branch and admitted commit as
-  inputs in plan order.
+  inputs in plan order. Every producer must be settled, including producers reached only through transitive
+  dependencies; an active retry cannot be paired with its previous candidate.
 - The worker refuses inputs whose branch moved, aborts a conflicting merge and reports the branch and files, and
   otherwise commits the merges, runs the repository's verification commands on the result, and reports the commit.
 - A conflict becomes a finding for the producer whose branch did not merge, and integration runs again after that
@@ -174,6 +175,7 @@ Focused Go tests, through the HTTP API with a fake GitHub (`go test ./cmd/zenchr
 | `TestProducerIsNotCompleteWithoutAnAdmittedHandoff` | A successful exit is not completion; attempts bound the retries; dependents are blocked |
 | `TestWorkGraphRecoversAfterRestartWithoutQueueingWorkTwice` | Restart recovery and adoption of an unrecorded run |
 | `TestIntegrationConflictGoesToItsOwnerAndStaleInputsFailVisibly` | Conflict routing, re-integration, stale inputs, unit retry |
+| `TestIntegrationWaitsForRetriedTransitiveProducer` | Integration waits while a retried transitive producer is queued and uses its new branch with its new admitted commit |
 | `TestDecisionRequestBlocksItsUnitUntilAPersonResolvesIt`, `TestOnlyAnAuthorizedPersonCanResolveADecision` | Durable decisions, resume, and who may resolve |
 | `TestCancellingAGraphStopsItsRunsAndFailedUnitsBlockTheirDependents`, `TestCancelledGraphFollowsItsRunningRunUntilItStops` | Cancellation and failure propagation |
 | `TestPublicationPassIsBoundToTheReviewedCommitAndAFailedPushIsRetried` | Only the reviewed commit is published; a failed push is retried |

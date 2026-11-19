@@ -28,6 +28,7 @@ import { OverviewPage } from './OverviewPage';
 import { Sidebar } from './Sidebar';
 import { PageHeading } from './PageHeading';
 import { PanelCard } from './PanelCard';
+import { PageErrorBoundary } from './PageErrorBoundary';
 import { describeProvider, workerProvidersSchema } from './agentRunQueue';
 import './style.css';
 import './overview.css';
@@ -224,7 +225,7 @@ function App() {
           <header className="topbar">
             {activePage === 'reports' ? <div className="greeting reports-greeting">
                 <IconChartBar size={22} aria-hidden="true" />
-                <PageHeading className="reports-heading-copy" titleClassName="reports-heading-title" titleLevel={1}
+                <PageHeading className="reports-heading-copy" titleClassName="reports-heading-title" titleLevel={1} titleTabIndex={-1}
                   title="Reports" titleAdornment={<span>Engineering Operations Analytics</span>}
                   description="Executive analytics for delivery, quality, productivity, and agent operations across products and workspaces." />
               </div> : <PageHeading className="greeting" titleLevel={1}
@@ -286,6 +287,8 @@ function App() {
             <a href="#activity">Alerts</a>
           </nav>}
 
+          <PageErrorBoundary key={`${activePage}-${previewPage ? 'mock' : 'live'}-${sessionUnavailable}`}
+            onRetry={() => document.querySelector<HTMLElement>('.reports-greeting h1')?.focus()}>
           {sessionUnavailable && !previewPage ? <section className="session-preview-region" aria-labelledby="session-preview-title"><PanelCard className="session-preview-card" withBorder>
             <IconActivity size={24} aria-hidden="true" />
             <h2 id="session-preview-title">Session check unavailable</h2>
@@ -334,6 +337,7 @@ function App() {
               workers={workers.data}
             />
           ) : null}
+          </PageErrorBoundary>
         </main>
       </div>
     </MantineProvider>

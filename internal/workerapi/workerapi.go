@@ -8,6 +8,8 @@ const (
 	ProviderCodex  = "codex-cli"
 	ProviderClaude = "claude-code"
 
+	AgentRunResultAlreadyAccepted = "agent run result was already accepted"
+
 	agentRunBranchPrefix = "zenchron/agent-run/"
 
 	MaxProgressEvents   = 50

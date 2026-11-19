@@ -5,14 +5,22 @@ and agent runs. Delivery velocity, cycle time, and acceptance rate use GitHub PR
 configured, CI duration uses GitHub Actions history, and agent spend uses the cost providers report on agent runs;
 review latency and autonomous completion remain unavailable until their evidence exists. The page has one layout, the
 approved design, fed by `mockReports` (fixtures) in Mock and `useLiveReports` (control plane) in Live; see
-`docs/architecture/dashboard-modes.md`.
+`docs/architecture/dashboard-modes.md`. Each live render uses one timestamp for report date filtering and spend buckets.
+Page content is isolated by a retryable error boundary so a render failure leaves the dashboard shell available.
 
 ## Feature diagram
 
 ```mermaid
 flowchart LR
-    Page[ReportsPage · reports.tsx<br/>one layout] -->|Mock| MockPreview[mockReports · reports-preview.tsx<br/>fixtures, no requests]
+    Shell[Dashboard shell] --> PageBoundary[PageErrorBoundary · retryable fallback]
+    PageBoundary --> Page[ReportsPage · reports.tsx<br/>one layout]
+    PageBoundary -->|render error| Retry[Retry page content]
+    Retry -->|clear error and render selected page| PageBoundary
+    Page -->|Mock| MockPreview[mockReports · reports-preview.tsx<br/>fixtures, no requests]
     Page -->|Live| Reports[useLiveReports · reportsView.tsx]
+    Reports --> RangeNow[One captured render timestamp]
+    RangeNow --> ScopedRecords[Objective and run time filters]
+    RangeNow --> Spend[Agent spend buckets]
     Reports --> Objectives[GET /api/v1/objectives]
     Reports --> Workflows[GET /api/v1/workflows]
     Reports --> Agents[GET /api/v1/agents]
@@ -51,7 +59,7 @@ flowchart LR
     Objectives --> WorkspaceSummary
     Scope --> WorkspaceSummary
     Reviews[Provider review events] -. not available .-> Latency[Review latency]
-    Runs -->|usage.cost_usd| Spend[Agent spend KPI and chart]
+    Runs -->|usage.cost_usd| Spend
     Evidence[Completion evidence] -. not available .-> Autonomy[Autonomous completion]
     PRs -. not available .-> Autonomy
     Reports --> Snapshot[Scoped live snapshot]
@@ -66,6 +74,8 @@ flowchart LR
 
 - Summary counts use named fields from the control-plane APIs and represent current snapshots, not historical trends.
 - Time range filters objective creation and agent-run creation; invalid and future timestamps are excluded. Product filters use product repository links, owner filters apply to objectives, and repository filters apply to checkout and run records.
+- The live objective and run filters and spend trend buckets share one captured `now`, so a run on the inclusive lower time boundary cannot move into a negative bucket during the same render. Bucket indices are clamped to the first and last valid periods.
+- A page render failure displays a retry action inside route content while the shared header and navigation remain mounted; retry clears the boundary and renders the selected page again.
 - One layout serves both modes. Labels, class names, chart types, and responsive rules are the approved design's; only values, capabilities, and the reasons for missing data come from the source. The root carries `data-preview="mock"` in Mock.
 - In Live the Workflow selector is disabled, with the reason as its accessible name and tooltip, because agent-run records do not contain a workflow ID. The Team selector lists objective owners. After Apply Filters a status line reads `Scope applied: …` (Mock: `Preview scope applied: …`). The local mock has explicit illustrative workflow-to-product and repository-to-product links, which scope its summary rows without making backend requests.
 - The shared header search keeps the mock label `Search Zenchron…` on Reports while retaining the accessible name `Search pages`.

@@ -467,6 +467,9 @@ func (store *workGraphStore) retryUnit(w http.ResponseWriter, r *http.Request) {
 		if unit == nil || unit.Failure == "" || graph.Status == graphCancelled {
 			return http.StatusConflict, "only a failed unit of an unfinished work graph can be retried"
 		}
+		if len(unit.RunIDs) >= maxUnitRuns {
+			return http.StatusConflict, "the unit has used all of its runs and cannot be retried"
+		}
 		unit.Failure, unit.Restart = "", true
 		return 0, ""
 	})

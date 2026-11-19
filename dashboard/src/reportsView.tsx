@@ -109,7 +109,8 @@ function spendTrend(runs: AgentRun[], range: ReportTimeRange, now = Date.now()) 
     date: new Date(start + index * span / count).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), spend: 0,
   }));
   for (const { created, cost } of costed) {
-    points[Math.min(count - 1, Math.floor((created - start) / span * count))].spend += cost;
+    const index = Math.max(0, Math.min(count - 1, Math.floor((created - start) / span * count)));
+    points[index].spend += cost;
   }
   return points.map((point) => ({ ...point, spend: Math.round(point.spend * 100) / 100 }));
 }
@@ -132,6 +133,7 @@ const withUnit = (value: number | undefined, unit: string) => value === undefine
 
 /** Reports from the control plane. Nothing is fetched while `enabled` is false. */
 export function useLiveReports(enabled: boolean, facts: LiveFacts, scope: ReportScope): ReportsSource {
+  const now = Date.now();
   const { apiOnline, workers } = facts;
   const objectives = enabled ? facts.objectives : undefined;
   const projects = enabled ? facts.projects : undefined;
@@ -143,7 +145,7 @@ export function useLiveReports(enabled: boolean, facts: LiveFacts, scope: Report
   const selectedProduct = products.data?.find((product) => product.id === scope.product);
   const productRepositoryIDs = new Set(selectedProduct?.repository_ids ?? []);
   const scopedObjectives = objectives?.filter((objective) =>
-    isInRange(objective.created_at, scope.timeRange) &&
+    isInRange(objective.created_at, scope.timeRange, now) &&
     (scope.product === 'all' || objective.product_id === scope.product) &&
     (scope.objectiveOwner === 'all' || objective.owner === scope.objectiveOwner),
   );
@@ -176,7 +178,7 @@ export function useLiveReports(enabled: boolean, facts: LiveFacts, scope: Report
                       ? `; ${pullRequests.unconfiguredCheckoutCount} checkout${pullRequests.unconfiguredCheckoutCount === 1 ? '' : 's'} ` +
                         `${pullRequests.unconfiguredCheckoutCount === 1 ? 'has' : 'have'} no remote` : ''}.`;
   const scopedRuns = runs.data?.filter((run) =>
-    isInRange(run.created_at, scope.timeRange) &&
+    isInRange(run.created_at, scope.timeRange, now) &&
     (scope.product === 'all' || productRepositoryIDs.has(run.project_id)) &&
     (scope.repository === 'all' || run.project_id === scope.repository),
   );
@@ -230,7 +232,7 @@ export function useLiveReports(enabled: boolean, facts: LiveFacts, scope: Report
   const spendSource = runs.isLoading ? 'Agent run data is loading.' : runs.isError ? 'Agent run data unavailable.'
     : spend ? `Cost reported by providers for ${costedRuns.length} of ${recordedRunCount} runs.`
       : 'No run in this scope reports provider cost.';
-  const spendPoints = costedRuns.length ? spendTrend(costedRuns, scope.timeRange) : [];
+  const spendPoints = costedRuns.length ? spendTrend(costedRuns, scope.timeRange, now) : [];
   const timeRangeLabel = timeRanges.find((range) => range.value === scope.timeRange)?.label ?? 'All Time';
   const selectedRangeLabel = timeRangeLabel.toLowerCase();
   const inventory = [

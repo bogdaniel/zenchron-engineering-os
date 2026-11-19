@@ -16,6 +16,10 @@ import (
 )
 
 const maxGitHubResponseSize = 1 << 20
+const maxGitHubIssueListItems = 100
+
+// ponytail: scans at most 1,000 GitHub records to bound dashboard latency; expand with explicit UI pagination if needed.
+const maxGitHubIssueListPages = 10
 
 const gitHubAPIURL = "https://api.github.com"
 
@@ -314,17 +318,43 @@ func (registry *workerRegistry) listGitHubIssues(w http.ResponseWriter, r *http.
 	if !ok {
 		return
 	}
-	records := make([]gitHubIssue, 0)
-	if err := registry.github.request(r.Context(), "/repos/"+owner+"/"+repository+"/issues", &records); err != nil {
-		http.Error(w, "GitHub issues are unavailable", http.StatusBadGateway)
-		return
-	}
-	items := make([]gitHubIssue, 0, len(records))
-	for _, issue := range records {
-		if issue.PullRequest == nil {
+	path := "/repos/" + owner + "/" + repository + "/issues"
+	items := make([]gitHubIssue, 0, maxGitHubIssueListItems)
+	complete := false
+	for page := 1; page <= maxGitHubIssueListPages; page++ {
+		query := make(url.Values)
+		query.Set("state", "open")
+		query.Set("per_page", strconv.Itoa(maxGitHubIssueListItems))
+		query.Set("sort", "updated")
+		query.Set("direction", "desc")
+		query.Set("page", strconv.Itoa(page))
+		body, err := registry.github.requestBytes(r.Context(), http.MethodGet, path, "application/vnd.github+json", query, nil)
+		if err != nil {
+			http.Error(w, "GitHub issues are unavailable", http.StatusBadGateway)
+			return
+		}
+		var records []gitHubIssue
+		if err := json.Unmarshal(body, &records); err != nil {
+			http.Error(w, "GitHub issues are unavailable", http.StatusBadGateway)
+			return
+		}
+		for _, issue := range records {
+			if issue.PullRequest != nil {
+				continue
+			}
+			if len(items) == maxGitHubIssueListItems {
+				w.Header().Set("X-Zenchron-Complete", "false")
+				writeJSON(w, http.StatusOK, items)
+				return
+			}
 			items = append(items, issue)
 		}
+		if len(records) < maxGitHubIssueListItems {
+			complete = true
+			break
+		}
 	}
+	w.Header().Set("X-Zenchron-Complete", strconv.FormatBool(complete))
 	writeJSON(w, http.StatusOK, items)
 }
 
@@ -471,7 +501,24 @@ func (registry *workerRegistry) reviewGitHubPullRequest(w http.ResponseWriter, r
 		http.Error(w, "GitHub pull request details are unavailable; review was not submitted", http.StatusBadGateway)
 		return
 	}
-	if err := registry.github.submitPullRequestReview(r.Context(), owner, repository, number, input.Body, input.Event); err != nil {
+	runID := ""
+	if registry.runs != nil {
+		runID, _ = registry.runs.findByPullRequest("github.com/"+owner+"/"+repository, pull.Number)
+	}
+	recordedAsComment := false
+	err = registry.github.submitPullRequestReview(r.Context(), owner, repository, number, input.Body, input.Event)
+	if errors.Is(err, errGitHubUnprocessableEntity) && input.Event == "REQUEST_CHANGES" && runID != "" {
+		if err := registry.github.submitPullRequestReview(r.Context(), owner, repository, number, input.Body, "COMMENT"); err != nil {
+			http.Error(w, "GitHub rejected the change request and could not record a comment instead",
+				http.StatusBadGateway)
+			return
+		}
+		recordedAsComment = true
+	} else if errors.Is(err, errGitHubUnprocessableEntity) {
+		http.Error(w, "GitHub rejected this review (HTTP 422); check the pull request state and reviewer permissions",
+			http.StatusBadGateway)
+		return
+	} else if err != nil {
 		http.Error(w, "GitHub could not submit this review; verify token permissions and provider access", http.StatusBadGateway)
 		return
 	}
@@ -479,22 +526,21 @@ func (registry *workerRegistry) reviewGitHubPullRequest(w http.ResponseWriter, r
 		Status            string `json:"status"`
 		AgentRunLinked    bool   `json:"agent_run_linked"`
 		AgentRunQueued    bool   `json:"agent_run_queued"`
+		RecordedAsComment bool   `json:"github_request_changes_recorded_as_comment,omitempty"`
 		FeedbackSyncError string `json:"feedback_sync_error,omitempty"`
-	}{Status: "submitted"}
-	if registry.runs == nil {
+	}{Status: "submitted", RecordedAsComment: recordedAsComment}
+	if runID == "" {
 		writeJSON(w, http.StatusOK, result)
 		return
 	}
-	if runID, found := registry.runs.findByPullRequest("github.com/"+owner+"/"+repository, pull.Number); found {
-		run, status, message := registry.runs.recordReview(
-			accessFor(r), runID, r.PathValue("id"), input.Body, input.Event == "REQUEST_CHANGES", false,
-		)
-		if status == 0 {
-			result.AgentRunLinked = true
-			result.AgentRunQueued = run.Status == "queued"
-		} else if status != http.StatusNotFound {
-			result.FeedbackSyncError = message
-		}
+	run, status, message := registry.runs.recordReview(
+		accessFor(r), runID, r.PathValue("id"), input.Body, input.Event == "REQUEST_CHANGES", false,
+	)
+	if status == 0 {
+		result.AgentRunLinked = true
+		result.AgentRunQueued = run.Status == "queued"
+	} else if status != http.StatusNotFound {
+		result.FeedbackSyncError = message
 	}
 	writeJSON(w, http.StatusOK, result)
 }
