@@ -42,10 +42,12 @@ func TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions(t *t
 		return body, response.Code
 	}
 	own, status := environment(alpha)
-	if status != http.StatusOK || own.Name != "alpha" || len(own.Objectives) != 1 || own.Objectives[0].ID != created.ID ||
+	if status != http.StatusOK || own.Name != "alpha" || own.ConfigurationRevision != 1 ||
+		len(own.Objectives) != 1 || own.Objectives[0].ID != created.ID ||
 		own.Objectives[0].GraphID != graph.ID || own.Objectives[0].PlanRevisions != 1 || own.Objectives[0].Handoffs != 1 ||
 		len(own.Decisions) != 1 || own.Decisions[0].Unit != "api" || own.Decisions[0].ResolvedBy != "" ||
 		len(own.History) != 1 || own.History[0].ID != graph.ID || own.History[0].PlanHash != graph.PlanHash ||
+		own.History[0].ProductConfigurationRevision != 1 ||
 		own.Decisions[0].GraphStatus != own.Objectives[0].GraphStatus || len(own.History[0].Assignments) != 2 ||
 		own.History[0].Assignments[0] != (environmentAssignment{Unit: "api", AgentID: harness.profile.ID,
 			ProfileVersion: harness.profile.Version}) ||

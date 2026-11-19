@@ -29,6 +29,7 @@ async function useLiveFixtures(page: Page, products: ProductFixture[] = [nova, o
   });
   await page.route('**/api/v1/products/*/environment', (route) => route.fulfill(json({
     product_id: route.request().url().includes(novaID) ? novaID : orionID,
+    configuration_revision: 7,
     objectives: route.request().url().includes(novaID) ? [{
       graph_id: 'f'.repeat(32), graph_status: 'running', findings: 2, handoffs: 1,
       pull_request_url: 'https://github.com/zenchron/nova-platform/pull/42',
@@ -39,6 +40,7 @@ async function useLiveFixtures(page: Page, products: ProductFixture[] = [nova, o
     }] : [],
     history: route.request().url().includes(novaID) ? [{
       id: '9'.repeat(32), objective_id: '1'.repeat(32), plan_revision: 3, plan_hash: 'a'.repeat(40),
+      product_configuration_revision: 2,
       workflow_id: 'release', workflow_version: 2, workflow_mode: 'automatic',
       assignments: [{ unit: 'build', agent_id: 'd'.repeat(32), profile_version: 1,
         persona_id: personaID, persona_version: 4 }], revision: 8, status: 'completed',
@@ -198,7 +200,7 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
     .toHaveAttribute('href', `/?objective=${'1'.repeat(32)}&tab=plan&graph_id=${'f'.repeat(32)}&decision=decision-1&mode=live#objectives`);
   await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'History' }).click();
   const workGraph = page.locator('.workspace-mock-card.history');
-  await expect(workGraph).toContainText('Plan r3 · aaaaaaaa · Graph r8 · release v2 · automatic');
+  await expect(workGraph).toContainText('Plan r3 · aaaaaaaa · Product config r2 · Graph r8 · release v2 · automatic');
   await expect(workGraph).toContainText('Runs: run-1, run-2 · Handoffs 2 · Findings 1');
   await expect(workGraph.getByRole('link', { name: 'Ship Platform v3.0' }))
     .toHaveAttribute('href', `/?objective=${'1'.repeat(32)}&tab=plan&graph_id=${'9'.repeat(32)}&mode=live#objectives`);

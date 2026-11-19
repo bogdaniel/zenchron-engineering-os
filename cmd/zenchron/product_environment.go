@@ -11,33 +11,35 @@ import (
 // objectives, plans, work graphs, decisions, and pull requests that belong to it. It is a projection of
 // records owned elsewhere and stores nothing of its own, so one product can never carry another's work.
 type productEnvironment struct {
-	ProductID     string                 `json:"product_id"`
-	Name          string                 `json:"name"`
-	Description   string                 `json:"description"`
-	RepositoryIDs []string               `json:"repository_ids"`
-	Objectives    []environmentObjective `json:"objectives"`
-	Decisions     []environmentDecision  `json:"decisions"`
-	History       []environmentGraph     `json:"history"`
+	ProductID             string                 `json:"product_id"`
+	Name                  string                 `json:"name"`
+	Description           string                 `json:"description"`
+	ConfigurationRevision int                    `json:"configuration_revision"`
+	RepositoryIDs         []string               `json:"repository_ids"`
+	Objectives            []environmentObjective `json:"objectives"`
+	Decisions             []environmentDecision  `json:"decisions"`
+	History               []environmentGraph     `json:"history"`
 }
 
 // environmentGraph is a product-scoped reference to a durable execution record, without copying its evidence.
 type environmentGraph struct {
-	ID              string                  `json:"id"`
-	ObjectiveID     string                  `json:"objective_id"`
-	PlanRevision    int                     `json:"plan_revision"`
-	PlanHash        string                  `json:"plan_hash"`
-	WorkflowID      string                  `json:"workflow_id,omitempty"`
-	WorkflowVersion int                     `json:"workflow_version,omitempty"`
-	WorkflowMode    string                  `json:"workflow_mode,omitempty"`
-	Assignments     []environmentAssignment `json:"assignments"`
-	Revision        int                     `json:"revision"`
-	Status          string                  `json:"status"`
-	CreatedAt       time.Time               `json:"created_at"`
-	UpdatedAt       time.Time               `json:"updated_at"`
-	RunIDs          []string                `json:"run_ids"`
-	Handoffs        int                     `json:"handoffs"`
-	Findings        int                     `json:"findings"`
-	PullRequestURL  string                  `json:"pull_request_url,omitempty"`
+	ID                           string                  `json:"id"`
+	ObjectiveID                  string                  `json:"objective_id"`
+	PlanRevision                 int                     `json:"plan_revision"`
+	PlanHash                     string                  `json:"plan_hash"`
+	ProductConfigurationRevision int                     `json:"product_configuration_revision,omitempty"`
+	WorkflowID                   string                  `json:"workflow_id,omitempty"`
+	WorkflowVersion              int                     `json:"workflow_version,omitempty"`
+	WorkflowMode                 string                  `json:"workflow_mode,omitempty"`
+	Assignments                  []environmentAssignment `json:"assignments"`
+	Revision                     int                     `json:"revision"`
+	Status                       string                  `json:"status"`
+	CreatedAt                    time.Time               `json:"created_at"`
+	UpdatedAt                    time.Time               `json:"updated_at"`
+	RunIDs                       []string                `json:"run_ids"`
+	Handoffs                     int                     `json:"handoffs"`
+	Findings                     int                     `json:"findings"`
+	PullRequestURL               string                  `json:"pull_request_url,omitempty"`
 }
 
 // environmentAssignment references the immutable profile and persona revisions captured by a plan unit.
@@ -85,7 +87,8 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	environment := productEnvironment{ProductID: item.ID, Name: item.Name, Description: item.Description,
-		RepositoryIDs: item.RepositoryIDs, Objectives: []environmentObjective{}, Decisions: []environmentDecision{},
+		ConfigurationRevision: item.configurationRevision(),
+		RepositoryIDs:         item.RepositoryIDs, Objectives: []environmentObjective{}, Decisions: []environmentDecision{},
 		History: []environmentGraph{}}
 	objectives := store.objectives.ofProduct(item.ID)
 	store.mu.Lock()
@@ -100,6 +103,10 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 				entry.PlanRevisions++
 			}
 		}
+		planConfigurationRevisions := make(map[int]int, len(store.plans[objective.ID]))
+		for _, plan := range store.plans[objective.ID] {
+			planConfigurationRevisions[plan.Revision] = plan.ProductConfigurationRevision
+		}
 		var newest environmentGraph
 		hasNewest := false
 		// ponytail: scans the bounded 100-graph store per objective; index by objective if retention grows.
@@ -108,7 +115,9 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 				continue
 			}
 			reference := environmentGraph{ID: graph.ID, ObjectiveID: objective.ID, PlanRevision: graph.PlanRevision,
-				PlanHash: graph.PlanHash, WorkflowID: graph.WorkflowID, WorkflowVersion: graph.WorkflowVersion,
+				PlanHash:                     graph.PlanHash,
+				ProductConfigurationRevision: planConfigurationRevisions[graph.PlanRevision],
+				WorkflowID:                   graph.WorkflowID, WorkflowVersion: graph.WorkflowVersion,
 				WorkflowMode: graph.WorkflowMode, Revision: graph.Revision, Status: graph.Status,
 				CreatedAt: graph.CreatedAt, UpdatedAt: graph.UpdatedAt, RunIDs: []string{},
 				Assignments: []environmentAssignment{}}

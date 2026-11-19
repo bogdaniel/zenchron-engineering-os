@@ -10,6 +10,7 @@ export const productSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
+  configuration_revision: z.number().int().nonnegative().optional(),
   default_workflow_id: z.string().optional(),
   repository_ids: z.array(z.string()),
   created_at: z.string(),

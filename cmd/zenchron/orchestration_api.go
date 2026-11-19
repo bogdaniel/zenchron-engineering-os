@@ -92,10 +92,17 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	if !decodeJSONBody(w, r, &input) {
 		return
 	}
-	if input.Plan == nil && input.WorkflowID == "" && item.ProductID != "" {
-		if linkedProduct, exists := store.objectives.products.get(item.ProductID); exists {
-			input.WorkflowID = linkedProduct.DefaultWorkflowID
+	var linkedProduct product
+	if item.ProductID != "" {
+		var exists bool
+		linkedProduct, exists = store.objectives.products.get(item.ProductID)
+		if !exists {
+			http.Error(w, "the objective's linked product is unavailable", http.StatusConflict)
+			return
 		}
+	}
+	if input.Plan == nil && input.WorkflowID == "" && item.ProductID != "" {
+		input.WorkflowID = linkedProduct.DefaultWorkflowID
 	}
 	access := accessFor(r)
 	project, online := store.runs.registry.onlineProject(strings.ToLower(input.ProjectID))
@@ -126,12 +133,8 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	plan := objectivePlan{ObjectiveID: item.ID, ProjectID: project.ID, Repository: project.GitRemote, WorkflowID: input.WorkflowID,
 		Status: planProposed, CreatedBy: access.user, CreatedAt: time.Now().UTC()}
 	if item.ProductID != "" {
-		linkedProduct, exists := store.objectives.products.get(item.ProductID)
-		if !exists {
-			http.Error(w, "the objective's linked product is unavailable", http.StatusConflict)
-			return
-		}
 		plan.ProductContext = "Product: " + linkedProduct.Name
+		plan.ProductConfigurationRevision = linkedProduct.configurationRevision()
 		if linkedProduct.Description != "" {
 			plan.ProductContext += "\nDescription: " + linkedProduct.Description
 		}
@@ -150,7 +153,8 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		plan.planProposal, plan.ProfileSnapshots = *input.Plan, snapshots
-		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.ProductContext, *input.Plan)
+		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.ProductContext,
+			plan.ProductConfigurationRevision, *input.Plan)
 	case input.Plan == nil && input.PlannerAgentID == "" && definition != nil:
 		profiles := store.agentProfiles()
 		proposal, problems := compileWorkflow(*definition, profiles)
@@ -165,7 +169,8 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		}
 		plan.planProposal = proposal
 		plan.WorkflowMode = workflowModeCompiled
-		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.ProductContext, proposal)
+		plan.Hash = planHash(project.ID, input.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode, plan.ProductContext,
+			plan.ProductConfigurationRevision, proposal)
 	case input.Plan == nil && input.PlannerAgentID != "":
 		if definition != nil {
 			var err error
@@ -274,7 +279,7 @@ func (store *workGraphStore) admitPlansLocked() bool {
 					plan.Status = planInvalid
 				}
 				plan.Hash = planHash(plan.ProjectID, plan.WorkflowID, plan.WorkflowVersion, plan.WorkflowMode,
-					plan.ProductContext, plan.planProposal)
+					plan.ProductContext, plan.ProductConfigurationRevision, plan.planProposal)
 			}
 		}
 	}

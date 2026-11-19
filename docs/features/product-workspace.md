@@ -29,7 +29,7 @@ flowchart LR
     Start -->|"project/workflow IDs carried to Plan form"| Plans
     Objective -->|"create objective, then select repository and workflow in Plan"| Plans["ObjectivePlanPanel"]
     Plans -->|"POST /api/v1/objectives/{id}/plans"| CP
-    Plans -->|"planned workflow, profile and product-context snapshots"| Workflow
+    Plans -->|"product config revision, workflow and profile snapshots"| Workflow
     Plans -->|"planned profile and persona versions"| Agents
     Plans --> Report["ObjectiveDeliveryReport"]
     Report -->|"workflow ID"| Workflow["WorkflowsPage · current saved definition"]
@@ -47,10 +47,10 @@ flowchart LR
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
     Environment --> Store
     Environment --> Graphs[(objectives.json · work-graphs.json)]
-    Store -->|"read product context and default workflow"| CP
+    Store -->|"read product context, revision and default workflow"| CP
     CP -->|"resolve default only for new plans; pin workflow version"| Graphs
     Graphs -->|"matching objective, revision and hash"| RunContext["planner / WorkUnit runContext"]
-    Graphs -->|"frozen workflow/profile/persona revision references"| Environment
+    Graphs -->|"frozen product/workflow/profile/persona revision references"| Environment
     Page -->|"Product actions → Open repository inventory"| Projects["#projects"]
 ```
 
@@ -134,7 +134,7 @@ Live:
   cost with explicit run coverage. Providers that do not report cost remain unknown; budgets are not recorded here.
 - The selected product's environment projection supplies the pending-decision count, decision links, current
   WorkGraph/handoff/finding counts, observed PR-link count, and a newest-first list of its historical WorkGraphs.
-  History entries reference the durable graph, plan hash/revision, graph revision, run IDs, status and timestamps;
+  History entries reference the durable graph, plan hash/revision, product configuration revision, graph revision, run IDs, status and timestamps;
   evidence bodies remain in their owning graph. These are recorded facts, without a time trend or implied merge state.
   A failed projection shows an error, and a missing product shows an empty explanation.
 - Delivery report workflow and profile links open the referenced saved record using
@@ -161,7 +161,7 @@ Live:
 
 ## Data boundaries
 
-- Products, descriptions, default workflow IDs, and repository ID links persist in `products.json`; product names are
+- Products, descriptions, default workflow IDs, configuration revisions, and repository ID links persist in `products.json`; product names are
   unique without regard to case.
 - Repository IDs are stable for a worker identity and checkout path. Names, branches, worker names, and heartbeat state
   come from current worker inventory; local paths remain on the worker. Only repository names and worker IDs are shared
@@ -197,9 +197,10 @@ verified; deterministic fake-CLI coverage lives in `orchestration.spec.ts`.
 ## Product environment
 
 `GET /api/v1/products/{id}/environment` returns the engineering world of one product by reference: its repository
-ids; each objective linked to it with its status, the number of plan revisions, and the id, status, plan revision,
+ids and current configuration revision; each objective linked to it with its status, the number of plan revisions,
+and the id, status, plan revision,
 handoff and finding counts, and pull-request URL of its newest work graph; every visible WorkGraph in newest-first
-history order with its plan hash/revision, graph revision, run IDs, status and timestamps, workflow identity/version,
+history order with its plan hash/revision, product configuration revision, graph revision, run IDs, status and timestamps, workflow identity/version,
 and each assigned unit's agent profile/persona identity and frozen revision; and every decision asked in those graphs
 with the unit that asked, the question, and who resolved it.
 
@@ -212,9 +213,12 @@ with the unit that asked, the question, and who resolved it.
 - A plan revision snapshots the linked product description and includes it in the plan hash. Planning runs and
   WorkUnit attempts use that same text across retries; editing a product affects only later plan revisions. The text
   is user-supplied task data and does not grant authority or change the result contract.
+- Configuration revision advances when product name, description, default workflow, or repository links change. Each
+  plan pins the revision alongside its product context and the environment projection associates that revision with
+  the historical WorkGraph. Older product records without the field read as revision 1.
 - Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
 - A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
-- Only the default workflow is product-scoped configuration. Other configuration, knowledge entries, promotion between
+- Only the default workflow is currently product-scoped configuration. Other configuration, knowledge entries, promotion between
   scopes, architecture/team references, and cross-product organization knowledge remain unimplemented because they
   require established authority/context boundaries.
 

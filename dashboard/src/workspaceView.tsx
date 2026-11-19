@@ -116,13 +116,15 @@ const missing = (what: string): WorkspaceNote => ({ text: `${unavailable}: ${wha
 const failed = (text: string): WorkspaceNote => ({ text, alert: true });
 const environmentSchema = z.object({
   product_id: z.string(),
+  configuration_revision: z.number().int().nonnegative().optional(),
   objectives: z.array(z.object({ graph_id: z.string().optional(), graph_status: z.string().optional(),
     findings: z.number().int().nonnegative().optional(), handoffs: z.number().int().nonnegative().optional(),
     pull_request_url: z.string().optional() })),
   decisions: z.array(z.object({ graph_id: z.string().optional(), graph_status: z.string().optional(), message_id: z.string().optional(),
     objective_id: z.string(), question: z.string(), resolved_by: z.string().optional() })),
   history: z.array(z.object({ id: z.string(), objective_id: z.string(), plan_revision: z.number().int().nonnegative(),
-    plan_hash: z.string(), workflow_id: z.string().optional(), workflow_version: z.number().int().nonnegative().optional(),
+    plan_hash: z.string(), product_configuration_revision: z.number().int().nonnegative().optional(),
+    workflow_id: z.string().optional(), workflow_version: z.number().int().nonnegative().optional(),
     workflow_mode: z.string().optional(), assignments: z.array(z.object({ unit: z.string(), agent_id: z.string(),
       profile_version: z.number().int().nonnegative(), persona_id: z.string().optional(),
       persona_version: z.number().int().nonnegative().optional() })), revision: z.number().int().nonnegative(), status: z.string(),
@@ -295,7 +297,8 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
       const workflow = item.workflow_id ? `${item.workflow_id}${item.workflow_version ? ` v${item.workflow_version}` : ''}${item.workflow_mode ? ` · ${item.workflow_mode}` : ''}` : 'No workflow';
       const title = facts.objectives?.find((objective) => objective.id === item.objective_id)?.title ?? item.objective_id;
       return { id: item.id, title, state: statusLabel(item.status),
-        detail: `Plan r${item.plan_revision} · ${item.plan_hash.slice(0, 8)} · Graph r${item.revision} · ${workflow}` +
+        detail: `Plan r${item.plan_revision} · ${item.plan_hash.slice(0, 8)} · Product config r${item.product_configuration_revision ?? 'unknown'}` +
+          ` · Graph r${item.revision} · ${workflow}` +
           ` · Runs: ${item.run_ids.join(', ') || 'none'} · Handoffs ${item.handoffs} · Findings ${item.findings}` +
           (assignments ? ` · ${assignments}` : ''),
         href: livePageHref('objectives', { objective: item.objective_id, tab: 'plan', graph_id: item.id }) };

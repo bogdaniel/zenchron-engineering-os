@@ -47,6 +47,18 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&createdProduct); err != nil || response.Code != http.StatusCreated {
 		t.Fatalf("create product = %#v, decode error = %v, HTTP %d", createdProduct, err, response.Code)
 	}
+	if createdProduct.ConfigurationRevision != 1 {
+		t.Fatalf("created product configuration revision = %d, want 1", createdProduct.ConfigurationRevision)
+	}
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/v1/products/"+createdProduct.ID, strings.NewReader(
+		`{"name":"Persisted product","description":"revision two","repository_ids":["`+testProjectID+
+			`"],"default_workflow_id":"pr-review-release"}`)))
+	var updatedProduct product
+	if err := json.NewDecoder(response.Body).Decode(&updatedProduct); err != nil || response.Code != http.StatusOK ||
+		updatedProduct.ConfigurationRevision != 2 {
+		t.Fatalf("update product revision = %#v, decode error = %v, HTTP %d", updatedProduct, err, response.Code)
+	}
 	response = httptest.NewRecorder()
 	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
 		`{"title":"Persisted linked objective","product_id":"`+createdProduct.ID+`"}`,
@@ -142,7 +154,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&products); err != nil || response.Code != http.StatusOK ||
 		len(products) != 1 || products[0].ID != createdProduct.ID ||
 		len(products[0].RepositoryIDs) != 1 || products[0].RepositoryIDs[0] != testProjectID ||
-		products[0].DefaultWorkflowID != "pr-review-release" {
+		products[0].DefaultWorkflowID != "pr-review-release" || products[0].ConfigurationRevision != 2 {
 		t.Fatalf("restored products = %#v, decode error = %v, HTTP %d", products, err, response.Code)
 	}
 	response = httptest.NewRecorder()

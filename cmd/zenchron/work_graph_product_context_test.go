@@ -186,3 +186,61 @@ func TestProductDefaultWorkflowIsPinnedIntoNewPlan(t *testing.T) {
 		t.Fatalf("manual plan inherited product workflow default: HTTP %d plan %#v", response.StatusCode, manual)
 	}
 }
+
+func TestProductConfigurationRevisionIsPinnedIntoNewPlans(t *testing.T) {
+	harness := newGraphHarness(t)
+	products := harness.store.graphs.objectives.products
+	harness.server = newMuxWithStores(harness.store.graphs.objectives, harness.store.graphs.workflows,
+		harness.store.agents, products, harness.store.registry, harness.store)
+	response := harness.call(http.MethodPost, "/api/v1/products",
+		`{"name":"Versioned product","description":"Initial context","repository_ids":[]}`)
+	var product map[string]json.RawMessage
+	if err := json.NewDecoder(response.Body).Decode(&product); err != nil || response.Code != http.StatusCreated {
+		t.Fatalf("create product: HTTP %d, %v", response.Code, err)
+	}
+	var productID string
+	if err := json.Unmarshal(product["id"], &productID); err != nil {
+		t.Fatal(err)
+	}
+	response = harness.call(http.MethodPost, "/api/v1/objectives",
+		`{"title":"Pin product configuration","product_id":"`+productID+`"}`)
+	var objective objective
+	if err := json.NewDecoder(response.Body).Decode(&objective); err != nil || response.Code != http.StatusCreated {
+		t.Fatalf("create objective: HTTP %d, %v", response.Code, err)
+	}
+	harness.objectiveID = objective.ID
+	body := harness.planBody(
+		unitJSON("api", unitProduce, harness.profile.ID),
+		unitJSON("integrate", unitIntegrate, "", "api"))
+	if _, response := harness.propose(body); response.StatusCode != http.StatusCreated {
+		t.Fatalf("propose first plan: HTTP %d, %s", response.StatusCode, response.Body)
+	}
+
+	response = harness.call(http.MethodPut, "/api/v1/products/"+productID,
+		`{"name":"Versioned product","description":"Updated context","repository_ids":[]}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("update product returned HTTP %d: %s", response.Code, response.Body)
+	}
+	if _, response := harness.propose(body); response.StatusCode != http.StatusCreated {
+		t.Fatalf("propose second plan: HTTP %d, %s", response.StatusCode, response.Body)
+	}
+
+	response = harness.call(http.MethodGet, "/api/v1/objectives/"+objective.ID+"/plans", "")
+	var plans []map[string]json.RawMessage
+	if err := json.NewDecoder(response.Body).Decode(&plans); err != nil || response.Code != http.StatusOK || len(plans) != 2 {
+		t.Fatalf("list plans: HTTP %d, %v, count %d", response.Code, err, len(plans))
+	}
+	var revisions [2]int
+	var hashes [2]string
+	for i, plan := range plans {
+		if err := json.Unmarshal(plan["product_configuration_revision"], &revisions[i]); err != nil {
+			t.Fatalf("decode plan %d product revision: %v", i, err)
+		}
+		if err := json.Unmarshal(plan["hash"], &hashes[i]); err != nil {
+			t.Fatalf("decode plan %d hash: %v", i, err)
+		}
+	}
+	if revisions != [2]int{2, 1} || hashes[0] == hashes[1] {
+		t.Fatalf("plans did not retain distinct configuration identities: revisions=%v hashes=%v", revisions, hashes)
+	}
+}

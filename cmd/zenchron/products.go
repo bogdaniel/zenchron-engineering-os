@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -12,13 +13,14 @@ import (
 )
 
 type product struct {
-	ID                string    `json:"id"`
-	Name              string    `json:"name"`
-	Description       string    `json:"description"`
-	DefaultWorkflowID string    `json:"default_workflow_id,omitempty"`
-	RepositoryIDs     []string  `json:"repository_ids"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID                    string    `json:"id"`
+	Name                  string    `json:"name"`
+	Description           string    `json:"description"`
+	ConfigurationRevision int       `json:"configuration_revision"`
+	DefaultWorkflowID     string    `json:"default_workflow_id,omitempty"`
+	RepositoryIDs         []string  `json:"repository_ids"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
 	// CreatedBy is the GitHub login that created the product under an access policy.
 	CreatedBy string `json:"created_by,omitempty"`
 	// AccessRepositories maps each linked project id to its repository, recorded when the project is
@@ -58,7 +60,15 @@ func (item product) visible(access requestAccess) bool {
 // public is the product as returned by the API.
 func (item product) public() product {
 	item.AccessRepositories = nil
+	item.ConfigurationRevision = item.configurationRevision()
 	return item
+}
+
+func (item product) configurationRevision() int {
+	if item.ConfigurationRevision < 1 {
+		return 1
+	}
+	return item.ConfigurationRevision
 }
 
 // accessRepositories returns the repository of every linked project. Under an access policy a product
@@ -133,7 +143,7 @@ func validStoredProduct(item product) bool {
 	id, err := hex.DecodeString(item.ID)
 	if err != nil || len(id) != 16 || item.ID != strings.ToLower(item.ID) ||
 		strings.TrimSpace(item.Name) == "" || len(item.Name) > 100 || len(item.Description) > 2000 ||
-		item.RepositoryIDs == nil || item.CreatedAt.IsZero() || item.UpdatedAt.IsZero() {
+		item.RepositoryIDs == nil || item.ConfigurationRevision < 0 || item.CreatedAt.IsZero() || item.UpdatedAt.IsZero() {
 		return false
 	}
 	if item.DefaultWorkflowID != "" {
@@ -216,7 +226,8 @@ func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	item := product{
 		ID: hex.EncodeToString(idBytes), Name: input.Name, Description: input.Description,
-		RepositoryIDs: repositoryIDs, DefaultWorkflowID: input.DefaultWorkflowID, CreatedAt: now, UpdatedAt: now,
+		ConfigurationRevision: 1, RepositoryIDs: repositoryIDs, DefaultWorkflowID: input.DefaultWorkflowID,
+		CreatedAt: now, UpdatedAt: now,
 		CreatedBy: access.user, AccessRepositories: accessRepositories,
 	}
 	store.mu.Lock()
@@ -296,6 +307,11 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 		item.DefaultWorkflowID = *input.DefaultWorkflowID
 	}
 	item.AccessRepositories = accessRepositories
+	item.ConfigurationRevision = previous.configurationRevision()
+	if item.Name != previous.Name || item.Description != previous.Description ||
+		item.DefaultWorkflowID != previous.DefaultWorkflowID || !slices.Equal(item.RepositoryIDs, previous.RepositoryIDs) {
+		item.ConfigurationRevision++
+	}
 	item.UpdatedAt = time.Now().UTC()
 	store.items[id] = item
 	if err := store.persistLocked(); err != nil {

@@ -43,6 +43,7 @@ const planSchema = z.object({
   objective_id: z.string(), revision: z.number(),
   status: z.enum(['planning', 'proposed', 'invalid', 'approved', 'superseded']),
   project_id: z.string(), workflow_id: z.string().optional(), workflow_version: z.number().optional(), summary: z.string().optional().default(''),
+  product_configuration_revision: z.number().int().nonnegative().optional(),
   workflow_mode: z.enum(['compiled', 'guidance']).optional(),
   max_parallel: z.number().optional().default(0), units: list(planUnitSchema), problems: list(z.string()),
   graph_id: z.string().optional(), created_at: z.string(), approved_by: z.string().optional(),
