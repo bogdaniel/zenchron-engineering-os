@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +14,92 @@ import (
 )
 
 const testPullRequestHead = "0123456789abcdef0123456789abcdef01234567"
+
+func TestListGitHubIssuesPaginatesPastPullRequestsAndReportsTruncation(t *testing.T) {
+	var pages []int
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page := 0
+		if _, err := fmt.Sscanf(r.URL.Query().Get("page"), "%d", &page); err != nil || page < 1 {
+			t.Errorf("GitHub issues page = %q", r.URL.Query().Get("page"))
+		}
+		pages = append(pages, page)
+		var records []map[string]any
+		for index := 0; index < 100; index++ {
+			number := (page-1)*100 + index + 1
+			if page == 1 {
+				records = append(records, map[string]any{"number": number, "title": "PR", "pull_request": map[string]string{"url": "https://api.github.com/pulls/1"}})
+				continue
+			}
+			records = append(records, map[string]any{"number": number, "title": "Issue"})
+		}
+		if page == 3 {
+			records = records[:1]
+		}
+		_ = json.NewEncoder(w).Encode(records)
+	}))
+	defer provider.Close()
+
+	registry := newWorkerRegistry()
+	registry.github.apiURL = provider.URL
+	registry.projects["worker:project"] = projectRecord{ID: "project", GitRemote: "github.com/acme/platform"}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/projects/{id}/issues", registry.listGitHubIssues)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	response, err := http.Get(server.URL + "/api/v1/projects/project/issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var issues []gitHubIssue
+	if err := json.NewDecoder(response.Body).Decode(&issues); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || len(issues) != 100 || issues[0].Number != 101 {
+		t.Fatalf("issue list = count %d, first %#v, HTTP %d", len(issues), issues[0], response.StatusCode)
+	}
+	if response.Header.Get("X-Zenchron-Complete") != "false" {
+		t.Fatalf("completeness header = %q, want false", response.Header.Get("X-Zenchron-Complete"))
+	}
+	if fmt.Sprint(pages) != "[1 2 3]" {
+		t.Fatalf("GitHub pages requested = %v, want [1 2 3]", pages)
+	}
+}
+
+func TestListGitHubIssuesDoesNotReturnPartialResultsWhenPageFails(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "1" {
+			records := make([]map[string]any, maxGitHubIssueListItems)
+			for index := range records {
+				records[index] = map[string]any{"number": index + 1, "pull_request": map[string]string{"url": "https://api.github.com/pulls/1"}}
+			}
+			_ = json.NewEncoder(w).Encode(records)
+			return
+		}
+		http.Error(w, "GitHub unavailable", http.StatusInternalServerError)
+	}))
+	defer provider.Close()
+	registry := newWorkerRegistry()
+	registry.github.apiURL = provider.URL
+	registry.projects["worker:project"] = projectRecord{ID: "project", GitRemote: "github.com/acme/platform"}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/projects/{id}/issues", registry.listGitHubIssues)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	response, err := http.Get(server.URL + "/api/v1/projects/project/issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusBadGateway {
+		t.Fatalf("failed GitHub page returned HTTP %d", response.StatusCode)
+	}
+	if response.Header.Get("X-Zenchron-Complete") != "" {
+		t.Fatalf("failed page advertised completeness: %q", response.Header.Get("X-Zenchron-Complete"))
+	}
+}
 
 func TestGitHubIssuesAndPullRequestsUseRemoteAndKeepDistinct(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -165,6 +252,9 @@ func TestGitHubIssuesAndPullRequestsUseRemoteAndKeepDistinct(t *testing.T) {
 	}
 	if response.StatusCode != http.StatusOK || len(issues) != 1 || issues[0].Number != 13 || issues[0].Labels[0].Name != "docs" {
 		t.Fatalf("issue list = %#v (HTTP %d), pull requests must be filtered", issues, response.StatusCode)
+	}
+	if response.Header.Get("X-Zenchron-Complete") != "true" {
+		t.Fatalf("completeness header = %q, want true", response.Header.Get("X-Zenchron-Complete"))
 	}
 
 	response, err = http.Post(server.URL+"/api/v1/projects/project/issues/13/comments", "application/json",
