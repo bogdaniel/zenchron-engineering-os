@@ -16,6 +16,15 @@ test('shows GitHub sign-in and keeps dashboard data gated without a session', as
   expect(dashboardRequests).toBe(0);
 });
 
+test('keeps the selected Live dashboard destination through sign-in', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) =>
+    route.fulfill({ status: 401, body: 'authentication required' }));
+  await page.goto('/?mode=live&objective=objective-1&tab=plan&graph_id=graph-2&token=private#objectives');
+  const signIn = page.getByRole('link', { name: 'Continue with GitHub' });
+  await expect(signIn).toHaveAttribute('href',
+    '/auth/github?return=%2F%3Fmode%3Dlive%26objective%3Dobjective-1%26tab%3Dplan%26graph_id%3Dgraph-2%23objectives');
+});
+
 test('keeps the dashboard shell visible until a failed session check can be retried', async ({ page }) => {
   let sessionChecks = 0;
   let protectedRequests = 0;

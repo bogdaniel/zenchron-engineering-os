@@ -21,6 +21,8 @@ flowchart LR
   Companion -->|Open Dashboard for access after 401 or 403| Browser
   Companion -->|Open selected objective and WorkGraph| Browser
   Companion -->|Open selected human decision| Browser
+  Browser -->|GitHub sign in| OAuth[OAuth state bound to dashboard destination]
+  OAuth -->|Validated same-origin return| Browser
   Companion -->|Start Zenchron| CLI[Canonical CLI start command]
   CLI -->|Kickstart and verify active release on /healthz and dashboard HTML| API
   CLI -->|Open only after both checks pass| Browser
@@ -59,7 +61,9 @@ flowchart LR
 - The menu distinguishes a missing session from missing administrator access and does not offer Start when either
   response means the local service is responding but its status is not authorized. It offers **Open Dashboard for
   access**, using the canonical local dashboard URL, so the operator can sign in there. The companion does not share
-  the browser session; its own status remains unavailable until a secure session-sharing path exists.
+  the browser session; its own status remains unavailable until a secure session-sharing path exists. When a selected
+  dashboard deep link prompts for GitHub sign-in, OAuth returns to that same-origin objective route after sign-in;
+  the return path is constrained to dashboard selection fields and authenticated state binds it to the OAuth flow.
 - Cancelled WorkGraphs remain in history but their unresolved decisions are excluded from actionable status counts and
   menu links. Blocked WorkGraphs still expose unanswered decisions.
 - **Open Dashboard** uses the canonical URL returned by the control plane, after validating its host and port.

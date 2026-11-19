@@ -148,16 +148,23 @@ func TestGitHubOAuthCreatesAllowlistedSession(t *testing.T) {
 	}
 	stateCookie := start.Result().Cookies()[0]
 	authorizeURL, err := url.Parse(start.Header().Get("Location"))
-	if err != nil || authorizeURL.Query().Get("state") != stateCookie.Value || authorizeURL.Query().Get("scope") != "read:user" {
-		t.Fatalf("authorization URL = %q, parse error = %v", start.Header().Get("Location"), err)
+	if err != nil {
+		t.Fatalf("parse authorization URL: %v", err)
+	}
+	state := authorizeURL.Query().Get("state")
+	if state == "" || authorizeURL.Query().Get("scope") != "read:user" {
+		t.Fatalf("authorization URL = %q, state %q, scope %q", start.Header().Get("Location"), state,
+			authorizeURL.Query().Get("scope"))
 	}
 
-	callback := httptest.NewRequest(http.MethodGet, "/auth/github/callback?code=one-time-code&state="+url.QueryEscape(stateCookie.Value), nil)
+	callbackPath := "/auth/github/callback?code=one-time-code&state=" + url.QueryEscape(state)
+	callback := httptest.NewRequest(http.MethodGet, callbackPath, nil)
 	callback.AddCookie(stateCookie)
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, callback)
-	if response.Code != http.StatusSeeOther {
-		t.Fatalf("OAuth callback returned HTTP %d: %s", response.Code, response.Body.String())
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/" {
+		t.Fatalf("OAuth callback returned HTTP %d to %q: %s", response.Code,
+			response.Header().Get("Location"), response.Body.String())
 	}
 	var sessionCookie *http.Cookie
 	for _, cookie := range response.Result().Cookies() {
@@ -201,6 +208,76 @@ func TestGitHubOAuthCreatesAllowlistedSession(t *testing.T) {
 	}
 }
 
+func TestGitHubOAuthReturnsToBoundDashboardDestination(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/login/oauth/access_token":
+			_, _ = w.Write([]byte(`{"access_token":"temporary-user-token"}`))
+		case "/user":
+			_, _ = w.Write([]byte(`{"login":"Engineer"}`))
+		default:
+			t.Errorf("unexpected provider path %q", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer provider.Close()
+	config := testAuthConfig()
+	config.githubURL, config.githubAPIURL = provider.URL, provider.URL
+	server := authHandler(newMux(), config)
+	returnTo := "/?mode=live&objective=objective-1&tab=plan&graph_id=graph-2#objectives"
+	start := httptest.NewRecorder()
+	server.ServeHTTP(start, httptest.NewRequest(http.MethodGet,
+		"/auth/github?return="+url.QueryEscape(returnTo), nil))
+	if start.Code != http.StatusFound {
+		t.Fatalf("OAuth start returned HTTP %d", start.Code)
+	}
+	stateCookie := start.Result().Cookies()[0]
+	authorizeURL, err := url.Parse(start.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse authorization URL: %v", err)
+	}
+	state := authorizeURL.Query().Get("state")
+	callbackPath := "/auth/github/callback?code=one-time-code&state=" + url.QueryEscape(state)
+	modifiedCookie := *stateCookie
+	modifiedCookie.Value += "x"
+	modified := httptest.NewRecorder()
+	modifiedRequest := httptest.NewRequest(http.MethodGet, callbackPath, nil)
+	modifiedRequest.AddCookie(&modifiedCookie)
+	server.ServeHTTP(modified, modifiedRequest)
+	if modified.Code != http.StatusBadRequest {
+		t.Fatalf("tampered OAuth state cookie returned HTTP %d", modified.Code)
+	}
+
+	callback := httptest.NewRecorder()
+	callbackRequest := httptest.NewRequest(http.MethodGet, callbackPath, nil)
+	callbackRequest.AddCookie(stateCookie)
+	server.ServeHTTP(callback, callbackRequest)
+	if callback.Code != http.StatusSeeOther || callback.Header().Get("Location") != returnTo {
+		t.Fatalf("OAuth callback returned HTTP %d to %q, want %q", callback.Code,
+			callback.Header().Get("Location"), returnTo)
+	}
+	for _, invalidReturn := range []string{"//attacker.example/path", "/?token=private"} {
+		start := httptest.NewRecorder()
+		server.ServeHTTP(start, httptest.NewRequest(http.MethodGet,
+			"/auth/github?return="+url.QueryEscape(invalidReturn), nil))
+		stateCookie := start.Result().Cookies()[0]
+		authorizeURL, err := url.Parse(start.Header().Get("Location"))
+		if err != nil {
+			t.Fatalf("parse authorization URL for invalid destination: %v", err)
+		}
+		callbackPath := "/auth/github/callback?code=one-time-code&state=" +
+			url.QueryEscape(authorizeURL.Query().Get("state"))
+		callback := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, callbackPath, nil)
+		request.AddCookie(stateCookie)
+		server.ServeHTTP(callback, request)
+		if callback.Code != http.StatusSeeOther || callback.Header().Get("Location") != "/" {
+			t.Errorf("invalid destination %q redirected with HTTP %d to %q", invalidReturn,
+				callback.Code, callback.Header().Get("Location"))
+		}
+	}
+}
+
 func TestGitHubOAuthRejectsStateAndUnlistedUsers(t *testing.T) {
 	config := testAuthConfig()
 	server := authHandler(newMux(), config)
@@ -225,9 +302,15 @@ func TestGitHubOAuthRejectsStateAndUnlistedUsers(t *testing.T) {
 	config.githubAPIURL = provider.URL
 	start := httptest.NewRecorder()
 	server.ServeHTTP(start, httptest.NewRequest(http.MethodGet, "/auth/github", nil))
-	state := start.Result().Cookies()[0]
-	request = httptest.NewRequest(http.MethodGet, "/auth/github/callback?code=x&state="+url.QueryEscape(state.Value), nil)
-	request.AddCookie(state)
+	stateCookie := start.Result().Cookies()[0]
+	authorizeURL, err := url.Parse(start.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse authorization URL: %v", err)
+	}
+	state := authorizeURL.Query().Get("state")
+	callbackPath := "/auth/github/callback?code=x&state=" + url.QueryEscape(state)
+	request = httptest.NewRequest(http.MethodGet, callbackPath, nil)
+	request.AddCookie(stateCookie)
 	response = httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "GitHub account is not authorized") {
@@ -249,9 +332,15 @@ func TestGitHubOAuthSeparatesTokenExchangeFailureFromAllowlistDenial(t *testing.
 	server := authHandler(newMux(), config)
 	start := httptest.NewRecorder()
 	server.ServeHTTP(start, httptest.NewRequest(http.MethodGet, "/auth/github", nil))
-	state := start.Result().Cookies()[0]
-	request := httptest.NewRequest(http.MethodGet, "/auth/github/callback?code=x&state="+url.QueryEscape(state.Value), nil)
-	request.AddCookie(state)
+	stateCookie := start.Result().Cookies()[0]
+	authorizeURL, err := url.Parse(start.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse authorization URL: %v", err)
+	}
+	state := authorizeURL.Query().Get("state")
+	callbackPath := "/auth/github/callback?code=x&state=" + url.QueryEscape(state)
+	request := httptest.NewRequest(http.MethodGet, callbackPath, nil)
+	request.AddCookie(stateCookie)
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 	if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), "check the OAuth app credentials") {

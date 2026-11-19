@@ -307,8 +307,15 @@ func startGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authConfig
 		http.Error(w, "could not start sign-in", http.StatusInternalServerError)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: state, Path: "/auth/github", HttpOnly: true, Secure: config.https,
-		SameSite: http.SameSiteLaxMode, MaxAge: 600})
+	returnTo := r.URL.Query().Get("return")
+	if !isDashboardReturnPath(returnTo) {
+		returnTo = "/"
+	}
+	stateCookie := encodeOAuthStateCookie(state, returnTo, config.sessionKey)
+	http.SetCookie(w, &http.Cookie{
+		Name: oauthStateCookie, Value: stateCookie, Path: "/auth/github", HttpOnly: true,
+		Secure: config.https, SameSite: http.SameSiteLaxMode, MaxAge: 600,
+	})
 	query := url.Values{"client_id": {config.clientID}, "redirect_uri": {config.publicURL.String() + "/auth/github/callback"}, "state": {state}, "scope": {"read:user"}}
 	http.Redirect(w, r, config.githubURL+"/login/oauth/authorize?"+query.Encode(), http.StatusFound)
 }
@@ -319,7 +326,11 @@ func completeGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authCon
 		return
 	}
 	stateCookie, err := r.Cookie(oauthStateCookie)
-	if err != nil || r.URL.Query().Get("state") == "" || !secureEqual(r.URL.Query().Get("state"), stateCookie.Value) {
+	returnTo, stateValid := "", false
+	if err == nil {
+		returnTo, stateValid = decodeOAuthStateCookie(stateCookie.Value, r.URL.Query().Get("state"), config.sessionKey)
+	}
+	if !stateValid {
 		http.Error(w, "invalid sign-in state", http.StatusBadRequest)
 		return
 	}
@@ -348,7 +359,7 @@ func completeGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authCon
 		SameSite: http.SameSiteLaxMode, MaxAge: 8 * 60 * 60})
 	http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: "", Path: "/auth/github", HttpOnly: true, Secure: config.https,
 		SameSite: http.SameSiteLaxMode, MaxAge: -1})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
 }
 
 func fetchGitHubUser(r *http.Request, config *authConfig, code string) (authUser, error) {

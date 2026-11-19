@@ -90,6 +90,17 @@ function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
   const loginRoute = activePage === 'login';
+  const signInReturnTo = loginRoute ? undefined : (() => {
+    const current = new URL(window.location.href);
+    const selection = new URLSearchParams();
+    for (const key of ['mode', 'objective', 'tab', 'graph_id', 'decision']) {
+      const value = current.searchParams.get(key);
+      if (value !== null) selection.set(key, value);
+    }
+    const fragment = pageIDs.includes(current.hash.slice(1)) ? current.hash : '';
+    return `/${selection.size ? `?${selection.toString()}` : ''}${fragment}`;
+  })();
+  const signInHref = signInReturnTo ? `/auth/github?return=${encodeURIComponent(signInReturnTo)}` : '/auth/github';
   useEffect(() => {
     const syncPage = () => { setActivePage(pageFromHash()); setMode(modeFromLocation()); };
     window.addEventListener('popstate', syncPage);
@@ -212,7 +223,7 @@ function App() {
       {auth.data?.local
         ? <><button className="github-login-button" disabled><IconBrandGithub size={19} /> Continue with GitHub</button>
           <p>GitHub sign-in is not configured in this local preview.</p></>
-        : <a className="github-login-button" href="/auth/github"><IconBrandGithub size={19} /> Continue with GitHub</a>}
+        : <a className="github-login-button" href={signInHref}><IconBrandGithub size={19} /> Continue with GitHub</a>}
       <a className="auth-preview-link" href="/#overview">Back to dashboard</a>
     </div>
   </div>;
