@@ -122,13 +122,21 @@ Quit exits only the menu-bar process.
   manifest digests and existing release staging.
 - `cd dashboard && npm run test:e2e -- e2e/auth.spec.ts --grep 'one-time menu companion grant'` checks issuance,
   one-time display and revocation in the authenticated dashboard.
-- The Mac package command above verifies bundle structure and the local ad-hoc signature. These checks do not prove
-  menu interaction or managed service continuity; those need an installed Mac acceptance run.
-- Local Mac acceptance on 2026-11-20 (macOS 27.2, arm64): the packaged app launched from its temporary package
-  directory; process inspection found exactly one companion process, and its executable matched the packaged binary.
-  Terminating that test process left the unavailable local backend unchanged. Port 8080 had no service. Screen capture
-  and computer-use inspection were unavailable, so the visible icon and menu contents were not observed. This does not
-  satisfy canonical-install acceptance.
+- Isolated managed acceptance on 2026-11-20 (macOS 27.2, arm64): a temporary home, installation, data directory and
+  projects root were seeded from PR commit `78f82f0138d7c556715db8f8b56b49021e2733d1`, using the already-packaged app
+  and a test-generated digest manifest. The existing `zenchron install` command installed that temporary release and
+  loaded its LaunchAgent. This tested the local installer path, not trusted-main source acquisition or release trust.
+  `/healthz`, the Live dashboard HTML, and the local-token status API all returned HTTP 200; status identified the PR
+  revision, reported the dashboard available and one online worker. The update projection reported `blocked` while
+  that release and worker stayed healthy.
+- The installed bundle process matched the packaged executable. A second `open -n` launch still left one companion
+  process. `launchctl kickstart -k` restarted the managed supervisor; status returned to the same revision and one
+  online worker while the companion process count stayed one. Quitting and reopening the companion left the backend
+  healthy. The temporary installation was unloaded and removed.
+- The app could not read the temporary LaunchAgent token from its normal real-home LaunchAgent location, so this run
+  does not prove the companion itself received authorized status. The CUA host timed out and macOS denied screen
+  capture; the visible icon/menu, dashboard action, OAuth pairing, Login Items, sleep/wake, and successful update
+  were not observed. The existing user installation paths and data were left in place; this remains partial acceptance.
 
 ## Release signing
 
