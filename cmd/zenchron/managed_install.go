@@ -73,7 +73,10 @@ func installManaged() error {
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return fmt.Errorf("create managed installation: %w", err)
 	}
-	if _, err := updater.ActiveRelease(home); err == nil {
+	if active, err := updater.ActiveRelease(home); err == nil {
+		if err := installManagedMenuBarApp(home, active); err != nil {
+			return err
+		}
 		entrypoint, err := installStableEntrypoint(home)
 		if err != nil {
 			return err
@@ -82,6 +85,9 @@ func installManaged() error {
 			return err
 		}
 		if err := ensureManagedAgent(home, entrypoint); err != nil {
+			return err
+		}
+		if err := launchManagedMenuBarApp(); err != nil {
 			return err
 		}
 		fmt.Printf("Zenchron is already installed at http://127.0.0.1:8080/?mode=live\nCommand: %s\n", entrypoint)
@@ -146,6 +152,9 @@ func installManaged() error {
 	if err := updater.SetActiveRelease(home, candidate.Commit); err != nil {
 		return err
 	}
+	if err := installManagedMenuBarApp(home, candidate.Commit); err != nil {
+		return err
+	}
 	entrypoint, err := installStableEntrypoint(home)
 	if err != nil {
 		return err
@@ -161,6 +170,9 @@ func installManaged() error {
 		return fmt.Errorf("release installed but managed-install lock could not be released: %w", err)
 	}
 	if err := installLaunchAgent(home, entrypoint); err != nil {
+		return err
+	}
+	if err := launchManagedMenuBarApp(); err != nil {
 		return err
 	}
 	fmt.Printf("Zenchron managed installation is starting at http://127.0.0.1:8080/?mode=live\nCommand: %s\n", entrypoint)
