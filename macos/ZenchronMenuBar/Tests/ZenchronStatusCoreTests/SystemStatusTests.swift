@@ -10,6 +10,181 @@ final class SystemStatusTests: XCTestCase {
         XCTAssertEqual(SystemStatus.refreshInterval(menuVisible: false, connected: false), 30)
     }
 
+    func testCompanionUsesKeychainGrantForCanonicalAuthenticatedStatusRequest() async throws {
+        var localCredentialRead = false
+        let client = CompanionStatusClient(credential: {
+            try selectStatusCredential(dashboardGrant: "one-time-status-grant") {
+                localCredentialRead = true
+                return "must-not-be-read"
+            }
+        }, send: { request in
+            XCTAssertEqual(request.url, CompanionStatusClient.endpoint)
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-Zenchron-Status-Grant"), "one-time-status-grant")
+            XCTAssertNil(request.value(forHTTPHeaderField: "X-Zenchron-Local-Status-Token"))
+            XCTAssertNil(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems)
+            return (status(revision: "a"), 200)
+        })
+
+        let value = try await client.refresh()
+        XCTAssertEqual(value.revision, "a")
+        XCTAssertFalse(localCredentialRead)
+    }
+
+    func testCompanionUsesManagedCredentialOnlyWhenNoDashboardGrantExists() async throws {
+        let client = CompanionStatusClient(credential: {
+            try selectStatusCredential(dashboardGrant: nil) { "launch-agent-local-token" }
+        }, send: { request in
+            XCTAssertEqual(request.url, CompanionStatusClient.endpoint)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-Zenchron-Local-Status-Token"),
+                "launch-agent-local-token")
+            XCTAssertNil(request.value(forHTTPHeaderField: "X-Zenchron-Status-Grant"))
+            return (status(revision: "b"), 200)
+        })
+
+        let value = try await client.refresh()
+        XCTAssertEqual(value.revision, "b")
+    }
+
+    func testPairingTrimsInputAndPersistsOnlyValidatedCredential() throws {
+        var stored: String?
+        try persistStatusGrant("  one-time-grant\n") { stored = $0 }
+        XCTAssertEqual(stored, "one-time-grant")
+
+        for invalid in [" \n", String(repeating: "x", count: 257)] {
+            var saveWasCalled = false
+            XCTAssertThrowsError(try persistStatusGrant(invalid) { _ in saveWasCalled = true })
+            XCTAssertFalse(saveWasCalled)
+        }
+    }
+
+    func testStaleDashboardGrantRequiresRepairAndNeverFallsBackToLocalCredential() async {
+        var localCredentialRead = false
+        let client = CompanionStatusClient(credential: {
+            try selectStatusCredential(dashboardGrant: "revoked-grant") {
+                localCredentialRead = true
+                return "must-not-be-read"
+            }
+        }, send: { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-Zenchron-Status-Grant"), "revoked-grant")
+            return (Data(), 401)
+        })
+        var pairingRequired = false
+        do {
+            _ = try await client.refresh()
+            XCTFail("revoked status grant was accepted")
+        } catch StatusClientError.pairingRequired {
+            pairingRequired = true
+        } catch {
+            XCTFail("revoked status grant produced the wrong error: \(error)")
+        }
+        XCTAssertTrue(pairingRequired)
+        XCTAssertFalse(localCredentialRead)
+    }
+
+    func testRejectedManagedCredentialOffersPairingInsteadOfClaimingAValidStatus() async {
+        let client = CompanionStatusClient(credential: { .managedInstallation("stale-local-token") }, send: { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-Zenchron-Local-Status-Token"), "stale-local-token")
+            return (Data(), 401)
+        })
+        var rejectedAsLocalCredential = false
+        do {
+            _ = try await client.refresh()
+            XCTFail("stale local credential was accepted")
+        } catch StatusClientError.localCredentialRejected {
+            rejectedAsLocalCredential = true
+        } catch {
+            XCTFail("stale local credential produced the wrong error: \(error)")
+        }
+        XCTAssertTrue(rejectedAsLocalCredential)
+    }
+
+    func testCompanionReportsAuthorizationAndPolicyFailuresSeparately() async {
+        for (httpStatus, expected) in [(403, StatusClientError.administratorRequired),
+                                       (503, StatusClientError.accessPolicyUnavailable)] {
+            let client = CompanionStatusClient(credential: { .dashboardGrant("grant") }, send: { _ in
+                (Data(), httpStatus)
+            })
+            do {
+                _ = try await client.refresh()
+                XCTFail("HTTP \(httpStatus) was accepted")
+            } catch StatusClientError.administratorRequired where httpStatus == 403 {
+                XCTAssertEqual(httpStatus, 403)
+            } catch StatusClientError.accessPolicyUnavailable where httpStatus == 503 {
+                XCTAssertEqual(httpStatus, 503)
+            } catch {
+                XCTFail("HTTP \(httpStatus) produced the wrong error: \(error); expected \(expected)")
+            }
+        }
+    }
+
+    func testCompanionReconnectsAndObservesTheNewActiveRevisionAfterRestart() async throws {
+        var calls = 0
+        let client = CompanionStatusClient(credential: { .dashboardGrant("grant") }, send: { request in
+            XCTAssertEqual(request.url, CompanionStatusClient.endpoint)
+            calls += 1
+            return (status(revision: calls == 1 ? "old" : "new"), 200)
+        })
+
+        let beforeRestart = try await client.refresh()
+        let afterRestart = try await client.refresh()
+
+        XCTAssertEqual(beforeRestart.revision, "old")
+        XCTAssertEqual(afterRestart.revision, "new")
+        XCTAssertEqual(calls, 2)
+    }
+
+    func testDisconnectedRequestCanReconnectWithoutShowingStaleStatusAsCurrent() async throws {
+        var calls = 0
+        let client = CompanionStatusClient(credential: { .dashboardGrant("grant") }, send: { _ in
+            calls += 1
+            if calls == 1 { throw URLError(.notConnectedToInternet) }
+            return (status(revision: "current"), 200)
+        })
+
+        do {
+            _ = try await client.refresh()
+            XCTFail("offline endpoint returned a status")
+        } catch URLError.notConnectedToInternet {
+            // The app clears its displayed status for this error and continues polling.
+        }
+        let reconnected = try await client.refresh()
+        XCTAssertEqual(reconnected.revision, "current")
+    }
+
+    func testLaunchAgentCredentialDiscoveryUsesExplicitHomeFixtureOnly() throws {
+        let temporaryHome = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temporaryHome) }
+        let launchAgentURL = managedLaunchAgentURL(homeDirectory: temporaryHome)
+        let expectedURL = temporaryHome.appendingPathComponent(
+            "Library/LaunchAgents/com.bogdaniel.zenchron-engineering-os.plist")
+        XCTAssertEqual(launchAgentURL.path, expectedURL.path)
+        XCTAssertThrowsError(try loadManagedInstallationCredential(homeDirectory: temporaryHome))
+        try FileManager.default.createDirectory(at: launchAgentURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
+        let data = try PropertyListSerialization.data(fromPropertyList: [
+            "EnvironmentVariables": ["ZENCHRON_LOCAL_STATUS_TOKEN": "isolated-fixture-token"],
+        ], format: .xml, options: 0)
+        try data.write(to: launchAgentURL)
+        XCTAssertEqual(try loadManagedInstallationCredential(homeDirectory: temporaryHome), "isolated-fixture-token")
+        XCTAssertEqual(try readManagedInstallationCredential(fromLaunchAgent: data), "isolated-fixture-token")
+        XCTAssertThrowsError(try readManagedInstallationCredential(fromLaunchAgent: Data("{}".utf8)))
+    }
+
+    func testInstanceLockAllowsOnlyOneOwnerAndReleasesForRestart() throws {
+        let lockURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("menubar.lock")
+        var first: MenuBarInstanceLock? = MenuBarInstanceLock(lockFileURL: lockURL)
+        XCTAssertNotNil(first)
+        XCTAssertNil(MenuBarInstanceLock(lockFileURL: lockURL))
+
+        first = nil
+        XCTAssertNotNil(MenuBarInstanceLock(lockFileURL: lockURL))
+    }
+
     func testStatusIndicatorReflectsWorkUpdateAndWorkerState() throws {
         XCTAssertEqual(try status().indicator, .connected)
         XCTAssertEqual(try status(activeGraphs: 1).indicator, .active)
@@ -141,5 +316,14 @@ final class SystemStatusTests: XCTestCase {
          "update_state":"\(updateState)"}
         """.utf8)
         return try decodeSystemStatus(data)
+    }
+
+    private func status(revision: String) -> Data {
+        Data("""
+        {"revision":"\(revision)","dashboard_url":"http://127.0.0.1:8080/?mode=live","dashboard_available":true,
+         "workers":{"online":1,"total":1},
+         "work":{"active_graphs":0,"blocked_graphs":0,"queued_units":0,"running_units":0,
+         "waiting_units":0,"failed_units":0,"open_decisions":0},"update_state":"idle"}
+        """.utf8)
     }
 }

@@ -1,48 +1,21 @@
 import AppKit
-import Darwin
 import Foundation
 import Security
 import ServiceManagement
 import ZenchronStatusCore
 
-private enum StatusAccessError: Error {
-    case signInRequired
-    case pairingRequired
-    case administratorRequired
-    case accessPolicyUnavailable
-    case localInstallationUnavailable
-}
-
-final class InstanceLock {
-    private let descriptor: Int32
-
-    init?() {
-        let directory = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Zenchron", isDirectory: true)
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
-                attributes: [.posixPermissions: 0o700])
-        } catch {
-            return nil
-        }
-        let path = directory.appendingPathComponent("menubar.lock").path
-        descriptor = open(path, O_CREAT | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR)
-        guard descriptor >= 0, flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
-            if descriptor >= 0 { close(descriptor) }
-            return nil
-        }
-    }
-
-    deinit {
-        flock(descriptor, LOCK_UN)
-        close(descriptor)
-    }
-}
-
 @MainActor
 final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private let statusURL = URL(string: "http://127.0.0.1:8080/api/v1/system/status")!
-    private var instanceLock: InstanceLock?
+    private let statusClient = CompanionStatusClient(credential: {
+        try selectStatusCredential(dashboardGrant: StatusCredentialStore.read()) { try Self.localStatusToken() }
+    }, send: { request in
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        return (data, httpResponse.statusCode)
+    })
+    private var instanceLock: MenuBarInstanceLock?
     private var statusItem: NSStatusItem?
     private var timer: Timer?
     private var menuVisible = false
@@ -57,7 +30,9 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        guard let lock = InstanceLock() else {
+        let supportDirectory = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Zenchron", isDirectory: true)
+        guard let lock = MenuBarInstanceLock(lockFileURL: supportDirectory.appendingPathComponent("menubar.lock")) else {
             NSApp.terminate(nil)
             return
         }
@@ -255,53 +230,42 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let generation = refreshGeneration
         let wasConnected = status != nil
         do {
-            var request = URLRequest(url: statusURL, timeoutInterval: 3)
-            if let credential = try StatusCredentialStore.read() {
-                request.setValue(credential, forHTTPHeaderField: "X-Zenchron-Status-Grant")
-            } else {
-                request.setValue(try localStatusToken(), forHTTPHeaderField: "X-Zenchron-Local-Status-Token")
-            }
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-            if httpResponse.statusCode == 401 {
-                if try StatusCredentialStore.read() != nil { throw StatusAccessError.pairingRequired }
-                throw StatusAccessError.signInRequired
-            }
-            if httpResponse.statusCode == 403 { throw StatusAccessError.administratorRequired }
-            if httpResponse.statusCode == 503 { throw StatusAccessError.accessPolicyUnavailable }
-            guard httpResponse.statusCode == 200 else { throw URLError(.badServerResponse) }
-            let decoded = try decodeSystemStatus(data)
+            let decoded = try await statusClient.refresh()
             guard generation == refreshGeneration else { return }
             status = decoded
             requiresOperatorSession = false
             startFailure = nil
             message = "Connected"
-        } catch StatusAccessError.signInRequired {
-            guard generation == refreshGeneration else { return }
-            status = nil
-            requiresOperatorSession = true
-            message = "Menu status is unavailable; open the dashboard to sign in"
-        } catch StatusAccessError.pairingRequired {
+        } catch StatusClientError.pairingRequired {
             guard generation == refreshGeneration else { return }
             status = nil
             requiresOperatorSession = true
             message = "Status pairing expired or was revoked; pair again in Dashboard Settings"
-        } catch StatusAccessError.administratorRequired {
+        } catch StatusClientError.localCredentialRejected {
+            guard generation == refreshGeneration else { return }
+            status = nil
+            requiresOperatorSession = true
+            message = "Managed status credential was rejected; pair this Mac in Dashboard Settings"
+        } catch StatusClientError.administratorRequired {
             guard generation == refreshGeneration else { return }
             status = nil
             requiresOperatorSession = true
             message = "Administrator access is required for local status"
-        } catch StatusAccessError.accessPolicyUnavailable {
+        } catch StatusClientError.accessPolicyUnavailable {
             guard generation == refreshGeneration else { return }
             status = nil
             requiresOperatorSession = true
             message = "Access policy is unavailable; menu status is blocked until repaired"
-        } catch StatusAccessError.localInstallationUnavailable {
+        } catch StatusClientError.localInstallationUnavailable {
             guard generation == refreshGeneration else { return }
             status = nil
             requiresOperatorSession = false
             message = "Local installation status credential is unavailable"
+        } catch StatusClientError.unexpectedStatus(let statusCode) {
+            guard generation == refreshGeneration else { return }
+            status = nil
+            requiresOperatorSession = false
+            message = "Zenchron disconnected · HTTP \(statusCode) from local status endpoint"
         } catch {
             guard generation == refreshGeneration else { return }
             status = nil
@@ -314,16 +278,8 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshMenu()
     }
 
-    private func localStatusToken() throws -> String {
-        let launchAgentURL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/LaunchAgents/com.bogdaniel.zenchron-engineering-os.plist")
-        guard let data = try? Data(contentsOf: launchAgentURL),
-              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
-              let environment = plist["EnvironmentVariables"] as? [String: String],
-              let token = environment["ZENCHRON_LOCAL_STATUS_TOKEN"], !token.isEmpty else {
-            throw StatusAccessError.localInstallationUnavailable
-        }
-        return token
+    private static func localStatusToken() throws -> String {
+        try loadManagedInstallationCredential(homeDirectory: FileManager.default.homeDirectoryForCurrentUser)
     }
 
     @objc private func openDashboard() {
@@ -348,17 +304,13 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         alert.addButton(withTitle: "Pair")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        let credential = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !credential.isEmpty, credential.count <= 256 else {
-            pairingError = "Pairing credential is empty or invalid"
-            refreshMenu()
-            return
-        }
         do {
-            try StatusCredentialStore.save(credential)
+            try persistStatusGrant(input.stringValue) { try StatusCredentialStore.save($0) }
             pairingError = nil
             message = "Paired with Dashboard"
             Task { await refresh() }
+        } catch StatusClientError.invalidPairingCredential {
+            pairingError = "Pairing credential is empty or invalid"
         } catch {
             pairingError = "Could not save pairing credential · \(error.localizedDescription)"
         }

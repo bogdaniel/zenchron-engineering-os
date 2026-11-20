@@ -20,6 +20,20 @@ func installManagedMenuBarApp(home, revision string) error {
 	} else if err != nil {
 		return fmt.Errorf("inspect release menu-bar app: %w", err)
 	}
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve menu-bar install location: %w", err)
+	}
+	return installManagedMenuBarAppAtHome(home, revision, userHome)
+}
+
+func installManagedMenuBarAppAtHome(home, revision, userHome string) error {
+	source := filepath.Join(home, "releases", revision, "macos", "Zenchron Menu Bar.app")
+	if _, err := os.Lstat(source); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("inspect release menu-bar app: %w", err)
+	}
 	repository := strings.TrimSpace(os.Getenv("ZENCHRON_UPDATE_REPOSITORY"))
 	if repository == "" {
 		repository = "bogdaniel/zenchron-engineering-os"
@@ -32,10 +46,6 @@ func installManagedMenuBarApp(home, revision string) error {
 	}
 	if manifest.Platform == "" {
 		return nil
-	}
-	userHome, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("resolve menu-bar install location: %w", err)
 	}
 	destination := filepath.Join(userHome, "Applications", "Zenchron Menu Bar.app")
 	return installStableMenuBarApp(source, destination)

@@ -63,9 +63,19 @@ flowchart LR
   revoked in Settings. A grant works only over loopback and only for this status route. An enforced access policy
   requires the grant owner to remain an administrator; policy read errors deny status. Existing session/admin checks
   still govern dashboard APIs, and the local LaunchAgent credential never bypasses them.
-- The menu distinguishes a missing session, expired/revoked pairing, missing administrator access, policy outage and
-  local installation failure. It provides **Open Dashboard for access** and **Pair with Dashboard…** with errors that
-  explain whether sign-in, pairing or policy repair is needed. When a selected dashboard deep link prompts for GitHub
+- The app discovers the current GUI user's LaunchAgent with
+  `FileManager.default.homeDirectoryForCurrentUser`; it does not use the process `HOME` environment variable to
+  redirect credential lookup. The Keychain grant takes precedence over the LaunchAgent credential, and a rejected
+  grant requires pairing again rather than falling back to the local token. The status client always targets the
+  canonical loopback endpoint and never puts credentials in a URL.
+- Swift tests pass a temporary home directly to the pure LaunchAgent path/parser helper. The Go managed-update test
+  sets `HOME` to a disposable directory for the installer and replaces `open` with a recorder, so it never launches
+  the companion or reads a credential. Neither test can redirect the app's fixed `FileManager` home or its production
+  Keychain source.
+- The menu distinguishes a missing or rejected local credential, expired/revoked pairing, missing administrator
+  access, policy outage and disconnected service. It provides **Open Dashboard for access** and
+  **Pair with Dashboard…** with errors that explain whether pairing or policy repair is needed. When a selected
+  dashboard deep link prompts for GitHub
   sign-in, OAuth returns to the same-origin page and mode after sign-in.
   Invalid or oversized selections are omitted so one bad value does not discard valid navigation; the server still
   validates the final return path and binds it to the OAuth flow.
@@ -104,8 +114,12 @@ swift build -c release --package-path macos/ZenchronMenuBar
 macos/ZenchronMenuBar/.build/release/zenchron-menubar
 macos/ZenchronMenuBar/Scripts/package-app.sh "$HOME/Applications/builds"
 open "$HOME/Applications/builds/Zenchron Menu Bar.app"
-swiftc macos/ZenchronMenuBar/Sources/ZenchronStatusCore/SystemStatus.swift \
-  macos/ZenchronMenuBar/Scripts/status-self-check.swift -o /tmp/zenchron-status-self-check
+swiftc -module-cache-path /tmp/zenchron-swift-module-cache -o /tmp/zenchron-status-self-check \
+  macos/ZenchronMenuBar/Sources/ZenchronStatusCore/SystemStatus.swift \
+  macos/ZenchronMenuBar/Sources/ZenchronStatusCore/CompanionStatusClient.swift \
+  macos/ZenchronMenuBar/Sources/ZenchronStatusCore/ManagedInstallationCredential.swift \
+  macos/ZenchronMenuBar/Sources/ZenchronStatusCore/MenuBarInstanceLock.swift \
+  macos/ZenchronMenuBar/Scripts/status-self-check.swift
 /tmp/zenchron-status-self-check
 ```
 
@@ -117,11 +131,18 @@ Quit exits only the menu-bar process.
 ## Verification
 
 - `go test ./cmd/zenchron -run 'TestMenuStatusGrant|TestStableMenuBarInstall' -count=1` checks admin denial, route
-  scope, expiry, revocation, audit rollback, idempotent app install and replacement.
+  scope, expiry, revocation, audit rollback and idempotent app replacement.
+- `go test ./cmd/zenchron -run 'TestManagedReleaseInstallsAndUpdatesMenuBarBundle|TestManagedActivation' -count=1`
+  checks digest-verified bundle replacement, preservation after a corrupt candidate, and activation order through the
+  existing updater.
 - `go test ./internal/updater -run 'TestVerifyReleaseBinds|TestBuildReleaseStages' -count=1` checks app bundle
   manifest digests and existing release staging.
 - `cd dashboard && npm run test:e2e -- e2e/auth.spec.ts --grep 'one-time menu companion grant'` checks issuance,
   one-time display and revocation in the authenticated dashboard.
+- `swift test --package-path macos/ZenchronMenuBar` checks the production status client with a deterministic transport,
+  credential precedence and stale-grant errors, explicit isolated LaunchAgent parsing, reconnect after a transport
+  failure, canonical deep links, and duplicate-instance locking. It does not claim to render or visually accept the
+  AppKit menu.
 - Isolated managed acceptance on 2026-11-20 (macOS 27.2, arm64): a temporary home, installation, data directory and
   projects root were seeded from PR commit `78f82f0138d7c556715db8f8b56b49021e2733d1`, using the already-packaged app
   and a test-generated digest manifest. The existing `zenchron install` command installed that temporary release and

@@ -2,7 +2,7 @@ import Foundation
 
 @main
 struct StatusSelfCheck {
-    static func main() throws {
+    static func main() async throws {
         let valid = Data("""
         {"dashboard_url":"http://127.0.0.1:8080/?mode=live","dashboard_available":true,
          "workers":{"online":1,"total":2},
@@ -63,6 +63,107 @@ struct StatusSelfCheck {
         let dashboardUnknown = try decodeSystemStatus(fixture(dashboardAvailable: nil))
         assert(dashboardUnavailable.indicator == .degraded)
         assert(dashboardUnknown.indicator == .degraded)
+
+        try await verifyCompanionClient()
+        try verifyIsolatedCredentialDiscovery()
+        verifySingleInstanceLock()
+    }
+
+    private static func verifyCompanionClient() async throws {
+        let grantClient = CompanionStatusClient(credential: {
+            try selectStatusCredential(dashboardGrant: "fixture-grant") { "must-not-be-read" }
+        }, send: { request in
+            assert(request.url == CompanionStatusClient.endpoint)
+            assert(request.value(forHTTPHeaderField: "X-Zenchron-Status-Grant") == "fixture-grant")
+            assert(request.value(forHTTPHeaderField: "X-Zenchron-Local-Status-Token") == nil)
+            assert(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems == nil)
+            return (fixture(revision: "paired"), 200)
+        })
+        let pairedStatus = try await grantClient.refresh()
+        assert(pairedStatus.revision == "paired")
+
+        let rejectedGrant = CompanionStatusClient(credential: {
+            try selectStatusCredential(dashboardGrant: "revoked-fixture") { "must-not-be-read" }
+        }, send: { _ in
+            (Data(), 401)
+        })
+        var pairingRequired = false
+        do {
+            _ = try await rejectedGrant.refresh()
+        } catch StatusClientError.pairingRequired {
+            pairingRequired = true
+        }
+        assert(pairingRequired)
+
+        var requests = 0
+        let reconnectingClient = CompanionStatusClient(credential: {
+            try selectStatusCredential(dashboardGrant: nil) { "isolated-local-token" }
+        }, send: { request in
+                assert(request.value(forHTTPHeaderField: "X-Zenchron-Local-Status-Token") == "isolated-local-token")
+                requests += 1
+                if requests == 1 { throw URLError(.notConnectedToInternet) }
+                return (fixture(revision: "after-restart"), 200)
+            })
+        var disconnected = false
+        do {
+            _ = try await reconnectingClient.refresh()
+        } catch URLError.notConnectedToInternet {
+            disconnected = true
+        }
+        assert(disconnected)
+        let reconnectedStatus = try await reconnectingClient.refresh()
+        assert(reconnectedStatus.revision == "after-restart")
+        assert(requests == 2)
+    }
+
+    private static func verifyIsolatedCredentialDiscovery() throws {
+        var savedGrant: String?
+        try persistStatusGrant(" one-time-test-grant ") { savedGrant = $0 }
+        assert(savedGrant == "one-time-test-grant")
+        var invalidGrantRejected = false
+        do {
+            try persistStatusGrant(" \n") { _ in fatalError("invalid pairing credential was persisted") }
+        } catch StatusClientError.invalidPairingCredential {
+            invalidGrantRejected = true
+        }
+        assert(invalidGrantRejected)
+
+        let testHome = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let launchAgentURL = managedLaunchAgentURL(homeDirectory: testHome)
+        assert(launchAgentURL.path.hasPrefix(testHome.path))
+        let data = try PropertyListSerialization.data(fromPropertyList: [
+            "EnvironmentVariables": ["ZENCHRON_LOCAL_STATUS_TOKEN": "isolated-test-only"],
+        ], format: .xml, options: 0)
+        let token = try readManagedInstallationCredential(fromLaunchAgent: data)
+        assert(token == "isolated-test-only")
+        var missingCredentialWasRejected = false
+        do {
+            _ = try readManagedInstallationCredential(fromLaunchAgent: Data("{}".utf8))
+            fatalError("missing launch-agent token was accepted")
+        } catch StatusClientError.localInstallationUnavailable {
+            missingCredentialWasRejected = true
+        }
+        assert(missingCredentialWasRejected)
+    }
+
+    private static func verifySingleInstanceLock() {
+        let lockURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true).appendingPathComponent("menubar.lock")
+        var first: MenuBarInstanceLock? = MenuBarInstanceLock(lockFileURL: lockURL)
+        assert(first != nil)
+        assert(MenuBarInstanceLock(lockFileURL: lockURL) == nil)
+        first = nil
+        assert(MenuBarInstanceLock(lockFileURL: lockURL) != nil)
+    }
+
+    private static func fixture(revision: String) -> Data {
+        Data("""
+        {"revision":"\(revision)","dashboard_url":"http://127.0.0.1:8080/?mode=live","dashboard_available":true,
+         "workers":{"online":1,"total":1},
+         "work":{"active_graphs":0,"blocked_graphs":0,"queued_units":0,"running_units":0,
+         "waiting_units":0,"failed_units":0,"open_decisions":0},"update_state":"idle"}
+        """.utf8)
     }
 
     private static func fixture(updateState: String = "idle", onlineWorkers: Int = 1, totalWorkers: Int = 1,
