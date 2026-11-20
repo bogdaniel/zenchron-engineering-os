@@ -246,9 +246,10 @@ func restartManagedForOAuth() error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, "launchctl", "kickstart", "-k", domain+"/"+managedLaunchAgentLabel)
+	// SIGTERM enters the supervisor's existing quiesce-and-drain shutdown path.
+	command := exec.CommandContext(ctx, "launchctl", "kill", "SIGTERM", domain+"/"+managedLaunchAgentLabel)
 	if _, err := command.CombinedOutput(); err != nil {
-		return fmt.Errorf("restart the existing managed LaunchAgent: %w", err)
+		return fmt.Errorf("request a graceful restart of the existing managed LaunchAgent: %w", err)
 	}
 	return nil
 }
