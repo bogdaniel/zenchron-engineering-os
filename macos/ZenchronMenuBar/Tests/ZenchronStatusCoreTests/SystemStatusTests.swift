@@ -4,17 +4,27 @@ import XCTest
 
 final class SystemStatusTests: XCTestCase {
     func testNotFoundLaunchAtLoginCanStillBeEnabledByTheUser() {
-        XCTAssertEqual(LaunchAtLoginMenuState(status: .notFound),
-            LaunchAtLoginMenuState(title: "Enable Launch at Login…", isEnabled: true, isChecked: false))
+        let state = LaunchAtLoginMenuState(status: .notFound)
+        XCTAssertEqual(state.title, "Enable Launch at Login…")
+        XCTAssertTrue(state.isEnabled)
+        XCTAssertFalse(state.isChecked)
     }
 
     func testLaunchAtLoginMenuReflectsRegisteredAndApprovalStates() {
-        XCTAssertEqual(LaunchAtLoginMenuState(status: .enabled),
-            LaunchAtLoginMenuState(title: "Launch at Login", isEnabled: true, isChecked: true))
-        XCTAssertEqual(LaunchAtLoginMenuState(status: .requiresApproval),
-            LaunchAtLoginMenuState(title: "Approve Launch at Login…", isEnabled: true, isChecked: false))
-        XCTAssertEqual(LaunchAtLoginMenuState(status: .notRegistered),
-            LaunchAtLoginMenuState(title: "Launch at Login", isEnabled: true, isChecked: false))
+        let enabled = LaunchAtLoginMenuState(status: .enabled)
+        XCTAssertEqual(enabled.title, "Launch at Login")
+        XCTAssertTrue(enabled.isEnabled)
+        XCTAssertTrue(enabled.isChecked)
+
+        let approval = LaunchAtLoginMenuState(status: .requiresApproval)
+        XCTAssertEqual(approval.title, "Approve Launch at Login…")
+        XCTAssertTrue(approval.isEnabled)
+        XCTAssertFalse(approval.isChecked)
+
+        let unregistered = LaunchAtLoginMenuState(status: .notRegistered)
+        XCTAssertEqual(unregistered.title, "Launch at Login")
+        XCTAssertTrue(unregistered.isEnabled)
+        XCTAssertFalse(unregistered.isChecked)
     }
 
     func testStatusRefreshCadenceKeepsClosedIconCurrentWithoutBusyPolling() {

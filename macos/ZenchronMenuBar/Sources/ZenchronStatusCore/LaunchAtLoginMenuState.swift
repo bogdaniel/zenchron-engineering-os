@@ -1,11 +1,11 @@
-public enum LaunchAtLoginStatus: Equatable {
+public enum LaunchAtLoginStatus {
     case enabled
     case requiresApproval
     case notRegistered
     case notFound
 }
 
-public struct LaunchAtLoginMenuState: Equatable {
+public struct LaunchAtLoginMenuState {
     public let title: String
     public let isEnabled: Bool
     public let isChecked: Bool
