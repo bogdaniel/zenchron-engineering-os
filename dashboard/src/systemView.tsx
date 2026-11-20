@@ -153,7 +153,7 @@ export function liveSystemSource(facts: SystemFacts): SystemSource {
     profile: 'Organization identity and defaults are not configured in the control plane.',
     policy: 'Merge rules, approval gates, and repository policy are not enforced.',
     permissions: githubLogin ? 'GitHub OAuth identifies users; organization roles and permissions are not enforced.'
-      : 'Local preview has no sign-in or organization authorization.',
+      : 'Local workspace is available without GitHub sign-in; optional managed setup is available with zenchron-engineering auth setup.',
     budget: 'Model spend, worker compute, and storage usage are not measured. Configured workers can run read-only tasks '
       + 'or write on isolated branches; test execution and cost limits are not enabled.',
     secrets: 'Model credentials stay on workers; GitHub credentials stay on the control plane. Secret management is not implemented.',
@@ -188,7 +188,7 @@ export function liveSystemSource(facts: SystemFacts): SystemSource {
     controllerOptions: { version: [unavailable], timeout: [unavailable] },
     controllerStatus: { label: apiOnline ? 'Online' : 'Offline', healthy: apiOnline },
     controllerFacts: [
-      ['Dashboard auth', githubLogin ? 'GitHub OAuth' : 'Local preview'],
+      ['Dashboard auth', githubLogin ? 'GitHub OAuth' : 'Local workspace · GitHub sign-in not configured'],
       ['State storage', 'Versioned JSON snapshots'],
       ['Online workers', `${onlineWorkerCount} of ${workerCount}`],
       ['Local checkouts', String(projectCount)],

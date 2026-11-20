@@ -216,7 +216,7 @@ function App() {
     ? { greeting: 'Alex', name: 'Alex Chen', role: 'Engineering Lead', avatar: '/alex-chen-avatar.jpg', initial: 'A',
       workspace: 'Core Product', hasNotifications: true }
     : { greeting: auth.data?.login ?? '', name: auth.data?.local ? 'Local workspace' : auth.data?.login ?? 'Session unavailable',
-      role: auth.data?.local ? 'Administrator' : auth.data?.login ? 'GitHub account' : 'Signed out',
+      role: auth.data?.local ? 'Local workspace' : auth.data?.login ? 'GitHub account' : 'Signed out',
       avatar: auth.data?.avatar_url, initial: auth.data?.local ? 'Z' : auth.data?.login?.slice(0, 1).toUpperCase() ?? '?',
       workspace: 'Workspace', hasNotifications: false };
   if (auth.isLoading && !previewPage) return <div className="auth-screen"><span className="brand-mark" /><p>Checking your Zenchron session…</p></div>;
@@ -225,8 +225,10 @@ function App() {
       <span className="brand-mark" aria-hidden="true" />
       <div><h1>Zenchron Engineering</h1><p>Sign in to access your engineering control plane.</p></div>
       {auth.data?.local
-        ? <><button className="github-login-button" disabled><IconBrandGithub size={19} /> Continue with GitHub</button>
-          <p>GitHub sign-in is not configured in this local preview.</p></>
+        ? <><p role="status">You are using the Local workspace. GitHub sign-in is optional and is not configured for this installation.</p>
+          <p>To enable it, create a <a href="https://github.com/settings/developers" target="_blank" rel="noreferrer">GitHub OAuth App</a> with callback URL <code>http://127.0.0.1:8080/auth/github/callback</code>, then run this command in Terminal:</p>
+          <p><code>zenchron-engineering auth setup</code></p>
+          <p>Your local workspace remains available without GitHub sign-in.</p></>
         : <a className="github-login-button" href={signInHref}><IconBrandGithub size={19} /> Continue with GitHub</a>}
       <a className="auth-preview-link" href="/#overview">Back to dashboard</a>
     </div>

@@ -166,11 +166,26 @@ export function SystemPage({ section, designPreview = false, canManageUpdates, .
 
       <SystemWorkspace section={section} source={source} onShowAudit={() => setAuditOpen(true)} />
       {section === 'settings' && <>
-        {!designPreview && canManageUpdates && facts.githubLogin && <SystemStatusCompanionPanel />}
+        {!designPreview && canManageUpdates && (facts.githubLogin
+          ? <SystemStatusCompanionPanel />
+          : <ManagedOAuthSetupPanel />)}
         <SystemUpdatePanel designPreview={designPreview} canManage={canManageUpdates} />
       </>}
     </section>
   );
+}
+
+function ManagedOAuthSetupPanel() {
+  return <PanelCard className="system-update-panel" withBorder>
+    <h2>Local workspace and GitHub sign-in</h2>
+    <p>You are using the managed Local workspace. GitHub sign-in is optional and is not configured yet.</p>
+    <p>To enable sign-in and Dashboard pairing, create a <a href="https://github.com/settings/developers" target="_blank" rel="noreferrer">GitHub OAuth App</a> with callback URL
+      {' '}<code>http://127.0.0.1:8080/auth/github/callback</code>, then run this command in Terminal:</p>
+    <p><code>zenchron-engineering auth setup</code></p>
+    <p>Local workspace use does not require GitHub sign-in. The managed updater uses separate GitHub credentials for
+      protected-main verification; this setup will not configure them.</p>
+    <p>Menu bar status already uses the managed local credential; pairing is not needed for local status.</p>
+  </PanelCard>;
 }
 
 function SystemWorkspace({ section, source, onShowAudit }: { section: SystemSection; source: SystemSource; onShowAudit: () => void }) {

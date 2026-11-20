@@ -301,14 +301,54 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func pairWithDashboard() {
+        pairingError = nil
+        Task { await beginDashboardPairing() }
+    }
+
+    private func beginDashboardPairing() async {
+        var request = URLRequest(url: CompanionStatusClient.authSessionEndpoint, timeoutInterval: 3)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let response = response as? HTTPURLResponse else {
+                pairingError = "Could not check Dashboard sign-in state"
+                refreshMenu()
+                return
+            }
+            switch dashboardPairingAvailability(statusCode: response.statusCode, sessionData: data) {
+            case .localWorkspace:
+                openDashboardSettings()
+                pairingError = "Dashboard pairing is unavailable in Local workspace; configure optional GitHub sign-in in Settings"
+                refreshMenu()
+                return
+            case .unknown:
+                openDashboardSettings()
+                pairingError = "Could not check whether Dashboard pairing is available; review sign-in status in Settings"
+                refreshMenu()
+                return
+            case .signInRequired, .available:
+                showDashboardPairingDialog()
+            }
+        } catch {
+            openDashboardSettings()
+            pairingError = "Could not check Dashboard sign-in state · \(error.localizedDescription)"
+            refreshMenu()
+        }
+    }
+
+    private func openDashboardSettings() {
         var components = URLComponents(url: SystemStatus.canonicalDashboardURL, resolvingAgainstBaseURL: false)!
         components.fragment = "settings"
         NSWorkspace.shared.open(components.url!)
+    }
+
+    private func showDashboardPairingDialog() {
+        openDashboardSettings()
         let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
         input.placeholderString = "Paste the one-time credential from Settings"
         let alert = NSAlert()
         alert.messageText = "Pair Zenchron Menu Bar"
-        alert.informativeText = "Create a menu-bar grant in Dashboard Settings, then paste it here. The credential is stored in this Mac’s Keychain."
+        alert.informativeText = "Sign in to the Dashboard as an allowed GitHub user, create a menu-bar grant in Settings, then paste it here. The credential is stored in this Mac’s Keychain."
         alert.accessoryView = input
         alert.addButton(withTitle: "Pair")
         alert.addButton(withTitle: "Cancel")
