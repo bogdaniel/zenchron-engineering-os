@@ -54,6 +54,18 @@ func TestMenuStatusGrantIsAdminOnlyScopedRevocableAndAudited(t *testing.T) {
 	if got := request("", http.MethodGet, "/api/v1/system/status", pair.Credential).Code; got != http.StatusOK {
 		t.Fatalf("valid local grant returned HTTP %d", got)
 	}
+	remote := httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil)
+	remote.RemoteAddr = "192.0.2.20:41000"
+	remote.Host = "127.0.0.1:8080"
+	remote.Header.Set("Origin", "http://127.0.0.1:8080")
+	remote.Header.Set("X-Forwarded-For", "127.0.0.1")
+	remote.Header.Set("X-Zenchron-Status-Grant", pair.Credential)
+	remoteResponse := httptest.NewRecorder()
+	harness.server.ServeHTTP(remoteResponse, remote)
+	if remoteResponse.Code != http.StatusForbidden {
+		t.Fatalf("remote request with loopback Host, Origin and forwarding headers returned HTTP %d",
+			remoteResponse.Code)
+	}
 	if got := request("", http.MethodGet, "/api/v1/workers", pair.Credential).Code; got != http.StatusUnauthorized {
 		t.Fatalf("status grant reached another API route: HTTP %d", got)
 	}
