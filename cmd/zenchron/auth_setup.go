@@ -48,7 +48,8 @@ func runAuthCommand(args []string) error {
 	client := &http.Client{Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
-	if err := managedOAuthSetupPreflight(home, localStatusCredential(), client); err != nil {
+	statusToken := localStatusCredential()
+	if err := managedOAuthSetupPreflight(home, statusToken, client); err != nil {
 		return err
 	}
 	terminal, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
@@ -56,19 +57,21 @@ func runAuthCommand(args []string) error {
 		return errors.New("GitHub sign-in setup requires an interactive terminal; no credentials were read")
 	}
 	defer terminal.Close()
-	return setupManagedOAuth(home, terminal, terminal, readTerminalSecret)
+	return setupManagedOAuth(home, terminal, terminal, readTerminalSecret, func() error {
+		return managedOAuthSetupPreflight(home, statusToken, client)
+	})
 }
 
 func managedOAuthSetupPreflight(home, statusToken string, client *http.Client) error {
 	if strings.TrimSpace(statusToken) == "" {
-		return errors.New("could not verify active agent runs; no credentials were read or saved")
+		return errors.New("could not verify active agent runs")
 	}
 	ready, err := managedControlPlaneReady(client, home)
 	if err != nil {
-		return fmt.Errorf("could not verify the active managed installation before OAuth setup; no credentials were read or saved: %w", err)
+		return fmt.Errorf("could not verify the active managed installation before OAuth setup: %w", err)
 	}
 	if !ready {
-		return errors.New("could not verify the active managed installation and work state; no credentials were read or saved")
+		return errors.New("could not verify the active managed installation and work state")
 	}
 	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
 	if err != nil {
@@ -81,7 +84,7 @@ func managedOAuthSetupPreflight(home, statusToken string, client *http.Client) e
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("could not verify active agent runs (HTTP %d); no credentials were read or saved", response.StatusCode)
+		return fmt.Errorf("could not verify active agent runs (HTTP %d)", response.StatusCode)
 	}
 	var status struct {
 		Work struct {
@@ -90,16 +93,17 @@ func managedOAuthSetupPreflight(home, statusToken string, client *http.Client) e
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 4096)).Decode(&status); err != nil ||
 		status.Work.ActiveAgentRuns == nil || *status.Work.ActiveAgentRuns < 0 {
-		return errors.New("could not read active agent run count; no credentials were read or saved")
+		return errors.New("could not read active agent run count")
 	}
 	if active := *status.Work.ActiveAgentRuns; active > 0 {
-		return fmt.Errorf("OAuth setup is deferred until active work finishes (%d active agent run(s)); no credentials were read or saved and the managed service was not restarted",
+		return fmt.Errorf("OAuth setup is deferred until active work finishes (%d active agent run(s)); credentials were not saved and the managed service was not restarted",
 			active)
 	}
 	return nil
 }
 
-func setupManagedOAuth(home string, input io.Reader, output io.Writer, readSecret func(io.Writer) (string, error)) error {
+func setupManagedOAuth(home string, input io.Reader, output io.Writer, readSecret func(io.Writer) (string, error),
+	verifyIdle func() error) error {
 	if _, err := os.Stat(managedOAuthConfigPath(home)); err == nil {
 		return errors.New("GitHub sign-in is already configured; existing credentials were left unchanged")
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -107,6 +111,9 @@ func setupManagedOAuth(home string, input io.Reader, output io.Writer, readSecre
 	}
 	config, err := collectManagedOAuthConfig(input, output, readSecret)
 	if err != nil {
+		return err
+	}
+	if err := verifyIdle(); err != nil {
 		return err
 	}
 	if err := writeManagedOAuthConfig(home, config); err != nil {

@@ -290,6 +290,31 @@ func TestManagedOAuthSetupPreflightDefersWhileAgentRunIsActive(t *testing.T) {
 	}
 }
 
+func TestManagedOAuthSetupRechecksActiveRunsBeforeWritingConfig(t *testing.T) {
+	home := t.TempDir()
+	secretRead := false
+	preflightErr := fmt.Errorf("1 active agent run")
+	err := setupManagedOAuth(home, strings.NewReader("client-id\nengineer\n"), io.Discard,
+		func(io.Writer) (string, error) {
+			secretRead = true
+			return "private-client-secret", nil
+		}, func() error {
+			if !secretRead {
+				t.Fatal("final active-run check happened before OAuth prompts")
+			}
+			return preflightErr
+		})
+	if err == nil || !strings.Contains(err.Error(), preflightErr.Error()) {
+		t.Fatalf("setup error = %v, want final active-run deferral", err)
+	}
+	if !secretRead {
+		t.Fatal("setup did not reach the second active-run check after reading credentials")
+	}
+	if _, err := os.Stat(managedOAuthConfigPath(home)); !os.IsNotExist(err) {
+		t.Fatalf("OAuth credentials were written after active work appeared: %v", err)
+	}
+}
+
 func TestRestartManagedForOAuthUsesGracefulLaunchdSignal(t *testing.T) {
 	launchctlDirectory := t.TempDir()
 	launchctlLog := filepath.Join(t.TempDir(), "launchctl.log")

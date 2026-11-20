@@ -17,8 +17,12 @@ sequenceDiagram
     participant GitHub
     participant Worker as Local worker
     User->>CLI: zenchron-engineering auth setup
+    CLI->API: Verify active-run count with local status credential
+    API-->>CLI: Continue only when count is verifiably zero
     CLI-->>User: Show loopback callback URL and request OAuth App details
     User->>CLI: Enter hidden client secret and allowed usernames
+    CLI->API: Recheck active-run count immediately before config write
+    API-->>CLI: Defer if count is active or unavailable
     CLI->>CLI: Validate and store 0600 config under private managed directory
     CLI->>CLI: Restart only the existing managed LaunchAgent
     CLI->>API: Verify bounded restart and OAuth configuration
@@ -48,7 +52,10 @@ the dashboard starts its own OAuth web flow. For the local preview, use
 For a managed localhost installation, create the OAuth App yourself with callback URL
 `http://127.0.0.1:8080/auth/github/callback`, then run `zenchron-engineering auth setup` in Terminal. The setup prompts
 for the Client ID, a hidden Client Secret, and the allowed GitHub username(s); it generates a session signing secret
-and loopback worker credential. It validates the complete configuration before writing
+and loopback worker credential. It verifies that no agent runs are active before prompting and checks again after the
+prompts, immediately before writing configuration; an active run or unavailable count defers setup without saving
+credentials. These checks do not lock run admission; they narrow the interval but do not guarantee an idle supervisor
+at the subsequent restart. It validates the complete configuration before writing
 `github-oauth.json` with mode `0600` under the private managed installation directory, then restarts only the existing
 managed LaunchAgent and verifies the auth endpoint. It does not change the LaunchAgent plist, access policy, application
 data, CLI, or updater credentials. Repeating setup leaves existing configuration unchanged. If activation fails, it
