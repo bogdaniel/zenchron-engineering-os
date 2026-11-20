@@ -179,6 +179,32 @@ func TestManagedOAuthConfigIsNotOverwrittenAndInsecureFileIsRejected(t *testing.
 	}
 }
 
+func TestManagedOAuthConfigRejectsFileSymlinks(t *testing.T) {
+	home := t.TempDir()
+	if err := os.Chmod(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(home, "existing-owner-file")
+	if err := os.WriteFile(target, []byte("preserved"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, managedOAuthConfigPath(home)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readManagedOAuthConfig(home); err == nil || !strings.Contains(err.Error(), "private regular file") {
+		t.Fatalf("symlink config read error = %v, want rejection", err)
+	}
+	config := managedOAuthConfig{ClientID: "dummy", ClientSecret: "dummy", SessionKey: strings.Repeat("s", 48),
+		AllowedUsers: []string{"engineer"}, WorkerToken: testWorkerToken}
+	if err := writeManagedOAuthConfig(home, config); err == nil || !strings.Contains(err.Error(), "already configured") {
+		t.Fatalf("symlink config write error = %v, want no-overwrite refusal", err)
+	}
+	contents, err := os.ReadFile(target)
+	if err != nil || string(contents) != "preserved" {
+		t.Fatalf("symlink target changed: %q, %v", contents, err)
+	}
+}
+
 func TestManagedOAuthDoesNotReplaceExistingAccessPolicyCredentials(t *testing.T) {
 	home := t.TempDir()
 	if err := os.Chmod(home, 0o700); err != nil {
@@ -264,8 +290,18 @@ func TestManagedOAuthConfigRejectsInsecureInstallHome(t *testing.T) {
 	}
 	config := managedOAuthConfig{ClientID: "id", ClientSecret: "secret", SessionKey: strings.Repeat("s", 48),
 		AllowedUsers: []string{"engineer"}, WorkerToken: testWorkerToken}
-	if err := writeManagedOAuthConfig(home, config); err == nil || !strings.Contains(err.Error(), "must be private") {
+	if err := writeManagedOAuthConfig(home, config); err == nil || !strings.Contains(err.Error(), "private real directory") {
 		t.Fatalf("public install home error = %v, want rejection", err)
+	}
+	linkedHome := filepath.Join(parent, "linked")
+	if err := os.Symlink(parent, linkedHome); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readManagedOAuthConfig(linkedHome); err == nil || !strings.Contains(err.Error(), "private real directory") {
+		t.Fatalf("symlinked install home read error = %v, want rejection", err)
+	}
+	if err := writeManagedOAuthConfig(linkedHome, config); err == nil || !strings.Contains(err.Error(), "private real directory") {
+		t.Fatalf("symlinked install home write error = %v, want rejection", err)
 	}
 }
 

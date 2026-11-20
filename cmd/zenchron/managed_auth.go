@@ -25,7 +25,21 @@ func managedOAuthConfigPath(home string) string {
 	return filepath.Join(home, managedOAuthConfigFile)
 }
 
+func verifyManagedOAuthDirectory(home string) error {
+	info, err := os.Lstat(home)
+	if err != nil {
+		return fmt.Errorf("inspect managed installation directory: %w", err)
+	}
+	if !info.IsDir() || info.Mode().Perm()&0o077 != 0 {
+		return errors.New("managed installation directory must be a private real directory")
+	}
+	return nil
+}
+
 func readManagedOAuthConfig(home string) (*managedOAuthConfig, error) {
+	if err := verifyManagedOAuthDirectory(home); err != nil {
+		return nil, err
+	}
 	path := managedOAuthConfigPath(home)
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -55,12 +69,8 @@ func readManagedOAuthConfig(home string) (*managedOAuthConfig, error) {
 }
 
 func writeManagedOAuthConfig(home string, config managedOAuthConfig) (returnErr error) {
-	info, err := os.Stat(home)
-	if err != nil {
-		return fmt.Errorf("inspect managed installation directory: %w", err)
-	}
-	if !info.IsDir() || info.Mode().Perm()&0o077 != 0 {
-		return errors.New("managed installation directory must be private before saving GitHub credentials")
+	if err := verifyManagedOAuthDirectory(home); err != nil {
+		return fmt.Errorf("save GitHub credentials: %w", err)
 	}
 	data, err := json.Marshal(config)
 	if err != nil {
