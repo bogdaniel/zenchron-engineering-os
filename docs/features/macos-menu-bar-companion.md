@@ -170,7 +170,8 @@ The current package script does not do those steps, and this repository has no v
 [notarization requirements](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution),
 and [Hardened Runtime guidance](https://developer.apple.com/documentation/security/hardened-runtime).
 
-GitHub CI's macOS job runs Swift tests and packages the app. It does not exercise the menu UI, Login Items,
+GitHub CI's macOS job runs Swift tests, packages the app, and retains the bundle as a one-day artifact for isolated
+current-head acceptance. It does not exercise the menu UI, Login Items,
 Developer ID signing, notarization, sleep/wake, or managed update/restart behavior.
 
 ## Limits
