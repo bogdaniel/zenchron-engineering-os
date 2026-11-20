@@ -113,7 +113,8 @@ test('settings and integrations routes show live runtime and honest provider sta
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Settings' }).click();
   await expect(integrationGrid).toHaveCount(0);
   const controller = page.locator('#system-preview-controller');
-  await expect(controller.locator('.system-preview-controller-values').filter({ hasText: 'Dashboard auth' })).toContainText('Local preview');
+  await expect(controller.locator('.system-preview-controller-values').filter({ hasText: 'Dashboard auth' }))
+    .toContainText('Local workspace · GitHub sign-in not configured');
   await expect(controller.locator('.system-preview-controller-values').filter({ hasText: 'State storage' })).toContainText('Versioned JSON snapshots');
   await expect(page.getByText('Roles and permissions')).toBeVisible();
   await expect(controller).toContainText('Local checkouts');
