@@ -26,6 +26,7 @@ type authConfig struct {
 	sessionKey   []byte
 	workerToken  string
 	access       *accessPolicy
+	statusGrants *systemStatusGrantStore
 	allowedUsers []string
 	publicURL    *url.URL
 	https        bool
@@ -150,6 +151,30 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 			return
 		}
 		if config != nil && strings.HasPrefix(r.URL.Path, "/api/v1/") {
+			if r.URL.Path == "/api/v1/system/status" && r.Method == http.MethodGet && config.statusGrants != nil {
+				if token := r.Header.Get("X-Zenchron-Status-Grant"); token != "" {
+					if !isLoopbackRequest(r) {
+						http.Error(w, "menu status is available only to the local operator", http.StatusForbidden)
+						return
+					}
+					var policy *accessFile
+					if config.access != nil {
+						var err error
+						policy, err = config.access.current()
+						if err != nil {
+							http.Error(w, "access policy is unavailable", http.StatusServiceUnavailable)
+							return
+						}
+					}
+					user, ok := config.statusGrants.authenticate(token, policy, config.access != nil, config.allowedUsers)
+					if !ok {
+						http.Error(w, "menu status credential is expired or revoked", http.StatusUnauthorized)
+						return
+					}
+					next.ServeHTTP(w, withSystemStatusGrant(r, user))
+					return
+				}
+			}
 			access, status, message := config.authorize(r)
 			if status != 0 {
 				http.Error(w, message, status)
@@ -160,6 +185,10 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 				return
 			}
 			r = withRequestAccess(r, access)
+			if strings.HasPrefix(r.URL.Path, "/api/v1/system/status/credentials") && config.statusGrants != nil {
+				config.statusGrants.serve(w, r, access)
+				return
+			}
 			if strings.HasPrefix(r.URL.Path, "/api/v1/admin/") && config.access != nil {
 				config.access.serveAdmin(w, r)
 				return

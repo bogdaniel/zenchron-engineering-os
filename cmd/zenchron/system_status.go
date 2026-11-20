@@ -80,7 +80,7 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 		return
 	}
 	token := localStatusCredential()
-	if token == "" || !hmac.Equal([]byte(r.Header.Get("X-Zenchron-Local-Status-Token")), []byte(token)) {
+	if !hasSystemStatusGrant(r) && (token == "" || !hmac.Equal([]byte(r.Header.Get("X-Zenchron-Local-Status-Token")), []byte(token))) {
 		http.Error(w, "system status credential required", http.StatusUnauthorized)
 		return
 	}

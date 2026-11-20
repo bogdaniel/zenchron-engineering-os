@@ -1,12 +1,15 @@
 import AppKit
 import Darwin
 import Foundation
+import Security
 import ServiceManagement
 import ZenchronStatusCore
 
 private enum StatusAccessError: Error {
     case signInRequired
+    case pairingRequired
     case administratorRequired
+    case accessPolicyUnavailable
     case localInstallationUnavailable
 }
 
@@ -48,6 +51,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var requiresOperatorSession = false
     private var startFailure: String?
     private var launchAtLoginError: String?
+    private var pairingError: String?
     private var refreshGeneration: UInt64 = 0
     private var startAttempt: UUID?
 
@@ -58,6 +62,8 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         instanceLock = lock
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(systemDidWake(_:)),
+            name: NSWorkspace.didWakeNotification, object: nil)
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "circle.dotted", accessibilityDescription: "Zenchron status")
         item.button?.toolTip = "Zenchron status"
@@ -88,6 +94,10 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+    }
+
+    @objc private func systemDidWake(_ notification: Notification) {
+        Task { await refresh() }
     }
 
     func menuDidClose(_ menu: NSMenu) {
@@ -180,6 +190,12 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 menu.addItem(start)
             }
         }
+        let pair = NSMenuItem(title: "Pair with Dashboard…", action: #selector(pairWithDashboard), keyEquivalent: "")
+        pair.target = self
+        menu.addItem(pair)
+        if let pairingError {
+            menu.addItem(NSMenuItem(title: pairingError, action: nil, keyEquivalent: ""))
+        }
         addLaunchAtLoginItem(to: menu)
         menu.addItem(NSMenuItem.separator())
         let quit = NSMenuItem(title: "Quit Menu Bar App", action: #selector(quit), keyEquivalent: "q")
@@ -240,12 +256,20 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let wasConnected = status != nil
         do {
             var request = URLRequest(url: statusURL, timeoutInterval: 3)
-            request.setValue(try localStatusToken(), forHTTPHeaderField: "X-Zenchron-Local-Status-Token")
+            if let credential = try StatusCredentialStore.read() {
+                request.setValue(credential, forHTTPHeaderField: "X-Zenchron-Status-Grant")
+            } else {
+                request.setValue(try localStatusToken(), forHTTPHeaderField: "X-Zenchron-Local-Status-Token")
+            }
             request.cachePolicy = .reloadIgnoringLocalCacheData
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-            if httpResponse.statusCode == 401 { throw StatusAccessError.signInRequired }
+            if httpResponse.statusCode == 401 {
+                if try StatusCredentialStore.read() != nil { throw StatusAccessError.pairingRequired }
+                throw StatusAccessError.signInRequired
+            }
             if httpResponse.statusCode == 403 { throw StatusAccessError.administratorRequired }
+            if httpResponse.statusCode == 503 { throw StatusAccessError.accessPolicyUnavailable }
             guard httpResponse.statusCode == 200 else { throw URLError(.badServerResponse) }
             let decoded = try decodeSystemStatus(data)
             guard generation == refreshGeneration else { return }
@@ -258,11 +282,21 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             status = nil
             requiresOperatorSession = true
             message = "Menu status is unavailable; open the dashboard to sign in"
+        } catch StatusAccessError.pairingRequired {
+            guard generation == refreshGeneration else { return }
+            status = nil
+            requiresOperatorSession = true
+            message = "Status pairing expired or was revoked; pair again in Dashboard Settings"
         } catch StatusAccessError.administratorRequired {
             guard generation == refreshGeneration else { return }
             status = nil
             requiresOperatorSession = true
             message = "Administrator access is required for local status"
+        } catch StatusAccessError.accessPolicyUnavailable {
+            guard generation == refreshGeneration else { return }
+            status = nil
+            requiresOperatorSession = true
+            message = "Access policy is unavailable; menu status is blocked until repaired"
         } catch StatusAccessError.localInstallationUnavailable {
             guard generation == refreshGeneration else { return }
             status = nil
@@ -299,6 +333,36 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         NSWorkspace.shared.open(status.dashboardURL)
+    }
+
+    @objc private func pairWithDashboard() {
+        var components = URLComponents(url: SystemStatus.canonicalDashboardURL, resolvingAgainstBaseURL: false)!
+        components.fragment = "settings"
+        NSWorkspace.shared.open(components.url!)
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
+        input.placeholderString = "Paste the one-time credential from Settings"
+        let alert = NSAlert()
+        alert.messageText = "Pair Zenchron Menu Bar"
+        alert.informativeText = "Create a menu-bar grant in Dashboard Settings, then paste it here. The credential is stored in this Mac’s Keychain."
+        alert.accessoryView = input
+        alert.addButton(withTitle: "Pair")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let credential = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !credential.isEmpty, credential.count <= 256 else {
+            pairingError = "Pairing credential is empty or invalid"
+            refreshMenu()
+            return
+        }
+        do {
+            try StatusCredentialStore.save(credential)
+            pairingError = nil
+            message = "Paired with Dashboard"
+            Task { await refresh() }
+        } catch {
+            pairingError = "Could not save pairing credential · \(error.localizedDescription)"
+        }
+        refreshMenu()
     }
 
     private func linkItem(title: String, url: URL) -> NSMenuItem {
@@ -356,6 +420,41 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+}
+
+private enum StatusCredentialStore {
+    private static let service = "com.zenchron.engineering.menubar"
+    private static let account = "system-status-grant"
+
+    static func read() throws -> String? {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service, kSecAttrAccount as String: account,
+            kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = result as? Data,
+              let value = String(data: data, encoding: .utf8) else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
+        return value
+    }
+
+    static func save(_ value: String) throws {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service, kSecAttrAccount as String: account]
+        let attributes: [String: Any] = [kSecValueData as String: Data(value.utf8),
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            var item = query
+            attributes.forEach { item[$0.key] = $0.value }
+            let addStatus = SecItemAdd(item as CFDictionary, nil)
+            guard addStatus == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(addStatus)) }
+            return
+        }
+        guard status == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) }
     }
 }
 
