@@ -57,6 +57,52 @@ func TestVerifyReleaseBindsManifestToCandidateAndArtifactDigests(t *testing.T) {
 	}
 }
 
+func TestVerifyReleaseBindsManagedMacBundleArtifacts(t *testing.T) {
+	root := t.TempDir()
+	candidate := Candidate{Repository: "bogdaniel/zenchron-engineering-os",
+		Commit: "0123456789abcdef0123456789abcdef01234567", Tree: "abcdef0123456789abcdef0123456789abcdef01"}
+	artifacts := map[string]string{
+		"bin/zenchron": "control plane", "bin/zenchron-worker": "worker", "dashboard/index.html": "dashboard",
+		"macos/Zenchron Menu Bar.app/Contents/Info.plist":             "bundle identifier",
+		"macos/Zenchron Menu Bar.app/Contents/MacOS/zenchron-menubar": "menu companion",
+	}
+	manifest := Manifest{Repository: candidate.Repository, Commit: candidate.Commit, Tree: candidate.Tree,
+		StateSchemaVersion: StateSchemaVersion, ControlPlaneProtocolVersion: workerapi.ProtocolVersion,
+		WorkerProtocolVersion: workerapi.ProtocolVersion, Platform: "darwin-arm64", Artifacts: map[string]string{}}
+	for relative, content := range artifacts {
+		path := filepath.Join(root, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		mode := os.FileMode(0o600)
+		if strings.HasSuffix(relative, "zenchron-menubar") {
+			mode = 0o700
+		}
+		if err := os.WriteFile(path, []byte(content), mode); err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256([]byte(content))
+		manifest.Artifacts[relative] = hex.EncodeToString(digest[:])
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "release.json"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyRelease(root, candidate); err != nil {
+		t.Fatalf("VerifyRelease() rejected packaged companion: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "macos", "Zenchron Menu Bar.app", "Contents", "MacOS", "zenchron-menubar"),
+		[]byte("modified"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyRelease(root, candidate); err == nil {
+		t.Fatal("VerifyRelease() accepted a modified menu-bar executable")
+	}
+}
+
 func TestActiveReleasePointerIsAtomicAndValidatesSHA(t *testing.T) {
 	root := t.TempDir()
 	commit := "0123456789abcdef0123456789abcdef01234567"

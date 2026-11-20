@@ -57,6 +57,19 @@ function pageFromHash() {
   const page = window.location.hash.slice(1);
   return pageIDs.includes(page) ? page : 'overview';
 }
+function dashboardOAuthReturnPath(location: URL): string {
+  const selection = new URLSearchParams();
+  const encoder = new TextEncoder();
+  const fragment = pageIDs.includes(location.hash.slice(1)) ? location.hash : '';
+  const path = () => `/${selection.size ? `?${selection.toString()}` : ''}${fragment}`;
+  for (const key of ['mode', 'objective', 'tab', 'graph_id', 'decision']) {
+    const value = location.searchParams.get(key);
+    if (value === null || encoder.encode(value).length > 256 || /[\0\r\n]/.test(value)) continue;
+    selection.set(key, value);
+    if (encoder.encode(path()).length > 2048) selection.delete(key);
+  }
+  return path();
+}
 
 const queryClient = new QueryClient();
 const healthResponse = z.object({ status: z.literal('ok') });
@@ -90,6 +103,8 @@ function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
   const loginRoute = activePage === 'login';
+  const signInReturnTo = loginRoute ? undefined : dashboardOAuthReturnPath(new URL(window.location.href));
+  const signInHref = signInReturnTo ? `/auth/github?return=${encodeURIComponent(signInReturnTo)}` : '/auth/github';
   useEffect(() => {
     const syncPage = () => { setActivePage(pageFromHash()); setMode(modeFromLocation()); };
     window.addEventListener('popstate', syncPage);
@@ -212,7 +227,7 @@ function App() {
       {auth.data?.local
         ? <><button className="github-login-button" disabled><IconBrandGithub size={19} /> Continue with GitHub</button>
           <p>GitHub sign-in is not configured in this local preview.</p></>
-        : <a className="github-login-button" href="/auth/github"><IconBrandGithub size={19} /> Continue with GitHub</a>}
+        : <a className="github-login-button" href={signInHref}><IconBrandGithub size={19} /> Continue with GitHub</a>}
       <a className="auth-preview-link" href="/#overview">Back to dashboard</a>
     </div>
   </div>;

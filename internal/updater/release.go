@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
@@ -35,6 +36,7 @@ type Manifest struct {
 	StateSchemaVersion          int               `json:"state_schema_version"`
 	ControlPlaneProtocolVersion int               `json:"control_plane_protocol_version"`
 	WorkerProtocolVersion       int               `json:"worker_protocol_version"`
+	Platform                    string            `json:"platform,omitempty"`
 	Artifacts                   map[string]string `json:"artifacts"`
 }
 
@@ -160,6 +162,26 @@ func buildReleaseFrom(ctx context.Context, root string, candidate Candidate, rem
 	if err := os.Rename(filepath.Join(dashboard, "dist"), filepath.Join(stage, "dashboard")); err != nil {
 		return Manifest{}, fmt.Errorf("place dashboard release assets: %w", err)
 	}
+	platform := ""
+	packageScript := filepath.Join(source, "macos", "ZenchronMenuBar", "Scripts", "package-app.sh")
+	if runtime.GOOS == "darwin" {
+		if _, err := os.Stat(packageScript); err == nil {
+			packageOutput := filepath.Join(stage, "menu-bar-package")
+			if err := run(ctx, source, "bash", buildEnvironment, packageScript, packageOutput); err != nil {
+				return Manifest{}, fmt.Errorf("package macOS menu-bar companion: %w", err)
+			}
+			app := filepath.Join(packageOutput, "Zenchron Menu Bar.app")
+			if err := os.MkdirAll(filepath.Join(stage, "macos"), 0o700); err != nil {
+				return Manifest{}, err
+			}
+			if err := os.Rename(app, filepath.Join(stage, "macos", "Zenchron Menu Bar.app")); err != nil {
+				return Manifest{}, fmt.Errorf("place packaged menu-bar companion: %w", err)
+			}
+			platform = runtime.GOOS + "-" + runtime.GOARCH
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return Manifest{}, fmt.Errorf("inspect menu-bar packaging script: %w", err)
+		}
+	}
 	if err := makeWritableDirectories(buildHome); err != nil {
 		return Manifest{}, fmt.Errorf("prepare isolated build home for cleanup: %w", err)
 	}
@@ -172,7 +194,7 @@ func buildReleaseFrom(ctx context.Context, root string, candidate Candidate, rem
 	manifest = Manifest{Repository: candidate.Repository, Commit: candidate.Commit, Tree: candidate.Tree,
 		StateSchemaVersion:          controlPlaneInfo.StateSchemaVersion,
 		ControlPlaneProtocolVersion: controlPlaneInfo.ProtocolVersion, WorkerProtocolVersion: workerInfo.ProtocolVersion,
-		Artifacts: make(map[string]string)}
+		Platform: platform, Artifacts: make(map[string]string)}
 	for _, relative := range []string{"bin/zenchron", "bin/zenchron-worker"} {
 		digest, err := fileDigest(filepath.Join(stage, relative))
 		if err != nil {
@@ -182,6 +204,11 @@ func buildReleaseFrom(ctx context.Context, root string, candidate Candidate, rem
 	}
 	if err := addTreeDigests(filepath.Join(stage, "dashboard"), "dashboard", manifest.Artifacts); err != nil {
 		return Manifest{}, err
+	}
+	if platform != "" {
+		if err := addTreeDigests(filepath.Join(stage, "macos", "Zenchron Menu Bar.app"), "macos/Zenchron Menu Bar.app", manifest.Artifacts); err != nil {
+			return Manifest{}, err
+		}
 	}
 	if err := writeManifest(filepath.Join(stage, "release.json"), manifest); err != nil {
 		return Manifest{}, err
@@ -350,7 +377,8 @@ func VerifyRelease(releaseDir string, candidate Candidate) (Manifest, error) {
 	for relative, expected := range manifest.Artifacts {
 		if filepath.IsAbs(relative) || filepath.Clean(relative) != relative || strings.HasPrefix(relative, "..") ||
 			strings.ContainsAny(relative, "\\\x00") || !digestSHA.MatchString(expected) ||
-			(relative != "bin/zenchron" && relative != "bin/zenchron-worker" && !strings.HasPrefix(relative, "dashboard/")) {
+			(relative != "bin/zenchron" && relative != "bin/zenchron-worker" &&
+				!strings.HasPrefix(relative, "dashboard/") && !strings.HasPrefix(relative, "macos/Zenchron Menu Bar.app/")) {
 			return Manifest{}, fmt.Errorf("invalid release artifact entry %q", relative)
 		}
 		artifact, err := regularArtifact(releaseDir, relative)
@@ -390,6 +418,39 @@ func VerifyRelease(releaseDir string, candidate Candidate) (Manifest, error) {
 		return nil
 	}); err != nil {
 		return Manifest{}, err
+	}
+	if manifest.Platform != "" {
+		if !strings.HasPrefix(manifest.Platform, "darwin-") {
+			return Manifest{}, errors.New("release manifest has an unsupported platform")
+		}
+		appPath := filepath.Join(releaseDir, "macos", "Zenchron Menu Bar.app")
+		for _, required := range []string{"Contents/Info.plist", "Contents/MacOS/zenchron-menubar"} {
+			relative := filepath.ToSlash(filepath.Join("macos", "Zenchron Menu Bar.app", required))
+			if _, ok := manifest.Artifacts[relative]; !ok {
+				return Manifest{}, fmt.Errorf("release manifest omits %s", relative)
+			}
+		}
+		if err := filepath.WalkDir(appPath, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			if !entry.Type().IsRegular() {
+				return fmt.Errorf("menu-bar bundle contains unsupported artifact %s", path)
+			}
+			relative, err := filepath.Rel(releaseDir, path)
+			if err != nil {
+				return err
+			}
+			if _, ok := manifest.Artifacts[filepath.ToSlash(relative)]; !ok {
+				return fmt.Errorf("release manifest omits menu-bar artifact %s", relative)
+			}
+			return nil
+		}); err != nil {
+			return Manifest{}, err
+		}
 	}
 	return manifest, nil
 }

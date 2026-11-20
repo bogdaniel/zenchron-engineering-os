@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { useState, type ReactNode } from 'react';
 import { PageHeading } from './PageHeading';
+import { SystemStatusCompanionPanel } from './systemStatusCompanion';
 import { PanelCard } from './PanelCard';
 import { PanelHeading } from './PanelHeading';
 import { useMockSystem } from './system-preview-data';
@@ -164,7 +165,10 @@ export function SystemPage({ section, designPreview = false, canManageUpdates, .
       </Modal>
 
       <SystemWorkspace section={section} source={source} onShowAudit={() => setAuditOpen(true)} />
-      {section === 'settings' && <SystemUpdatePanel designPreview={designPreview} canManage={canManageUpdates} />}
+      {section === 'settings' && <>
+        {!designPreview && canManageUpdates && facts.githubLogin && <SystemStatusCompanionPanel />}
+        <SystemUpdatePanel designPreview={designPreview} canManage={canManageUpdates} />
+      </>}
     </section>
   );
 }

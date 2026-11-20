@@ -47,21 +47,30 @@ func (child *managedChild) stop(timeout time.Duration) error {
 	}
 }
 
-func waitManagedHealth(ctx context.Context, api *managedChild, expectedRevision string) error {
+func waitManagedHealth(ctx context.Context, client *http.Client, api *managedChild, activeRevision func() (string, error)) error {
 	deadline := time.Now().Add(updateHealthTimeout)
-	client := &http.Client{Timeout: time.Second}
+	clientWithoutRedirects := *client
+	clientWithoutRedirects.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	var apiDone <-chan error
+	if api != nil {
+		apiDone = api.done
+	}
 	for time.Now().Before(deadline) {
+		expectedRevision, err := activeRevision()
+		if err != nil {
+			return fmt.Errorf("read active managed release: %w", err)
+		}
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/healthz", nil)
 		if err != nil {
 			return err
 		}
-		response, err := client.Do(request)
+		response, err := clientWithoutRedirects.Do(request)
 		if err == nil {
 			var health struct {
 				Status   string `json:"status"`
 				Revision string `json:"revision"`
 			}
-			decodeErr := json.NewDecoder(response.Body).Decode(&health)
+			decodeErr := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&health)
 			response.Body.Close()
 			if decodeErr == nil && response.StatusCode == http.StatusOK && health.Status == "ok" && health.Revision == expectedRevision {
 				return nil
@@ -69,7 +78,7 @@ func waitManagedHealth(ctx context.Context, api *managedChild, expectedRevision 
 		}
 		timer := time.NewTimer(250 * time.Millisecond)
 		select {
-		case err := <-api.done:
+		case err := <-apiDone:
 			timer.Stop()
 			return fmt.Errorf("control plane failed before activation: %w", err)
 		case <-ctx.Done():
@@ -145,11 +154,13 @@ func managedChildrenAlive(api, worker *managedChild) error {
 }
 
 func waitManagedDashboard(ctx context.Context, client *http.Client) error {
+	clientWithoutRedirects := *client
+	clientWithoutRedirects.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/", nil)
 	if err != nil {
 		return err
 	}
-	response, err := client.Do(request)
+	response, err := clientWithoutRedirects.Do(request)
 	if err != nil {
 		return err
 	}
@@ -161,6 +172,16 @@ func waitManagedDashboard(ctx context.Context, client *http.Client) error {
 		return fmt.Errorf("read dashboard response: %w", err)
 	}
 	return nil
+}
+
+func openVerifiedManagedDashboard(ctx context.Context, client *http.Client, activeRevision func() (string, error), open func() error) error {
+	if err := waitManagedHealth(ctx, client, nil, activeRevision); err != nil {
+		return fmt.Errorf("managed control plane did not report the active release; dashboard was not opened: %w", err)
+	}
+	if err := waitManagedDashboard(ctx, client); err != nil {
+		return fmt.Errorf("managed dashboard is unavailable; dashboard was not opened: %w", err)
+	}
+	return open()
 }
 
 func withEnvironment(environment []string, values map[string]string) []string {
@@ -192,7 +213,7 @@ func managedWorkerEnvironment(base []string, projectsRoot, revision string) []st
 		"ZENCHRON_GITHUB_INSTALLATION_ID", "ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", "ZENCHRON_GITHUB_CLIENT_ID",
 		"ZENCHRON_GITHUB_CLIENT_SECRET", "ZENCHRON_GITHUB_WEBHOOK_SECRET", "ZENCHRON_SESSION_SECRET",
 		"ZENCHRON_GITHUB_ALLOWED_USERS", "ZENCHRON_PUBLIC_URL", "ZENCHRON_ACCESS_FILE", "ZENCHRON_DATA_DIR",
-		"ZENCHRON_UPDATE_REPOSITORY"} {
+		"ZENCHRON_UPDATE_REPOSITORY", "ZENCHRON_LOCAL_STATUS_TOKEN"} {
 		environment = withoutEnvironment(environment, key)
 	}
 	return environment

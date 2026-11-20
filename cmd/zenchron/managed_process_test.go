@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -17,6 +18,7 @@ func TestManagedWorkerReceivesOnlyExecutionCredentials(t *testing.T) {
 		"ZENCHRON_GITHUB_WEBHOOK_SECRET=webhook-secret", "ZENCHRON_SESSION_SECRET=session-secret",
 		"ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH=/private/app.pem", "ZENCHRON_ACCESS_FILE=/private/access.json",
 		"ZENCHRON_DATA_DIR=/private/state", "ZENCHRON_UPDATE_REPOSITORY=owner/repo",
+		"ZENCHRON_LOCAL_STATUS_TOKEN=menu-status-token",
 	}
 	original := append([]string(nil), base...)
 	api := withEnvironment(base, map[string]string{"ZENCHRON_DATA_DIR": "/private/state"})
@@ -28,7 +30,8 @@ func TestManagedWorkerReceivesOnlyExecutionCredentials(t *testing.T) {
 		t.Fatal("API environment lost its state directory after worker environment composition")
 	}
 	for _, key := range []string{"ZENCHRON_GITHUB_TOKEN", "ZENCHRON_GITHUB_WEBHOOK_SECRET", "ZENCHRON_SESSION_SECRET",
-		"ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", "ZENCHRON_ACCESS_FILE", "ZENCHRON_DATA_DIR", "ZENCHRON_UPDATE_REPOSITORY"} {
+		"ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", "ZENCHRON_ACCESS_FILE", "ZENCHRON_DATA_DIR", "ZENCHRON_UPDATE_REPOSITORY",
+		"ZENCHRON_LOCAL_STATUS_TOKEN"} {
 		if strings.Contains(got, key) {
 			t.Fatalf("worker received privileged environment variable %s", key)
 		}
@@ -66,7 +69,7 @@ func TestManagedStartupWaitsHonorCancellationAndWorkerExit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	started := time.Now()
-	if err := waitManagedHealth(ctx, api, "revision"); err == nil || time.Since(started) > time.Second {
+	if err := waitManagedHealth(ctx, &http.Client{Timeout: time.Second}, api, func() (string, error) { return "revision", nil }); err == nil || time.Since(started) > time.Second {
 		t.Fatalf("health wait ignored cancellation: %v", err)
 	}
 	if err := waitManagedWorker(ctx, &http.Client{}, api, worker, "revision", "token"); err == nil || time.Since(started) > time.Second {
@@ -91,6 +94,96 @@ func TestManagedStartupWaitsHonorCancellationAndWorkerExit(t *testing.T) {
 	})}
 	if err := waitManagedWorker(context.Background(), client, api, exited, "revision", "token"); err == nil {
 		t.Fatal("worker readiness accepted an exited candidate worker")
+	}
+}
+
+func TestOpenVerifiedManagedDashboardOpensOnlyAfterBothHealthChecks(t *testing.T) {
+	type response struct {
+		status int
+		header http.Header
+		body   string
+	}
+	tests := []struct {
+		name      string
+		responses []response
+		cancelAt  int
+		wantOpen  bool
+	}{
+		{name: "matching managed dashboard", responses: []response{
+			{status: http.StatusOK, header: http.Header{"Content-Type": []string{"application/json"}}, body: `{"status":"ok","revision":"expected"}`},
+			{status: http.StatusOK, header: http.Header{"Content-Type": []string{"text/html"}}, body: "dashboard"}}, wantOpen: true},
+		{name: "wrong release on canonical port", responses: []response{
+			{status: http.StatusOK, header: http.Header{"Content-Type": []string{"application/json"}}, body: `{"status":"ok","revision":"other"}`}}, cancelAt: 1},
+		{name: "redirect to unrelated service", responses: []response{
+			{status: http.StatusFound, header: http.Header{"Content-Type": []string{"application/json"}, "Location": []string{"https://example.invalid/healthz"}},
+				body: `{"status":"ok","revision":"expected"}`}}, cancelAt: 1},
+		{name: "healthy API without dashboard", responses: []response{
+			{status: http.StatusOK, header: http.Header{"Content-Type": []string{"application/json"}}, body: `{"status":"ok","revision":"expected"}`},
+			{status: http.StatusServiceUnavailable, header: http.Header{"Content-Type": []string{"text/plain"}}, body: "unavailable"}}},
+		{name: "redirect from dashboard", responses: []response{
+			{status: http.StatusOK, header: http.Header{"Content-Type": []string{"application/json"}}, body: `{"status":"ok","revision":"expected"}`},
+			{status: http.StatusFound, header: http.Header{"Content-Type": []string{"text/html"}, "Location": []string{"https://example.invalid/"}}, body: "dashboard"}}},
+		{name: "non-html service on canonical port", responses: []response{
+			{status: http.StatusOK, header: http.Header{"Content-Type": []string{"application/json"}}, body: `{"status":"ok","revision":"expected"}`},
+			{status: http.StatusOK, header: http.Header{"Content-Type": []string{"application/json"}}, body: `{}`}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			requests := 0
+			client := &http.Client{Transport: managedTestTransport(func(request *http.Request) (*http.Response, error) {
+				if requests >= len(test.responses) {
+					return nil, fmt.Errorf("unexpected readiness request %d", requests+1)
+				}
+				responseIndex := requests
+				requests++
+				response := test.responses[responseIndex]
+				result := &http.Response{StatusCode: response.status, Header: response.header.Clone(),
+					Body: io.NopCloser(strings.NewReader(response.body)), Request: request}
+				if requests == test.cancelAt {
+					cancel()
+				}
+				return result, nil
+			})}
+			opened := false
+			err := openVerifiedManagedDashboard(ctx, client, func() (string, error) { return "expected", nil }, func() error {
+				opened = true
+				return nil
+			})
+			if (err == nil) != test.wantOpen || opened != test.wantOpen {
+				t.Fatalf("openVerifiedManagedDashboard() error = %v, opened = %t, want open %t", err, opened, test.wantOpen)
+			}
+			if requests != len(test.responses) {
+				t.Fatalf("readiness request count = %d, want %d", requests, len(test.responses))
+			}
+		})
+	}
+}
+
+func TestOpenVerifiedManagedDashboardTracksActivatedRelease(t *testing.T) {
+	checks := 0
+	client := &http.Client{Transport: managedTestTransport(func(request *http.Request) (*http.Response, error) {
+		contentType, body := "application/json", `{"status":"ok","revision":"release-b"}`
+		if request.URL.Path != "/healthz" {
+			contentType, body = "text/html", "dashboard"
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{contentType}},
+			Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+	})}
+	opened := false
+	err := openVerifiedManagedDashboard(context.Background(), client, func() (string, error) {
+		checks++
+		if checks == 1 {
+			return "release-a", nil
+		}
+		return "release-b", nil
+	}, func() error {
+		opened = true
+		return nil
+	})
+	if err != nil || !opened || checks != 2 {
+		t.Fatalf("dashboard open error=%v opened=%t active-release checks=%d", err, opened, checks)
 	}
 }
 
