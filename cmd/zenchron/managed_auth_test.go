@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/user"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -251,6 +252,34 @@ func TestManagedOAuthSetupRecognizesExistingOAuthSession(t *testing.T) {
 	configured, err = managedOAuthSessionIsConfigured(http.StatusUnauthorized, strings.NewReader(""))
 	if err != nil || !configured {
 		t.Fatalf("unauthenticated OAuth session = (%v, %v), want true, nil", configured, err)
+	}
+}
+
+func TestRestartManagedForOAuthUsesGracefulLaunchdSignal(t *testing.T) {
+	launchctlDirectory := t.TempDir()
+	launchctlLog := filepath.Join(t.TempDir(), "launchctl.log")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$LAUNCHCTL_LOG\"\n" +
+		"[ \"$1\" = print ] || [ \"$1\" = kill ]\n"
+	if err := os.WriteFile(filepath.Join(launchctlDirectory, "launchctl"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LAUNCHCTL_LOG", launchctlLog)
+	t.Setenv("PATH", launchctlDirectory+string(os.PathListSeparator)+"/usr/bin:/bin")
+	currentUser, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restartManagedForOAuth(); err != nil {
+		t.Fatal(err)
+	}
+	commands, err := os.ReadFile(launchctlLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "print gui/" + currentUser.Uid + "/" + managedLaunchAgentLabel + "\n" +
+		"kill SIGTERM gui/" + currentUser.Uid + "/" + managedLaunchAgentLabel + "\n"
+	if string(commands) != want {
+		t.Fatalf("launchctl calls = %q, want %q", commands, want)
 	}
 }
 
