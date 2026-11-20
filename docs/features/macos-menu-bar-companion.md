@@ -89,9 +89,13 @@ flowchart LR
   unhealthy, or unrelated service on port 8080 is not opened. Quit exits only the menu-bar process.
 - A process lock prevents another companion instance for the same user from adding a second icon.
 - **Launch at Login** is opt-in and uses `SMAppService.mainApp` from the stable app path. The menu reflects macOS
-  registration state, directs approval-required cases to System Settings, and reports registration errors. It never
-  starts or stops the engineering services. Repeated install/update opens resolve to the same app bundle ID; the
-  process lock keeps one visible icon.
+  registration state, directs approval-required cases to System Settings, and permits an explicit registration
+  attempt when macOS reports `.notFound`; registration failures remain visible. It never starts or stops the
+  engineering services. Repeated install/update opens resolve to the same app bundle ID; the process lock keeps one
+  visible icon.
+- **Pair with Dashboard…** opens a dialog that directs the operator to Dashboard Settings. In Local preview, the
+  grant-generation page is unavailable because that mode has no authenticated organization session; the app keeps
+  the pairing dialog and does not bypass dashboard authorization.
 - macOS release builds run `package-app.sh`, include every bundle file in the release digest manifest, verify those
   files, and install the new bundle before the active release pointer advances. The existing managed supervisor
   remains the only updater; a running companion reconnects to its stable loopback API, and the supervisor opens the

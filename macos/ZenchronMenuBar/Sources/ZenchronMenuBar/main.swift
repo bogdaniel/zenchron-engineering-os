@@ -191,12 +191,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func addLaunchAtLoginItem(to menu: NSMenu) {
         let service = SMAppService.mainApp
-        let title = service.status == .requiresApproval ? "Approve Launch at Login…"
-            : service.status == .notFound ? "Launch at Login unavailable" : "Launch at Login"
-        let item = NSMenuItem(title: title, action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        let state = LaunchAtLoginMenuState(status: launchAtLoginStatus(service.status))
+        let item = NSMenuItem(title: state.title, action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         item.target = self
-        item.state = service.status == .enabled ? .on : .off
-        item.isEnabled = service.status != .notFound
+        item.state = state.isChecked ? .on : .off
+        item.isEnabled = state.isEnabled
         menu.addItem(item)
         if let launchAtLoginError {
             menu.addItem(NSMenuItem(title: launchAtLoginError, action: nil, keyEquivalent: ""))
@@ -223,6 +222,16 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             launchAtLoginError = "Launch at Login could not be changed · \(reason)"
         }
         refreshMenu()
+    }
+
+    private func launchAtLoginStatus(_ status: SMAppService.Status) -> LaunchAtLoginStatus {
+        switch status {
+        case .enabled: return .enabled
+        case .requiresApproval: return .requiresApproval
+        case .notRegistered: return .notRegistered
+        case .notFound: return .notFound
+        @unknown default: return .notFound
+        }
     }
 
     private func refresh() async {

@@ -3,6 +3,20 @@ import XCTest
 @testable import ZenchronStatusCore
 
 final class SystemStatusTests: XCTestCase {
+    func testNotFoundLaunchAtLoginCanStillBeEnabledByTheUser() {
+        XCTAssertEqual(LaunchAtLoginMenuState(status: .notFound),
+            LaunchAtLoginMenuState(title: "Enable Launch at Login…", isEnabled: true, isChecked: false))
+    }
+
+    func testLaunchAtLoginMenuReflectsRegisteredAndApprovalStates() {
+        XCTAssertEqual(LaunchAtLoginMenuState(status: .enabled),
+            LaunchAtLoginMenuState(title: "Launch at Login", isEnabled: true, isChecked: true))
+        XCTAssertEqual(LaunchAtLoginMenuState(status: .requiresApproval),
+            LaunchAtLoginMenuState(title: "Approve Launch at Login…", isEnabled: true, isChecked: false))
+        XCTAssertEqual(LaunchAtLoginMenuState(status: .notRegistered),
+            LaunchAtLoginMenuState(title: "Launch at Login", isEnabled: true, isChecked: false))
+    }
+
     func testStatusRefreshCadenceKeepsClosedIconCurrentWithoutBusyPolling() {
         XCTAssertEqual(SystemStatus.refreshInterval(menuVisible: true, connected: true), 15)
         XCTAssertEqual(SystemStatus.refreshInterval(menuVisible: true, connected: false), 30)
