@@ -12,6 +12,7 @@ final class SystemStatusTests: XCTestCase {
 
     func testCompanionUsesKeychainGrantForCanonicalAuthenticatedStatusRequest() async throws {
         var localCredentialRead = false
+        let responseStatus = status(revision: "a")
         let client = CompanionStatusClient(credential: {
             try selectStatusCredential(dashboardGrant: "one-time-status-grant") {
                 localCredentialRead = true
@@ -24,7 +25,7 @@ final class SystemStatusTests: XCTestCase {
             XCTAssertEqual(request.value(forHTTPHeaderField: "X-Zenchron-Status-Grant"), "one-time-status-grant")
             XCTAssertNil(request.value(forHTTPHeaderField: "X-Zenchron-Local-Status-Token"))
             XCTAssertNil(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems)
-            return (status(revision: "a"), 200)
+            return (responseStatus, 200)
         })
 
         let value = try await client.refresh()
@@ -33,6 +34,7 @@ final class SystemStatusTests: XCTestCase {
     }
 
     func testCompanionUsesManagedCredentialOnlyWhenNoDashboardGrantExists() async throws {
+        let responseStatus = status(revision: "b")
         let client = CompanionStatusClient(credential: {
             try selectStatusCredential(dashboardGrant: nil) { "launch-agent-local-token" }
         }, send: { request in
@@ -40,7 +42,7 @@ final class SystemStatusTests: XCTestCase {
             XCTAssertEqual(request.value(forHTTPHeaderField: "X-Zenchron-Local-Status-Token"),
                 "launch-agent-local-token")
             XCTAssertNil(request.value(forHTTPHeaderField: "X-Zenchron-Status-Grant"))
-            return (status(revision: "b"), 200)
+            return (responseStatus, 200)
         })
 
         let value = try await client.refresh()
@@ -121,10 +123,12 @@ final class SystemStatusTests: XCTestCase {
 
     func testCompanionReconnectsAndObservesTheNewActiveRevisionAfterRestart() async throws {
         var calls = 0
+        let oldStatus = status(revision: "old")
+        let newStatus = status(revision: "new")
         let client = CompanionStatusClient(credential: { .dashboardGrant("grant") }, send: { request in
             XCTAssertEqual(request.url, CompanionStatusClient.endpoint)
             calls += 1
-            return (status(revision: calls == 1 ? "old" : "new"), 200)
+            return (calls == 1 ? oldStatus : newStatus, 200)
         })
 
         let beforeRestart = try await client.refresh()
@@ -137,10 +141,11 @@ final class SystemStatusTests: XCTestCase {
 
     func testDisconnectedRequestCanReconnectWithoutShowingStaleStatusAsCurrent() async throws {
         var calls = 0
+        let responseStatus = status(revision: "current")
         let client = CompanionStatusClient(credential: { .dashboardGrant("grant") }, send: { _ in
             calls += 1
             if calls == 1 { throw URLError(.notConnectedToInternet) }
-            return (status(revision: "current"), 200)
+            return (responseStatus, 200)
         })
 
         do {
