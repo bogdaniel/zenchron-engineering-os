@@ -45,12 +45,58 @@ func runAuthCommand(args []string) error {
 		fmt.Println("GitHub sign-in is already configured for the running installation; no credentials or files were changed.")
 		return nil
 	}
+	client := &http.Client{Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	if err := managedOAuthSetupPreflight(home, localStatusCredential(), client); err != nil {
+		return err
+	}
 	terminal, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
 		return errors.New("GitHub sign-in setup requires an interactive terminal; no credentials were read")
 	}
 	defer terminal.Close()
 	return setupManagedOAuth(home, terminal, terminal, readTerminalSecret)
+}
+
+func managedOAuthSetupPreflight(home, statusToken string, client *http.Client) error {
+	if strings.TrimSpace(statusToken) == "" {
+		return errors.New("could not verify active agent runs; no credentials were read or saved")
+	}
+	ready, err := managedControlPlaneReady(client, home)
+	if err != nil {
+		return fmt.Errorf("could not verify the active managed installation before OAuth setup; no credentials were read or saved: %w", err)
+	}
+	if !ready {
+		return errors.New("could not verify the active managed installation and work state; no credentials were read or saved")
+	}
+	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+	if err != nil {
+		return fmt.Errorf("check managed agent runs before setup: %w", err)
+	}
+	request.Header.Set("X-Zenchron-Local-Status-Token", statusToken)
+	response, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("check managed agent runs before setup: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("could not verify active agent runs (HTTP %d); no credentials were read or saved", response.StatusCode)
+	}
+	var status struct {
+		Work struct {
+			ActiveAgentRuns *int `json:"active_agent_runs"`
+		} `json:"work"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 4096)).Decode(&status); err != nil ||
+		status.Work.ActiveAgentRuns == nil || *status.Work.ActiveAgentRuns < 0 {
+		return errors.New("could not read active agent run count; no credentials were read or saved")
+	}
+	if active := *status.Work.ActiveAgentRuns; active > 0 {
+		return fmt.Errorf("OAuth setup is deferred until active work finishes (%d active agent run(s)); no credentials were read or saved and the managed service was not restarted",
+			active)
+	}
+	return nil
 }
 
 func setupManagedOAuth(home string, input io.Reader, output io.Writer, readSecret func(io.Writer) (string, error)) error {

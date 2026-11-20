@@ -13,6 +13,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
 )
 
 func TestManagedOAuthConfigEnablesLoopbackSignInWithoutReplacingWorkerCredential(t *testing.T) {
@@ -252,6 +254,39 @@ func TestManagedOAuthSetupRecognizesExistingOAuthSession(t *testing.T) {
 	configured, err = managedOAuthSessionIsConfigured(http.StatusUnauthorized, strings.NewReader(""))
 	if err != nil || !configured {
 		t.Fatalf("unauthenticated OAuth session = (%v, %v), want true, nil", configured, err)
+	}
+}
+
+func TestManagedOAuthSetupPreflightDefersWhileAgentRunIsActive(t *testing.T) {
+	for _, activeRuns := range []int{0, 1} {
+		t.Run(fmt.Sprintf("active runs %d", activeRuns), func(t *testing.T) {
+			home := t.TempDir()
+			revision := strings.Repeat("a", 40)
+			if err := updater.SetActiveRelease(home, revision); err != nil {
+				t.Fatal(err)
+			}
+			client := &http.Client{Transport: managedTestTransport(func(request *http.Request) (*http.Response, error) {
+				body := `{"status":"ok","revision":"` + revision + `"}`
+				if request.URL.Path == "/api/v1/system/status" {
+					if request.Header.Get("X-Zenchron-Local-Status-Token") != "local-status-token" {
+						return nil, fmt.Errorf("system status request omitted the existing local credential")
+					}
+					body = fmt.Sprintf(`{"work":{"active_agent_runs":%d}}`, activeRuns)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)),
+					Header: make(http.Header), Request: request}, nil
+			})}
+			err := managedOAuthSetupPreflight(home, "local-status-token", client)
+			if activeRuns == 0 && err != nil {
+				t.Fatalf("idle setup preflight failed: %v", err)
+			}
+			if activeRuns > 0 && (err == nil || !strings.Contains(err.Error(), "1 active agent run(s)")) {
+				t.Fatalf("active setup preflight = %v, want a deferral before any changes", err)
+			}
+			if _, err := os.Stat(managedOAuthConfigPath(home)); !os.IsNotExist(err) {
+				t.Fatalf("preflight wrote OAuth credentials: %v", err)
+			}
+		})
 	}
 }
 
