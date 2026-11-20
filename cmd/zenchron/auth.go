@@ -21,17 +21,18 @@ const authSessionCookie = "zenchron_session"
 const oauthStateCookie = "zenchron_oauth_state"
 
 type authConfig struct {
-	clientID     string
-	clientSecret string
-	sessionKey   []byte
-	workerToken  string
-	access       *accessPolicy
-	statusGrants *systemStatusGrantStore
-	allowedUsers []string
-	publicURL    *url.URL
-	https        bool
-	githubURL    string
-	githubAPIURL string
+	clientID        string
+	clientSecret    string
+	sessionKey      []byte
+	workerToken     string
+	access          *accessPolicy
+	statusGrants    *systemStatusGrantStore
+	allowedUsers    []string
+	publicURL       *url.URL
+	https           bool
+	githubURL       string
+	githubAPIURL    string
+	oauthHTTPClient *http.Client
 }
 
 type authUser struct {
@@ -41,10 +42,14 @@ type authUser struct {
 }
 
 func loadAuthConfig() (*authConfig, bool, error) {
+	return loadAuthConfigFrom(os.Getenv)
+}
+
+func loadAuthConfigFrom(getenv func(string) string) (*authConfig, bool, error) {
 	keys := []string{"ZENCHRON_GITHUB_CLIENT_ID", "ZENCHRON_GITHUB_CLIENT_SECRET", "ZENCHRON_SESSION_SECRET",
 		"ZENCHRON_GITHUB_ALLOWED_USERS", "ZENCHRON_PUBLIC_URL"}
 	workerKeys := []string{"ZENCHRON_WORKER_TOKEN", "ZENCHRON_ACCESS_FILE"}
-	isSet := func(key string) bool { return strings.TrimSpace(os.Getenv(key)) != "" }
+	isSet := func(key string) bool { return strings.TrimSpace(getenv(key)) != "" }
 	if !slices.ContainsFunc(slices.Concat(keys, workerKeys), isSet) {
 		return nil, false, nil
 	}
@@ -56,20 +61,20 @@ func loadAuthConfig() (*authConfig, bool, error) {
 	if !slices.ContainsFunc(workerKeys, isSet) {
 		return nil, true, fmt.Errorf("ZENCHRON_ACCESS_FILE or ZENCHRON_WORKER_TOKEN is required when authentication is configured")
 	}
-	access, err := loadAccessPolicy()
+	access, err := loadAccessPolicyAt(getenv("ZENCHRON_ACCESS_FILE"))
 	if err != nil {
 		return nil, true, err
 	}
-	publicURL, err := url.Parse(strings.TrimRight(os.Getenv("ZENCHRON_PUBLIC_URL"), "/"))
+	publicURL, err := url.Parse(strings.TrimRight(getenv("ZENCHRON_PUBLIC_URL"), "/"))
 	if err != nil || (publicURL.Scheme != "https" && publicURL.Scheme != "http") || publicURL.Host == "" ||
 		publicURL.User != nil || publicURL.Path != "" || publicURL.RawQuery != "" || publicURL.Fragment != "" {
 		return nil, true, fmt.Errorf("ZENCHRON_PUBLIC_URL must be an http(s) origin without a path")
 	}
-	workerToken := strings.TrimSpace(os.Getenv("ZENCHRON_WORKER_TOKEN"))
+	workerToken := strings.TrimSpace(getenv("ZENCHRON_WORKER_TOKEN"))
 	if access == nil && (len(workerToken) < 32 || strings.ContainsAny(workerToken, " \t\r\n")) {
 		return nil, true, fmt.Errorf("ZENCHRON_WORKER_TOKEN must contain at least 32 non-whitespace bytes")
 	}
-	allowedUsers := strings.FieldsFunc(os.Getenv("ZENCHRON_GITHUB_ALLOWED_USERS"), func(r rune) bool { return r == ',' || r == '\n' })
+	allowedUsers := strings.FieldsFunc(getenv("ZENCHRON_GITHUB_ALLOWED_USERS"), func(r rune) bool { return r == ',' || r == '\n' })
 	for i, user := range allowedUsers {
 		allowedUsers[i] = strings.ToLower(strings.TrimSpace(user))
 	}
@@ -77,12 +82,12 @@ func loadAuthConfig() (*authConfig, bool, error) {
 	if len(allowedUsers) == 0 {
 		return nil, true, fmt.Errorf("ZENCHRON_GITHUB_ALLOWED_USERS must contain at least one username")
 	}
-	secret := []byte(os.Getenv("ZENCHRON_SESSION_SECRET"))
+	secret := []byte(getenv("ZENCHRON_SESSION_SECRET"))
 	if len(secret) < 32 {
 		return nil, true, fmt.Errorf("ZENCHRON_SESSION_SECRET must contain at least 32 bytes")
 	}
 	return &authConfig{
-		clientID: strings.TrimSpace(os.Getenv("ZENCHRON_GITHUB_CLIENT_ID")), clientSecret: strings.TrimSpace(os.Getenv("ZENCHRON_GITHUB_CLIENT_SECRET")),
+		clientID: strings.TrimSpace(getenv("ZENCHRON_GITHUB_CLIENT_ID")), clientSecret: strings.TrimSpace(getenv("ZENCHRON_GITHUB_CLIENT_SECRET")),
 		sessionKey: secret, workerToken: workerToken, access: access, allowedUsers: allowedUsers,
 		publicURL: publicURL, https: publicURL.Scheme == "https", githubURL: "https://github.com", githubAPIURL: "https://api.github.com",
 	}, true, nil
@@ -96,7 +101,8 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 		}
 		if r.URL.Path == "/auth/github" && r.Method == http.MethodGet {
 			if config == nil {
-				http.Error(w, "GitHub sign-in is not configured", http.StatusNotFound)
+				w.Header().Set("Cache-Control", "no-store")
+				http.Error(w, "GitHub sign-in is not configured. To enable it for this managed localhost installation, run `zenchron-engineering auth setup` in Terminal.", http.StatusServiceUnavailable)
 				return
 			}
 			startGitHubOAuth(w, r, config)
@@ -351,7 +357,8 @@ func startGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authConfig
 
 func completeGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authConfig) {
 	if config == nil {
-		http.Error(w, "GitHub sign-in is not configured", http.StatusNotFound)
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, "GitHub sign-in is not configured. To enable it for this managed localhost installation, run `zenchron-engineering auth setup` in Terminal.", http.StatusServiceUnavailable)
 		return
 	}
 	stateCookie, err := r.Cookie(oauthStateCookie)
@@ -401,9 +408,12 @@ func fetchGitHubUser(r *http.Request, config *authConfig, code string) (authUser
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
-		return http.ErrUseLastResponse
-	}}
+	client := config.oauthHTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		}}
+	}
 	response, err := client.Do(request)
 	if err != nil {
 		return user, err

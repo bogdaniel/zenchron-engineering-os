@@ -15,6 +15,26 @@ public enum StatusClientError: Error {
     case unexpectedStatus(Int)
 }
 
+public enum DashboardPairingAvailability: Equatable {
+    case localWorkspace
+    case signInRequired
+    case available
+    case unknown
+}
+
+public func dashboardPairingAvailability(statusCode: Int, sessionData: Data) -> DashboardPairingAvailability {
+    if statusCode == 401 { return .signInRequired }
+    guard statusCode == 200,
+          let session = try? JSONDecoder().decode(DashboardAuthSession.self, from: sessionData) else { return .unknown }
+    if session.local { return .localWorkspace }
+    return session.authenticated ? .available : .unknown
+}
+
+private struct DashboardAuthSession: Decodable {
+    let authenticated: Bool
+    let local: Bool
+}
+
 public func selectStatusCredential(dashboardGrant: String?,
                                    localInstallation: () throws -> String) throws -> StatusCredential {
     if let dashboardGrant { return .dashboardGrant(dashboardGrant) }
@@ -31,6 +51,7 @@ public func persistStatusGrant(_ input: String, save: (String) throws -> Void) t
 
 public struct CompanionStatusClient {
     public static let endpoint = URL(string: "http://127.0.0.1:8080/api/v1/system/status")!
+    public static let authSessionEndpoint = URL(string: "http://127.0.0.1:8080/api/v1/auth/session")!
 
     private let credential: () throws -> StatusCredential
     private let send: (URLRequest) async throws -> (Data, Int)

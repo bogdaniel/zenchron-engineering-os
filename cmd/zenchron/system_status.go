@@ -24,6 +24,7 @@ type systemStatus struct {
 	} `json:"workers"`
 	Work struct {
 		ActiveGraphs     int                    `json:"active_graphs"`
+		ActiveAgentRuns  *int                   `json:"active_agent_runs,omitempty"`
 		ActiveGraph      *systemStatusWorkItem  `json:"active_graph,omitempty"`
 		ActiveGraphLinks []systemStatusWorkItem `json:"active_graph_links,omitempty"`
 		Decisions        []systemStatusDecision `json:"decisions,omitempty"`
@@ -88,6 +89,14 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 	status := systemStatus{Revision: strings.TrimSpace(os.Getenv("ZENCHRON_RELEASE_REVISION")),
 		DashboardURL:       "http://127.0.0.1:8080/?mode=live",
 		DashboardAvailable: dashboardIndexAvailable(os.Getenv("ZENCHRON_DASHBOARD_DIR")), UpdateState: "unknown"}
+	if graphs != nil && graphs.runs != nil {
+		activeRuns, err := graphs.runs.countActiveRuns()
+		if err != nil {
+			http.Error(w, "active agent run status is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		status.Work.ActiveAgentRuns = &activeRuns
+	}
 	registry.mu.RLock()
 	status.Workers.Total = len(registry.workers)
 	providers := make(map[string]systemStatusProvider)

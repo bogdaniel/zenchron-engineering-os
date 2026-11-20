@@ -55,6 +55,8 @@ test('keeps the dashboard shell visible until a failed session check can be retr
   await page.getByRole('button', { name: 'Retry session check' }).click();
   await expect(page.locator('.session-preview-card')).toHaveCount(0);
   await expect(page.locator('.metric-grid')).toBeVisible();
+  await expect(page.locator('.topbar').getByText('Local workspace').first()).toBeVisible();
+  await expect(page.locator('.topbar').getByText('Administrator')).toHaveCount(0);
   expect(sessionChecks).toBe(2);
   expect(protectedRequests).toBeGreaterThan(0);
 });
@@ -69,8 +71,37 @@ test('local dashboard has a direct sign-in screen and explains when OAuth is unc
   await page.getByRole('link', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(`${local.origin}/#login`);
   await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeDisabled();
-  await expect(page.getByText('GitHub sign-in is not configured in this local preview.')).toBeVisible();
+  await expect(page.getByText(/GitHub sign-in is optional and is not configured for this installation/)).toBeVisible();
+  await expect(page.getByText('zenchron-engineering auth setup', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toHaveCount(0);
+});
+
+test('local workspace explains that menu status does not need a Dashboard grant', async ({ page, baseURL }) => {
+  let grantRequests = 0;
+  await page.route('**/api/v1/**', (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/api/v1/auth/session') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        authenticated: true, local: true, login: 'Local workspace',
+      }) });
+    }
+    if (url.pathname.startsWith('/api/v1/system/status/credentials')) grantRequests += 1;
+    if (url.pathname === '/api/v1/system/update') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        running_revision: 'local', latest_revision: 'local', state: 'idle', worker_compatible: true, active_runs: 0,
+      }) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  const local = new URL(baseURL!);
+  local.hostname = '127.0.0.1';
+  await page.goto(`${local.origin}/?mode=live#settings`);
+  await expect(page.getByRole('heading', { name: 'Local workspace and GitHub sign-in' })).toBeVisible();
+  await expect(page.getByText('zenchron-engineering auth setup', { exact: true })).toBeVisible();
+  await expect(page.getByText(/managed updater uses separate GitHub credentials for protected-main verification/)).toBeVisible();
+  await expect(page.getByText('Menu bar status already uses the managed local credential; pairing is not needed for local status.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pair this Mac' })).toHaveCount(0);
+  expect(grantRequests).toBe(0);
 });
 
 test('local settings creates and revokes a one-time menu companion grant', async ({ page, baseURL }) => {

@@ -1,17 +1,31 @@
 # GitHub sign-in and remote worker authentication
 
-GitHub sign-in protects dashboard API access when the Go control plane binds outside loopback. Local preview remains
-unauthenticated on loopback. GitHub identity is distinct from the GitHub App or token used for repository operations.
-Per-worker credentials and per-repository access for users are configured with `ZENCHRON_ACCESS_FILE`; see
+GitHub sign-in is optional for a managed localhost installation and required when the Go control plane binds outside
+loopback. An unconfigured managed install remains in Local workspace mode and does not claim a GitHub identity.
+GitHub identity is distinct from the GitHub App or token used for repository operations and the updater's protected-main
+credential. Per-worker credentials and per-repository access for users are configured with `ZENCHRON_ACCESS_FILE`; see
 [Worker enrollment and project access](worker-enrollment-and-project-access.md). A non-loopback control plane requires
 that file.
+
+## Feature diagram
 
 ```mermaid
 sequenceDiagram
     participant User as Dashboard user
+    participant CLI as Managed CLI setup
     participant API as Go control plane
     participant GitHub
     participant Worker as Local worker
+    User->>CLI: zenchron-engineering auth setup
+    CLI->API: Verify active-run count with local status credential
+    API-->>CLI: Continue only when count is verifiably zero
+    CLI-->>User: Show loopback callback URL and request OAuth App details
+    User->>CLI: Enter hidden client secret and allowed usernames
+    CLI->API: Recheck active-run count immediately before config write
+    API-->>CLI: Defer if count is active or unavailable
+    CLI->>CLI: Validate and store 0600 config under private managed directory
+    CLI->>CLI: Restart only the existing managed LaunchAgent
+    CLI->>API: Verify bounded restart and OAuth configuration
     User->>API: GET /auth/github
     API-->>User: Redirect with random OAuth state
     User->>GitHub: Authorize read:user
@@ -22,7 +36,7 @@ sequenceDiagram
     User->>API: Dashboard API request with session cookie
     API->>API: Validate signature, expiry, allowlist
     API->>API: Reject cross-origin session-authenticated mutations
-    Worker->>API: Worker endpoint with Bearer worker token over HTTPS
+    Worker->>API: Worker request with its existing token (HTTPS remote or loopback managed)
     API->>API: Validate worker credential
 ```
 
@@ -34,6 +48,19 @@ Client ID and Client Secret; the numeric App ID and private key are for separate
 The optional “Request user authorization (OAuth) during installation” setting controls installation-time authorization;
 the dashboard starts its own OAuth web flow. For the local preview, use
 `http://127.0.0.1:4173/auth/github/callback` and set `ZENCHRON_PUBLIC_URL=http://127.0.0.1:4173`.
+
+For a managed localhost installation, create the OAuth App yourself with callback URL
+`http://127.0.0.1:8080/auth/github/callback`, then run `zenchron-engineering auth setup` in Terminal. The setup prompts
+for the Client ID, a hidden Client Secret, and the allowed GitHub username(s); it generates a session signing secret
+and loopback worker credential. It verifies that no agent runs are active before prompting and checks again after the
+prompts, immediately before writing configuration; an active run or unavailable count defers setup without saving
+credentials. These checks do not lock run admission; they narrow the interval but do not guarantee an idle supervisor
+at the subsequent restart. It validates the complete configuration before writing
+`github-oauth.json` with mode `0600` under the private managed installation directory, then restarts only the existing
+managed LaunchAgent and verifies the auth endpoint. It does not change the LaunchAgent plist, access policy, application
+data, CLI, or updater credentials. Repeating setup leaves existing configuration unchanged. If activation fails, it
+removes the newly written file and restarts the prior local-workspace configuration; rollback errors are reported.
+When OAuth is not configured, `/auth/github` responds with the setup command. Local-only use does not require sign-in.
 
 - `ZENCHRON_PUBLIC_URL`: public HTTPS origin for remote use, for example `https://engineering.example.com`; loopback
   development may use `http://127.0.0.1:4173`.
@@ -62,6 +89,11 @@ refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does no
   repository access. Repository operations continue to use the control-plane GitHub App or token configuration.
 - The allowlist is checked at login and on each session request, so removing a username takes effect immediately.
   Rotating `ZENCHRON_SESSION_SECRET` invalidates all sessions.
+- Managed OAuth setup stores the client secret, session signing secret, and generated worker credential only in a
+  mode-0600 file beneath the mode-0700 managed installation directory. The secret is entered without terminal echo and
+  is not printed by the setup command. Existing LaunchAgent environment values take precedence and are not overwritten.
+- OAuth setup does not read, change, or claim to configure the GitHub credentials used by the updater to verify
+  protected `main` or fetch releases.
 - OAuth token-exchange failures return a distinct gateway error; only a successfully verified but unlisted GitHub username
   receives the account-not-authorized response.
 - GitHub OAuth codes are exchanged at `github.com`; user identity is fetched separately from `api.github.com/user`.
@@ -73,8 +105,8 @@ refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does no
 
 ## Verification
 
-Focused checks: `go test ./cmd/zenchron ./cmd/zenchron-worker`, `cd dashboard && npm run typecheck`, and the auth and
-Settings dashboard E2E specs. `cd dashboard && npm run test:e2e:agent-runtime` launches real control-plane and worker
-processes with auth enabled, confirms anonymous API and wrong worker-token requests fail, then verifies the authenticated
-worker completes a model run on an isolated branch. It signs a temporary allowlisted session fixture; the GitHub OAuth
-exchange is covered with a local provider stub and was verified live against the GitHub test app on the loopback preview.
+Automated checks cover managed OAuth config, the full allowlisted callback against a local provider stub, and the
+Dashboard local-workspace setup/pairing states. `cd dashboard && npm run test:e2e:agent-runtime` launches real
+control-plane and worker processes with auth enabled, confirms anonymous API and wrong worker-token requests fail, then
+verifies the authenticated worker completes a model run on an isolated branch. A live GitHub sign-in still requires an
+owner-created OAuth App and must be accepted manually on the loopback installation; CI never receives its credentials.
