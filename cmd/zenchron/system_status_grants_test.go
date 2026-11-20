@@ -40,6 +40,9 @@ func TestMenuStatusGrantIsAdminOnlyScopedRevocableAndAudited(t *testing.T) {
 	if created.Code != http.StatusCreated {
 		t.Fatalf("second admin pairing returned HTTP %d: %s", created.Code, created.Body.String())
 	}
+	if created.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("pairing response Cache-Control = %q", created.Header().Get("Cache-Control"))
+	}
 	var pair struct {
 		ID         string    `json:"id"`
 		Credential string    `json:"credential"`

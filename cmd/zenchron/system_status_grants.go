@@ -108,6 +108,7 @@ func (store *systemStatusGrantStore) authenticate(token string, access *accessFi
 }
 
 func (store *systemStatusGrantStore) serve(w http.ResponseWriter, r *http.Request, access requestAccess) {
+	w.Header().Set("Cache-Control", "no-store")
 	if !isLoopbackRequest(r) {
 		http.Error(w, "menu status pairing is available only on the local installation", http.StatusForbidden)
 		return
