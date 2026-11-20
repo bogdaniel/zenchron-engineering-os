@@ -7,7 +7,7 @@ import ZenchronStatusCore
 @MainActor
 final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let statusClient = CompanionStatusClient(credential: {
-        try selectStatusCredential(dashboardGrant: StatusCredentialStore.read()) { try Self.localStatusToken() }
+        try selectStatusCredential(dashboardGrant: StatusCredentialStore.read()) { try MenuBarApp.localStatusToken() }
     }, send: { request in
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
