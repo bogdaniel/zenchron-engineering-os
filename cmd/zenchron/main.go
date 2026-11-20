@@ -45,8 +45,10 @@ func run() error {
 		return showManagedStatus()
 	case "doctor":
 		return showManagedDoctor()
+	case "auth":
+		return runAuthCommand(os.Args[2:])
 	default:
-		return fmt.Errorf("unknown command %q; use install, start, status, or doctor", os.Args[1])
+		return fmt.Errorf("unknown command %q; use install, start, status, doctor, or auth setup", os.Args[1])
 	}
 }
 
