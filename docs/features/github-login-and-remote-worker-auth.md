@@ -90,8 +90,10 @@ refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does no
 - The allowlist is checked at login and on each session request, so removing a username takes effect immediately.
   Rotating `ZENCHRON_SESSION_SECRET` invalidates all sessions.
 - Managed OAuth setup stores the client secret, session signing secret, and generated worker credential only in a
-  mode-0600 file beneath the mode-0700 managed installation directory. The secret is entered without terminal echo and
-  is not printed by the setup command. Existing LaunchAgent environment values take precedence and are not overwritten.
+  mode-0600 file owned by the service user. The managed installation directory must have the same owner and must not
+  be writable by group or other users; existing 0755 directories are accepted. The secret is entered without terminal
+  echo and is not printed by the setup command. Existing LaunchAgent environment values take precedence and are not
+  overwritten.
 - OAuth setup does not read, change, or claim to configure the GitHub credentials used by the updater to verify
   protected `main` or fetch releases.
 - OAuth token-exchange failures return a distinct gateway error; only a successfully verified but unlisted GitHub username

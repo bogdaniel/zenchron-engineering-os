@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
@@ -373,25 +374,69 @@ func TestManagedOAuthRollbackRestartsAndVerifiesLocalWorkspace(t *testing.T) {
 
 func TestManagedOAuthConfigRejectsInsecureInstallHome(t *testing.T) {
 	parent := t.TempDir()
-	home := filepath.Join(parent, "public")
-	if err := os.Mkdir(home, 0o755); err != nil {
+	home := filepath.Join(parent, "writable")
+	if err := os.Mkdir(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(home, 0o775); err != nil {
 		t.Fatal(err)
 	}
 	config := managedOAuthConfig{ClientID: "id", ClientSecret: "secret", SessionKey: strings.Repeat("s", 48),
 		AllowedUsers: []string{"engineer"}, WorkerToken: testWorkerToken}
-	if err := writeManagedOAuthConfig(home, config); err == nil || !strings.Contains(err.Error(), "private real directory") {
+	if err := writeManagedOAuthConfig(home, config); err == nil || !strings.Contains(err.Error(), "not writable by others") {
 		t.Fatalf("public install home error = %v, want rejection", err)
 	}
 	linkedHome := filepath.Join(parent, "linked")
 	if err := os.Symlink(parent, linkedHome); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readManagedOAuthConfig(linkedHome); err == nil || !strings.Contains(err.Error(), "private real directory") {
+	if _, err := readManagedOAuthConfig(linkedHome); err == nil || !strings.Contains(err.Error(), "real directory") {
 		t.Fatalf("symlinked install home read error = %v, want rejection", err)
 	}
-	if err := writeManagedOAuthConfig(linkedHome, config); err == nil || !strings.Contains(err.Error(), "private real directory") {
+	if err := writeManagedOAuthConfig(linkedHome, config); err == nil || !strings.Contains(err.Error(), "real directory") {
 		t.Fatalf("symlinked install home write error = %v, want rejection", err)
 	}
+}
+
+func TestManagedOAuthEnvironmentAcceptsExisting0755InstallWithoutOAuthConfig(t *testing.T) {
+	home := t.TempDir()
+	if err := os.Chmod(home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	environment := []string{"PATH=/bin", "ZENCHRON_WORKER_TOKEN=existing-worker-token"}
+
+	got, err := managedOAuthEnvironment(home, environment)
+	if err != nil || !reflect.DeepEqual(got, environment) {
+		t.Fatalf("managed environment for an unconfigured 0755 install = (%v, %v), want the original environment", got, err)
+	}
+	if _, err := os.Lstat(managedOAuthConfigPath(home)); !os.IsNotExist(err) {
+		t.Fatalf("startup created OAuth configuration: %v", err)
+	}
+}
+
+func TestManagedOAuthDirectoryRejectsOtherOwners(t *testing.T) {
+	info, err := os.Stat(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		t.Fatalf("directory stat has unexpected type %T", info.Sys())
+	}
+	otherOwner := *stat
+	otherOwner.Uid ^= 1
+	if managedOAuthPathOwnedByCurrentUser(managedOAuthTestFileInfo{FileInfo: info, sys: &otherOwner}) {
+		t.Fatal("directory owned by another user was accepted")
+	}
+}
+
+type managedOAuthTestFileInfo struct {
+	os.FileInfo
+	sys any
+}
+
+func (info managedOAuthTestFileInfo) Sys() any {
+	return info.sys
 }
 
 func TestManagedOAuthSetupCollectsAllowedUsersWithoutEchoingSecret(t *testing.T) {

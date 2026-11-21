@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 const managedOAuthConfigFile = "github-oauth.json"
@@ -30,10 +31,16 @@ func verifyManagedOAuthDirectory(home string) error {
 	if err != nil {
 		return fmt.Errorf("inspect managed installation directory: %w", err)
 	}
-	if !info.IsDir() || info.Mode().Perm()&0o077 != 0 {
-		return errors.New("managed installation directory must be a private real directory")
+	if !info.IsDir() || info.Mode().Perm()&0o022 != 0 || !managedOAuthPathOwnedByCurrentUser(info) {
+		return errors.New("managed installation directory must be a real directory owned by the current user " +
+			"and not writable by others")
 	}
 	return nil
+}
+
+func managedOAuthPathOwnedByCurrentUser(info os.FileInfo) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && stat.Uid == uint32(os.Getuid())
 }
 
 func readManagedOAuthConfig(home string) (*managedOAuthConfig, error) {
@@ -48,8 +55,8 @@ func readManagedOAuthConfig(home string) (*managedOAuthConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("inspect managed GitHub sign-in configuration: %w", err)
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
-		return nil, errors.New("managed GitHub sign-in configuration must be a private regular file")
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || !managedOAuthPathOwnedByCurrentUser(info) {
+		return nil, errors.New("managed GitHub sign-in configuration must be owned by the current user and be a private regular file")
 	}
 	file, err := os.Open(path)
 	if err != nil {
