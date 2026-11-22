@@ -57,6 +57,7 @@ type gitHubPullRequest struct {
 
 type gitHubIssue struct {
 	Number      int            `json:"number"`
+	Comments    int            `json:"comments"`
 	Title       string         `json:"title"`
 	State       string         `json:"state"`
 	HTMLURL     string         `json:"html_url"`

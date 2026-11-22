@@ -99,8 +99,9 @@ that exits successfully is therefore not reported as delivered work unless verif
   profile's provider as installed and signed in.
 - A run can be started only from an issue written by a repository owner, member, or collaborator; an issue from
   anyone else is refused, because its text becomes the agent's task. The title, body, labels, and comments from owners,
-  members, and collaborators are snapshotted when the run is created. Comments from anyone else are not sent to the
-  agent.
+  members, and collaborators are snapshotted when the run is created. Comment reads include the newest 100 comments;
+  the context marks when older comments or other content were omitted to fit its limit. Comments from anyone else are
+  not sent to the agent.
 - Each run has its own branch `zenchron/agent-run/<run id>` and its own worktree. The worker refuses any other branch
   name, so two runs never share files and a run cannot push to another branch.
 - The provider process gets the prompt on stdin. Codex runs under a permission profile built by the worker: the
@@ -272,8 +273,9 @@ Automated, deterministic:
   provider failure, inactivity versus a long-running tool, wall-clock limit, cancellation with partial diff, lost
   lease, unauthorized branch, option-like model names, redaction, and cleanup safety.
 - `go test ./cmd/zenchron -run 'TestIssueRun|TestPullRequest|TestProgress|TestStaleAttempt|TestRunWaits|TestResult|TestVerificationFailure' -count=1`
-  covers the issue snapshot and untrusted-comment filtering, identity linking, idempotent publication, lease renewal
-  and fencing, provider gating, result validation, and review import against a fake GitHub API.
+  covers the issue snapshot, latest-comment pagination and truncation, untrusted-comment filtering, identity linking,
+  idempotent publication, lease renewal and fencing, provider gating, result validation, and review import against a
+  fake GitHub API.
 - `cd dashboard && npm run test:e2e:agent-runtime` runs the real control plane and worker binaries end to end
   through the fake Codex CLI in `dashboard/e2e/fake-cli` (see [Agent run queue](agent-run-queue.md)).
 
