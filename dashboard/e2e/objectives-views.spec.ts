@@ -56,7 +56,7 @@ test('Objectives in Mock renders the supplied screen and keeps create and edit l
   });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
 
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   await expect(page.locator('.objective-filters .mantine-Select-section[data-position="left"]')).toHaveCount(4);
@@ -271,7 +271,7 @@ test('Objectives in Mock renders the supplied screen and keeps create and edit l
 test('Objectives preview deep link selects the referenced objective', async ({ page }) => {
   await page.route('**/api/v1/**', (route) => route.fulfill({ status: 401, body: 'preview fixture expected' }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto(`http://zenchron.test:${dashboardPort}/?objective=OBJ-1492#objectives`);
+  await page.goto(`http://127.0.0.1:${dashboardPort}/?objective=OBJ-1492#objectives`);
   await expect(page.locator('.objective-detail-panel')).toContainText('Improve review velocity');
   await expect(page.locator('.objective-grid-wrap [role="row"].ag-row-selected')).toContainText('Improve review velocity');
 });
@@ -284,7 +284,7 @@ test('Objectives mock layout stays within desktop, tablet, and mobile viewports'
   });
   for (const [width, height] of [[1668, 750], [1440, 900], [1280, 800], [768, 1024], [390, 844]]) {
     await page.setViewportSize({ width, height });
-    await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+    await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
     await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Objective' })).toBeVisible();
     await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(6);
@@ -611,7 +611,7 @@ test(`switching Objectives from Mock to Live resets the due-date filter (${viewp
       ...objectives[3], product: 'Unassigned',
     }]),
   }));
-  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
 
   const dueQuarter = page.getByRole('combobox', { name: 'Filter by due quarter' });
   await expect(dueQuarter).toHaveValue('This Quarter');
