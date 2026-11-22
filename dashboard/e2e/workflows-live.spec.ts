@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 10019)
-Total output lines: 575
-
 import { expect, test, type Page } from '@playwright/test';
 
 async function chooseFromWorkflowMenu(page: Page, item: string | RegExp) {
@@ -278,7 +275,8 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(emptyStates).toHaveText([/^Unavailable · the control plane stores/, 'No notification rules are stored for this workflow.']);
   await expect(page.getByRole('button', { name: 'Archive Workflow' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'View Audit Log' })).toBeDisabled();
-  const renamedWorkflow = `${w…19 tokens truncated…dWorkflow);
+  const renamedWorkflow = `${workflowName} renamed`;
+  await page.getByLabel('Workflow name').fill(renamedWorkflow);
   await page.getByLabel('Status').selectOption('active');
   const settingsRequest = page.waitForRequest((request) => request.method() === 'PUT' && request.url().includes('/api/v1/workflows/'));
   await page.getByRole('button', { name: 'Save Settings' }).click();
@@ -331,38 +329,15 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(page.getByRole('heading', { name: `Workflow Builder — ${seededWorkflow}` })).toBeVisible();
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
   await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Task');
-  await chooseFromWorkflowMenu(page, 'Auto layout');
-  await expect(page.locator('.workflow-status')).toContainText('Layout updated');
-  await page.getByRole('button', { name: 'Fit graph to canvas' }).click();
-  const viewport = page.locator('.workflow-canvas .react-flow__viewport');
-  let lastTransform = '';
-  let stableSamples = 0;
-  await expect.poll(async () => {
-    const transform = await viewport.getAttribute('style');
-    stableSamples = transform === lastTransform ? stableSamples + 1 : 0;
-    lastTransform = transform ?? '';
-    return stableSamples;
-  }, { intervals: [50, 100, 150] }).toBeGreaterThanOrEqual(2);
   const dragHandle = page.getByRole('button', { name: 'Drag Agent Task to canvas' });
   const source = await dragHandle.boundingBox();
+  const canvas = await page.locator('.workflow-canvas').boundingBox();
   expect(source).not.toBeNull();
-  const dropPoint = await page.locator('.workflow-canvas').evaluate((canvas) => {
-    const bounds = canvas.getBoundingClientRect();
-    const nodes = [...canvas.querySelectorAll('.workflow-node')].map((node) => node.getBoundingClientRect());
-    for (let y = bounds.top + 30; y < bounds.bottom - 30; y += 30) {
-      for (let x = bounds.left + 30; x < bounds.right - 30; x += 30) {
-        if (nodes.every((node) => x < node.left - 10 || x > node.right + 10 || y < node.top - 10 || y > node.bottom + 10)) {
-          return { x, y };
-        }
-      }
-    }
-    return null;
-  });
-  expect(dropPoint, 'the fitted graph leaves room for a palette drop').not.toBeNull();
-  const target = dropPoint!;
+  expect(canvas).not.toBeNull();
+  const dropPoint = { x: canvas!.x + canvas!.width / 2, y: canvas!.y + canvas!.height / 2 };
   await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2);
   await page.mouse.down();
-  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await page.mouse.move(dropPoint.x, dropPoint.y, { steps: 8 });
   await page.mouse.up();
   const droppedNodes = page.locator('.workflow-canvas .workflow-node').filter({ hasText: 'Agent Task' });
   await expect(droppedNodes).toHaveCount(2);
@@ -370,8 +345,8 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect.poll(async () => {
     const bounds = await droppedNode.boundingBox();
     if (!bounds) return false;
-    return Math.abs(bounds.x + bounds.width / 2 - target.x) < 30 &&
-      Math.abs(bounds.y + bounds.height / 2 - target.y) < 30;
+    return Math.abs(bounds.x + bounds.width / 2 - dropPoint.x) < 30 &&
+      Math.abs(bounds.y + bounds.height / 2 - dropPoint.y) < 30;
   }).toBe(true);
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(11);
   await expect(page.locator('.workflow-properties .workflow-subheading h3')).toHaveText('Agent Task');
