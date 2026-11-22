@@ -130,10 +130,29 @@ test('local settings creates and revokes a one-time menu companion grant', async
   });
   const local = new URL(baseURL!);
   local.hostname = '127.0.0.1';
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: local.origin });
   await page.goto(`${local.origin}/?mode=live#settings`);
-  await page.getByRole('button', { name: 'Pair this Mac' }).click();
+  const pairButton = page.getByRole('button', { name: 'Pair this Mac' });
+  const panel = page.locator('.system-update-panel').first();
+  const pairButtonBounds = await pairButton.boundingBox();
+  const panelBounds = await panel.boundingBox();
+  expect(pairButtonBounds?.width).toBeLessThan((panelBounds?.width ?? 0) / 2);
+  await pairButton.click();
   await expect(page.getByText('one-time-status-grant')).toBeVisible();
   await expect(page.getByText(/shown only once/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Copy credential' }).click();
+  await expect(page.getByText(/Credential copied/i)).toBeVisible();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('one-time-status-grant');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true,
+      value: { writeText: async () => { throw new Error('clipboard denied'); } } });
+    document.execCommand = () => true;
+  });
+  await page.getByRole('button', { name: 'Copy credential' }).click();
+  await expect(page.getByText(/Credential copied/i)).toBeVisible();
+  await page.evaluate(() => { document.execCommand = () => false; });
+  await page.getByRole('button', { name: 'Copy credential' }).click();
+  await expect(page.getByRole('alert')).toHaveText('Clipboard access failed; select the credential and press ⌘C.');
   await page.getByRole('button', { name: 'Revoke' }).click();
   await expect(page.getByText(/expires/i)).toHaveCount(0);
 });

@@ -352,6 +352,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         alert.accessoryView = input
         alert.addButton(withTitle: "Pair")
         alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = input
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         do {
             try persistStatusGrant(input.stringValue) { try StatusCredentialStore.save($0) }

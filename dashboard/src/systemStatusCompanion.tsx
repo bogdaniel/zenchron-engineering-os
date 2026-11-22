@@ -15,12 +15,43 @@ export function SystemStatusCompanionPanel() {
   const client = useQueryClient();
   const [credential, setCredential] = useState('');
   const [copyError, setCopyError] = useState('');
+  const [copyStatus, setCopyStatus] = useState('');
   const grants = useQuery({ queryKey: ['menu-status-grants'],
     queryFn: () => request<{ grants: StatusGrant[] }>('/api/v1/system/status/credentials') });
   const pair = useMutation({ mutationFn: () => request<{ credential: string }>('/api/v1/system/status/credentials', { method: 'POST' }),
     onSuccess: async (result) => { setCredential(result.credential); await client.invalidateQueries({ queryKey: ['menu-status-grants'] }); } });
   const revoke = useMutation({ mutationFn: (id: string) => request<void>(`/api/v1/system/status/credentials/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     onSuccess: async () => { setCredential(''); await client.invalidateQueries({ queryKey: ['menu-status-grants'] }); } });
+
+  async function copyCredential() {
+    setCopyError('');
+    setCopyStatus('');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API is unavailable');
+      await navigator.clipboard.writeText(credential);
+    } catch {
+      const fallback = document.createElement('textarea');
+      fallback.value = credential;
+      fallback.style.position = 'fixed';
+      fallback.style.opacity = '0';
+      let copied = false;
+      try {
+        document.body.append(fallback);
+        fallback.select();
+        copied = document.execCommand('copy');
+      } catch {
+        setCopyError('Clipboard access failed; select the credential and press ⌘C.');
+        return;
+      } finally {
+        fallback.remove();
+      }
+      if (!copied) {
+        setCopyError('Clipboard access failed; select the credential and press ⌘C.');
+        return;
+      }
+    }
+    setCopyStatus('Credential copied. Paste it into the menu-bar pairing window.');
+  }
 
   return <PanelCard className="system-update-panel" withBorder>
     <h2>Menu Bar Companion</h2>
@@ -32,14 +63,16 @@ export function SystemStatusCompanionPanel() {
     {credential && <Stack gap="xs" role="status">
       <Text size="sm">Copy this credential, then choose Pair with Dashboard in the menu-bar app. It is shown only once.</Text>
       <Code>{credential}</Code>
-      <Button size="xs" variant="default" onClick={() => {
-        void navigator.clipboard.writeText(credential).then(() => setCopyError(''), () => setCopyError('Clipboard access failed; select and copy the credential above.'));
-      }}>Copy credential</Button>
+      <Button size="xs" variant="default" style={{ width: 'fit-content' }} onClick={() => void copyCredential()}>
+        Copy credential
+      </Button>
+      {copyStatus && <Text role="status">{copyStatus}</Text>}
       {copyError && <Text c="red" role="alert">{copyError}</Text>}
     </Stack>}
     {grants.error instanceof Error && <Text c="red" role="alert">{grants.error.message}</Text>}
     {pair.error instanceof Error && <Text c="red" role="alert">{pair.error.message}</Text>}
     {revoke.error instanceof Error && <Text c="red" role="alert">{revoke.error.message}</Text>}
-    <Button variant="default" onClick={() => pair.mutate()} loading={pair.isPending} disabled={pair.isPending}>Pair this Mac</Button>
+    <Button variant="default" style={{ width: 'fit-content' }} onClick={() => pair.mutate()} loading={pair.isPending}
+      disabled={pair.isPending}>Pair this Mac</Button>
   </PanelCard>;
 }
