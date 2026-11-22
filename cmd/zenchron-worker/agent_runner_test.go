@@ -267,7 +267,7 @@ func TestCLIRunPushesVerifiedCommitWhenVerificationMovesBranch(t *testing.T) {
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	harness.gitRemote = "github.com/test/repository"
-	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository.git")
+	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
 	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
 	harness.command.PublishPullRequest = true
 	var headAtPush string
@@ -303,7 +303,7 @@ func TestCLIRunRetryReconcilesPublishedBranchAfterWorktreeCleanup(t *testing.T) 
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	harness.gitRemote = "github.com/test/repository"
-	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository.git")
+	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
 	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
 	first := harness.command
 	first.PublishPullRequest = true
