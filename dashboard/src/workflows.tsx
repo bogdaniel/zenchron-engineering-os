@@ -180,7 +180,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         ...definition,
         nodes: nodes.map(({ id, position, data }) => ({
           id, type: data.kind, position, data: { label: data.label, description: data.description,
-            agent_id: data.agent_id ?? '', persona_id: data.persona_id ?? '', acceptance: data.acceptance ?? [] },
+            agent_id: data.agent_id ?? '', persona_id: data.persona_id ?? '',
+            acceptance: (data.acceptance ?? []).filter(Boolean) },
         })),
         edges: edges.map(({ id, source: from, target, label }) => ({
           id, source: from, target, label: typeof label === 'string' ? label : '',
@@ -297,7 +298,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     node.id === selectedId ? { ...node, data: { ...node.data, [key]: value } } : node
   )));
   const updateAcceptance = (value: string) => setNodes((current) => current.map((node) => (
-    node.id === selectedId ? { ...node, data: { ...node.data, acceptance: value.split('\n').filter(Boolean) } } : node
+    node.id === selectedId ? { ...node, data: { ...node.data, acceptance: value.split('\n') } } : node
   )));
   const validate = async () => {
     if (designPreview) {
@@ -316,7 +317,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       const result = await source.validate(activeWorkflow.id, {
         nodes: nodes.map(({ id, position, data }) => ({ id, type: data.kind, position, data: {
           label: data.label, description: data.description, agent_id: data.agent_id ?? '',
-          persona_id: data.persona_id ?? '', acceptance: data.acceptance ?? [],
+          persona_id: data.persona_id ?? '', acceptance: (data.acceptance ?? []).filter(Boolean),
         } })),
         edges: edges.map(({ id, source: from, target, label }) => ({ id, source: from, target, label: typeof label === 'string' ? label : '' })),
       });
