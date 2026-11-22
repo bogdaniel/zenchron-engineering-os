@@ -38,7 +38,7 @@ flowchart LR
   Worker -->|"POST /api/v1/workers/{id}/agent-runs/claim"| Runs
   Runs -->|"claim reconciles, then leases;<br/>context from work_graph_context.go"| Worker
   Worker -->|"PUT .../agent-runs/{run}: commit, diff, typed result"| Runs
-  Runs --> Reconcile
+  Runs -->|admit terminal result once, including cancelled follow-ups| Reconcile
   Worker -->|push integration branch| Remote[(GitHub remote)]
   Runs -->|create or reuse one pull request| GitHub[(GitHub API)]
 ```
@@ -100,6 +100,9 @@ flowchart LR
 - A produce unit that depends on a produce unit starts from that unit's branch.
 - A failed unit blocks the units that depend on it; other units finish. `POST .../units/{key}/retry` starts a fresh run
   for a failed unit; a retried producer continues from its previous branch.
+- Requeueing remediation, decision-resolution, or publication clears the prior admission attempt. If that queued pass
+  is cancelled before a worker leases it, reconciliation records the cancellation as a unit failure even though the
+  run's attempt count has not advanced.
 - `POST .../cancel` persists the graph intent before cancelling runs. Queued and running run changes share one
   atomic run-store write; a failed write leaves the graph cancelled and reconciliation retries before workers can lease
   more work, including after restart. A failed intent write leaves every run unchanged.

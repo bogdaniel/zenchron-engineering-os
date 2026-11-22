@@ -46,6 +46,52 @@ func TestPublicationPassIsBoundToTheReviewedCommitAndAFailedPushIsRetried(t *tes
 	}
 }
 
+func TestCancelledRequeuedProducerFailsItsWorkGraphUnit(t *testing.T) {
+	harness := newGraphHarness(t)
+	graph := harness.start(harness.planBody(
+		unitJSON("api", unitProduce, harness.profile.ID),
+		unitJSON("review-api", unitReview, harness.reviewer.ID, "api"),
+		unitJSON("integrate", unitIntegrate, "", "review-api")))
+	api := harness.claimUnit("api")
+	harness.handOff(api, commit(1), "api")
+	harness.verdict(harness.claimUnit("review-api"), commit(1), blockAPI)
+	queued, exists := harness.store.get(api.ID)
+	if !exists || queued.Status != "queued" || queued.Attempts != 1 {
+		t.Fatalf("remediation run = status %q attempt %d", queued.Status, queued.Attempts)
+	}
+	if response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+api.ID+"/cancel", ""); response.Code != http.StatusAccepted {
+		t.Fatalf("cancel requeued remediation returned HTTP %d", response.Code)
+	}
+	graph = harness.graph()
+	if unit := graph.unit("api"); unit.State != unitFailed || unit.Failure == "" || graph.Status != graphFailed {
+		t.Fatalf("cancelled remediation left graph %s and unit %#v", graph.Status, unit)
+	}
+}
+
+func TestCancelledQueuedPublicationFailsItsWorkGraphUnit(t *testing.T) {
+	harness := newGraphHarness(t)
+	harness.start(harness.planBody(
+		unitJSON("api", unitProduce, harness.profile.ID),
+		unitJSON("integrate", unitIntegrate, "", "api"),
+		unitJSON("check", unitReview, harness.reviewer.ID, "integrate")))
+	harness.handOff(harness.claimUnit("api"), commit(1), "api")
+	integration := harness.claimUnit("integrate")
+	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
+		Result: "{\"integration\":{}}"})
+	harness.verdict(harness.claimUnit("check"), commit(4), "{\"review\":{\"verdict\":\"accept\"}}")
+	queued, exists := harness.store.get(integration.ID)
+	if !exists || queued.Status != "queued" || queued.Attempts != 1 {
+		t.Fatalf("publication run = exists %t status %q attempt %d", exists, queued.Status, queued.Attempts)
+	}
+	if response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+integration.ID+"/cancel", ""); response.Code != http.StatusAccepted {
+		t.Fatalf("cancel queued publication returned HTTP %d", response.Code)
+	}
+	graph := harness.graph()
+	if unit := graph.unit("integrate"); unit.State != unitFailed || unit.Failure == "" || graph.Status != graphFailed {
+		t.Fatalf("cancelled publication left graph %s and unit %#v", graph.Status, unit)
+	}
+}
+
 func TestAdoptedReviewRunDoesNotInheritTheVerdictOfTheRoundBeforeIt(t *testing.T) {
 	harness := newGraphHarness(t)
 	graph := harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID),
