@@ -92,6 +92,11 @@ func TestPushAgentBranchRestrictsOriginAndPushesOnlyTheRunBranch(t *testing.T) {
 	if err := pushAgentBranch(context.Background(), worktree, "github.com/acme/repo", branch, commitSHA); err == nil {
 		t.Fatal("agent branch push accepted an origin outside GitHub")
 	}
+	runGit(t, repository, "config", "remote.origin.pushurl", "https://github.com/acme/repo.git")
+	if err := validateAgentRunRemote(context.Background(), worktree, "github.com/acme/repo", branch); err == nil {
+		t.Fatal("agent run accepted a fetch origin outside the project repository")
+	}
+	runGit(t, repository, "config", "--unset", "remote.origin.pushurl")
 	if err := pushGitCommit(context.Background(), worktree, branch, commitSHA); err != nil {
 		t.Fatalf("push isolated branch to test remote: %v", err)
 	}
