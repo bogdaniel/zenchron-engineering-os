@@ -18,6 +18,7 @@ sequenceDiagram
   participant Worker as zenchron-worker
   Reviewer->>GH: Submit review "Request changes" on the run's pull request
   GH->>API: pull_request_review (X-Hub-Signature-256, X-GitHub-Delivery)
+  API->>API: Enforce 5s header, 30s request-read, and 2m idle timeouts
   API->>API: HMAC-SHA256 of the raw body with ZENCHRON_GITHUB_WEBHOOK_SECRET
   API->>Deliveries: Delivery id seen before? then answer "duplicate"
   API->>Runs: Find the run by repository + pull request number
@@ -46,6 +47,9 @@ sequenceDiagram
 ## Behavior
 
 - A delivery without a valid `X-Hub-Signature-256` over the exact body is refused with 401 and changes nothing.
+- The HTTP server bounds header reads to 5 seconds, the full request read to 30 seconds, and idle keep-alive time to
+  2 minutes. The 30-second read deadline applies to webhook bodies before signature verification as well as other
+  HTTP requests.
 - Each `X-GitHub-Delivery` id is handled once. The newest 5,000 ids are kept in `agent-runs.json.deliveries` and
   survive a restart. The same review or check arriving under a new delivery id is also applied only once.
 - A delivery that does not match a run is acknowledged with 200 and ignored, so GitHub does not retry it: another
