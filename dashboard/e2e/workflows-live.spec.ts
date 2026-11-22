@@ -32,7 +32,7 @@ test('Live workflow keeps saved node positions when loading the canvas', async (
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/?mode=live#workflows');
   for (const [id, x, y] of [['trigger', 100, 80], ['planner', 420, 180]] as const) {
-    await expect.poll(() => page.locator(`.react-flow__node[data-id="${id}"]`).evaluate((node) => {
+    await expect.poll(() => page.locator(`.workflow-canvas .react-flow__node[data-id="${id}"]`).evaluate((node) => {
       const match = (node as HTMLElement).style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
       return match ? [Number(match[1]), Number(match[2])] : null;
     })).toEqual([x, y]);
@@ -329,6 +329,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(page.getByRole('heading', { name: `Workflow Builder — ${seededWorkflow}` })).toBeVisible();
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
   await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Task');
+  await chooseFromWorkflowMenu(page, 'Auto layout');
   const dragHandle = page.getByRole('button', { name: 'Drag Agent Task to canvas' });
   const source = await dragHandle.boundingBox();
   const canvas = await page.locator('.workflow-canvas').boundingBox();
