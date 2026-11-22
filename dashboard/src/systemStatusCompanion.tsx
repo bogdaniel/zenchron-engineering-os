@@ -53,18 +53,18 @@ export function SystemStatusCompanionPanel() {
     setCopyStatus('Credential copied. Paste it into the menu-bar pairing window.');
   }
 
-  return <PanelCard className="system-update-panel" withBorder>
+  return <PanelCard className="system-update-panel system-companion-panel" withBorder>
     <h2>Menu Bar Companion</h2>
     <p>Pair this Mac to show local status. Under an access policy, only an administrator can create a grant.</p>
-    {grants.data?.grants.map((grant) => <Group key={grant.id} justify="space-between" wrap="nowrap">
+    {grants.data?.grants.map((grant) => <Group className="system-companion-grant" key={grant.id} justify="space-between" wrap="nowrap">
       <Text size="sm">{grant.user} · expires {new Date(grant.expires_at).toLocaleDateString()}</Text>
       <Button size="xs" variant="default" onClick={() => revoke.mutate(grant.id)} loading={revoke.isPending}>Revoke</Button>
     </Group>)}
     {credential && <Stack gap="xs" role="status">
-      <Text size="sm">Copy this credential, then choose Pair with Dashboard in the menu-bar app. It is shown only once.</Text>
-      <Code>{credential}</Code>
+      <Text size="sm">Step 1: Copy this one-time credential. Step 2: In Zenchron Menu Bar, choose Pair with Dashboard… and paste it.</Text>
+      <Code className="system-companion-credential">{credential}</Code>
       <Button size="xs" variant="default" style={{ width: 'fit-content' }} onClick={() => void copyCredential()}>
-        Copy credential
+        Copy for Menu Bar
       </Button>
       {copyStatus && <Text role="status">{copyStatus}</Text>}
       {copyError && <Text c="red" role="alert">{copyError}</Text>}
@@ -72,7 +72,9 @@ export function SystemStatusCompanionPanel() {
     {grants.error instanceof Error && <Text c="red" role="alert">{grants.error.message}</Text>}
     {pair.error instanceof Error && <Text c="red" role="alert">{pair.error.message}</Text>}
     {revoke.error instanceof Error && <Text c="red" role="alert">{revoke.error.message}</Text>}
-    <Button variant="default" style={{ width: 'fit-content' }} onClick={() => pair.mutate()} loading={pair.isPending}
-      disabled={pair.isPending}>Pair this Mac</Button>
+    <div className="system-companion-actions">
+      <Button variant="default" style={{ width: 'fit-content' }} onClick={() => pair.mutate()} loading={pair.isPending}
+        disabled={pair.isPending}>Pair this Mac</Button>
+    </div>
   </PanelCard>;
 }

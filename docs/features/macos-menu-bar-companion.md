@@ -103,7 +103,9 @@ flowchart LR
   explains that managed local status does not need a grant and that optional GitHub sign-in must be configured before
   Dashboard pairing; it does not show the unusable credential dialog. When OAuth is enabled but no browser session
   exists, it opens Settings and directs the operator to sign in before creating a grant. Dashboard grant creation still
-  requires the existing authenticated session and admin checks.
+  requires the existing authenticated session and admin checks. The pairing dialog includes an explicit clipboard
+  paste button as well as the standard ⌘V shortcut. Dashboard places the Pair action at the end of the grant panel and
+  wraps long credentials within the panel.
 - Live Settings clearly identifies Local workspace mode, links the operator to `zenchron-engineering auth setup`, and
   shows the exact loopback callback URL. The grant management panel appears only after GitHub sign-in; the Local
   workspace remains usable without it.

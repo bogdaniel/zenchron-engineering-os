@@ -177,6 +177,10 @@
 .system-update-facts dd { overflow-wrap: anywhere; margin: 5px 0 0; font-size: var(--page-description-size); font-weight: 600; }
 .system-update-panel > p { margin: 7px 0; color: #aaa4bb; font-size: var(--panel-description-size); overflow-wrap: anywhere; }
 .system-update-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+.system-companion-grant { min-width: 0; margin-top: 8px; }
+.system-companion-grant > *:first-child { min-width: 0; overflow-wrap: anywhere; }
+.system-companion-credential { display: block; overflow-wrap: anywhere; white-space: pre-wrap; }
+.system-companion-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
 @media (min-width: 1351px) {
   .system-service-card { padding: 12px; }
 }
