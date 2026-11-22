@@ -12,7 +12,7 @@ import (
 
 const workerTestID = "0123456789abcdef0123456789abcdef"
 
-func TestPrepareWorktreeCreatesIsolatedBranchAndIsIdempotent(t *testing.T) {
+func TestPrepareWorktreeCreatesIsolatedBranchAndReusesItAfterCleanup(t *testing.T) {
 	repository := filepath.Join(t.TempDir(), "repository")
 	if err := os.MkdirAll(repository, 0o700); err != nil {
 		t.Fatal(err)
@@ -45,6 +45,17 @@ func TestPrepareWorktreeCreatesIsolatedBranchAndIsIdempotent(t *testing.T) {
 	}
 	if status := strings.TrimSpace(runGit(t, repository, "status", "--porcelain")); status != "" {
 		t.Fatalf("base checkout has changes after worktree preparation: %s", status)
+	}
+	removed, kept, err := cleanupWorktrees(ctx, root, []discoveredProject{project})
+	if err != nil || len(removed) != 1 || len(kept) != 0 {
+		t.Fatalf("cleanupWorktrees() = removed %v, kept %v, error %v", removed, kept, err)
+	}
+	runGit(t, repository, "show-ref", "--verify", "refs/heads/"+branch)
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main"); err != nil {
+		t.Fatalf("prepareWorktree() after cleanup error = %v", err)
+	}
+	if current := strings.TrimSpace(runGit(t, worktree, "branch", "--show-current")); current != branch {
+		t.Fatalf("recreated worktree branch = %q, want %q", current, branch)
 	}
 }
 
