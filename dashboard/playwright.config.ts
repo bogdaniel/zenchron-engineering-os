@@ -12,9 +12,8 @@ export default defineConfig({
   testDir: './e2e',
   globalTeardown: './e2e/teardown.mjs',
   use: {
-    baseURL: `http://zenchron.test:${dashboardPort}`,
-    launchOptions: { args: ['--host-resolver-rules=MAP zenchron.test 127.0.0.1'] },
-  },
+    baseURL: `http://127.0.0.1:${dashboardPort}`,
+      },
   webServer: [
     {
       command: 'sh ./test-server.sh',
