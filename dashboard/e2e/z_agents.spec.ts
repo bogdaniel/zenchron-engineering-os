@@ -499,6 +499,9 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
   await detail.getByRole('tab', { name: 'Prompts' }).click();
   const systemPrompt = detail.locator('.agent-prompt-editor').first();
   await expect(systemPrompt.locator('.monaco-editor')).toBeVisible();
+  const promptLabelID = await systemPrompt.locator('textarea.inputarea').getAttribute('aria-labelledby');
+  expect(promptLabelID).toBeTruthy();
+  await expect(page.locator(`[id="${promptLabelID}"]`)).toHaveText('System prompt');
   await systemPrompt.locator('.monaco-editor').click();
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.insertText('Review safely and cite changed files.');

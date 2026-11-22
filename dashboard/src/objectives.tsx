@@ -274,20 +274,24 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
 
       <div className={`objective-content-grid objective-preview-layout${sourceView.referenceFrame ? ' objective-reference-frame' : ''}`}>
         <div className="objective-table-stack">
-          <div className="objectives-tabs" role="tablist" aria-label="Objective views">
-            {(['objectives', 'planning', 'roadmap'] as const).map((tab) => (
-              <button key={tab} type="button" role="tab" aria-selected={section === tab}
-                className={section === tab ? 'objective-section-active' : ''} onClick={() => setSection(tab)}>
-                {tab[0].toUpperCase() + tab.slice(1)}
-              </button>
-            ))}
+          <div className="objectives-tabs">
+            <div className="objective-section-tabs" role="tablist" aria-label="Objective sections">
+              {(['objectives', 'planning', 'roadmap'] as const).map((tab) => (
+                <button key={tab} type="button" role="tab" aria-selected={section === tab}
+                  className={section === tab ? 'objective-section-active' : ''} onClick={() => setSection(tab)}>
+                  {tab[0].toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
             <span />
-            {section === 'objectives' && (['kanban', 'table', 'cards'] as const).map((mode) => (
-              <button key={mode} type="button" aria-pressed={view === mode}
-                className={view === mode ? 'view-active' : ''} onClick={() => setView(mode)}>
-                {mode === 'kanban' ? 'Kanban' : mode[0].toUpperCase() + mode.slice(1)}
-              </button>
-            ))}
+            {section === 'objectives' && <div className="objective-view-buttons" role="group" aria-label="Objective views">
+              {(['kanban', 'table', 'cards'] as const).map((mode) => (
+                <button key={mode} type="button" aria-pressed={view === mode}
+                  className={view === mode ? 'view-active' : ''} onClick={() => setView(mode)}>
+                  {mode === 'kanban' ? 'Kanban' : mode[0].toUpperCase() + mode.slice(1)}
+                </button>
+              ))}
+            </div>}
           </div>
           <PanelCard className="objective-table-panel" withBorder>
             <div className="objective-grid-toolbar"><span>{source.loading ? 'Loading objectives…' : `${filteredItems.length} objectives`}</span><TextInput aria-label="Search objectives" placeholder="Search objectives…" value={search} onChange={(event) => setSearch(event.currentTarget.value)} /><span>{gridHint}</span>
