@@ -12,17 +12,20 @@ const run = (digit: string, branch: string) => ({
 });
 
 async function useData(page: import('@playwright/test').Page) {
-  await page.route('**/api/v1/**', (route) => route.fulfill({ json: [] }));
-  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
-    json: { authenticated: true, local: true, login: 'Local workspace' },
-  }));
+  await page.route('**/api/v1/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/auth/session') return route.fulfill({ json: {
+      authenticated: true, local: true, login: 'Local workspace',
+    } });
+    if (path === '/api/v1/projects') return route.fulfill({ json: [
+      project('first', 'First repository'), project('second', 'Second repository'),
+    ] });
+    if (path === '/api/v1/agent-runs') return route.fulfill({ json: [
+      run('1', 'zenchron/agent-run/first'), run('2', 'zenchron/agent-run/second'),
+    ] });
+    return route.fulfill({ json: [] });
+  });
   await page.route('**/healthz', (route) => route.fulfill({ json: { status: 'ok' } }));
-  await page.route('**/api/v1/projects', (route) => route.fulfill({ json: [
-    project('first', 'First repository'), project('second', 'Second repository'),
-  ] }));
-  await page.route('**/api/v1/agent-runs', (route) => route.fulfill({ json: [
-    run('1', 'zenchron/agent-run/first'), run('2', 'zenchron/agent-run/second'),
-  ] }));
 }
 
 test('Projects grid opens focused rows with Enter and Space', async ({ page }) => {

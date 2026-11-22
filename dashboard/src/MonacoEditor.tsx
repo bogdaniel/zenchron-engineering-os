@@ -91,7 +91,7 @@ export function MonacoEditor({ value, label, labelledBy, mode, readOnly, onChang
         links: false,
       });
       editor.current = instance;
-      if (labelledBy) instance.getDomNode()?.querySelector('textarea.inputarea')?.setAttribute('aria-labelledby', labelledBy);
+      if (labelledBy) instance.getDomNode()?.setAttribute('aria-labelledby', labelledBy);
       if (mode === 'diff') decorations.current = instance.deltaDecorations([], diffLineDecorations(instance));
       changeSubscription = instance.onDidChangeModelContent(() => onChangeRef.current?.(instance!.getValue()));
     }).catch(() => {
