@@ -51,6 +51,7 @@ sequenceDiagram
     participant CP as Control plane
     participant W as Local worker
     participant D as Settings System Update page
+    participant DP as Dashboard dev/test proxy
     participant U as system-update.json
     participant A as agent-runs.json and in-memory admission
     I->>I: Validate canonical entrypoint and PATH without changing them
@@ -86,7 +87,13 @@ sequenceDiagram
     U-->>CP: Return running revision and update state
     CP-->>D: Return verified running revision
     D->>D: Reload current URL to use the new dashboard bundle
-    D->>CP: POST /api/v1/system/update/check on operator request
+    alt Dashboard uses the dev/test proxy
+        D->>DP: POST /api/v1/system/update/check with loopback Origin
+        DP->>DP: Rewrite same-origin loopback Origin only
+        DP->>CP: Forward request with upstream Host and Origin
+    else Installed dashboard
+        D->>CP: POST /api/v1/system/update/check on operator request
+    end
     CP->>S: Signal the existing managed supervisor
     opt Candidate recovery fails after pointer advancement
         S->>S: Persist blocked status and exit
@@ -94,6 +101,9 @@ sequenceDiagram
         S->>R: Read blocked marker without starting child processes
     end
 ```
+
+The dashboard dev/test proxy rewrites `Origin` only when it matches the local `127.0.0.1` or `localhost` dashboard
+origin; it forwards foreign and malformed origins unchanged so the control plane can reject them.
 
 ## Configuration and boundaries
 
