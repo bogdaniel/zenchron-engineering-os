@@ -39,3 +39,29 @@ func TestIssueRunContextMarksOmittedCommentsAndKeepsNewest(t *testing.T) {
 		t.Fatalf("page-bounded issue context = %q", pageBounded)
 	}
 }
+
+func TestIssueRunPreservesNewestHundredCommentsAtPageBoundaries(t *testing.T) {
+	for _, total := range []int{101, 151, 199, 201} {
+		t.Run(fmt.Sprint(total), func(t *testing.T) {
+			harness := newDeliveryHarness(t, workerapi.ProviderCodex)
+			harness.issueComments = make([]string, total)
+			for index := range harness.issueComments {
+				harness.issueComments[index] = fmt.Sprintf(
+					`{"body":"Marker-%03d","author_association":"OWNER","user":{"login":"maintainer"}}`, index)
+			}
+			run := harness.createIssueRun()
+			context := harness.run(run.ID).IssueContext
+			for index := total - 100; index < total; index++ {
+				if !strings.Contains(context, fmt.Sprintf("Marker-%03d", index)) {
+					t.Fatalf("latest comment %d was omitted from issue context", index)
+				}
+			}
+			if strings.Contains(context, fmt.Sprintf("Marker-%03d", total-101)) {
+				t.Fatal("oldest comment was included instead of the newest 100")
+			}
+			if !strings.Contains(context, "truncated") {
+				t.Fatal("omitted earlier comments were not reported")
+			}
+		})
+	}
+}
