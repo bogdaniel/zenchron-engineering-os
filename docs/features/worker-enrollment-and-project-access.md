@@ -26,7 +26,7 @@ sequenceDiagram
   Admin->>API: PUT /api/v1/admin/users/{login} {repositories, admin}
   Worker->>API: PUT /api/v1/workers/{id}/heartbeat with Bearer token
   API->>Policy: Token hash must match the grant for exactly this id
-  API->>API: Register only projects whose repository is granted to this worker
+  API->>API: Register only granted repositories; GitHub owner and repository names ignore case
   Developer->>API: POST /api/v1/agent-runs (session cookie)
   API->>Policy: User may touch the repository and may dispatch to this worker
   Worker->>API: POST /api/v1/workers/{id}/agent-runs/claim
@@ -127,10 +127,9 @@ the previous one keeps working for 24 hours, so the worker can be restarted at a
   worker's id is rejected, so a worker cannot heartbeat, claim, report, or finish as another worker. The one exception
   is the readiness probe `GET /api/v1/workers/healthz`, which has no worker id and accepts any enrolled worker's token.
 - Rotating, revoking, or removing one worker's credential does not affect any other worker.
-- A repository grant must equal the remote the worker reports, character for character (`github.com/owner/name`, with
-  the host lower-cased and no `.git` suffix; the path keeps its case). A project whose remote is not granted is left
-  out of the worker's registration and the heartbeat still returns 200, so a grant that differs only in case or suffix
-  shows up as a missing project, not as an error.
+- A GitHub repository grant matches the worker's remote without regard to case in the host, owner, or repository name.
+  Worker locators omit a trailing `.git` suffix, so grants must use that form. Other hosts retain exact matching. A
+  project whose remote is not granted is left out of the worker's registration and the heartbeat still returns 200.
 - The control plane stores only the SHA-256 of each token. With an access policy, the shared `ZENCHRON_WORKER_TOKEN`
   is not accepted at all.
 - A signed-in user sees only projects, runs, and workers for repositories they are granted. A user without an entry

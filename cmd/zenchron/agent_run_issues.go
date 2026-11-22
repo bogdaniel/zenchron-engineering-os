@@ -241,7 +241,7 @@ func (store *agentRunStore) findByPullRequest(repository string, number int) (st
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	for id, item := range store.items {
-		if item.Repository == repository && item.PullRequestNumber == number && number > 0 {
+		if sameRepository(item.Repository, repository) && item.PullRequestNumber == number && number > 0 {
 			return id, true
 		}
 	}
