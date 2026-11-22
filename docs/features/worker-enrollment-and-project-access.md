@@ -176,7 +176,7 @@ flowchart TB
   Worker[zenchron-worker] -->|"claims the worktree: lock on <worktree>.owner"| Owner[Worktree owner]
   Owner -->|"starts under"| Guard["zenchron-worker guard<br/>own process group"]
   Guard -->|"allowlisted environment only"| CLI[Codex CLI or Claude Code]
-  CLI -->|"provider sandbox: filesystem profile, no network"| Tool[Tool commands, tests]
+  CLI -->|"project/local settings excluded; provider sandbox: filesystem profile, no network"| Tool[Tool commands, tests]
   Guard -->|"polls the process table, writes <worktree>.owner.processes"| Record[(Process record)]
   Worker -. "dies" .-> Guard
   Guard -->|"SIGTERM, then SIGKILL to every recorded descendant"| CLI
@@ -203,7 +203,7 @@ re-allowed inside them. Network access is off for model-run commands.
 
 | | Codex CLI | Claude Code |
 |---|---|---|
-| File reads and writes by the agent itself | Through sandboxed commands only | File tools are limited to the worktree by Claude Code's permission layer; outside paths are refused |
+| Settings and file access | Uses the worker's filesystem profile | Loads operator user settings only; project and local settings in the agent-writable worktree are excluded. File tools are limited to the worktree by Claude Code's permission layer; outside paths are refused |
 | Commands (tests, builds) | Always sandboxed by Codex with the worker's permission profile | Only for profiles with `code.write` and `tests.run`, inside Claude Code's sandbox with `failIfUnavailable`, so a missing sandbox stops the run instead of running the shell unconfined |
 | How the boundary is established on a machine | At worker start a self-test runs a command under `codex sandbox` with the run's profile; Codex is reported not ready (`reason: sandbox self-test failed`) unless a denied file is unreadable, an outside write fails, and a workspace write succeeds | The shell is offered only where the backend exists: Seatbelt on macOS, bubblewrap and socat on Linux; otherwise the provider reports `sandboxed_commands: false` and edits files without running anything |
 | macOS (tested: Codex 0.167.0, Claude Code 2.1.322) | Verified by the self-test, by `codex sandbox` tests, and by a live adversarial run | Verified by a live adversarial run for both the file-tool and the sandboxed-shell profile |
