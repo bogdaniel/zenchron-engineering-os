@@ -163,6 +163,7 @@ func TestLoopbackAPIMutationsRequireSameOriginAndLoopbackHost(t *testing.T) {
 		{method: http.MethodPost, path: "/api/v1/test", host: "127.0.0.1:8080", origin: "http://attacker.example:8080", status: http.StatusForbidden},
 		{method: http.MethodPost, path: "/api/v1/test", host: "127.0.0.1:8080", status: http.StatusForbidden},
 		{method: http.MethodPost, path: "/api/v1/test", host: "127.0.0.1:8080", origin: "http://127.0.0.1:8080", status: http.StatusNoContent},
+		{method: http.MethodPost, path: "/api/v1/test", host: "localhost", origin: "http://localhost", status: http.StatusNoContent},
 		{method: http.MethodPut, path: "/api/v1/workers/0123456789abcdef0123456789abcdef/heartbeat",
 			host: "127.0.0.1:8080", status: http.StatusForbidden},
 		{method: http.MethodPut, path: "/api/v1/workers/0123456789abcdef0123456789abcdef/heartbeat",
@@ -180,8 +181,8 @@ func TestLoopbackAPIMutationsRequireSameOriginAndLoopbackHost(t *testing.T) {
 				test.method, test.path, test.host, test.origin, response.Code, test.status)
 		}
 	}
-	if passed != 2 {
-		t.Fatalf("allowed requests passed through %d times, want 2", passed)
+	if passed != 3 {
+		t.Fatalf("allowed requests passed through %d times, want 3", passed)
 	}
 }
 
