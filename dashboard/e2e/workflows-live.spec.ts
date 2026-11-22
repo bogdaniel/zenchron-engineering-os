@@ -341,14 +341,14 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await page.mouse.up();
   const droppedNodes = page.locator('.workflow-canvas .workflow-node').filter({ hasText: 'Agent Task' });
   await expect(droppedNodes).toHaveCount(2);
-  const droppedNode = droppedNodes.last();
-  await expect.poll(async () => {
-    const bounds = await droppedNode.boundingBox();
-    if (!bounds) return null;
-    const x = Math.round(bounds.x + bounds.width / 2);
-    const y = Math.round(bounds.y + bounds.height / 2);
-    return { x, y, matches: Math.abs(x - dropPoint.x) < 30 && Math.abs(y - dropPoint.y) < 30 };
-  }).toMatchObject({ matches: true });
+  const droppedBounds = await droppedNodes.last().boundingBox();
+  expect(droppedBounds).not.toBeNull();
+  const droppedX = Math.round(droppedBounds!.x + droppedBounds!.width / 2);
+  const droppedY = Math.round(droppedBounds!.y + droppedBounds!.height / 2);
+  expect(droppedX).toBeGreaterThan(dropPoint.x - 30);
+  expect(droppedX).toBeLessThan(dropPoint.x + 30);
+  expect(droppedY).toBeGreaterThan(dropPoint.y - 30);
+  expect(droppedY).toBeLessThan(dropPoint.y + 30);
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(11);
   await expect(page.locator('.workflow-properties .workflow-subheading h3')).toHaveText('Agent Task');
   const splitter = page.getByRole('separator');
