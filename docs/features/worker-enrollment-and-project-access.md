@@ -23,6 +23,13 @@ sequenceDiagram
   Admin->>API: PUT /api/v1/admin/workers/{id} {token_sha256, owner, repositories}
   API->>Policy: Replace the file atomically
   API->>Audit: Append {time, actor, action, target, before, after}
+  alt audit append fails
+    API->>Audit: Truncate to the previous length
+    API->>Policy: Restore the previous file atomically
+    API-->>Admin: 500; no change is committed
+  else audit append succeeds
+    API-->>Admin: 200; change is audited
+  end
   Admin->>API: PUT /api/v1/admin/users/{login} {repositories, admin}
   Worker->>API: PUT /api/v1/workers/{id}/heartbeat with Bearer token
   API->>Policy: Token hash must match the grant for exactly this id
@@ -146,8 +153,10 @@ the previous one keeps working for 24 hours, so the worker can be restarted at a
   when the review arrives. See [GitHub webhooks](github-webhooks.md).
 - Every applied policy change appends one line to `<access file>.audit.jsonl` with the time, the administrator, the
   action (`user.set`, `user.delete`, `worker.set`, `worker.delete`), the target, and the state before and after. A
-  token rotation is recorded as `token_changed`; hashes are not written. If the record cannot be written the change is
-  undone and the request fails. The last administrator cannot be removed or demoted.
+  token rotation is recorded as `token_changed`; hashes are not written. If the record cannot be written, the appender
+  restores the log to its prior length, the policy is restored atomically, and the request fails. A storage failure
+  during rollback is logged. Audit reads wait until a change finishes so they cannot observe a partial record. The last
+  administrator cannot be removed or demoted.
 - A project id belongs to the first worker that registers it; another worker cannot register the same id.
 - A successful heartbeat reports skipped project IDs and either `repository_not_granted` or
   `project_id_registered_by_another_worker`; it omits `skipped_projects` when there are none and includes no remote
@@ -255,11 +264,11 @@ Not covered, and blocking multi-organization or untrusted deployment:
 
 ## Verification
 
-- `go test ./cmd/zenchron -run 'TestAdmin|TestWorkerToken|TestProductsAndObjectives|TestProfilesAndWorkflows|TestWorkerIsStopped' -count=1`
+- `go test ./cmd/zenchron -run 'TestAdmin|TestAuditAppendFailures|TestWorkerToken|TestProductsAndObjectives|TestProfilesAndWorkflows|TestWorkerIsStopped' -count=1`
   covers the admin API (refusals for developers and worker tokens, grants, removal, the last administrator, audit
-  records without token hashes), token rotation overlap, immediate revocation, an expired previous token, another
-  worker being unaffected, product and objective scoping with negative cases, profile and workflow ownership, and a
-  worker losing its grant mid-run.
+  records without token hashes, failed append rollback), token rotation overlap, immediate revocation, an expired
+  previous token, another worker being unaffected, product and objective scoping with negative cases, profile and
+  workflow ownership, and a worker losing its grant mid-run.
 - `go test ./cmd/zenchron -run 'TestWorkerTokenIsBound|TestWorkerRegistersOnlyApproved|TestRunsAreScoped|TestUsersDispatchOnly|TestRepositoryAccessAlone|TestWorkerCannot|TestRevokingAGrant|TestAccessFileRejects|TestRunRejectsRemoteListener' -count=1`
   covers impersonation, the shared token, unapproved repositories, cross-user reads and writes on runs and projects,
   cross-worker claims and results, personal versus shared workers, revocation without restart, an invalid policy
