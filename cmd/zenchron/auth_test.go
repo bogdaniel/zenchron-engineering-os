@@ -311,7 +311,7 @@ func TestReadSessionRejectsTamperingAndExpiry(t *testing.T) {
 
 func testAuthConfig() *authConfig {
 	return &authConfig{clientID: "client-id", clientSecret: "client-secret", sessionKey: []byte(strings.Repeat("s", 32)),
-		workerToken: testWorkerToken, allowedUsers: []string{"engineer"}, publicURL: mustURL("https://zenchron.example"), https: true,
+		sessionRevocations: &sessionRevocations{revokedBefore: make(map[string]int64)}, workerToken: testWorkerToken, allowedUsers: []string{"engineer"}, publicURL: mustURL("https://zenchron.example"), https: true,
 		githubURL: "https://github.com", githubAPIURL: "https://api.github.com"}
 }
 
