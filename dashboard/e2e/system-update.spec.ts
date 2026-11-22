@@ -39,3 +39,13 @@ test('Mock Settings does not read managed update status', async ({ page }) => {
   expect(reads).toBe(0);
   await expect(page.getByText('Mock status is illustrative; the installed update service is not queried.')).toBeVisible();
 });
+
+test('Live update check reaches the local API through the dashboard proxy', async ({ page }) => {
+  await page.goto(`${localDashboardURL}/?mode=live#settings`);
+  const status = await page.evaluate(async () => (await fetch('/api/v1/system/update/check', { method: 'POST' })).status);
+  expect(status).toBe(503);
+  const foreignOrigin = await page.request.post(`${localDashboardURL}/api/v1/system/update/check`, {
+    headers: { Origin: 'https://attacker.example' },
+  });
+  expect(foreignOrigin.status()).toBe(403);
+});

@@ -146,11 +146,10 @@ func codexCompletedItem(id, itemType, text, command string, exitCode *int, chang
 	return cliEvent{kind: "tool", message: itemType, toolFinished: id}
 }
 
-// claudeArguments uses print mode with stream-json events. The prompt arrives on stdin. User settings and
-// MCP servers are not loaded, which keeps personal plugins and connectors out of runs, and hooks are
-// disabled for every profile: a project hook is a script in the worktree that would run outside any sandbox,
-// and a writing agent could change it first. Profiles get file tools only, unless they may run tests on a
-// machine that has the sandbox backend: then Bash is offered, but only inside Claude Code's own sandbox.
+// claudeArguments uses print mode with stream-json events. The prompt arrives on stdin. Project and local
+// settings are excluded because the worktree is agent-writable. MCP servers are not loaded, and hooks are
+// disabled for every profile. Profiles get file tools only, unless they may run tests on a machine that has
+// the sandbox backend: then Bash is offered, but only inside Claude Code's own sandbox.
 func claudeArguments(command workerapi.AgentRunCommand, workspace runWorkspace) []string {
 	tools, mode := "Read,Glob,Grep", "default"
 	if canWrite(command) {
@@ -161,7 +160,7 @@ func claudeArguments(command workerapi.AgentRunCommand, workspace runWorkspace) 
 		tools += ",Bash"
 	}
 	args := []string{"--print", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
-		"--setting-sources", "project", "--strict-mcp-config", "--settings", claudeSettings(workspace, sandboxed),
+		"--setting-sources", "user", "--strict-mcp-config", "--settings", claudeSettings(workspace, sandboxed),
 		"--permission-mode", mode, "--tools", tools}
 	if command.Profile.Model != defaultModel {
 		args = append(args, "--model="+command.Profile.Model)

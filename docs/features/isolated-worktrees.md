@@ -24,8 +24,8 @@ sequenceDiagram
     C->>C: Persist queued run with branch zenchron/agent-run/<run id>
     W->>C: POST /api/v1/workers/{id}/agent-runs/claim
     C-->>W: Run command: id, project id, branch, base branch, attempt
-    W->>R: git check-ref-format, git worktree add -b <branch> <root>/<project id>/<run id> <base branch>
-    R->>T: Create the branch and its checkout (reused on a later attempt)
+    W->>R: Validate branch; create or reattach the run branch at <root>/<project id>/<run id>
+    R->>T: Create the branch or checkout retained branch after cleanup
     W->>T: Claim exclusive ownership (<worktree>.owner lock), stop leftovers of an earlier attempt
     W->>R: git worktree lock (run in progress)
     W->>T: Run the coding CLI, verification, and commit inside the worktree
@@ -44,8 +44,8 @@ sequenceDiagram
   and its branch stay in place.
 - **Creation.** `prepareWorktree` is called only from the run pipeline. It validates the run branch and base branch
   with `git check-ref-format`, then runs `git worktree add`. A worktree that already exists on the run branch is
-  reused, so a follow-up attempt (retry, or request-changes) continues in the same checkout; a destination on another
-  branch is refused.
+  reused, so a follow-up attempt (retry, or request-changes) continues in the same checkout. If cleanup removed the
+  checkout, the worker reattaches the retained run branch; a destination on another branch is refused.
 - **Leases and fencing.** There is one implementation, the agent-run store: claim, three-minute lease renewed by
   progress reports, attempt number echoed by the result, expiry, attempt limit, and cancellation. See
   [Agent run queue](agent-run-queue.md).
@@ -64,7 +64,7 @@ sequenceDiagram
 ## Verification
 
 - `go test ./cmd/zenchron-worker -run 'TestPrepareWorktree' -count=1` covers real Git worktree creation, reuse on a
-  repeated call, invalid-branch rejection, and the source checkout staying on its branch.
+  repeated call and after cleanup, invalid-branch rejection, and the source checkout staying on its branch.
 - `go test ./cmd/zenchron-worker -run 'TestCleanupWorktreesKeepsLockedAndModifiedWorktrees|TestStaleLease' -count=1`
   covers cleanup refusing locked and modified worktrees while keeping the run branch.
 - `go test ./cmd/zenchron -run 'TestRunLeaseRecoversAfterRestartAndFailsWhenAttemptsAreUsedUp|TestStaleAttemptCannotFinishOrReportAfterRunIsReclaimed|TestPersistentMuxRestoresObjectivesAndWorkflows' -count=1`

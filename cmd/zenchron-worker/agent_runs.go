@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"slices"
 	"strings"
@@ -49,6 +50,15 @@ func pushGitBranch(ctx context.Context, worktree, branch string) error {
 	return nil
 }
 
+// Agent-created nested repositories can install fsmonitor commands, so these Git children get
+// neither that hook nor worker secrets.
+func agentRunGitCommand(ctx context.Context, args ...string) *exec.Cmd {
+	command := gitCommand(ctx, args...)
+	command.Env = append(providerEnvironment(os.Environ()),
+		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.fsmonitor", "GIT_CONFIG_VALUE_0=false")
+	return command
+}
+
 // agentIdentity is the author of every commit the worker creates on a run branch.
 var agentIdentity = []string{"-c", "user.name=Zenchron Agent", "-c", "user.email=agent@zenchron.invalid", "-c", "commit.gpgsign=false"}
 
@@ -77,18 +87,19 @@ func (buffer *boundedDiff) Write(input []byte) (int, error) {
 func (buffer *boundedDiff) String() string { return strings.ToValidUTF8(string(buffer.data), "") }
 
 func collectAgentRunDiff(ctx context.Context, worktree, baseBranch string) (string, bool, error) {
-	add := gitCommand(ctx, "add", "--intent-to-add", "--", ".")
+	add := agentRunGitCommand(ctx, "add", "--intent-to-add", "--", ".")
 	add.Dir = worktree
 	if err := add.Run(); err != nil {
 		return "", false, err
 	}
-	mergeBase := gitCommand(ctx, "merge-base", baseBranch, "HEAD")
+	mergeBase := agentRunGitCommand(ctx, "merge-base", baseBranch, "HEAD")
 	mergeBase.Dir = worktree
 	base, err := mergeBase.Output()
 	if err != nil {
 		return "", false, fmt.Errorf("find agent branch base: %w", err)
 	}
-	command := gitCommand(ctx, "diff", strings.TrimSpace(string(base)), "--no-ext-diff", "--no-textconv", "--no-color", "--")
+	command := agentRunGitCommand(ctx, "diff", strings.TrimSpace(string(base)), "--no-ext-diff", "--no-textconv",
+		"--no-color", "--ignore-submodules=all", "--")
 	command.Dir = worktree
 	buffer := &boundedDiff{}
 	command.Stdout, command.Stderr = buffer, io.Discard
@@ -99,19 +110,19 @@ func collectAgentRunDiff(ctx context.Context, worktree, baseBranch string) (stri
 }
 
 func commitAgentRunChanges(ctx context.Context, worktree, baseBranch, runID string, attempt int) (string, error) {
-	add := gitCommand(ctx, "add", "-A", "--", ".")
+	add := agentRunGitCommand(ctx, "add", "-A", "--", ".")
 	add.Dir = worktree
 	if err := add.Run(); err != nil {
 		return "", fmt.Errorf("stage agent branch changes: %w", err)
 	}
-	check := gitCommand(ctx, "diff", "--cached", "--quiet")
+	check := agentRunGitCommand(ctx, "diff", "--cached", "--quiet")
 	check.Dir = worktree
 	if err := check.Run(); err != nil {
 		var exitError *exec.ExitError
 		if !errors.As(err, &exitError) || exitError.ExitCode() != 1 {
 			return "", fmt.Errorf("check staged agent changes: %w", err)
 		}
-		commit := gitCommand(ctx, append(slices.Clone(agentIdentity), "commit", "-m",
+		commit := agentRunGitCommand(ctx, append(slices.Clone(agentIdentity), "commit", "-m",
 			fmt.Sprintf("Agent run %s attempt %d", runID, attempt))...)
 		commit.Dir = worktree
 		commit.Stdout, commit.Stderr = io.Discard, io.Discard
@@ -119,13 +130,13 @@ func commitAgentRunChanges(ctx context.Context, worktree, baseBranch, runID stri
 			return "", fmt.Errorf("create isolated agent commit: %w", err)
 		}
 	}
-	head := gitCommand(ctx, "rev-parse", "--verify", "HEAD")
+	head := agentRunGitCommand(ctx, "rev-parse", "--verify", "HEAD")
 	head.Dir = worktree
 	commitID, err := head.Output()
 	if err != nil {
 		return "", fmt.Errorf("read isolated agent commit: %w", err)
 	}
-	base := gitCommand(ctx, "merge-base", baseBranch, "HEAD")
+	base := agentRunGitCommand(ctx, "merge-base", baseBranch, "HEAD")
 	base.Dir = worktree
 	baseID, err := base.Output()
 	if err != nil {

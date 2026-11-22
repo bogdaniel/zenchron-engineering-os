@@ -217,22 +217,26 @@ func (store *agentRunStore) syncReviews(w http.ResponseWriter, r *http.Request) 
 		return review.ID <= item.ImportedReviewID || review.State != "CHANGES_REQUESTED" ||
 			strings.TrimSpace(review.Body) == "" || !trustedGitHubAuthor(review.AuthorAssociation)
 	})
+	importedCount := 0
 	for index, review := range pending {
 		// Only the newest request queues the follow-up pass; a queued run cannot take further feedback.
 		newest := index == len(pending)-1
 		var status int
 		var message string
-		if item, status, message = store.importReview(accessFor(r), item, review, newest); status != 0 {
+		var imported bool
+		if item, imported, status, message = store.importReview(accessFor(r), item, review, newest, nil); status != 0 {
 			http.Error(w, message, status)
 			return
 		}
+		if imported {
+			importedCount++
+		}
 	}
-	imported := len(pending)
 	item.CanRequestChanges = store.canRequestChanges(item)
 	writeJSON(w, http.StatusOK, struct {
 		Imported int      `json:"imported"`
 		Run      agentRun `json:"run"`
-	}{imported, publicAgentRun(item)})
+	}{importedCount, publicAgentRun(item)})
 }
 
 // findByPullRequest returns the run that published a pull request, using the stored identity rather
