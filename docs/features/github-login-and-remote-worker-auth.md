@@ -12,6 +12,7 @@ sequenceDiagram
     participant API as Go control plane
     participant GitHub
     participant Worker as Local worker
+    participant State as Control-plane state file
     User->>API: GET /auth/github
     API-->>User: Redirect with random OAuth state
     User->>GitHub: Authorize read:user
@@ -22,8 +23,12 @@ sequenceDiagram
     User->>API: Dashboard API request with session cookie
     API->>API: Validate signature, expiry, allowlist
     API->>API: Reject cross-origin session-authenticated mutations
-    API->>API: On loopback, require a loopback Host and same-origin mutations without auth
+    API->>API: On loopback, require loopback Host and same-origin unauthenticated mutations
     API->>API: Require application/json for decoded JSON bodies
+    GitHub->>API: Signed webhook may use external Host; validate HMAC at the webhook handler
+    User->>API: POST /api/v1/auth/logout
+    API->>State: Persist per-login session cutoff
+    API-->>User: Revoke earlier sessions and expire cookie
     Worker->>API: Worker endpoint with Bearer worker token over HTTPS
     API->>API: Validate worker credential
 ```
@@ -57,16 +62,21 @@ refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does no
 ## Security boundary and limits
 
 - Dashboard API requests require a signed session cookie. State-changing dashboard requests also validate a supplied
-  `Origin` against `ZENCHRON_PUBLIC_URL`; requests without an `Origin` remain available to non-browser clients. On a
-  loopback control plane, every request must use a loopback `Host`, and unauthenticated API mutations must carry a
-  matching loopback `Origin`. The local worker supplies that origin; the dashboard dev proxy rewrites it only for
-  same-origin requests from its loopback address. JSON request bodies require `Content-Type: application/json`. Worker
+  `Origin` against `ZENCHRON_PUBLIC_URL`; requests without an `Origin` remain available to non-browser clients. Worker
   bearer requests use their separate credential check. OAuth state is random, short-lived, HttpOnly, and SameSite Lax.
   The session cookie is HttpOnly, SameSite Lax, Secure on HTTPS, and expires after eight hours.
+- A loopback control plane requires a loopback `Host`; unauthenticated API mutations require a matching loopback
+  `Origin`. The local worker supplies that origin, and the dashboard dev proxy rewrites it only for same-origin local
+  requests. Decoded JSON request bodies require `Content-Type: application/json`.
+- With authentication disabled, requests must use a loopback `Host` and cannot carry forwarding headers. The GitHub
+  webhook remains exempt from those transport checks and relies on signature validation; a tunnel should forward only
+  `/api/v1/github/webhook`.
 - The user access token is used only to fetch the GitHub username and avatar; it is discarded and never used for
   repository access. Repository operations continue to use the control-plane GitHub App or token configuration.
 - The allowlist is checked at login and on each session request, so removing a username takes effect immediately.
-  Rotating `ZENCHRON_SESSION_SECRET` invalidates all sessions.
+  Logout persists a per-login cutoff in `auth-sessions.json` under the control-plane data directory; sessions issued
+  at or before that cutoff are rejected, including copied cookies and after a restart. Signing in again creates a
+  fresh session. Rotating `ZENCHRON_SESSION_SECRET` invalidates all sessions.
 - OAuth token-exchange failures return a distinct gateway error; only a successfully verified but unlisted GitHub username
   receives the account-not-authorized response.
 - GitHub OAuth codes are exchanged at `github.com`; user identity is fetched separately from `api.github.com/user`.
@@ -74,7 +84,8 @@ refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does no
   revocable by editing the file. Without one, a single shared token authenticates any worker id; that mode is refused
   on a non-loopback listener.
 - This is user authentication plus an allowlist. GitHub organization/team roles, invite flows, audit history, and
-  persistent/revocable server-side sessions remain open architecture work.
+  a per-device session list and single-session revocation remain open architecture work. Logout revokes all sessions
+  for that login.
 
 ## Verification
 

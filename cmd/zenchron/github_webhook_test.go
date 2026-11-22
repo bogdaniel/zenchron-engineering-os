@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
@@ -24,6 +25,7 @@ func signWebhook(secret, body string) string {
 // deliver sends one GitHub delivery to a control plane, signed with secret.
 func deliver(server http.Handler, secret, event, delivery, body string) *httptest.ResponseRecorder {
 	request := jsonRequest(http.MethodPost, gitHubWebhookPath, strings.NewReader(body))
+	request.Host = "tunnel.example"
 	request.RemoteAddr = "140.82.115.10:443"
 	request.Header.Set("X-GitHub-Event", event)
 	request.Header.Set("X-GitHub-Delivery", delivery)
@@ -33,6 +35,17 @@ func deliver(server http.Handler, secret, event, delivery, body string) *httptes
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 	return response
+}
+
+func TestExternalWebhookHostStillRequiresAValidSignature(t *testing.T) {
+	t.Setenv("ZENCHRON_GITHUB_WEBHOOK_SECRET", webhookSecret)
+	server := authHandler(newMux(), nil)
+	if response := deliver(server, webhookSecret, "ping", "tunnel-valid", `{"zen":"ok"}`); response.Code != http.StatusOK {
+		t.Fatalf("signed webhook through external Host returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+	if response := deliver(server, "another-secret-0123456789abcdef", "ping", "tunnel-invalid", `{"zen":"ok"}`); response.Code != http.StatusUnauthorized {
+		t.Fatalf("invalid signature through external Host returned HTTP %d: %s", response.Code, response.Body.String())
+	}
 }
 
 // reviewEvent is a pull_request_review delivery for the harness's pull request #23.
@@ -107,6 +120,7 @@ func TestWebhookRejectsForgedDeliveriesAndIsAbsentWithoutASecret(t *testing.T) {
 	}
 	// A valid signature over a different body does not authenticate this one.
 	tampered := jsonRequest(http.MethodPost, gitHubWebhookPath, strings.NewReader(body))
+	tampered.Host = "tunnel.example"
 	tampered.Header.Set("X-GitHub-Event", "pull_request_review")
 	tampered.Header.Set("X-GitHub-Delivery", "d-3")
 	tampered.Header.Set("X-Hub-Signature-256", signWebhook(webhookSecret, strings.Replace(body, "Handle", "Ignore", 1)))
@@ -180,6 +194,62 @@ func TestWebhookChangeRequestQueuesOneBoundedFollowUpAndIsIdempotent(t *testing.
 	if !strings.Contains(response.Body.String(), "feedback recorded") || final.Status != "succeeded" || final.Attempts != 3 ||
 		final.GitHubReviews[len(final.GitHubReviews)-1].Queued {
 		t.Fatalf("a fourth attempt was admitted: %s %#v", response.Body.String(), final)
+	}
+}
+
+func TestConcurrentWebhookDeliveriesImportReviewOnce(t *testing.T) {
+	t.Setenv("ZENCHRON_GITHUB_WEBHOOK_SECRET", webhookSecret)
+	harness := newDeliveryHarness(t, workerapi.ProviderCodex)
+	run := harness.publishedRun()
+	body := reviewEvent{id: 508}.json(run)
+	responses := make([]*httptest.ResponseRecorder, 2)
+	var wait sync.WaitGroup
+	for index := range responses {
+		wait.Add(1)
+		go func(index int) {
+			defer wait.Done()
+			responses[index] = deliver(harness.server, webhookSecret, "pull_request_review", fmt.Sprintf("concurrent-%d", index), body)
+		}(index)
+	}
+	wait.Wait()
+	for _, response := range responses {
+		if response.Code != http.StatusOK {
+			t.Fatalf("concurrent delivery returned HTTP %d: %s", response.Code, response.Body.String())
+		}
+	}
+	after := harness.run(run.ID)
+	if after.Status != "queued" || after.Attempts != 1 || after.ImportedReviewID != 508 ||
+		len(after.ReviewComments) != 1 || len(after.GitHubReviews) != 1 {
+		t.Fatalf("concurrent review was applied more than once: %#v", after)
+	}
+}
+
+func TestWebhookAndReviewSyncImportTheSameReviewOnce(t *testing.T) {
+	t.Setenv("ZENCHRON_GITHUB_WEBHOOK_SECRET", webhookSecret)
+	harness := newDeliveryHarness(t, workerapi.ProviderCodex)
+	run := harness.publishedRun()
+	harness.reviews = fmt.Sprintf(`[{"id":509,"state":"CHANGES_REQUESTED","commit_id":%q,"body":"Handle the race.",`+
+		`"author_association":"MEMBER","user":{"login":"maintainer"}}]`, testCommit)
+	responses := make([]*httptest.ResponseRecorder, 2)
+	var wait sync.WaitGroup
+	wait.Add(2)
+	go func() {
+		defer wait.Done()
+		responses[0] = deliver(harness.server, webhookSecret, "pull_request_review", "concurrent-webhook", reviewEvent{id: 509}.json(run))
+	}()
+	go func() {
+		defer wait.Done()
+		responses[1] = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/sync-reviews", "")
+	}()
+	wait.Wait()
+	for _, response := range responses {
+		if response.Code != http.StatusOK {
+			t.Fatalf("concurrent import returned HTTP %d: %s", response.Code, response.Body.String())
+		}
+	}
+	after := harness.run(run.ID)
+	if after.Status != "queued" || after.Attempts != 1 || after.ImportedReviewID != 509 || len(after.ReviewComments) != 1 {
+		t.Fatalf("webhook and sync duplicated review feedback: %#v", after)
 	}
 }
 

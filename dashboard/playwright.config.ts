@@ -29,7 +29,7 @@ export default defineConfig({
       command: 'sh ./dashboard/e2e/control-plane.sh',
       cwd: '..',
       url: 'http://127.0.0.1:8083/healthz',
-      env: { ZENCHRON_LISTEN_ADDR: '127.0.0.1:8083' },
+      env: { ZENCHRON_LISTEN_ADDR: '127.0.0.1:8083', ZENCHRON_MANAGED_SUPERVISOR_PID: '' },
       reuseExistingServer: false,
       timeout: 120_000,
     },

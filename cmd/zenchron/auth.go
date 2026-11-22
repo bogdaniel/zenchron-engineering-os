@@ -21,21 +21,23 @@ const authSessionCookie = "zenchron_session"
 const oauthStateCookie = "zenchron_oauth_state"
 
 type authConfig struct {
-	clientID     string
-	clientSecret string
-	sessionKey   []byte
-	workerToken  string
-	access       *accessPolicy
-	allowedUsers []string
-	publicURL    *url.URL
-	https        bool
-	githubURL    string
-	githubAPIURL string
+	clientID           string
+	clientSecret       string
+	sessionKey         []byte
+	workerToken        string
+	access             *accessPolicy
+	allowedUsers       []string
+	publicURL          *url.URL
+	https              bool
+	githubURL          string
+	githubAPIURL       string
+	sessionRevocations *sessionRevocations
 }
 
 type authUser struct {
 	Login     string `json:"login"`
 	AvatarURL string `json:"avatar_url"`
+	IssuedAt  int64  `json:"issued_at"`
 	ExpiresAt int64  `json:"expires_at"`
 }
 
@@ -89,9 +91,14 @@ func loadAuthConfig() (*authConfig, bool, error) {
 
 func authHandler(next http.Handler, config *authConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if (config == nil || config.publicURL == nil || isLoopbackHost(config.publicURL.Hostname())) &&
-			!validLoopbackRequestHost(r.Host) {
+		webhook := r.URL.Path == gitHubWebhookPath && r.Method == http.MethodPost
+		loopbackHostRequired := config == nil || config.publicURL == nil || isLoopbackHost(config.publicURL.Hostname())
+		if !webhook && loopbackHostRequired && !validLoopbackRequestHost(r.Host) {
 			http.Error(w, "invalid request host", http.StatusForbidden)
+			return
+		}
+		if config == nil && !webhook && hasForwardedClientAddress(r) {
+			http.Error(w, "untrusted loopback request", http.StatusForbidden)
 			return
 		}
 		if managedSupervisorRequest(r) {
@@ -100,7 +107,7 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 		}
 		if config == nil && strings.HasPrefix(r.URL.Path, "/api/v1/") &&
 			r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions &&
-			r.URL.Path != gitHubWebhookPath && !localRequestOrigin(r) {
+			!webhook && !localRequestOrigin(r) {
 			http.Error(w, "invalid request origin", http.StatusForbidden)
 			return
 		}
@@ -118,8 +125,10 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 		}
 		if r.URL.Path == "/api/v1/auth/session" && r.Method == http.MethodGet {
 			w.Header().Set("Cache-Control", "no-store")
+			githubWriteConfigured := newGitHubClient().authConfigured()
 			if config == nil {
-				writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "local": true, "login": "Local workspace"})
+				writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "local": true, "login": "Local workspace",
+					"github_write_configured": githubWriteConfigured})
 				return
 			}
 			user, ok := readSession(r, config)
@@ -128,7 +137,8 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 				return
 			}
 			writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "local": false, "login": user.Login,
-				"avatar_url": user.AvatarURL, "admin": config.isAdmin(user.Login)})
+				"avatar_url": user.AvatarURL, "admin": config.isAdmin(user.Login),
+				"github_write_configured": githubWriteConfigured})
 			return
 		}
 		if r.URL.Path == "/api/v1/auth/logout" && r.Method == http.MethodPost {
@@ -140,6 +150,17 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 			if !validRequestOriginForRequest(r, config) {
 				http.Error(w, "invalid request origin", http.StatusForbidden)
 				return
+			}
+			if user, ok := readSession(r, config); ok {
+				if config.sessionRevocations == nil {
+					http.Error(w, "session revocation is unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				if err := config.sessionRevocations.revoke(user.Login, time.Now().UnixNano()); err != nil {
+					log.Printf("could not revoke session: %v", err)
+					http.Error(w, "could not revoke session", http.StatusInternalServerError)
+					return
+				}
 			}
 			http.SetCookie(w, &http.Cookie{Name: authSessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: config.https, SameSite: http.SameSiteLaxMode, MaxAge: -1})
 			w.WriteHeader(http.StatusNoContent)
@@ -180,6 +201,11 @@ func validLoopbackRequestHost(host string) bool {
 	parsed, err := url.Parse("//" + host)
 	return err == nil && parsed.Host == host && parsed.User == nil && parsed.Path == "" && parsed.RawQuery == "" &&
 		parsed.Fragment == "" && isLoopbackHost(parsed.Hostname())
+}
+
+func hasForwardedClientAddress(r *http.Request) bool {
+	return len(r.Header.Values("Forwarded")) > 0 || len(r.Header.Values("X-Forwarded-For")) > 0 ||
+		len(r.Header.Values("CF-Connecting-IP")) > 0
 }
 
 func managedSupervisorRequest(r *http.Request) bool {
@@ -289,7 +315,7 @@ func validRequestOriginForRequest(r *http.Request, config *authConfig) bool {
 	if validRequestOrigin(r.Header.Get("Origin"), config) {
 		return true
 	}
-	return config != nil && config.publicURL != nil && isLoopbackHost(config.publicURL.Hostname()) && localRequestOrigin(r)
+	return isLoopbackHost(config.publicURL.Hostname()) && localRequestOrigin(r)
 }
 
 func effectiveOriginPort(origin *url.URL) string {
@@ -361,7 +387,8 @@ func completeGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authCon
 		http.Error(w, "GitHub account is not authorized", http.StatusForbidden)
 		return
 	}
-	user.ExpiresAt = time.Now().Add(8 * time.Hour).Unix()
+	user.IssuedAt = time.Now().UnixNano()
+	user.ExpiresAt = time.Unix(0, user.IssuedAt).Add(8 * time.Hour).Unix()
 	value, err := signSession(user, config.sessionKey)
 	if err != nil {
 		http.Error(w, "could not create session", http.StatusInternalServerError)
@@ -466,7 +493,7 @@ func readSession(r *http.Request, config *authConfig) (authUser, bool) {
 	}
 	var user authUser
 	if json.Unmarshal(data, &user) != nil || user.Login == "" || user.ExpiresAt <= time.Now().Unix() ||
-		!config.maySignIn(user.Login) {
+		!config.maySignIn(user.Login) || config.sessionRevocations.isRevoked(user.Login, user.IssuedAt) {
 		return authUser{}, false
 	}
 	return user, true

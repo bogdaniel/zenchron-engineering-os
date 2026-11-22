@@ -260,6 +260,10 @@ func (store *workGraphStore) perform(graph *workGraph, action unitAction, runs m
 		if action.kind == actionRequeue {
 			unit.Seen = len(graph.Messages)
 		}
+		if action.kind == actionRequeue || action.kind == actionPublish {
+			// A queued follow-up is a new admission even before leasing advances the attempt count.
+			unit.AdmittedAttempt = 0
+		}
 		runs[run.ID] = run
 		return true
 	}

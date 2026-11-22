@@ -11,6 +11,7 @@ decisions in cancelled graphs as cancelled.
 
 ```mermaid
 flowchart LR
+    Link["Action Required deep link<br/>objective · tab · graph · decision"] -->|Retain selection until navigation or approval| Overview
     Overview[Live Overview] -->|GET /api/v1/work-graphs| CP[(Existing Go control plane)]
     CP -->|authorized durable WorkGraphs and typed decision requests| Overview
     Overview -->|objective_id, graph_id, decision_id| Objective[Existing Objective Plan view]

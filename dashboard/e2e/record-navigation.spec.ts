@@ -26,15 +26,48 @@ for (const viewport of [{ width: 1672, height: 941 }, { width: 390, height: 844 
     } else {
       await expect(page.getByRole('heading', { name: 'Workflow Builder — Workflow target' })).toBeVisible();
     }
+    await expect(page).toHaveURL(/workflow=target.*#workflows$/);
+    await page.locator('.sidebar nav a[href="#overview"]').click();
+    await expect(page).toHaveURL(/#overview$/);
+    await page.locator('.sidebar nav a[href="#workflows"]').click();
+    if (viewport.width === 390) {
+      await expect(page.getByRole('img', { name: 'Key workflow stages for Workflow first; 0 stages summarize 0 components' })).toBeVisible();
+    } else {
+      await expect(page.getByRole('heading', { name: 'Workflow Builder — Workflow first' })).toBeVisible();
+    }
     await page.goto('/?profile=target#agents');
     await expect(page.locator('.agents-detail-heading')).toContainText('Profile target');
+    await expect(page).toHaveURL(/profile=target.*#agents$/);
+    await page.locator('.sidebar nav a[href="#overview"]').click();
+    await page.locator('.sidebar nav a[href="#agents"]').click();
+    await expect(page.locator('.agents-detail-heading')).toContainText('Profile first');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.goto('/?run=target#reviews');
     await expect(page.getByLabel('Run evidence summary')).toContainText('run-target');
     await expect(page.getByLabel('Run evidence summary')).not.toContainText('run-first');
+    await expect(page).toHaveURL(/run=target.*#reviews$/);
+    await page.locator('.sidebar nav a[href="#overview"]').click();
+    await page.locator('.sidebar nav a[href="#reviews"]').click();
+    await expect(page.getByLabel('Run evidence summary')).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('run-evidence.png'), fullPage: true });
     await page.goto('/?run=missing#reviews');
     await expect(page.getByRole('alert')).toContainText('The requested run is unavailable');
     await expect(page.getByLabel('Run evidence summary')).toHaveCount(0);
   });
 }
+
+test('canceling a workspace objective link consumes its one-shot context', async ({ page }) => {
+  await page.route('**/api/v1/**', (route) => route.fulfill({ json: [] }));
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    json: { authenticated: true, local: true, login: 'Local workspace' },
+  }));
+  await page.route('**/healthz', (route) => route.fulfill({ json: { status: 'ok' } }));
+  await page.goto('/?create=1&product_id=product&workflow=workflow&project=project&mode=live#objectives');
+  const dialog = page.getByRole('dialog', { name: 'New objective' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page).toHaveURL(/\?mode=live#objectives$/);
+  await page.goto('/?mode=live#overview');
+  await page.goto('/?mode=live#objectives');
+  await expect(page.getByRole('dialog', { name: 'New objective' })).toHaveCount(0);
+});
