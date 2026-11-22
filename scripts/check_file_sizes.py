@@ -43,18 +43,39 @@ def exceptions(paths: list[Path]) -> set[str]:
 
 
 def has_generated_header(path: Path) -> bool:
+    suffix = path.suffix
+    hash_comment = suffix in {".py", ".yaml", ".yml"}
+    slash_comment = suffix in {".go", ".js", ".jsx", ".ts", ".tsx"}
+    block_comment = suffix in {".go", ".js", ".jsx", ".ts", ".tsx", ".css"}
+    html_comment = suffix == ".html"
     lines: list[str] = []
+    block_end = ""
     with path.open(encoding="utf-8", errors="replace") as source:
         for line in islice(source, GENERATED_HEADER_LINES):
             comment = line.lstrip()
             if not comment.strip():
                 continue
-            if not comment.startswith(("#", "//", "/*", "*", "<!--", "*/", "-->")):
-                break
-            lines.append(comment.casefold())
+            if block_end:
+                lines.append(comment.casefold())
+                if block_end in comment:
+                    block_end = ""
+                continue
+            if (hash_comment and comment.startswith("#")) or (slash_comment and comment.startswith("//")):
+                lines.append(comment.casefold())
+                continue
+            if block_comment and comment.startswith("/*"):
+                lines.append(comment.casefold())
+                if "*/" not in comment:
+                    block_end = "*/"
+                continue
+            if html_comment and comment.startswith("<!--"):
+                lines.append(comment.casefold())
+                if "-->" not in comment:
+                    block_end = "-->"
+                continue
+            break
     header = " ".join(lines)
     return "generated" in header and "do not edit" in header
-
 
 def should_check(path: Path) -> bool:
     relative = path.relative_to(ROOT)
