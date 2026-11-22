@@ -344,10 +344,11 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   const droppedNode = droppedNodes.last();
   await expect.poll(async () => {
     const bounds = await droppedNode.boundingBox();
-    if (!bounds) return false;
-    return Math.abs(bounds.x + bounds.width / 2 - dropPoint.x) < 30 &&
-      Math.abs(bounds.y + bounds.height / 2 - dropPoint.y) < 30;
-  }).toBe(true);
+    if (!bounds) return null;
+    const x = Math.round(bounds.x + bounds.width / 2);
+    const y = Math.round(bounds.y + bounds.height / 2);
+    return { x, y, matches: Math.abs(x - dropPoint.x) < 30 && Math.abs(y - dropPoint.y) < 30 };
+  }).toMatchObject({ matches: true });
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(11);
   await expect(page.locator('.workflow-properties .workflow-subheading h3')).toHaveText('Agent Task');
   const splitter = page.getByRole('separator');
