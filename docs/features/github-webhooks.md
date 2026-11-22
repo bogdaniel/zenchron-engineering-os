@@ -49,6 +49,7 @@ sequenceDiagram
 
 ## Behavior
 
+- The HTTP server bounds header reads to 5 seconds, full request reads to 30 seconds, and idle keep-alive connections to 2 minutes. The read deadline also applies to unsigned webhook bodies before HMAC validation.
 - A delivery without a valid `X-Hub-Signature-256` over the exact body is refused with 401 and changes nothing.
 - Each `X-GitHub-Delivery` id is handled once. The newest 5,000 ids are kept in `agent-runs.json.deliveries` and
   survive a restart. The same review or check arriving under a new delivery id is also applied only once.
