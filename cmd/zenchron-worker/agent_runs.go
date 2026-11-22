@@ -38,8 +38,13 @@ func validateAgentRunRemote(ctx context.Context, worktree, expectedRemote, branc
 	if err := validateGitBranch(ctx, worktree, branch); err != nil {
 		return err
 	}
-	remote, err := gitOutput(ctx, "-C", worktree, "remote", "get-url", "--push", "origin")
-	if err != nil || repositoryLocator(strings.TrimSpace(remote)) != expectedRemote {
+	fetchRemote, err := gitOutput(ctx, "-C", worktree, "config", "--get-all", "remote.origin.url")
+	fetchURLs := strings.Fields(fetchRemote)
+	if err != nil || len(fetchURLs) != 1 || repositoryLocator(fetchURLs[0]) != expectedRemote {
+		return errors.New("Git fetch origin does not match the project's GitHub repository")
+	}
+	pushRemote, err := gitOutput(ctx, "-C", worktree, "remote", "get-url", "--push", "origin")
+	if err != nil || repositoryLocator(strings.TrimSpace(pushRemote)) != expectedRemote {
 		return errors.New("Git push origin does not match the project's GitHub repository")
 	}
 	return nil
