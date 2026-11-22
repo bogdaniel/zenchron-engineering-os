@@ -157,7 +157,8 @@ the previous one keeps working for 24 hours, so the worker can be restarted at a
   restores the log to its prior length, the policy is restored atomically, and the request fails. A storage failure
   during rollback is logged. Audit reads wait until a change finishes so they cannot observe a partial record. The last
   administrator cannot be removed or demoted.
-- A project id belongs to the first worker that registers it; another worker cannot register the same id.
+- A project id belongs to the first worker that registers it while online. When that registration goes offline, the
+  next authorized worker can reclaim the id; the old offline entry remains visible until that worker heartbeats again.
 - A successful heartbeat reports skipped project IDs and either `repository_not_granted` or
   `project_id_registered_by_another_worker`; it omits `skipped_projects` when there are none and includes no remote
   names or details about the other worker. The worker logs each skipped project using its local name only when the
