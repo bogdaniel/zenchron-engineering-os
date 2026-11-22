@@ -349,7 +349,6 @@ func TestWorkerCanRegisterAProjectIDAfterPreviousWorkerWentOffline(t *testing.T)
 	}
 }
 
-
 func TestUsersDispatchOnlyToTheirOwnOrSharedWorkers(t *testing.T) {
 	harness := newAccessHarness(t)
 	// Grant Bob project A as well; Alice's personal worker must still refuse his work.
