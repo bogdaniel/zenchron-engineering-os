@@ -164,6 +164,11 @@ test('Product Workspace matches its desktop frame and filters products', async (
   await expect(productName).toHaveText('Orion Analytics');
   await expect(page.locator('.workspace-mock-roadmap-row')).toHaveCount(1);
   await expect(page.locator('.workspace-mock-roadmap-row')).toContainText('Improve CI cycle time');
+  await page.getByRole('button', { name: 'Share' }).click();
+  const shareURL = new URL(await page.getByRole('textbox', { name: 'Workspace link' }).inputValue());
+  expect(shareURL.searchParams.get('product')).toBe(orionID);
+  await page.goto(shareURL.toString());
+  await expect(productName).toHaveText('Orion Analytics');
   await page.getByRole('textbox', { name: 'Search products' }).fill('no match');
   await expect(page.locator('.workspace-mock-directory')).toContainText('No products match your search.');
   await page.getByRole('button', { name: /All Products \(2\)/ }).click();
