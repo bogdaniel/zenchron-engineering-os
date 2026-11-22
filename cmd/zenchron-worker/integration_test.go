@@ -48,7 +48,8 @@ func TestIntegrationRunMergesExactCandidatesVerifiesTheCombinationAndPublishesOn
 		t.Fatal(err)
 	}
 	runGit(t, bare, "init", "--bare")
-	runGit(t, harness.repository, "remote", "add", "origin", bare)
+	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	harness.gitRemote = "github.com/test/repository"
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository.git")
 	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
