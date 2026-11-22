@@ -292,7 +292,9 @@ func (runner *agentRunner) deliver(
 		if push == nil {
 			push = pushAgentBranch
 		}
-		if err := push(gitCtx, worktree, project.Remote, command.Branch); err != nil {
+		pushCtx, cancelPush := context.WithTimeout(context.WithoutCancel(ctx), runner.limits.gitStage)
+		defer cancelPush()
+		if err := push(pushCtx, worktree, project.Remote, command.Branch); err != nil {
 			result.BranchPushFailed = true
 			reporter.emit("error", "Git could not push the run branch.")
 		} else {

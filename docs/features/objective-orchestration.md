@@ -39,7 +39,7 @@ flowchart LR
   Runs -->|"claim reconciles, then leases;<br/>context from work_graph_context.go"| Worker
   Worker -->|"PUT .../agent-runs/{run}: commit, diff, typed result"| Runs
   Runs -->|admit terminal result once, including cancelled follow-ups| Reconcile
-  Worker -->|push integration branch| Remote[(GitHub remote)]
+  Worker -->|push verified integration branch with a fresh deadline| Remote[(GitHub remote)]
   Runs -->|create or reuse one pull request| GitHub[(GitHub API)]
 ```
 

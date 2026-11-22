@@ -348,6 +348,29 @@ func TestGitStageDeadlineStartsAfterProviderFinishes(t *testing.T) {
 	}
 }
 
+func TestPushGetsFreshDeadlineAfterVerification(t *testing.T) {
+	harness := newRunHarness(t, fakeChangeScript, [][]string{{"sh", "-c", "sleep 2.5"}})
+	harness.runner.limits.gitStage = 2 * time.Second
+	harness.runner.limits.verification = 5 * time.Second
+	harness.command.PublishPullRequest = true
+	pushed := false
+	harness.runner.push = func(ctx context.Context, _, _, _ string) error {
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) < time.Second {
+			return context.DeadlineExceeded
+		}
+		pushed = true
+		return ctx.Err()
+	}
+	if err := harness.process(); err != nil {
+		t.Fatalf("process run: %v", err)
+	}
+	if result := harness.result(); result.Status != "succeeded" || !result.BranchPushed || !pushed ||
+		result.Verification != workerapi.VerificationPassed {
+		t.Fatalf("run after verification exceeded the staging deadline = %#v; pushed %t", result, pushed)
+	}
+}
+
 func TestCLIRunWallClockLimitIsReportedSeparately(t *testing.T) {
 	harness := newRunHarness(t, "while true; do echo '{\"type\":\"turn.started\"}'; sleep 0.2; done\n", nil)
 	harness.runner.limits.wallClock = time.Second
