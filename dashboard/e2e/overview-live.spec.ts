@@ -12,7 +12,7 @@ async function useLiveSession(page: Page) {
 
 test('dashboard displays the connected control plane and local worker', async ({ page }) => {
   await page.setViewportSize({ width: 1490, height: 829 });
-  await page.route((url) => url.hostname === '127.0.0.1'
+  await page.route((url) => url.hostname === 'zenchron.test'
     && (url.pathname === '/healthz' || url.pathname.startsWith('/api/v1/')),
   async (route) => {
     const upstream = new URL(route.request().url());
