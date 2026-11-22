@@ -195,7 +195,7 @@ func (runner *agentRunner) attempt(
 		return failed(result, workerapi.TerminationWorkerError, "The run worktree is still in use by an earlier attempt's processes.")
 	}
 	defer owner.release()
-	if command.PublishPullRequest {
+	if command.PublishPullRequest && command.Attempts > 1 {
 		if err := validateAgentRunRemote(ctx, worktree, project.Remote, command.Branch); err != nil {
 			return failed(result, workerapi.TerminationWorkerError, "Could not validate the run branch's GitHub remote.")
 		}
