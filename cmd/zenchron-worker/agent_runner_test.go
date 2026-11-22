@@ -267,6 +267,7 @@ func TestCLIRunPushesVerifiedCommitWhenVerificationMovesBranch(t *testing.T) {
 	runGit(t, harness.repository, "remote", "add", "origin", bare)
 	harness.gitRemote = "github.com/test/repository"
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository.git")
+	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
 	harness.command.PublishPullRequest = true
 	var headAtPush string
 	harness.runner.push = func(ctx context.Context, worktree, _, branch, commitSHA string) error {
@@ -301,6 +302,7 @@ func TestCLIRunRetryReconcilesPublishedBranchAfterWorktreeCleanup(t *testing.T) 
 	runGit(t, harness.repository, "remote", "add", "origin", bare)
 	harness.gitRemote = "github.com/test/repository"
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository.git")
+	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
 	first := harness.command
 	first.PublishPullRequest = true
 	second := first
