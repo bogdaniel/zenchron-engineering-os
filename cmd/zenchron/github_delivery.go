@@ -59,12 +59,20 @@ func (client gitHubClient) get(ctx context.Context, path string, query url.Value
 	return json.Unmarshal(body, target)
 }
 
-func (client gitHubClient) issueComments(ctx context.Context, owner, repository string, number int) ([]gitHubIssueComment, error) {
-	comments := make([]gitHubIssueComment, 0)
+func (client gitHubClient) issueComments(
+	ctx context.Context, owner, repository string, number, total int,
+) ([]gitHubIssueComment, bool, error) {
+	const perPage = 100
+	// ponytail: include at most the newest 100 comments; fetch older pages if more history is needed in the agent context.
 	path := "/repos/" + owner + "/" + repository + "/issues/" + strconv.Itoa(number) + "/comments"
-	// Decode before returning: Go does not fix when a plain operand is read relative to a call beside it.
-	err := client.get(ctx, path, url.Values{"per_page": {"50"}}, &comments)
-	return comments, err
+	total = max(0, total)
+	page := max(1, (total-1)/perPage+1)
+	var comments []gitHubIssueComment
+	query := url.Values{"per_page": {strconv.Itoa(perPage)}, "page": {strconv.Itoa(page)}}
+	if err := client.get(ctx, path, query, &comments); err != nil {
+		return nil, false, err
+	}
+	return comments, page > 1, nil
 }
 
 func (client gitHubClient) pullRequestReviews(ctx context.Context, owner, repository string, number int) ([]gitHubReview, error) {
