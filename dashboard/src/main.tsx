@@ -143,6 +143,20 @@ function App() {
   const goToPage = (href: string) => {
     const page = href.slice(1);
     if (!pageIDs.includes(page)) return;
+    const oneShotParams: Record<string, string[]> = {
+      objectives: ['create', 'product_id', 'objective', 'tab', 'workflow', 'project', 'graph_id', 'decision'],
+      agents: ['profile'],
+      reviews: ['run'],
+      workflows: ['workflow'],
+    };
+    const currentURL = new URL(window.location.href);
+    let changed = false;
+    for (const key of oneShotParams[activePage] ?? []) {
+      if (!currentURL.searchParams.has(key)) continue;
+      currentURL.searchParams.delete(key);
+      changed = true;
+    }
+    if (changed) window.history.replaceState(window.history.state, '', currentURL);
     window.history.pushState({}, '', href);
     setActivePage(page);
     setSearchTerm('');

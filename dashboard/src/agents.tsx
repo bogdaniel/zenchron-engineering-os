@@ -28,7 +28,6 @@ import {
 } from './agentsData';
 import { useLiveAgents, type Choice, type Figure } from './agentsView';
 import { useMockAgents } from './agents-preview-data';
-import { consumeQueryParams } from './consumeQueryParams';
 import './agents.css';
 import './agents-layout.css';
 
@@ -110,7 +109,6 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   const source = designPreview ? mock : live;
   const { view, items, runs: runItems } = source;
   const [selectedID, setSelectedID] = useState<string | null>(() => new URLSearchParams(window.location.search).get('profile'));
-  useEffect(() => { consumeQueryParams('profile'); }, []);
   const [performanceRange, setPerformanceRange] = useState<'Last 7 Days' | 'Last 30 Days'>('Last 30 Days');
   const [detailTab, setDetailTab] = useState<string | null>('overview');
   const [libraryOpen, setLibraryOpen] = useState(false);

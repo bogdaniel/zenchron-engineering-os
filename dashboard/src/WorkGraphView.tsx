@@ -4,7 +4,6 @@ import { IconGitPullRequest } from '@tabler/icons-react';
 import { openDecisions } from './orchestration';
 import type { GraphMessage, OrchestrationSource, PlanUnit, WorkGraph, WorkUnit } from './orchestration';
 import { livePageHref } from './livePageHref';
-import { consumeQueryParams } from './consumeQueryParams';
 import './orchestration.css';
 
 const messageLabels: Record<GraphMessage['type'], string> = {
@@ -116,7 +115,6 @@ export function WorkGraphView({ graph, source, showRunLinks = false }: {
   graph: WorkGraph; source: OrchestrationSource; showRunLinks?: boolean;
 }) {
   const [error, setError] = useState('');
-  useEffect(() => { consumeQueryParams('decision'); }, []);
   const finished = graph.status === 'completed' || graph.status === 'cancelled';
   const done = graph.units.filter((unit) => unit.state === 'completed').length;
   return <section className="work-graph" aria-label={`Work graph for ${graph.objective_title}`}>

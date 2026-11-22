@@ -15,7 +15,6 @@ import { ObjectiveDetail, ObjectiveMilestones, objectiveDisplayID, objectiveProd
   objectiveStatusOptions } from './ObjectiveDetail';
 import type { ObjectiveDetailTab } from './ObjectiveDetail';
 import { useMockObjectives } from './objective-preview';
-import { consumeQueryParams } from './consumeQueryParams';
 import { formatObjectiveDate, objectiveFormErrors, objectiveInputSchema, useLiveObjectives } from './objectivesView';
 import type { Objective, ObjectiveInput } from './objectivesView';
 import './objectives.css';
@@ -99,8 +98,6 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [detailTab, setDetailTab] = useState<ObjectiveDetailTab>(() =>
     new URLSearchParams(window.location.search).get('tab') === 'plan' ? 'plan' : 'overview');
   const [selectedID, setSelectedID] = useState<string | null>(() => new URLSearchParams(window.location.search).get('objective'));
-  useEffect(() => { consumeQueryParams('objective'); }, [selectedID]);
-  useEffect(() => { consumeQueryParams('tab'); }, [detailTab]);
   const selectedIDRef = useRef(selectedID);
   selectedIDRef.current = selectedID;
   const [actionNotice, setActionNotice] = useState('');
@@ -139,7 +136,10 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     createForm.reset();
     createForm.setFieldValue('product_id', '');
     clearWorkspaceCreateContext();
-    consumeQueryParams('workflow', 'project');
+    const url = new URL(window.location.href);
+    url.searchParams.delete('workflow');
+    url.searchParams.delete('project');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }
 
   function selectObjective(item: Objective) {

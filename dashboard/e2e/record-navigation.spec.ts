@@ -26,15 +26,25 @@ for (const viewport of [{ width: 1672, height: 941 }, { width: 390, height: 844 
     } else {
       await expect(page.getByRole('heading', { name: 'Workflow Builder — Workflow target' })).toBeVisible();
     }
-    await expect(page).toHaveURL(/#workflows$/);
+    await expect(page).toHaveURL(/workflow=target.*#workflows$/);
+    await page.locator('a[href="#overview"]').first().click();
+    await expect(page).toHaveURL(/#overview$/);
+    await page.locator('a[href="#workflows"]').first().click();
+    await expect(page.getByRole('heading', { name: 'Workflow Builder — Workflow first' })).toBeVisible();
     await page.goto('/?profile=target#agents');
     await expect(page.locator('.agents-detail-heading')).toContainText('Profile target');
-    await expect(page).toHaveURL(/#agents$/);
+    await expect(page).toHaveURL(/profile=target.*#agents$/);
+    await page.locator('a[href="#overview"]').first().click();
+    await page.locator('a[href="#agents"]').first().click();
+    await expect(page.locator('.agents-detail-heading')).toContainText('Profile first');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.goto('/?run=target#reviews');
     await expect(page.getByLabel('Run evidence summary')).toContainText('run-target');
     await expect(page.getByLabel('Run evidence summary')).not.toContainText('run-first');
-    await expect(page).toHaveURL(/#reviews$/);
+    await expect(page).toHaveURL(/run=target.*#reviews$/);
+    await page.locator('a[href="#overview"]').first().click();
+    await page.locator('a[href="#reviews"]').first().click();
+    await expect(page.getByLabel('Run evidence summary')).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('run-evidence.png'), fullPage: true });
     await page.goto('/?run=missing#reviews');
     await expect(page.getByRole('alert')).toContainText('The requested run is unavailable');

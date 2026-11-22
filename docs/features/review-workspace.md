@@ -16,7 +16,7 @@ plane credential, and GitHub enforces branch protection.
 
 ```mermaid
 flowchart LR
-    Link["Run deep link"] -->|Select run, then consume run parameter| Page
+    Link["Run deep link"] -->|Select run; clear run parameter on navigation away| Page
     User[Developer or reviewer] --> Page["ReviewsPage · reviews.tsx<br/>one layout, search / filter / pinned selection state"]
     Page -->|reads| Source{"ReviewsSource · reviewsView.ts"}
     Source -->|Mock| Mock["useMockReviews · review-preview.tsx<br/>fixtures, useState only, no requests"]
