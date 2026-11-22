@@ -30,7 +30,11 @@ for (const viewport of [{ width: 1672, height: 941 }, { width: 390, height: 844 
     await page.locator('.sidebar nav a[href="#overview"]').click();
     await expect(page).toHaveURL(/#overview$/);
     await page.locator('.sidebar nav a[href="#workflows"]').click();
-    await expect(page.getByRole('heading', { name: 'Workflow Builder — Workflow first' })).toBeVisible();
+    if (viewport.width === 390) {
+      await expect(page.getByRole('img', { name: 'Key workflow stages for Workflow first; 0 stages summarize 0 components' })).toBeVisible();
+    } else {
+      await expect(page.getByRole('heading', { name: 'Workflow Builder — Workflow first' })).toBeVisible();
+    }
     await page.goto('/?profile=target#agents');
     await expect(page.locator('.agents-detail-heading')).toContainText('Profile target');
     await expect(page).toHaveURL(/profile=target.*#agents$/);
