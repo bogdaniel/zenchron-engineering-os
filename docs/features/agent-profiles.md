@@ -15,6 +15,7 @@ expectations, and review specialization. Profiles bind to personas by ID. The Ag
 disable, and enable personas and shows the linked persona version on its profile. Persona responsibility line breaks
 remain editable while typing; blank lines are omitted when the persona is saved. A persona does not grant tools:
 profile tools and worker sandbox controls remain authoritative.
+Persona Duplicate, Enable, Disable and editor saves validate before sending requests and report failures in accessible alerts.
 
 Filtering the profile list does not change the selected profile; its detail, unsaved edits, and Run Agent target stay
 bound to that profile until the user selects another one.
