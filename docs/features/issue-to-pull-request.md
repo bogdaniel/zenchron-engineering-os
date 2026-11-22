@@ -35,6 +35,7 @@ sequenceDiagram
     API->>Store: Renew lease, append events
     API-->>Worker: cancel_requested
   end
+  Worker->>Tree: Collect bounded diff with worker-safe Git environment
   Worker->>Tree: git add + commit on the run branch
   Worker->>Tree: Run configured verification commands
   Worker->>Remote: git push refs/heads/zenchron/agent-run/{run}
@@ -104,7 +105,9 @@ that exits successfully is therefore not reported as delivered work unless verif
   Codex starts as their own session. A new attempt first stops whatever an earlier attempt left and fails instead of
   running beside it, so two attempts never write the same worktree.
 - Claude Code hooks are disabled for every run, and the worker's own Git commands run with Git hooks disabled, because
-  a hook can be a script in the worktree that would run outside the sandbox. Provider and verification processes
+  a hook can be a script in the worktree that would run outside the sandbox. After the provider exits, Git staging,
+  diff, and commit commands use the provider environment allowlist, disable filesystem-monitor hooks, and exclude
+  nested repository status from collected diffs. Provider and verification processes
   inherit only a fixed list of variables (path, home, locale, temporary directory, proxy and certificate settings,
   CLI configuration directories) plus the operator's per-repository `environment`; tokens in the developer's shell
   and provider API keys never reach them, so a subscription sign-in is never replaced by API billing.
