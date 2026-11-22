@@ -28,6 +28,11 @@ sequenceDiagram
   API->>Store: Lease attempt N to the assigned worker
   API-->>Worker: Prompt with issue text, profile, branch, base branch
   Worker->>Tree: git worktree add + git worktree lock
+  opt Retry after a branch was published
+    Worker->>Remote: Fetch the published run branch
+    Worker->>Tree: Preserve a divergent local tip on a recovery branch
+    Worker->>Tree: Reset the run branch to the published tip
+  end
   Worker->>CLI: Start in worktree, prompt on stdin, own process group
   loop every 2 seconds
     CLI-->>Worker: JSON event lines
@@ -39,7 +44,7 @@ sequenceDiagram
   Worker->>Tree: Collect bounded diff with worker-safe Git environment
   Worker->>Tree: git add + commit on the run branch
   Worker->>Tree: Run configured verification commands
-  Worker->>Remote: git push refs/heads/zenchron/agent-run/{run}
+  Worker->>Remote: git push {verified commit SHA}:refs/heads/zenchron/agent-run/{run}
   Worker->>API: PUT .../agent-runs/{run} (result, commits, verification, usage)
   API->>GH: Find or create pull request "Closes #issue"
   API->>Store: Persist publication and pull-request identity
@@ -127,7 +132,13 @@ that exits successfully is therefore not reported as delivered work unless verif
   a failed report can retry its intact batch.
 - A successful execution with changes is committed, then verified. A failed verification keeps the commit on the local
   branch, marks the run `failed`, and publishes nothing. Without configured commands verification is `not_configured`
-  and publication proceeds; the pull request states that.
+  and publication proceeds; the pull request states that. After verification, the worker pushes the exact commit SHA
+  it verified, even if a verification command moves the local branch.
+- Before a later attempt on a pull-request run, the worker fetches the published run branch. If verification left a
+  divergent local commit, it preserves that commit on a local recovery branch before resetting the run branch to the
+  published tip. A dirty worktree fails closed, so recovery never discards uncommitted changes. Reconciliation acquires
+  the Git worktree lock first, bounds remote operations by the Git-stage deadline, and can use the owner's SSH agent
+  without exposing provider API keys or worker bearer credentials.
 - The pull request is created with the control plane's GitHub credential, titled after the issue, and ends with
   `Closes #<issue>`. Creation reuses an open pull request for the same branch. If GitHub fails after the push,
   `POST /api/v1/agent-runs/{id}/publish` retries without creating a duplicate.

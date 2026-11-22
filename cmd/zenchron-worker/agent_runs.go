@@ -23,7 +23,14 @@ const (
 	maxClaimResponseSize  = 1 << 20
 )
 
-func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch string) error {
+func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch, commitSHA string) error {
+	if err := validateAgentRunRemote(ctx, worktree, expectedRemote, branch); err != nil {
+		return err
+	}
+	return pushGitCommit(ctx, worktree, branch, commitSHA)
+}
+
+func validateAgentRunRemote(ctx context.Context, worktree, expectedRemote, branch string) error {
 	parts := strings.Split(expectedRemote, "/")
 	if len(parts) != 3 || parts[0] != "github.com" || parts[1] == "" || parts[2] == "" {
 		return errors.New("project is not a GitHub repository")
@@ -31,18 +38,23 @@ func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch strin
 	if err := validateGitBranch(ctx, worktree, branch); err != nil {
 		return err
 	}
-	remote, err := gitOutput(ctx, "-C", worktree, "remote", "get-url", "--push", "origin")
-	if err != nil || repositoryLocator(strings.TrimSpace(remote)) != expectedRemote {
+	fetchRemote, err := gitOutput(ctx, "-C", worktree, "config", "--get-all", "remote.origin.url")
+	fetchURLs := strings.Fields(fetchRemote)
+	if err != nil || len(fetchURLs) != 1 || repositoryLocator(fetchURLs[0]) != expectedRemote {
+		return errors.New("Git fetch origin does not match the project's GitHub repository")
+	}
+	pushRemote, err := gitOutput(ctx, "-C", worktree, "remote", "get-url", "--push", "origin")
+	if err != nil || repositoryLocator(strings.TrimSpace(pushRemote)) != expectedRemote {
 		return errors.New("Git push origin does not match the project's GitHub repository")
 	}
-	return pushGitBranch(ctx, worktree, branch)
+	return nil
 }
 
-func pushGitBranch(ctx context.Context, worktree, branch string) error {
+func pushGitCommit(ctx context.Context, worktree, branch, commitSHA string) error {
 	pushCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	push := gitCommand(pushCtx, "-C", worktree, "push", "origin",
-		"refs/heads/"+branch+":refs/heads/"+branch)
+		commitSHA+":refs/heads/"+branch)
 	push.Stdout, push.Stderr = io.Discard, io.Discard
 	if err := push.Run(); err != nil {
 		return errors.New("Git push failed")

@@ -43,6 +43,16 @@ func (harness *runHarness) lastResult() workerapi.AgentRunResult {
 func TestIntegrationRunMergesExactCandidatesVerifiesTheCombinationAndPublishesOnce(t *testing.T) {
 	// The provider script must never run: integration starts no model.
 	harness := newRunHarness(t, "exit 9\n", [][]string{{"sh", "-c", "test -f a.txt && test -f b.txt"}})
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	if err := os.MkdirAll(bare, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, bare, "init", "--bare")
+	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
+	harness.gitRemote = "github.com/test/repository"
+	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
+	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
 	harness.command.Merge = []workerapi.MergeInput{
 		harness.candidate(firstCandidateRun, "a.txt", "from a\n"), harness.candidate(secondCandidateRun, "b.txt", "from b\n")}
 	harness.command.Profile = workerapi.AgentProfile{Provider: "zenchron-merge", Model: "none"}
@@ -66,8 +76,8 @@ func TestIntegrationRunMergesExactCandidatesVerifiesTheCombinationAndPublishesOn
 	// The publication pass repeats the run on the same worktree: nothing new is merged, the reviewed
 	// commit is reproduced, and only now is the branch pushed.
 	var pushed []string
-	harness.runner.push = func(_ context.Context, _, _, branch string) error {
-		pushed = append(pushed, branch)
+	harness.runner.push = func(_ context.Context, _, _, branch, commitSHA string) error {
+		pushed = append(pushed, branch+":"+commitSHA)
 		return nil
 	}
 	// A publication bound to another commit than the worktree reproduces pushes nothing.
@@ -83,7 +93,7 @@ func TestIntegrationRunMergesExactCandidatesVerifiesTheCombinationAndPublishesOn
 		t.Fatalf("process publication: %v", err)
 	}
 	if published := harness.lastResult(); published.CommitSHA != head || !published.BranchPushed || len(pushed) != 1 ||
-		pushed[0] != harness.command.Branch {
+		pushed[0] != harness.command.Branch+":"+head {
 		t.Fatalf("publication result = %#v, pushed %v", published, pushed)
 	}
 }

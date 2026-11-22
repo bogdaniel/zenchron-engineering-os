@@ -31,7 +31,7 @@ type agentRunner struct {
 	// this binary's own `guard` command. Empty runs them unguarded.
 	guard []string
 	// push publishes the run branch; nil uses pushAgentBranch. Tests replace this network boundary.
-	push func(ctx context.Context, worktree, remote, branch string) error
+	push func(ctx context.Context, worktree, remote, branch, commitSHA string) error
 	// finishRetryDelay overrides the pause between result deliveries; zero uses the default.
 	finishRetryDelay time.Duration
 	// slots bounds how many runs execute at once; running tracks them so the worker can wait for them.
@@ -195,10 +195,6 @@ func (runner *agentRunner) attempt(
 		return failed(result, workerapi.TerminationWorkerError, "The run worktree is still in use by an earlier attempt's processes.")
 	}
 	defer owner.release()
-	workspace.owner = owner
-	if owner.tookOver {
-		reporter.emit("status", "Stopped processes left in the worktree by an earlier attempt.")
-	}
 	runner.checkout.Lock()
 	unlock := lockWorktree(project.Path, worktree)
 	runner.checkout.Unlock()
@@ -207,6 +203,20 @@ func (runner *agentRunner) attempt(
 		defer runner.checkout.Unlock()
 		unlock()
 	}()
+	if command.PublishPullRequest && command.Attempts > 1 {
+		reconcileCtx, cancelReconcile := context.WithTimeout(ctx, runner.limits.gitStage)
+		defer cancelReconcile()
+		if err := validateAgentRunRemote(reconcileCtx, worktree, project.Remote, command.Branch); err != nil {
+			return failed(result, workerapi.TerminationWorkerError, "Could not validate the run branch's GitHub remote.")
+		}
+		if err := reconcileRunBranch(reconcileCtx, worktree, command.Branch, command.ID, command.Attempts); err != nil {
+			return failed(result, workerapi.TerminationWorkerError, "Could not reconcile the run branch with its published commit.")
+		}
+	}
+	workspace.owner = owner
+	if owner.tookOver {
+		reporter.emit("status", "Stopped processes left in the worktree by an earlier attempt.")
+	}
 	if base, err := gitOutput(ctx, "-C", worktree, "merge-base", command.BaseBranch, "HEAD"); err == nil {
 		result.BaseCommit = strings.TrimSpace(base)
 	}
@@ -294,7 +304,7 @@ func (runner *agentRunner) deliver(
 		}
 		pushCtx, cancelPush := context.WithTimeout(context.WithoutCancel(ctx), runner.limits.gitStage)
 		defer cancelPush()
-		if err := push(pushCtx, worktree, project.Remote, command.Branch); err != nil {
+		if err := push(pushCtx, worktree, project.Remote, command.Branch, result.CommitSHA); err != nil {
 			result.BranchPushFailed = true
 			reporter.emit("error", "Git could not push the run branch.")
 		} else {
