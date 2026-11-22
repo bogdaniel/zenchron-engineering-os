@@ -11,6 +11,7 @@ decisions are in [Objective orchestration: architecture and decisions](../archit
 
 ```mermaid
 flowchart LR
+  URL["One-shot plan link parameters"] -->|"Capture project, workflow, and graph before clearing"| Plan
   Operator[Operator] --> Plan["Objectives → Plan tab<br/>ObjectivePlanPanel, WorkGraphView"]
   Operator --> Views["Product Workspace, Agents, Reviews<br/>WorkspaceExecution, AgentWorkUnits, RunGraphContext"]
   Plan -->|"GET, POST /api/v1/objectives/{id}/plans"| Plans[orchestration_api.go]
@@ -37,7 +38,7 @@ flowchart LR
   Worker -->|"POST /api/v1/workers/{id}/agent-runs/claim"| Runs
   Runs -->|"claim reconciles, then leases;<br/>context from work_graph_context.go"| Worker
   Worker -->|"PUT .../agent-runs/{run}: commit, diff, typed result"| Runs
-  Runs --> Reconcile
+  Runs -->|admit terminal result once, including cancelled follow-ups| Reconcile
   Worker -->|push verified integration branch with a fresh deadline| Remote[(GitHub remote)]
   Runs -->|create or reuse one pull request| GitHub[(GitHub API)]
 ```
@@ -99,6 +100,9 @@ flowchart LR
 - A produce unit that depends on a produce unit starts from that unit's branch.
 - A failed unit blocks the units that depend on it; other units finish. `POST .../units/{key}/retry` starts a fresh run
   for a failed unit; a retried producer continues from its previous branch.
+- Requeueing remediation, decision-resolution, or publication clears the prior admission attempt. If that queued pass
+  is cancelled before a worker leases it, reconciliation records the cancellation as a unit failure even though the
+  run's attempt count has not advanced.
 - `POST .../cancel` persists the graph intent before cancelling runs. Queued and running run changes share one
   atomic run-store write; a failed write leaves the graph cancelled and reconciliation retries before workers can lease
   more work, including after restart. A failed intent write leaves every run unchanged.
@@ -133,8 +137,9 @@ flowchart LR
 - The integrate unit starts when its dependencies are settled, with every produce unit's branch and admitted commit as
   inputs in plan order. Every producer must be settled, including producers reached only through transitive
   dependencies; an active retry cannot be paired with its previous candidate.
-- The worker refuses inputs whose branch moved, aborts a conflicting merge and reports the branch and files, and
-  otherwise commits the merges, runs the repository's verification commands on the result, and reports the commit.
+- The worker refuses inputs whose branch moved, aborts a conflicting merge and reports the branch and exact file
+  paths, including paths with spaces, and otherwise commits the merges, runs the repository's verification commands on
+  the result, and reports the commit.
 - A conflict becomes a finding for the producer whose branch did not merge, and integration runs again after that
   producer hands off. Failed verification of the combined candidate fails the unit.
 - With reviews of the integrate unit, the candidate is pushed and the pull request created only after they accept, by
@@ -194,7 +199,7 @@ Worker tests with a real Git repository and a fake CLI (`go test ./cmd/zenchron-
 | `TestWorkerExecutesTwoRunsOfOneCheckoutAtTheSameTimeInSeparateWorktrees` | Real overlap: each provider process waits until it sees the other running |
 | `TestWorkerWithOneSlotExecutesQueuedRunsOneAfterTheOther`, `TestRunConcurrencyIsConfigurableAndBounded` | The concurrency limit |
 | `TestIntegrationRunMergesExactCandidatesVerifiesTheCombinationAndPublishesOnce` | Deterministic merge, verification of the combination, idempotent publication pass |
-| `TestIntegrationRunReportsConflictsAndStaleInputsWithoutCombiningThem` | Aborted conflicting merge, refused stale input |
+| `TestIntegrationRunReportsConflictsAndStaleInputsWithoutCombiningThem` | Exact conflict path with spaces, aborted merge, refused stale input |
 | `TestTypedResultIsTheLastFencedResultBlockOfTheFinalMessage` | Result extraction |
 
 Browser, real control plane and worker with the fake Codex CLI

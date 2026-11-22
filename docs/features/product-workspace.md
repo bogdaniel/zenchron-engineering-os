@@ -11,6 +11,8 @@ control plane records nothing.
 ```mermaid
 flowchart LR
     Shell["App shell · main.tsx<br/>mode, projects, objectives, workers, agent runs"] -->|"designPreview, WorkspaceFacts"| Page["WorkspacePage · workspace.tsx<br/>one layout, focus and UI state"]
+    Page -->|"Share link includes selected product ID"| URL["Workspace URL · ?product={id}"]
+    URL -->|"Restore selected product on mount"| Page
     Page -->|"source.view(product, quarter)"| Source{"WorkspaceSource"}
     Source -->|Mock| Mock["useMockWorkspace<br/>workspace-preview-data.tsx · useState"]
     Source -->|Live| Live["useLiveWorkspace<br/>workspaceView.tsx · TanStack Query"]
@@ -76,6 +78,7 @@ Both modes:
   Product actions menu opens it for the selected product. The editor validates the name (required, at most 100
   characters) and description (at most 2000) and shows a save error in place.
 - "Open repository inventory" in the Product actions menu goes to the Projects page.
+- The Share dialog's link includes the selected product ID, and opening it restores that product.
 - Tabs narrow the cards: Objectives (roadmap and all objectives), Repos (all repositories and workflows), Files,
   Decisions (decisions and stakeholders), Templates (workflow and agent templates, release streams).
 - The roadmap has Roadmap and Timeline views and a "Quarterly" menu that chooses the first quarter shown.

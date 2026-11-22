@@ -131,7 +131,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   );
   if (agentSort !== 'default') visibleItems.sort((a, b) =>
     agentSort === 'ascending' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
-  const selected = visibleItems.find((item) => item.id === selectedID) ?? visibleItems[0];
+  const selected = items.find((item) => item.id === selectedID) ?? visibleItems[0];
   const createForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateAgentInput });
   const editForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateAgentInput });
   const runForm = useForm<{ prompt: string }>({ initialValues: { prompt: '' }, validate: (values) => {
@@ -181,6 +181,9 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
       .catch((error: unknown) => setNotice(`Could not change ${agent.name}: ${message(error)}`));
   }
   useEffect(() => {
+    if (selected && selected.id !== selectedID) setSelectedID(selected.id);
+  }, [selected?.id, selectedID]);
+  useEffect(() => {
     if (!selected) return;
     resetEditForm();
     setIsEditing(false);
@@ -229,7 +232,9 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
     savePersona.mutate({ id: persona.id, input });
   }
   function personaInput(values: AgentPersonaInput) {
-    const result = agentPersonaInputSchema.safeParse(values);
+    const result = agentPersonaInputSchema.safeParse({
+      ...values, responsibilities: values.responsibilities.filter(Boolean),
+    });
     if (!result.success) { setPersonaError(result.error.issues[0].message); return; }
     savePersona.mutate({ id: personaEdit?.id, input: result.data }, { onError: (error) => setPersonaError(message(error)) });
   }
@@ -691,7 +696,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
         <TextInput label="Persona name" value={personaDraft.name} onChange={(event) => setPersonaDraft({ ...personaDraft, name: event.currentTarget.value })} required />
         <TextInput label="Role" value={personaDraft.role} onChange={(event) => setPersonaDraft({ ...personaDraft, role: event.currentTarget.value })} required />
         <Textarea label="Responsibilities (one per line)" value={personaDraft.responsibilities.join('\n')}
-          onChange={(event) => setPersonaDraft({ ...personaDraft, responsibilities: event.currentTarget.value.split('\n').filter(Boolean) })} />
+          onChange={(event) => setPersonaDraft({ ...personaDraft, responsibilities: event.currentTarget.value.split('\n') })} />
         <Textarea label="Instructions" value={personaDraft.instructions} onChange={(event) => setPersonaDraft({ ...personaDraft, instructions: event.currentTarget.value })} />
         <Textarea label="Behavior expectations" value={personaDraft.behavior} onChange={(event) => setPersonaDraft({ ...personaDraft, behavior: event.currentTarget.value })} />
         <Textarea label="Review specialization" value={personaDraft.review_specialization}

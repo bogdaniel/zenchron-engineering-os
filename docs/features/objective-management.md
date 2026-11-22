@@ -9,6 +9,7 @@ icons, and the installed AG Grid Community table.
 
 ```mermaid
 flowchart LR
+    URL["One-shot objective link parameters"] -->|"Capture objective and tab in page state, then remove from URL"| Page
     User[Engineering user] --> Page["ObjectivesPage · objectives.tsx<br/>filters, views, create dialog"]
     Page --> Detail["ObjectiveDetail.tsx<br/>summary, tabs, editor, milestones"]
     Page -->|reads| Source{"ObjectivesSource · objectivesView.ts"}
@@ -69,6 +70,8 @@ flowchart LR
   Copy objective link copies a deep link (`?objective=<id>#objectives`) that selects that objective. The more-actions
   menu holds **Edit objective**, View related PRs, and View activity; overview card shortcuts and each table row menu
   open the matching tab.
+- Objective and tab parameters are removed after the page captures them, so hash navigation does not replay an old
+  selection. Workspace create context remains until the dialog is submitted or canceled.
 - On a phone the status badge and the three header actions keep their full width; the title wraps instead.
 - The search row above the table is hidden only in Mock at the approved desktop frame (1351px or wider and 840px or
   taller), which has no room for it; Live keeps search, the count, and retry visible at every size.

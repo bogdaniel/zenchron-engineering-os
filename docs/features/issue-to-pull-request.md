@@ -32,9 +32,11 @@ sequenceDiagram
   loop every 2 seconds
     CLI-->>Worker: JSON event lines
     Worker->>API: POST .../agent-runs/{run}/progress (redacted events)
+    Note over Worker: Keep the in-flight batch intact; overflow drops oldest unsent events
     API->>Store: Renew lease, append events
     API-->>Worker: cancel_requested
   end
+  Worker->>Tree: Collect bounded diff with worker-safe Git environment
   Worker->>Tree: git add + commit on the run branch
   Worker->>Tree: Run configured verification commands
   Worker->>Remote: git push refs/heads/zenchron/agent-run/{run}
@@ -43,6 +45,14 @@ sequenceDiagram
   API->>Store: Persist publication and pull-request identity
   User->>UI: Reviews > Local branches > Evidence, Code changes
   UI->>API: GET /api/v1/agent-runs, .../events, .../diff, .../pull-request
+  User->>UI: Retry publication or import change requests
+  alt Retry publication
+    UI->>API: POST .../publish
+    API-->>UI: 2xx; show success without parsing a body
+  else Import change requests
+    UI->>API: POST .../sync-reviews
+    API-->>UI: {imported}; validate response and refresh runs
+  end
   User->>UI: Request changes
   UI->>API: POST .../request-changes
   API->>Store: Requeue the same run and branch with the feedback
@@ -104,13 +114,17 @@ that exits successfully is therefore not reported as delivered work unless verif
   Codex starts as their own session. A new attempt first stops whatever an earlier attempt left and fails instead of
   running beside it, so two attempts never write the same worktree.
 - Claude Code hooks are disabled for every run, and the worker's own Git commands run with Git hooks disabled, because
-  a hook can be a script in the worktree that would run outside the sandbox. Provider and verification processes
+  a hook can be a script in the worktree that would run outside the sandbox. After the provider exits, Git staging,
+  diff, and commit commands use the provider environment allowlist, disable filesystem-monitor hooks, and exclude
+  nested repository status from collected diffs. Provider and verification processes
   inherit only a fixed list of variables (path, home, locale, temporary directory, proxy and certificate settings,
   CLI configuration directories) plus the operator's per-repository `environment`; tokens in the developer's shell
   and provider API keys never reach them, so a subscription sign-in is never replaced by API billing.
 - The profile's model is passed to the CLI; the model name `default` leaves the choice to the CLI's own configuration.
 - Events and the final message are redacted for known credential formats, the worker token, and local absolute paths,
-  and bounded: 1,000 bytes per event, 300 stored events per run, 20,000 bytes of final output.
+  and bounded: 1,000 bytes per event, 300 stored events per run, 20,000 bytes of final output. The worker buffers at
+  most 200 progress events; while a batch is being sent, overflow drops only the oldest events waiting behind it, so
+  a failed report can retry its intact batch.
 - A successful execution with changes is committed, then verified. A failed verification keeps the commit on the local
   branch, marks the run `failed`, and publishes nothing. Without configured commands verification is `not_configured`
   and publication proceeds; the pull request states that.
@@ -121,6 +135,8 @@ that exits successfully is therefore not reported as delivered work unless verif
   from GitHub with `sync-reviews`, queues another attempt on the
   same branch and worktree; the new commit lands on the same pull request. A run has at most three attempts. When
   several change requests are imported at once, all are kept and the newest queues the attempt.
+- Evidence actions validate the `sync-reviews` response before showing the imported count. Publication retry is a
+  success on any 2xx response and does not depend on a response body.
 - The worker retries delivering a result up to four times after a connection or server error, so a finished run is
   not repeated because one request failed. It stops an attempt when the control plane answers a progress report with
   conflict, unauthorized, forbidden, or not found, and never pushes from an attempt that lost its lease.
