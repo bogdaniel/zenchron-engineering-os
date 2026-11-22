@@ -131,7 +131,7 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
   );
   if (agentSort !== 'default') visibleItems.sort((a, b) =>
     agentSort === 'ascending' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
-  const selected = visibleItems.find((item) => item.id === selectedID) ?? visibleItems[0];
+  const selected = items.find((item) => item.id === selectedID) ?? visibleItems[0];
   const createForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateAgentInput });
   const editForm = useForm<AgentInput>({ initialValues: blankProfile, validate: validateAgentInput });
   const runForm = useForm<{ prompt: string }>({ initialValues: { prompt: '' }, validate: (values) => {
@@ -180,6 +180,9 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
       .then(() => setNotice(`${agent.name} ${status === 'active' ? 'enabled' : 'disabled'}${source.savedSuffix}`))
       .catch((error: unknown) => setNotice(`Could not change ${agent.name}: ${message(error)}`));
   }
+  useEffect(() => {
+    if (selected && selected.id !== selectedID) setSelectedID(selected.id);
+  }, [selected?.id, selectedID]);
   useEffect(() => {
     if (!selected) return;
     resetEditForm();
