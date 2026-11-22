@@ -34,6 +34,30 @@ func TestAuthenticationSeparatesDashboardAndWorkerRequests(t *testing.T) {
 	}
 }
 
+func TestAuthSessionReportsGitHubWriteCredentialConfiguration(t *testing.T) {
+	t.Setenv("ZENCHRON_GITHUB_TOKEN", "")
+	t.Setenv("ZENCHRON_GITHUB_APP_ID", "")
+	t.Setenv("ZENCHRON_GITHUB_INSTALLATION_ID", "")
+	t.Setenv("ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", "")
+	server := authHandler(newMux(), nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	var session map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &session); err != nil || response.Code != http.StatusOK ||
+		session["github_write_configured"] != false {
+		t.Fatalf("unconfigured session = %#v, body %s, error %v, HTTP %d", session, response.Body.String(), err, response.Code)
+	}
+
+	t.Setenv("ZENCHRON_GITHUB_TOKEN", "configured-token")
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if err := json.Unmarshal(response.Body.Bytes(), &session); err != nil || response.Code != http.StatusOK ||
+		session["github_write_configured"] != true {
+		t.Fatalf("configured session = %#v, body %s, error %v, HTTP %d", session, response.Body.String(), err, response.Code)
+	}
+}
+
 func TestAuthenticatedAPIMutationsRejectCrossOriginRequests(t *testing.T) {
 	config := testAuthConfig()
 	user := authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}
