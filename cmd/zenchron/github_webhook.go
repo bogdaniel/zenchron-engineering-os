@@ -364,7 +364,7 @@ func (store *agentRunStore) applyCheckRunEvent(event gitHubWebhookEvent) (string
 	store.mu.Lock()
 	runID := ""
 	for id, item := range store.items {
-		if item.Repository == repository && item.PullRequestNumber > 0 && item.CommitSHA == check.HeadSHA {
+		if sameRepository(item.Repository, repository) && item.PullRequestNumber > 0 && item.CommitSHA == check.HeadSHA {
 			runID = id
 			break
 		}

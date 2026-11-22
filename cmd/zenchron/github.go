@@ -272,7 +272,7 @@ func (registry *workerRegistry) repositoryOf(projectID string) (string, bool) {
 func githubRepositoryParts(remote string) (string, string, bool) {
 	host, path, found := strings.Cut(remote, "/")
 	parts := strings.Split(path, "/")
-	if !found || host != "github.com" || len(parts) != 2 || !validGitRemote(remote) {
+	if !found || !strings.EqualFold(host, "github.com") || len(parts) != 2 || !validGitRemote(remote) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true

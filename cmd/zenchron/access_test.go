@@ -198,6 +198,34 @@ func TestWorkerRegistersOnlyApprovedRepositoriesAndUsersSeeOnlyTheirProjects(t *
 	}
 }
 
+func TestWorkerHeartbeatMatchesCaseVariantGitHubGrant(t *testing.T) {
+	harness := newAccessHarness(t)
+	if status := harness.heartbeat(aliceWorkerID, aliceToken, projectJSON(projectA, "github.com/ACME/PROJECT-A")); status != http.StatusOK {
+		t.Fatalf("heartbeat returned HTTP %d", status)
+	}
+	projects := decodeList[projectStatus](t, harness.user("alice", http.MethodGet, "/api/v1/projects", ""))
+	if len(projects) != 1 || projects[0].GitRemote != "github.com/ACME/PROJECT-A" {
+		t.Fatalf("case-variant granted project was not registered: %#v", projects)
+	}
+}
+
+func TestRepositoryIdentityCaseRules(t *testing.T) {
+	access := requestAccess{enforced: true, repositories: []string{"github.com/acme/Widget", "git.example.com/Group/Repo"}}
+	for _, test := range []struct {
+		repository string
+		allowed    bool
+	}{
+		{"github.com/Acme/widget", true},
+		{"GITHUB.com/ACME/WIDGET", true},
+		{"git.example.com/Group/Repo", true},
+		{"git.example.com/group/repo", false},
+	} {
+		if allowed := access.allows(test.repository); allowed != test.allowed {
+			t.Errorf("allows(%q) = %t, want %t", test.repository, allowed, test.allowed)
+		}
+	}
+}
+
 func TestRunsAreScopedToProjectAccessAndWorkerOwnership(t *testing.T) {
 	harness := newAccessHarness(t)
 	harness.heartbeat(aliceWorkerID, aliceToken, projectJSON(projectA, repositoryA))

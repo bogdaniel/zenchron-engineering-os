@@ -475,6 +475,16 @@ func validGitRemote(remote string) bool {
 	return true
 }
 
+func sameRepository(left, right string) bool {
+	if left == right {
+		return true
+	}
+	leftHost, leftPath, leftHasPath := strings.Cut(left, "/")
+	rightHost, rightPath, rightHasPath := strings.Cut(right, "/")
+	return leftHasPath && rightHasPath && strings.EqualFold(leftHost, "github.com") &&
+		strings.EqualFold(rightHost, "github.com") && strings.EqualFold(leftPath, rightPath)
+}
+
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

@@ -332,6 +332,26 @@ func TestWebhookStoresCheckRunsForTheHeadCommitWithoutStartingWork(t *testing.T)
 	}
 }
 
+func TestWebhooksMatchCaseVariantGitHubRepositoryNames(t *testing.T) {
+	t.Setenv("ZENCHRON_GITHUB_WEBHOOK_SECRET", webhookSecret)
+	harness := newDeliveryHarness(t, workerapi.ProviderCodex)
+	run := harness.publishedRun()
+	review := deliver(harness.server, webhookSecret, "pull_request_review", "case-review",
+		reviewEvent{id: 510, repository: "Acme/Platform"}.json(run))
+	if review.Code != http.StatusOK || !strings.Contains(review.Body.String(), "follow-up attempt queued") {
+		t.Fatalf("case-variant review: HTTP %d %s", review.Code, review.Body.String())
+	}
+	check := strings.ReplaceAll(checkRunEvent("go", "failure", testCommit, "2026-11-14T10:05:00Z", 23),
+		"acme/platform", "Acme/Platform")
+	if response := deliver(harness.server, webhookSecret, "check_run", "case-check", check); response.Code != http.StatusOK {
+		t.Fatalf("case-variant check run: HTTP %d %s", response.Code, response.Body.String())
+	}
+	if after := harness.run(run.ID); after.ImportedReviewID != 510 || len(after.GitHubReviews) != 1 ||
+		!after.GitHubReviews[0].Queued || len(after.Checks) != 1 || after.Checks[0].Name != "go" {
+		t.Fatalf("case-variant webhooks were not matched: %#v", after)
+	}
+}
+
 func TestWebhookFollowUpRunsOnlyWhileTheRunCreatorKeepsAccess(t *testing.T) {
 	t.Setenv("ZENCHRON_GITHUB_WEBHOOK_SECRET", webhookSecret)
 	harness := newAdminHarness(t)
