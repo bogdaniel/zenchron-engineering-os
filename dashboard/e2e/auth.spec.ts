@@ -105,7 +105,8 @@ test('local workspace explains that menu status does not need a Dashboard grant'
 });
 
 test('local settings creates and revokes a one-time menu companion grant', async ({ page, baseURL }) => {
-  const grants: { id: string; user: string; created_at: string; expires_at: string }[] = [];
+  const grants = ['existing-1', 'existing-2'].map((id) => ({ id, user: 'admin',
+    created_at: '2026-11-22T00:00:00Z', expires_at: '2027-11-22T00:00:00Z' }));
   await page.route('**/api/v1/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -118,12 +119,12 @@ test('local settings creates and revokes a one-time menu companion grant', async
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ grants }) });
     }
     if (url.pathname === '/api/v1/system/status/credentials' && request.method() === 'POST') {
-      grants.push({ id: 'device-1', user: 'Local workspace', created_at: new Date().toISOString(),
+      grants.push({ id: 'new-device', user: 'Local workspace', created_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 86400000).toISOString() });
       return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ credential: 'one-time-status-grant' }) });
     }
-    if (url.pathname === '/api/v1/system/status/credentials/device-1' && request.method() === 'DELETE') {
-      grants.splice(0, grants.length);
+    if (url.pathname === '/api/v1/system/status/credentials/new-device' && request.method() === 'DELETE') {
+      grants.splice(2, 1);
       return route.fulfill({ status: 204, body: '' });
     }
     return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
@@ -131,16 +132,26 @@ test('local settings creates and revokes a one-time menu companion grant', async
   const local = new URL(baseURL!);
   local.hostname = '127.0.0.1';
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: local.origin });
+  await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto(`${local.origin}/?mode=live#settings`);
   const pairButton = page.getByRole('button', { name: 'Pair this Mac' });
   const panel = page.locator('.system-companion-panel');
+  const companionHeading = panel.locator('.system-update-heading h2');
+  const updateHeading = page.locator('.system-update-panel:not(.system-companion-panel) .system-update-heading h2');
+  expect(await companionHeading.evaluate((element) => getComputedStyle(element).fontSize))
+    .toBe(await updateHeading.evaluate((element) => getComputedStyle(element).fontSize));
   const pairButtonBounds = await pairButton.boundingBox();
   const panelBounds = await panel.boundingBox();
   expect(pairButtonBounds?.width).toBeLessThan((panelBounds?.width ?? 0) / 2);
   expect(pairButtonBounds!.x + pairButtonBounds!.width).toBeGreaterThan(panelBounds!.x + panelBounds!.width / 2);
   await pairButton.click();
   await expect(page.getByText('one-time-status-grant')).toBeVisible();
-  await expect(page.getByText(/Step 1: Copy this one-time credential/i)).toBeVisible();
+  await expect(page.getByText(/Copy it, then choose Pair with Dashboard/i)).toBeVisible();
+  const credentialBounds = await page.locator('.system-companion-credential').boundingBox();
+  expect(credentialBounds?.width).toBeLessThan((panelBounds?.width ?? 0) / 2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobilePanelBounds = await panel.boundingBox();
+  expect(mobilePanelBounds?.width).toBeLessThanOrEqual(390);
   await page.getByRole('button', { name: 'Copy for Menu Bar' }).click();
   await expect(page.getByText(/Credential copied/i)).toBeVisible();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('one-time-status-grant');
@@ -154,6 +165,6 @@ test('local settings creates and revokes a one-time menu companion grant', async
   await page.evaluate(() => { document.execCommand = () => false; });
   await page.getByRole('button', { name: 'Copy for Menu Bar' }).click();
   await expect(page.getByRole('alert')).toHaveText('Clipboard access failed; select the credential and press ⌘C.');
-  await page.getByRole('button', { name: 'Revoke' }).click();
-  await expect(page.getByText(/expires/i)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Revoke' }).last().click();
+  await expect(page.getByText(/expires/i)).toHaveCount(2);
 });

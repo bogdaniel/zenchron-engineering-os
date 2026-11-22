@@ -104,8 +104,9 @@ flowchart LR
   Dashboard pairing; it does not show the unusable credential dialog. When OAuth is enabled but no browser session
   exists, it opens Settings and directs the operator to sign in before creating a grant. Dashboard grant creation still
   requires the existing authenticated session and admin checks. The pairing dialog includes an explicit clipboard
-  paste button as well as the standard ⌘V shortcut. Dashboard places the Pair action at the end of the grant panel and
-  wraps long credentials within the panel.
+  paste button as well as the standard ⌘V shortcut. Dashboard uses the System Update panel heading and action layout,
+  presents existing grants as separated rows, and keeps a one-time credential and copy action together in a compact,
+  wrapping card.
 - Live Settings clearly identifies Local workspace mode, links the operator to `zenchron-engineering auth setup`, and
   shows the exact loopback callback URL. The grant management panel appears only after GitHub sign-in; the Local
   workspace remains usable without it.

@@ -54,21 +54,28 @@ export function SystemStatusCompanionPanel() {
   }
 
   return <PanelCard className="system-update-panel system-companion-panel" withBorder>
-    <h2>Menu Bar Companion</h2>
-    <p>Pair this Mac to show local status. Under an access policy, only an administrator can create a grant.</p>
-    {grants.data?.grants.map((grant) => <Group className="system-companion-grant" key={grant.id} justify="space-between" wrap="nowrap">
-      <Text size="sm">{grant.user} · expires {new Date(grant.expires_at).toLocaleDateString()}</Text>
-      <Button size="xs" variant="default" onClick={() => revoke.mutate(grant.id)} loading={revoke.isPending}>Revoke</Button>
-    </Group>)}
-    {credential && <Stack gap="xs" role="status">
-      <Text size="sm">Step 1: Copy this one-time credential. Step 2: In Zenchron Menu Bar, choose Pair with Dashboard… and paste it.</Text>
-      <Code className="system-companion-credential">{credential}</Code>
-      <Button size="xs" variant="default" style={{ width: 'fit-content' }} onClick={() => void copyCredential()}>
-        Copy for Menu Bar
-      </Button>
-      {copyStatus && <Text role="status">{copyStatus}</Text>}
-      {copyError && <Text c="red" role="alert">{copyError}</Text>}
-    </Stack>}
+    <div className="system-update-heading"><div><h2>Menu Bar Companion</h2>
+      <p>Pair this Mac to show local status. Under an access policy, only an administrator can create a grant.</p>
+    </div></div>
+    {grants.data?.grants.length ? <Stack className="system-companion-grants" gap="xs">
+      {grants.data.grants.map((grant) => (
+        <Group className="system-companion-grant" key={grant.id} justify="space-between" wrap="nowrap">
+          <Text size="sm">{grant.user} · expires {new Date(grant.expires_at).toLocaleDateString()}</Text>
+          <Button size="xs" variant="default" onClick={() => revoke.mutate(grant.id)} loading={revoke.isPending}>
+            Revoke
+          </Button>
+        </Group>
+      ))}
+    </Stack> : grants.data && <Text className="system-companion-empty" size="sm">No Macs are paired.</Text>}
+    {credential && <div className="system-companion-credential-card" role="status">
+      <div><Text size="sm">One-time pairing credential</Text>
+        <Code className="system-companion-credential">{credential}</Code>
+        <Text size="xs">Copy it, then choose Pair with Dashboard… in Zenchron Menu Bar and paste it.</Text>
+      </div>
+      <Button size="xs" variant="default" onClick={() => void copyCredential()}>Copy for Menu Bar</Button>
+      {copyStatus && <Text className="system-companion-copy-status" role="status">{copyStatus}</Text>}
+      {copyError && <Text className="system-companion-copy-error" c="red" role="alert">{copyError}</Text>}
+    </div>}
     {grants.error instanceof Error && <Text c="red" role="alert">{grants.error.message}</Text>}
     {pair.error instanceof Error && <Text c="red" role="alert">{pair.error.message}</Text>}
     {revoke.error instanceof Error && <Text c="red" role="alert">{revoke.error.message}</Text>}

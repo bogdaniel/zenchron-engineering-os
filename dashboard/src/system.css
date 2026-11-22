@@ -177,9 +177,26 @@
 .system-update-facts dd { overflow-wrap: anywhere; margin: 5px 0 0; font-size: var(--page-description-size); font-weight: 600; }
 .system-update-panel > p { margin: 7px 0; color: #aaa4bb; font-size: var(--panel-description-size); overflow-wrap: anywhere; }
 .system-update-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
-.system-companion-grant { min-width: 0; margin-top: 8px; }
+.system-companion-panel > .system-update-heading { margin-bottom: 12px; }
+.system-companion-grants { margin-top: 12px; }
+.system-companion-grant { min-width: 0; padding: 8px 0; border-top: 1px solid #2e2b40; }
 .system-companion-grant > *:first-child { min-width: 0; overflow-wrap: anywhere; }
-.system-companion-credential { display: block; overflow-wrap: anywhere; white-space: pre-wrap; }
+.system-companion-empty { margin-top: 12px; color: #aaa4bb; }
+.system-companion-credential-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #2e2b40;
+  border-radius: 8px;
+  background: #12121d;
+}
+.system-companion-credential-card > div:first-child { display: grid; min-width: 0; gap: 6px; }
+.system-companion-credential { display: block; width: fit-content; max-width: 100%; overflow-wrap: anywhere; white-space: pre-wrap; }
+.system-companion-credential-card > .mantine-Button-root { width: fit-content; }
+.system-companion-copy-status, .system-companion-copy-error { grid-column: 1 / -1; }
 .system-companion-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
 @media (min-width: 1351px) {
   .system-service-card { padding: 12px; }
@@ -207,4 +224,7 @@
   .system-add-integration { grid-column: auto; }
   .system-service-card { min-height: 92px; }
   .system-update-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .system-companion-credential-card { grid-template-columns: minmax(0, 1fr); }
+  .system-companion-credential-card > .mantine-Button-root { justify-self: start; }
+  .system-companion-copy-status, .system-companion-copy-error { grid-column: auto; }
 }
