@@ -330,6 +330,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(10);
   await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Task');
   await chooseFromWorkflowMenu(page, 'Auto layout');
+  await expect(page.locator('.workflow-status')).toContainText('Layout updated');
   const dragHandle = page.getByRole('button', { name: 'Drag Agent Task to canvas' });
   const source = await dragHandle.boundingBox();
   const canvas = await page.locator('.workflow-canvas').boundingBox();
