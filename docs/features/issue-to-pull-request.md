@@ -32,6 +32,7 @@ sequenceDiagram
   loop every 2 seconds
     CLI-->>Worker: JSON event lines
     Worker->>API: POST .../agent-runs/{run}/progress (redacted events)
+    Note over Worker: Keep the in-flight batch intact; overflow drops oldest unsent events
     API->>Store: Renew lease, append events
     API-->>Worker: cancel_requested
   end
@@ -110,7 +111,9 @@ that exits successfully is therefore not reported as delivered work unless verif
   and provider API keys never reach them, so a subscription sign-in is never replaced by API billing.
 - The profile's model is passed to the CLI; the model name `default` leaves the choice to the CLI's own configuration.
 - Events and the final message are redacted for known credential formats, the worker token, and local absolute paths,
-  and bounded: 1,000 bytes per event, 300 stored events per run, 20,000 bytes of final output.
+  and bounded: 1,000 bytes per event, 300 stored events per run, 20,000 bytes of final output. The worker buffers at
+  most 200 progress events; while a batch is being sent, overflow drops only the oldest events waiting behind it, so
+  a failed report can retry its intact batch.
 - A successful execution with changes is committed, then verified. A failed verification keeps the commit on the local
   branch, marks the run `failed`, and publishes nothing. Without configured commands verification is `not_configured`
   and publication proceeds; the pull request states that.
