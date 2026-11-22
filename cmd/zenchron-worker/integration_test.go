@@ -43,6 +43,15 @@ func (harness *runHarness) lastResult() workerapi.AgentRunResult {
 func TestIntegrationRunMergesExactCandidatesVerifiesTheCombinationAndPublishesOnce(t *testing.T) {
 	// The provider script must never run: integration starts no model.
 	harness := newRunHarness(t, "exit 9\n", [][]string{{"sh", "-c", "test -f a.txt && test -f b.txt"}})
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	if err := os.MkdirAll(bare, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, bare, "init", "--bare")
+	runGit(t, harness.repository, "remote", "add", "origin", bare)
+	harness.gitRemote = "github.com/test/repository"
+	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository.git")
+	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
 	harness.command.Merge = []workerapi.MergeInput{
 		harness.candidate(firstCandidateRun, "a.txt", "from a\n"), harness.candidate(secondCandidateRun, "b.txt", "from b\n")}
 	harness.command.Profile = workerapi.AgentProfile{Provider: "zenchron-merge", Model: "none"}
