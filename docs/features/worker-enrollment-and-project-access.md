@@ -239,8 +239,9 @@ Not covered, and blocking multi-organization or untrusted deployment:
 - One control plane serves one organization. There are no organizations or teams, and no self-service enrollment.
 - The policy is one file changed by one control-plane instance. Hand edits are not audited, and the audit log is a
   local file an operator with host access can alter.
-- User sessions are signed cookies valid for eight hours. Removing a user from the policy ends them; there is no list
-  of active sessions and no single-session revocation.
+- User sessions are signed cookies valid for eight hours. Removing a user from the policy ends them; logout persists a
+  per-login cutoff that revokes all earlier sessions, but there is no list of active sessions or single-session
+  revocation.
 - Worker tokens are bearer secrets; there is no mutual TLS and no automatic rotation.
 - Verification runs unsandboxed, as described above.
 - Descendant processes are found by polling. A process that detaches from an already finished parent between two

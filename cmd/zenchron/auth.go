@@ -21,21 +21,23 @@ const authSessionCookie = "zenchron_session"
 const oauthStateCookie = "zenchron_oauth_state"
 
 type authConfig struct {
-	clientID     string
-	clientSecret string
-	sessionKey   []byte
-	workerToken  string
-	access       *accessPolicy
-	allowedUsers []string
-	publicURL    *url.URL
-	https        bool
-	githubURL    string
-	githubAPIURL string
+	clientID           string
+	clientSecret       string
+	sessionKey         []byte
+	workerToken        string
+	access             *accessPolicy
+	allowedUsers       []string
+	publicURL          *url.URL
+	https              bool
+	githubURL          string
+	githubAPIURL       string
+	sessionRevocations *sessionRevocations
 }
 
 type authUser struct {
 	Login     string `json:"login"`
 	AvatarURL string `json:"avatar_url"`
+	IssuedAt  int64  `json:"issued_at"`
 	ExpiresAt int64  `json:"expires_at"`
 }
 
@@ -129,6 +131,17 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 			if !validRequestOrigin(r.Header.Get("Origin"), config) {
 				http.Error(w, "invalid request origin", http.StatusForbidden)
 				return
+			}
+			if user, ok := readSession(r, config); ok {
+				if config.sessionRevocations == nil {
+					http.Error(w, "session revocation is unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				if err := config.sessionRevocations.revoke(user.Login, time.Now().UnixNano()); err != nil {
+					log.Printf("could not revoke session: %v", err)
+					http.Error(w, "could not revoke session", http.StatusInternalServerError)
+					return
+				}
 			}
 			http.SetCookie(w, &http.Cookie{Name: authSessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: config.https, SameSite: http.SameSiteLaxMode, MaxAge: -1})
 			w.WriteHeader(http.StatusNoContent)
@@ -334,7 +347,8 @@ func completeGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authCon
 		http.Error(w, "GitHub account is not authorized", http.StatusForbidden)
 		return
 	}
-	user.ExpiresAt = time.Now().Add(8 * time.Hour).Unix()
+	user.IssuedAt = time.Now().UnixNano()
+	user.ExpiresAt = time.Unix(0, user.IssuedAt).Add(8 * time.Hour).Unix()
 	value, err := signSession(user, config.sessionKey)
 	if err != nil {
 		http.Error(w, "could not create session", http.StatusInternalServerError)
@@ -439,7 +453,7 @@ func readSession(r *http.Request, config *authConfig) (authUser, bool) {
 	}
 	var user authUser
 	if json.Unmarshal(data, &user) != nil || user.Login == "" || user.ExpiresAt <= time.Now().Unix() ||
-		!config.maySignIn(user.Login) {
+		!config.maySignIn(user.Login) || config.sessionRevocations.isRevoked(user.Login, user.IssuedAt) {
 		return authUser{}, false
 	}
 	return user, true
