@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MantineProvider, Menu, SegmentedControl, TextInput } from '@mantine/core';
+import { MantineProvider, Menu, SegmentedControl, Text, TextInput } from '@mantine/core';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
@@ -89,6 +89,7 @@ function App() {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const loginRoute = activePage === 'login';
   useEffect(() => {
@@ -272,8 +273,14 @@ function App() {
                 <Menu.Dropdown><Menu.Label>Notifications</Menu.Label><Menu.Item disabled>No new notifications.</Menu.Item></Menu.Dropdown>
               </Menu>
               {!previewPage && auth.data?.authenticated && auth.data.local === false && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
-                await fetch('/api/v1/auth/logout', { method: 'POST' });
-                await auth.refetch();
+                setLogoutError(null);
+                try {
+                  const response = await fetch('/api/v1/auth/logout', { method: 'POST' });
+                  if (!response.ok) throw new Error(`Sign-out failed: ${response.status}`);
+                  await auth.refetch();
+                } catch {
+                  setLogoutError('Sign-out could not be confirmed. Please try again.');
+                }
               }}><IconLogout size={17} /></button>}
               <Menu position="bottom-end" withinPortal>
                 <Menu.Target><button className="workspace-button" type="button" aria-label="Choose workspace">
@@ -295,6 +302,8 @@ function App() {
               </Menu>
             </div>
           </header>
+
+          {logoutError && !previewPage && <Text c="red.4" role="alert" mt="xs">{logoutError}</Text>}
 
           {activePage === 'overview' && <nav className="overview-mobile-tabs" aria-label="Overview shortcuts">
             <a href="#overview" aria-current="page" onClick={(event) => navigatePage(event, '#overview')}>Overview</a>
