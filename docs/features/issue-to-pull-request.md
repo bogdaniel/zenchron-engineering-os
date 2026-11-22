@@ -37,7 +37,7 @@ sequenceDiagram
   end
   Worker->>Tree: git add + commit on the run branch
   Worker->>Tree: Run configured verification commands
-  Worker->>Remote: git push refs/heads/zenchron/agent-run/{run}
+  Worker->>Remote: git push {verified commit SHA}:refs/heads/zenchron/agent-run/{run}
   Worker->>API: PUT .../agent-runs/{run} (result, commits, verification, usage)
   API->>GH: Find or create pull request "Closes #issue"
   API->>Store: Persist publication and pull-request identity
@@ -113,7 +113,8 @@ that exits successfully is therefore not reported as delivered work unless verif
   and bounded: 1,000 bytes per event, 300 stored events per run, 20,000 bytes of final output.
 - A successful execution with changes is committed, then verified. A failed verification keeps the commit on the local
   branch, marks the run `failed`, and publishes nothing. Without configured commands verification is `not_configured`
-  and publication proceeds; the pull request states that.
+  and publication proceeds; the pull request states that. After verification, the worker pushes the exact commit SHA
+  it verified, even if a verification command moves the local branch.
 - The pull request is created with the control plane's GitHub credential, titled after the issue, and ends with
   `Closes #<issue>`. Creation reuses an open pull request for the same branch. If GitHub fails after the push,
   `POST /api/v1/agent-runs/{id}/publish` retries without creating a duplicate.

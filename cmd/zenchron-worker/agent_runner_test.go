@@ -253,6 +253,38 @@ func TestCLIRunVerificationFailureKeepsCommitAndDoesNotPublish(t *testing.T) {
 	}
 }
 
+func TestCLIRunPushesVerifiedCommitWhenVerificationMovesBranch(t *testing.T) {
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	if err := os.MkdirAll(bare, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, bare, "init", "--bare")
+	harness := newRunHarness(t, fakeChangeScript, [][]string{{
+		"git", "-c", "user.name=Verification", "-c", "user.email=verification@example.invalid",
+		"commit", "--amend", "--allow-empty", "-m", "verification moved branch",
+	}})
+	runGit(t, harness.repository, "remote", "add", "origin", bare)
+	harness.command.PublishPullRequest = true
+	var headAtPush string
+	harness.runner.push = func(ctx context.Context, worktree, _, branch, commitSHA string) error {
+		head, err := gitOutput(ctx, "-C", worktree, "rev-parse", "HEAD")
+		if err != nil {
+			return err
+		}
+		headAtPush = strings.TrimSpace(head)
+		return pushGitCommit(ctx, worktree, branch, commitSHA)
+	}
+	if err := harness.process(); err != nil {
+		t.Fatalf("process run: %v", err)
+	}
+	result := harness.result()
+	remoteCommit := strings.TrimSpace(runGit(t, bare, "rev-parse", "refs/heads/"+harness.command.Branch))
+	if headAtPush == result.CommitSHA || result.Status != "succeeded" || result.Verification != workerapi.VerificationPassed || !result.BranchPushed ||
+		remoteCommit != result.CommitSHA {
+		t.Fatalf("result = %#v; remote branch points to %q, want verified commit %q", result, remoteCommit, result.CommitSHA)
+	}
+}
+
 func TestOperatorEnvironmentReachesProviderAndVerificationButCannotRestoreCredentials(t *testing.T) {
 	script := `echo "cache=$ZC_TEST_CACHE" >> README.md
 echo '{"type":"item.completed","item":{"id":"m1","type":"agent_message","text":"done"}}'
@@ -456,7 +488,7 @@ func TestBoundedDiffStaysValidAndWithinLimitWhenCutMidCharacter(t *testing.T) {
 
 func TestAttemptThatLosesItsLeaseAfterCommittingDoesNotPush(t *testing.T) {
 	pushes := 0
-	countPush := func(context.Context, string, string, string) error {
+	countPush := func(context.Context, string, string, string, string) error {
 		pushes++
 		return nil
 	}

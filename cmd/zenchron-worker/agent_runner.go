@@ -31,7 +31,7 @@ type agentRunner struct {
 	// this binary's own `guard` command. Empty runs them unguarded.
 	guard []string
 	// push publishes the run branch; nil uses pushAgentBranch. Tests replace this network boundary.
-	push func(ctx context.Context, worktree, remote, branch string) error
+	push func(ctx context.Context, worktree, remote, branch, commitSHA string) error
 	// finishRetryDelay overrides the pause between result deliveries; zero uses the default.
 	finishRetryDelay time.Duration
 	// slots bounds how many runs execute at once; running tracks them so the worker can wait for them.
@@ -292,7 +292,7 @@ func (runner *agentRunner) deliver(
 		if push == nil {
 			push = pushAgentBranch
 		}
-		if err := push(gitCtx, worktree, project.Remote, command.Branch); err != nil {
+		if err := push(gitCtx, worktree, project.Remote, command.Branch, result.CommitSHA); err != nil {
 			result.BranchPushFailed = true
 			reporter.emit("error", "Git could not push the run branch.")
 		} else {

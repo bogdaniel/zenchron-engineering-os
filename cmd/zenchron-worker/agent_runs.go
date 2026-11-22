@@ -22,7 +22,7 @@ const (
 	maxClaimResponseSize  = 1 << 20
 )
 
-func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch string) error {
+func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch, commitSHA string) error {
 	parts := strings.Split(expectedRemote, "/")
 	if len(parts) != 3 || parts[0] != "github.com" || parts[1] == "" || parts[2] == "" {
 		return errors.New("project is not a GitHub repository")
@@ -34,14 +34,14 @@ func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch strin
 	if err != nil || repositoryLocator(strings.TrimSpace(remote)) != expectedRemote {
 		return errors.New("Git push origin does not match the project's GitHub repository")
 	}
-	return pushGitBranch(ctx, worktree, branch)
+	return pushGitCommit(ctx, worktree, branch, commitSHA)
 }
 
-func pushGitBranch(ctx context.Context, worktree, branch string) error {
+func pushGitCommit(ctx context.Context, worktree, branch, commitSHA string) error {
 	pushCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	push := gitCommand(pushCtx, "-C", worktree, "push", "origin",
-		"refs/heads/"+branch+":refs/heads/"+branch)
+		commitSHA+":refs/heads/"+branch)
 	push.Stdout, push.Stderr = io.Discard, io.Discard
 	if err := push.Run(); err != nil {
 		return errors.New("Git push failed")
