@@ -57,6 +57,35 @@ func TestWorkerHeartbeatAppearsInWorkerList(t *testing.T) {
 	}
 }
 
+func TestWorkerHeartbeatReportsProjectsRegisteredByAnotherWorker(t *testing.T) {
+	server := newMux()
+	project := `"id":"abcdef0123456789abcdef0123456789","name":"repo","branch":"main"`
+	path := "/api/v1/workers/"
+	first := httptest.NewRecorder()
+	server.ServeHTTP(first, httptest.NewRequest(http.MethodPut, path+"11111111111111111111111111111111/heartbeat",
+		strings.NewReader(`{"name":"first","projects":[{`+project+`}]}`)))
+	if first.Code != http.StatusOK {
+		t.Fatalf("first heartbeat returned HTTP %d: %s", first.Code, first.Body.String())
+	}
+	var firstBody map[string]json.RawMessage
+	if err := json.Unmarshal(first.Body.Bytes(), &firstBody); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := firstBody["skipped_projects"]; exists {
+		t.Fatalf("empty skipped_projects field was not omitted: %s", first.Body.String())
+	}
+
+	second := httptest.NewRecorder()
+	server.ServeHTTP(second, httptest.NewRequest(http.MethodPut, path+"22222222222222222222222222222222/heartbeat",
+		strings.NewReader(`{"name":"second","projects":[{`+project+`}]}`)))
+	var reply workerapi.HeartbeatReply
+	if second.Code != http.StatusOK || json.Unmarshal(second.Body.Bytes(), &reply) != nil ||
+		len(reply.SkippedProjects) != 1 || reply.SkippedProjects[0].ID != "abcdef0123456789abcdef0123456789" ||
+		reply.SkippedProjects[0].Reason != workerapi.SkippedProjectRegisteredElsewhere {
+		t.Fatalf("second heartbeat = %s (HTTP %d), want project ownership reason", second.Body.String(), second.Code)
+	}
+}
+
 func TestWorkerHeartbeatRejectsInvalidIdentityAndName(t *testing.T) {
 	server := newMux()
 	for _, testCase := range []struct {
