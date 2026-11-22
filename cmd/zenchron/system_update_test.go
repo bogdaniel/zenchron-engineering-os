@@ -104,6 +104,7 @@ func TestManagedWorkerCompatibilityRequiresMatchingLiveHeartbeat(t *testing.T) {
 	products, agents := newProductStore(), newAgentProfileStore()
 	handler := authHandler(newMuxWithStores(newObjectiveStore(products), newWorkflowStore(), agents, products, registry, runs), nil)
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/system/update/worker-compatible", nil)
+	request.Host = "127.0.0.1:8080"
 	request.RemoteAddr = "127.0.0.1:1234"
 	request.Header.Set("X-Zenchron-Supervisor-Token", os.Getenv("ZENCHRON_MANAGED_SUPERVISOR_TOKEN"))
 	response := httptest.NewRecorder()
@@ -136,6 +137,7 @@ func TestSystemUpdateRunControlsRequireSupervisorTokenAndRecoverLeases(t *testin
 	call := func(method, path, token string) *httptest.ResponseRecorder {
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(method, path, nil)
+		request.Host = "127.0.0.1:8080"
 		request.RemoteAddr = "127.0.0.1:1234"
 		if token != "" {
 			request.Header.Set("X-Zenchron-Supervisor-Token", token)
