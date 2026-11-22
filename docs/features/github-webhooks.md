@@ -26,7 +26,8 @@ sequenceDiagram
   API->>API: Branch and review commit must equal the run's branch and published commit
   API->>API: Reviewer must be OWNER, MEMBER, or COLLABORATOR
   API->>Policy: May the user who started the run still touch the repository and the worker?
-  API->>Runs: Append feedback, store the review, queue attempt N+1 (at most 3 attempts)
+  API->>Runs: Under one update, re-check the review id; append observation and, when imported, feedback + import id
+  API->>Runs: Queue attempt N+1 when eligible (at most 3 attempts)
   API->>Deliveries: Remember the delivery id
   Worker->>API: POST /api/v1/workers/{id}/agent-runs/claim
   API-->>Worker: Prompt including "Requested changes: <reviewer> on GitHub: ..."
@@ -51,6 +52,8 @@ sequenceDiagram
 - A delivery without a valid `X-Hub-Signature-256` over the exact body is refused with 401 and changes nothing.
 - Each `X-GitHub-Delivery` id is handled once. The newest 5,000 ids are kept in `agent-runs.json.deliveries` and
   survive a restart. The same review or check arriving under a new delivery id is also applied only once.
+- Concurrent review webhooks and `sync-reviews` calls re-check the review id while updating the run. Imported
+  feedback and its import id are persisted together, so retries cannot append the same review twice.
 - A delivery that does not match a run is acknowledged with 200 and ignored, so GitHub does not retry it: another
   repository, another pull request, another branch, a commit that is not the run's current published commit, or a
   check run GitHub lists for a different pull request.
@@ -81,3 +84,4 @@ sequenceDiagram
   pull request; a stale review of the previous commit; the three-attempt limit; reviews for another repository, pull
   request, branch, or commit and from outsiders; approvals and comments; failed, out-of-order, foreign, and rerun
   check runs; delivery ids surviving a restart; and a run whose creator lost and regained repository access.
+- Concurrent duplicate-webhook and webhook-versus-`sync-reviews` regressions run with `-race`.
