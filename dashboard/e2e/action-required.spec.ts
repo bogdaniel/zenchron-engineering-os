@@ -97,7 +97,7 @@ test('Action Required deep links stay selected until their action is complete', 
   const messages = page.getByRole('list', { name: 'Handoffs, findings, and decisions' });
   await expect(messages).toContainText('Replacement graph decision');
   await expect(messages).not.toContainText('Old graph decision');
-  await page.locator('a[href="#overview"]').first().click();
-  await page.locator('a[href="#objectives"]').first().click();
+  await page.locator('.sidebar nav a[href="#overview"]').click();
+  await page.locator('.sidebar nav a[href="#objectives"]').click();
   await expect(page).not.toHaveURL(/objective=|tab=|graph_id=|decision=/);
 });
