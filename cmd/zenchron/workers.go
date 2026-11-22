@@ -231,9 +231,15 @@ func registerDashboard(mux *http.ServeMux, directory string) {
 		if filepath.Base(path) == "index.html" {
 			w.Header().Set("Cache-Control", "no-cache")
 		}
+		w.Header().Set("Content-Security-Policy", dashboardContentSecurityPolicy)
 		http.ServeFile(w, r, path)
 	})
 }
+
+// Mantine emits inline style elements and style attributes for global classes and component values.
+const dashboardContentSecurityPolicy = "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self' data:; " +
+	"form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https://avatars.githubusercontent.com; " +
+	"object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:"
 
 func (registry *workerRegistry) ready(w http.ResponseWriter, _ *http.Request) {
 	registry.mu.RLock()
