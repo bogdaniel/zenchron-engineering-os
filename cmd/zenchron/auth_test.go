@@ -82,6 +82,46 @@ func TestAuthenticatedAPIMutationsRejectCrossOriginRequests(t *testing.T) {
 	}
 }
 
+func TestUnauthenticatedRequestsRejectForwardedAndNonLoopbackHosts(t *testing.T) {
+	passed := 0
+	server := authHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		passed++
+		w.WriteHeader(http.StatusNoContent)
+	}), nil)
+	for _, test := range []struct {
+		name, host, header, value string
+		status                    int
+	}{
+		{name: "local request", host: "127.0.0.1:8080", status: http.StatusNoContent},
+		{name: "non-loopback host", host: "tunnel.example", status: http.StatusForbidden},
+		{name: "forwarded", host: "127.0.0.1:8080", header: "Forwarded", value: "for=203.0.113.1", status: http.StatusForbidden},
+		{name: "forwarded for", host: "127.0.0.1:8080", header: "X-Forwarded-For", value: "203.0.113.1", status: http.StatusForbidden},
+		{name: "cloudflare client", host: "127.0.0.1:8080", header: "CF-Connecting-IP", value: "203.0.113.1", status: http.StatusForbidden},
+		{name: "webhook route defers to signature validation", host: "tunnel.example", header: "X-Forwarded-For", value: "203.0.113.1",
+			status: http.StatusNoContent},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			method, path := http.MethodGet, "/api/v1/test"
+			if test.name == "webhook route defers to signature validation" {
+				method, path = http.MethodPost, gitHubWebhookPath
+			}
+			request := httptest.NewRequest(method, path, nil)
+			request.Host = test.host
+			if test.header != "" {
+				request.Header.Set(test.header, test.value)
+			}
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, request)
+			if response.Code != test.status {
+				t.Errorf("request returned HTTP %d, want %d", response.Code, test.status)
+			}
+		})
+	}
+	if passed != 2 {
+		t.Fatalf("allowed requests passed through %d times, want 2", passed)
+	}
+}
+
 func TestAuthenticatedGitHubLoginIsAvailableWithoutRepositoryPolicy(t *testing.T) {
 	config := testAuthConfig()
 	user := authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}

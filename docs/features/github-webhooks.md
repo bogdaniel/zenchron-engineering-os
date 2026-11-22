@@ -11,13 +11,15 @@ the run as evidence. Nothing is merged, and a failed check never starts work by 
 sequenceDiagram
   actor Reviewer
   participant GH as GitHub
+  participant Tunnel as Optional tunnel
   participant API as Control plane: POST /api/v1/github/webhook
   participant Deliveries as agent-runs.json.deliveries
   participant Runs as agent-runs.json + events
   participant Policy as Access policy
   participant Worker as zenchron-worker
   Reviewer->>GH: Submit review "Request changes" on the run's pull request
-  GH->>API: pull_request_review (X-Hub-Signature-256, X-GitHub-Delivery)
+  GH->>Tunnel: pull_request_review (X-Hub-Signature-256, X-GitHub-Delivery)
+  Tunnel->>API: Forward only /api/v1/github/webhook
   API->>API: HMAC-SHA256 of the raw body with ZENCHRON_GITHUB_WEBHOOK_SECRET
   API->>Deliveries: Delivery id seen before? then answer "duplicate"
   API->>Runs: Find the run by repository + pull request number
@@ -39,9 +41,10 @@ sequenceDiagram
    endpoint answers 404.
 2. In the repository or the GitHub App, add a webhook to `<control plane origin>/api/v1/github/webhook` with content
    type `application/json`, the same secret, and the events **Pull request reviews** and **Check runs**.
-3. GitHub must be able to reach the control plane. A loopback control plane can be reached through a tunnel, or
-   deliveries can be replayed by hand with a signed request; `POST /api/v1/agent-runs/{id}/sync-reviews` remains the
-   fallback that imports change requests on demand.
+3. GitHub must be able to reach the webhook endpoint. If using a tunnel, forward only
+   `/api/v1/github/webhook`; do not expose the rest of the control plane. A tunnelled control plane needs
+   authentication and an access policy. Deliveries can also be replayed by hand with a signed request;
+   `POST /api/v1/agent-runs/{id}/sync-reviews` remains the fallback that imports change requests on demand.
 
 ## Behavior
 
@@ -63,6 +66,8 @@ sequenceDiagram
   run has replaced are dropped. A conclusion other than success, neutral, or skipped is also written to the run's
   event log. Checks never change the run's status or queue an attempt.
 - The webhook is not a session: it can only be posted to, and it grants no API access.
+- With authentication disabled, non-webhook requests must use a loopback `Host` and cannot carry forwarding headers.
+  The webhook remains protected by its GitHub signature; a tunnel must forward only that route.
 - A queued follow-up is still subject to the checks every claim makes: it is handed only to the run's worker, and
   only while that worker is granted the repository.
 - The run exposes `github_reviews` (`id`, `state`, `author`, `commit_sha`, `submitted_at`, `imported`, `queued`) and

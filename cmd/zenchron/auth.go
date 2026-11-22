@@ -89,6 +89,11 @@ func loadAuthConfig() (*authConfig, bool, error) {
 
 func authHandler(next http.Handler, config *authConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if config == nil && !(r.URL.Path == gitHubWebhookPath && r.Method == http.MethodPost) &&
+			(!validLoopbackRequestHost(r.Host) || hasForwardedClientAddress(r)) {
+			http.Error(w, "untrusted loopback request", http.StatusForbidden)
+			return
+		}
 		if managedSupervisorRequest(r) {
 			next.ServeHTTP(w, r)
 			return
@@ -163,6 +168,17 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func validLoopbackRequestHost(host string) bool {
+	parsed, err := url.Parse("//" + host)
+	return err == nil && parsed.Host == host && parsed.User == nil && parsed.Path == "" && parsed.RawQuery == "" &&
+		parsed.Fragment == "" && isLoopbackHost(parsed.Hostname())
+}
+
+func hasForwardedClientAddress(r *http.Request) bool {
+	return len(r.Header.Values("Forwarded")) > 0 || len(r.Header.Values("X-Forwarded-For")) > 0 ||
+		len(r.Header.Values("CF-Connecting-IP")) > 0
 }
 
 func managedSupervisorRequest(r *http.Request) bool {
