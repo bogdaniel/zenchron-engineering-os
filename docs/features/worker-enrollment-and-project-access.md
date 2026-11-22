@@ -130,7 +130,7 @@ the previous one keeps working for 24 hours, so the worker can be restarted at a
 - A repository grant must equal the remote the worker reports, character for character (`github.com/owner/name`, with
   the host lower-cased and no `.git` suffix; the path keeps its case). A project whose remote is not granted is left
   out of the worker's registration and the heartbeat still returns 200, so a grant that differs only in case or suffix
-  shows up as a missing project, not as an error.
+  shows up in `skipped_projects` with reason `repository_not_granted`, not as an error.
 - The control plane stores only the SHA-256 of each token. With an access policy, the shared `ZENCHRON_WORKER_TOKEN`
   is not accepted at all.
 - A signed-in user sees only projects, runs, and workers for repositories they are granted. A user without an entry
@@ -149,6 +149,10 @@ the previous one keeps working for 24 hours, so the worker can be restarted at a
   token rotation is recorded as `token_changed`; hashes are not written. If the record cannot be written the change is
   undone and the request fails. The last administrator cannot be removed or demoted.
 - A project id belongs to the first worker that registers it; another worker cannot register the same id.
+- A successful heartbeat reports skipped project IDs and either `repository_not_granted` or
+  `project_id_registered_by_another_worker`; it omits `skipped_projects` when there are none and includes no remote
+  names or details about the other worker. The worker logs each skipped project using its local name only when the
+  skipped set changes.
 - If the policy file is missing or invalid, every API request is refused until it is fixed.
 - A control plane on a non-loopback address refuses to start without an access policy, GitHub sign-in, and an HTTPS
   public URL.

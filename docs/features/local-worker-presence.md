@@ -27,7 +27,7 @@ sequenceDiagram
     W->>W: Scan root and direct child folders for .git
     W->>W: Keep paths and remote credentials local; derive opaque IDs and sanitized origin locator
     W->>C: PUT heartbeat with worker and project names, branch, IDs, sanitized origin locator
-    C-->>W: 200 OK
+    C-->>W: 200 with skipped project IDs and reasons, when any
     D->>C: GET /healthz
     C-->>D: {status: ok}
     D->>C: GET /api/v1/workers and /api/v1/projects (every 5s)
@@ -55,7 +55,7 @@ Open <http://127.0.0.1:4173>. The dashboard dev server rebuilds the React app on
 ## API
 
 - `GET /healthz` returns `{"status":"ok"}`.
-- `PUT /api/v1/workers/{id}/heartbeat` upserts a worker name, server timestamp, and complete project snapshot. Worker IDs must be 32 hexadecimal characters; worker names are trimmed and limited to 128 bytes. Project IDs must be 32 hexadecimal characters; project names are trimmed and limited to 255 bytes. The project `git_remote` field is a sanitized host/repository path with URL credentials and query strings removed.
+- `PUT /api/v1/workers/{id}/heartbeat` upserts a worker name, server timestamp, and accepted project snapshot. The response includes `skipped_projects` only when projects were skipped, with their IDs and reason (`repository_not_granted` or `project_id_registered_by_another_worker`). Worker IDs must be 32 hexadecimal characters; worker names are trimmed and limited to 128 bytes. Project IDs must be 32 hexadecimal characters; project names are trimmed and limited to 255 bytes. The project `git_remote` field is a sanitized host/repository path with URL credentials and query strings removed.
 - `GET /api/v1/workers` returns each worker and its current status.
 - `GET /api/v1/projects` returns each discovered checkout, its worker, and online/offline status. A worker is online when its last heartbeat is within 15 seconds.
 - `GET /api/v1/workers/healthz` returns `200` while any worker is online and `503` otherwise; it is used by the focused browser check.

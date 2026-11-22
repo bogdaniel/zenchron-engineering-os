@@ -43,6 +43,7 @@ type workerRecord struct {
 	Providers       []workerapi.ProviderStatus `json:"providers,omitempty"`
 	ProtocolVersion int                        `json:"protocol_version,omitempty"`
 	ReleaseRevision string                     `json:"release_revision,omitempty"`
+	SkippedProjects []workerapi.SkippedProject `json:"skipped_projects,omitempty"`
 }
 
 type projectRecord struct {
@@ -389,7 +390,16 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 	for _, project := range request.Projects {
 		// An enrolled worker registers only the repositories it was approved for, and never a project id
 		// another worker already registered: lookups by project id must name exactly one checkout.
-		if !access.allows(project.Remote) || claimed[project.ID] {
+		if !access.allows(project.Remote) {
+			worker.SkippedProjects = append(worker.SkippedProjects, workerapi.SkippedProject{
+				ID: project.ID, Reason: workerapi.SkippedProjectRepositoryNotGranted,
+			})
+			continue
+		}
+		if claimed[project.ID] {
+			worker.SkippedProjects = append(worker.SkippedProjects, workerapi.SkippedProject{
+				ID: project.ID, Reason: workerapi.SkippedProjectRegisteredElsewhere,
+			})
 			continue
 		}
 		key := id + ":" + project.ID
