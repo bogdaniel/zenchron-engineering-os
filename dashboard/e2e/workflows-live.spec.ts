@@ -15,6 +15,30 @@ async function useLocalSession(page: Page) {
   }));
 }
 
+test('Live workflow keeps saved node positions when loading the canvas', async ({ page }) => {
+  const workflow = {
+    id: 'a'.repeat(32), name: 'Arranged workflow', description: 'Preserve the saved canvas layout.',
+    status: 'draft', version: 1, updated_at: '2026-11-02T10:00:00Z',
+    nodes: [
+      { id: 'trigger', type: 'trigger', position: { x: 100, y: 80 }, data: { label: 'Trigger', description: 'Start' } },
+      { id: 'planner', type: 'planner', position: { x: 420, y: 180 }, data: { label: 'Planner', description: 'Plan' } },
+    ],
+    edges: [{ id: 'start-plan', source: 'trigger', target: 'planner', label: '' }],
+  };
+  await page.route('**/api/v1/**', (route) => route.fulfill({ json: [] }));
+  await page.route('**/healthz', (route) => route.fulfill({ json: { status: 'ok' } }));
+  await page.route('**/api/v1/workflows', (route) => route.fulfill({ json: [workflow] }));
+  await useLocalSession(page);
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/?mode=live#workflows');
+  for (const [id, x, y] of [['trigger', 100, 80], ['planner', 420, 180]] as const) {
+    await expect.poll(() => page.locator(`.react-flow__node[data-id="${id}"]`).evaluate((node) => {
+      const match = (node as HTMLElement).style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+      return match ? [Number(match[1]), Number(match[2])] : null;
+    })).toEqual([x, y]);
+  }
+});
+
 test('workflow graph can be edited and saved to the control plane', async ({ page }) => {
   await page.addInitScript(() => {
     if (!crypto.randomUUID) Object.defineProperty(Crypto.prototype, 'randomUUID', {

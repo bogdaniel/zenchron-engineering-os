@@ -9,6 +9,7 @@ mode rules.
 The control plane stores versioned workflow definitions and validates which nodes can compile into the existing
 objective plan and WorkGraph. The canvas does not run a separate workflow engine: Objective Workspace compiles a saved
 workflow into the same plan that is inspected, approved, and executed by WorkGraph.
+Live workflows retain saved node positions on load; graphs whose nodes are all at the origin still use ELK auto-layout.
 
 ## Feature diagram
 
@@ -24,6 +25,7 @@ flowchart LR
     Hook -->|"POST /api/v1/workflows/{id}/validate"| API
     API --> Validate[Validate node types and edge references]
     Validate --> Store[(Versioned JSON snapshot)]
+    Store -->|Non-zero saved node positions| Canvas
     Page --> Menu["Workflow menu (version badge)<br/>switch · New workflow · version history · Auto layout"]
     Page --> Palette["WorkflowPalette<br/>search · categories · click or drag to add"]
     Palette -->|"@dnd-kit drop centred at cursor"| Canvas[React Flow canvas]
@@ -48,6 +50,7 @@ flowchart LR
   Preview, and the inspector. Desktop reference size is 1672×941; the editor is desktop and tablet only.
 - The workflow menu opens from the version badge. It lists every workflow (the open one is marked), then "New
   workflow…", "Open version history", and "Auto layout".
+- A Live graph with at least one non-zero saved node position keeps its layout; an all-origin graph is auto-laid out.
 - The palette groups all node types the control plane accepts. Search filters names and descriptions; the All, Agents,
   Actions, Control, and Integrations chips narrow the list; group headings collapse, and Integrations starts
   collapsed. A component is added by clicking it or by dragging its handle onto the canvas, where it is centred under
