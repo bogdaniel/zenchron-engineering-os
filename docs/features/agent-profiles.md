@@ -47,6 +47,7 @@ operating contract. Tool permissions are passed separately and cannot be expande
 
 ```mermaid
 flowchart LR
+    Link["Profile deep link"] -->|Select profile, then consume profile parameter| Dashboard
     User[Engineering user] --> Dashboard[Agents workspace]
     Dashboard[Agents workspace<br/>Overview, Prompts, Tools, Run History] -->|GET, POST, PUT /api/v1/agents| API[Go control plane]
     Dashboard -->|GET /api/v1/workers · runtime readiness| API

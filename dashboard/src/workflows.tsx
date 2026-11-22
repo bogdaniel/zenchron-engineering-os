@@ -23,6 +23,7 @@ import { WorkflowPhoneRunCards, WorkflowRunPreview } from './WorkflowRun';
 import { WorkflowSectionTabs, WorkflowSectionView } from './WorkflowSections';
 import type { WorkflowSection } from './WorkflowSections';
 import { useMockWorkflows } from './workflow-preview-data';
+import { consumeQueryParams } from './consumeQueryParams';
 import { loadAgents, loadPersonas } from './agentsData';
 import type { Agent, AgentPersona } from './agentsData';
 import {
@@ -145,6 +146,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   const [selectedWorkflowId, setSelectedWorkflowId] = useState(() => new URLSearchParams(window.location.search).get('workflow') ?? '');
+  useEffect(() => { consumeQueryParams('workflow'); }, []);
   const [selectedId, setSelectedId] = useState('');
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const loadedWorkflowId = useRef('');

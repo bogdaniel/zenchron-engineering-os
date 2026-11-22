@@ -75,7 +75,7 @@ test('Action Required omits an empty queue and reports an unavailable queue hone
   await expect(queue.getByRole('button', { name: 'Retry' })).toBeVisible();
 });
 
-test('approving a replacement plan clears the stale Action Required graph selection', async ({ page }) => {
+test('Action Required deep links are consumed without losing the selected graph or decision', async ({ page }) => {
   await useLiveSession(page, [graph(cancelledGraphID, 'api-cancelled', 'Old graph decision', '2026-11-02T00:00:00Z', 'cancelled')]);
   const plan = { objective_id: objectiveID, revision: 2, status: 'proposed', project_id: 'repository', summary: 'Replacement plan',
     max_parallel: 1, units: [], problems: [], created_at: '2026-11-03T00:00:00Z' };
@@ -90,6 +90,7 @@ test('approving a replacement plan clears the stale Action Required graph select
   });
   await page.goto(`/?mode=live&objective=${objectiveID}&tab=plan&graph_id=${cancelledGraphID}&decision=decision-api-cancelled#objectives`);
   await expect(page.getByRole('form', { name: 'Decision for api-cancelled' })).toContainText('Old graph decision');
+  await expect(page).not.toHaveURL(/objective=|tab=|graph_id=|decision=/);
   await page.getByRole('button', { name: 'Approve plan and start' }).click();
   await expect(page).toHaveURL(new RegExp(`objective=${objectiveID}.*tab=plan`));
   await expect(page).not.toHaveURL(/graph_id=|decision=/);

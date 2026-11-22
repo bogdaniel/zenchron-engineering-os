@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Select } from '@mantine/core';
 import { graphOfObjective, useLiveOrchestration } from './orchestration';
 import type { ObjectivePlan, OrchestrationSource } from './orchestration';
@@ -7,6 +7,7 @@ import { useMockOrchestration } from './orchestration-preview-data';
 import { StateBadge, UnitFacts, WorkGraphView } from './WorkGraphView';
 import { ObjectiveDeliveryReport } from './ObjectiveDeliveryReport';
 import { livePageHref } from './livePageHref';
+import { consumeQueryParams } from './consumeQueryParams';
 
 function profileReadiness(profile: OrchestrationSource['options']['agents'][number], source: OrchestrationSource,
   projectID: string) {
@@ -37,12 +38,6 @@ function PlanRevision({ plan, latest, source, live }: {
     setError('');
     try {
       await source.approve?.(plan.revision);
-      if (live && new URLSearchParams(window.location.search).has('graph_id')) {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('graph_id');
-        url.searchParams.delete('decision');
-        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not approve the plan.');
     } finally {
@@ -147,7 +142,10 @@ export function ObjectivePlanPanel({ objectiveID, productID, sampleData }: {
   const mock = useMockOrchestration(objectiveID);
   const live = useLiveOrchestration(!sampleData, objectiveID, productID);
   const source = sampleData ? mock : live;
-  const requestedGraphID = new URLSearchParams(window.location.search).get('graph_id');
+  const [requestedGraphID] = useState(() => new URLSearchParams(window.location.search).get('graph_id'));
+  useEffect(() => {
+    if (!sampleData) consumeQueryParams('workflow', 'project', 'graph_id');
+  }, [sampleData]);
   const graph = source.graphs.find((item) => item.id === requestedGraphID && item.objective_id === objectiveID)
     ?? graphOfObjective(source.graphs, objectiveID);
   if (source.failed || source.plansFailed) return <div className="work-panel" role="tabpanel">

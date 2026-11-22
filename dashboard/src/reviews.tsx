@@ -16,6 +16,7 @@ import { ReviewDetail } from './ReviewDetail';
 import { ReviewQueue } from './ReviewQueue';
 import { ReviewSummary } from './ReviewSummary';
 import { loadDiff, summarizeDiff, useLivePullRequestDiff, useLiveReviews } from './reviewsView';
+import { consumeQueryParams } from './consumeQueryParams';
 import type { DetailTab, ReviewSection } from './reviewsView';
 import './reviews.css';
 import './reviews-detail.css';
@@ -54,6 +55,7 @@ export function ReviewsPage({ runs, runsLoading = false, runsFailed = false, pro
   const live = useLiveReviews(!designPreview, projects, { items: runs, loading: runsLoading, failed: runsFailed });
   const source = designPreview ? mock : live;
   const requestedRunID = new URLSearchParams(window.location.search).get('run');
+  useEffect(() => { consumeQueryParams('run'); }, []);
   const [section, setSection] = useState<ReviewSection>(requestedRunID ? 'local-branches' : 'pull-requests');
   const [activeTab, setActiveTab] = useState<string>(requestedRunID ? 'local-branches' : 'pull-requests');
   const [detailTab, setDetailTab] = useState<DetailTab>(requestedRunID ? 'evidence' : 'code-changes');

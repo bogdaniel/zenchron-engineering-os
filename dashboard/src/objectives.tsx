@@ -15,6 +15,7 @@ import { ObjectiveDetail, ObjectiveMilestones, objectiveDisplayID, objectiveProd
   objectiveStatusOptions } from './ObjectiveDetail';
 import type { ObjectiveDetailTab } from './ObjectiveDetail';
 import { useMockObjectives } from './objective-preview';
+import { consumeQueryParams } from './consumeQueryParams';
 import { formatObjectiveDate, objectiveFormErrors, objectiveInputSchema, useLiveObjectives } from './objectivesView';
 import type { Objective, ObjectiveInput } from './objectivesView';
 import './objectives.css';
@@ -98,6 +99,8 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
   const [detailTab, setDetailTab] = useState<ObjectiveDetailTab>(() =>
     new URLSearchParams(window.location.search).get('tab') === 'plan' ? 'plan' : 'overview');
   const [selectedID, setSelectedID] = useState<string | null>(() => new URLSearchParams(window.location.search).get('objective'));
+  useEffect(() => { consumeQueryParams('objective'); }, [selectedID]);
+  useEffect(() => { consumeQueryParams('tab'); }, [detailTab]);
   const selectedIDRef = useRef(selectedID);
   selectedIDRef.current = selectedID;
   const [actionNotice, setActionNotice] = useState('');
@@ -129,6 +132,14 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     url.searchParams.delete('create');
     url.searchParams.delete('product_id');
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function closeCreateDialog() {
+    setCreateOpen(false);
+    createForm.reset();
+    createForm.setFieldValue('product_id', '');
+    clearWorkspaceCreateContext();
+    consumeQueryParams('workflow', 'project');
   }
 
   function selectObjective(item: Objective) {
@@ -398,12 +409,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
         </div>
       </div>
 
-      <Modal opened={createOpen} onClose={() => {
-        setCreateOpen(false);
-        createForm.reset();
-        createForm.setFieldValue('product_id', '');
-        clearWorkspaceCreateContext();
-      }} title="New objective" centered className="objective-modal">
+      <Modal opened={createOpen} onClose={closeCreateDialog} title="New objective" centered className="objective-modal">
         <form onSubmit={createForm.onSubmit((values) => void createObjective(values))}>
           <TextInput label="Objective title" placeholder="e.g. Improve review velocity" required {...createForm.getInputProps('title')} />
           <Textarea label="Description" placeholder="Describe the outcome and why it matters" minRows={3} {...createForm.getInputProps('description')} />
@@ -415,7 +421,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
           {source.productsFailed && <Text className="form-error" role="alert">Product choices are unavailable. You can create this objective without a product.</Text>}
           <TextInput label="Due date" type="date" {...createForm.getInputProps('due_date')} />
           {submitError && <Text className="form-error" role="alert">{submitError}</Text>}
-          <div className="objective-form-actions"><Button variant="subtle" type="button" onClick={() => setCreateOpen(false)}>Cancel</Button><Button className="new-objective-button" type="submit" loading={creating}>Create objective</Button></div>
+          <div className="objective-form-actions"><Button variant="subtle" type="button" onClick={closeCreateDialog}>Cancel</Button><Button className="new-objective-button" type="submit" loading={creating}>Create objective</Button></div>
         </form>
       </Modal>
     </div>
