@@ -12,8 +12,12 @@ test('Live empty state creates, edits, and reloads a workflow through an empty c
   }));
   await page.route('**/api/v1/workflows**', (route) => {
     const apiURL = new URL(route.request().url());
+    apiURL.hostname = '127.0.0.1';
     apiURL.port = '8083';
-    return route.continue({ url: apiURL.toString() });
+    return route.fetch({
+      url: apiURL.toString(),
+      headers: { ...route.request().headers(), host: apiURL.host, origin: apiURL.origin },
+    }).then((response) => route.fulfill({ response }));
   });
   await page.setViewportSize({ width: 1672, height: 941 });
   const initialList = page.waitForResponse((response) => response.url().endsWith('/api/v1/workflows') &&

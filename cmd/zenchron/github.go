@@ -94,6 +94,7 @@ func (client gitHubClient) request(ctx context.Context, path string, target any)
 }
 
 var errPullRequestHeadChanged = errors.New("pull request head changed while the diff was being read")
+var errPullRequestDiffTooLarge = errors.New("pull request diff exceeds the size limit")
 
 func (client gitHubClient) pullRequestDiff(ctx context.Context, owner, repository string, number int, expectedHead string) (string, error) {
 	current, err := client.pullRequest(ctx, owner, repository, number)
@@ -106,6 +107,9 @@ func (client gitHubClient) pullRequestDiff(ctx context.Context, owner, repositor
 	path := "/repos/" + owner + "/" + repository + "/pulls/" + strconv.Itoa(number)
 	body, err := client.requestBytes(ctx, http.MethodGet, path, "application/vnd.github.diff", nil, nil)
 	if err != nil {
+		if errors.Is(err, errGitHubResponseTooLarge) {
+			return "", errPullRequestDiffTooLarge
+		}
 		return "", err
 	}
 	latest, err := client.pullRequest(ctx, owner, repository, number)
@@ -305,6 +309,11 @@ func (registry *workerRegistry) getGitHubPullRequestDiff(w http.ResponseWriter, 
 	if err != nil {
 		if errors.Is(err, errPullRequestHeadChanged) {
 			http.Error(w, "pull request head changed; refresh and inspect the current revision", http.StatusConflict)
+			return
+		}
+		if errors.Is(err, errPullRequestDiffTooLarge) {
+			http.Error(w, fmt.Sprintf("pull request diff exceeds the %d-byte limit", maxGitHubResponseSize),
+				http.StatusUnprocessableEntity)
 			return
 		}
 		http.Error(w, "GitHub pull request diff is unavailable", http.StatusBadGateway)

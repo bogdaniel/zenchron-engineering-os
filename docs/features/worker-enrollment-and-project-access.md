@@ -23,11 +23,17 @@ sequenceDiagram
   Admin->>API: PUT /api/v1/admin/workers/{id} {token_sha256, owner, repositories}
   API->>Policy: Replace the file atomically
   API->>Audit: Append {time, actor, action, target, before, after}
+  alt audit append fails
+    API->>Audit: Truncate to the previous length
+    API->>Policy: Restore the previous file atomically
+    API-->>Admin: 500; no change is committed
+  else audit append succeeds
+    API-->>Admin: 200; change is audited
+  end
   Admin->>API: PUT /api/v1/admin/users/{login} {repositories, admin}
   Worker->>API: PUT /api/v1/workers/{id}/heartbeat with Bearer token
   API->>Policy: Token hash must match the grant for exactly this id
   API->>API: Register only projects whose repository is granted to this worker
-  API->>API: Reserve project ids only while their existing registrations are online
   Developer->>API: POST /api/v1/agent-runs (session cookie)
   API->>Policy: User may touch the repository and may dispatch to this worker
   Worker->>API: POST /api/v1/workers/{id}/agent-runs/claim
@@ -131,7 +137,7 @@ the previous one keeps working for 24 hours, so the worker can be restarted at a
 - A repository grant must equal the remote the worker reports, character for character (`github.com/owner/name`, with
   the host lower-cased and no `.git` suffix; the path keeps its case). A project whose remote is not granted is left
   out of the worker's registration and the heartbeat still returns 200, so a grant that differs only in case or suffix
-  shows up as a missing project, not as an error.
+  shows up in `skipped_projects` with reason `repository_not_granted`, not as an error.
 - The control plane stores only the SHA-256 of each token. With an access policy, the shared `ZENCHRON_WORKER_TOKEN`
   is not accepted at all.
 - A signed-in user sees only projects, runs, and workers for repositories they are granted. A user without an entry
@@ -147,10 +153,16 @@ the previous one keeps working for 24 hours, so the worker can be restarted at a
   when the review arrives. See [GitHub webhooks](github-webhooks.md).
 - Every applied policy change appends one line to `<access file>.audit.jsonl` with the time, the administrator, the
   action (`user.set`, `user.delete`, `worker.set`, `worker.delete`), the target, and the state before and after. A
-  token rotation is recorded as `token_changed`; hashes are not written. If the record cannot be written the change is
-  undone and the request fails. The last administrator cannot be removed or demoted.
+  token rotation is recorded as `token_changed`; hashes are not written. If the record cannot be written, the appender
+  restores the log to its prior length, the policy is restored atomically, and the request fails. A storage failure
+  during rollback is logged. Audit reads wait until a change finishes so they cannot observe a partial record. The last
+  administrator cannot be removed or demoted.
 - A project id belongs to the first worker that registers it while online. When that registration goes offline, the
   next authorized worker can reclaim the id; the old offline entry remains visible until that worker heartbeats again.
+- A successful heartbeat reports skipped project IDs and either `repository_not_granted` or
+  `project_id_registered_by_another_worker`; it omits `skipped_projects` when there are none and includes no remote
+  names or details about the other worker. The worker logs each skipped project using its local name only when the
+  skipped set changes.
 - If the policy file is missing or invalid, every API request is refused until it is fixed.
 - A control plane on a non-loopback address refuses to start without an access policy, GitHub sign-in, and an HTTPS
   public URL.
@@ -178,7 +190,7 @@ flowchart TB
   Worker[zenchron-worker] -->|"claims the worktree: lock on <worktree>.owner"| Owner[Worktree owner]
   Owner -->|"starts under"| Guard["zenchron-worker guard<br/>own process group"]
   Guard -->|"allowlisted environment only"| CLI[Codex CLI or Claude Code]
-  CLI -->|"provider sandbox: filesystem profile, no network"| Tool[Tool commands, tests]
+  CLI -->|"project/local settings excluded; provider sandbox: filesystem profile, no network"| Tool[Tool commands, tests]
   Guard -->|"polls the process table, writes <worktree>.owner.processes"| Record[(Process record)]
   Worker -. "dies" .-> Guard
   Guard -->|"SIGTERM, then SIGKILL to every recorded descendant"| CLI
@@ -205,7 +217,7 @@ re-allowed inside them. Network access is off for model-run commands.
 
 | | Codex CLI | Claude Code |
 |---|---|---|
-| File reads and writes by the agent itself | Through sandboxed commands only | File tools are limited to the worktree by Claude Code's permission layer; outside paths are refused |
+| Settings and file access | Uses the worker's filesystem profile | Loads operator user settings only; project and local settings in the agent-writable worktree are excluded. File tools are limited to the worktree by Claude Code's permission layer; outside paths are refused |
 | Commands (tests, builds) | Always sandboxed by Codex with the worker's permission profile | Only for profiles with `code.write` and `tests.run`, inside Claude Code's sandbox with `failIfUnavailable`, so a missing sandbox stops the run instead of running the shell unconfined |
 | How the boundary is established on a machine | At worker start a self-test runs a command under `codex sandbox` with the run's profile; Codex is reported not ready (`reason: sandbox self-test failed`) unless a denied file is unreadable, an outside write fails, and a workspace write succeeds | The shell is offered only where the backend exists: Seatbelt on macOS, bubblewrap and socat on Linux; otherwise the provider reports `sandboxed_commands: false` and edits files without running anything |
 | macOS (tested: Codex 0.167.0, Claude Code 2.1.322) | Verified by the self-test, by `codex sandbox` tests, and by a live adversarial run | Verified by a live adversarial run for both the file-tool and the sandboxed-shell profile |
@@ -241,8 +253,9 @@ Not covered, and blocking multi-organization or untrusted deployment:
 - One control plane serves one organization. There are no organizations or teams, and no self-service enrollment.
 - The policy is one file changed by one control-plane instance. Hand edits are not audited, and the audit log is a
   local file an operator with host access can alter.
-- User sessions are signed cookies valid for eight hours. Removing a user from the policy ends them; there is no list
-  of active sessions and no single-session revocation.
+- User sessions are signed cookies valid for eight hours. Removing a user from the policy ends them; logout persists a
+  per-login cutoff that revokes all earlier sessions, but there is no list of active sessions or single-session
+  revocation.
 - Worker tokens are bearer secrets; there is no mutual TLS and no automatic rotation.
 - Verification runs unsandboxed, as described above.
 - Descendant processes are found by polling. A process that detaches from an already finished parent between two
@@ -252,17 +265,15 @@ Not covered, and blocking multi-organization or untrusted deployment:
 
 ## Verification
 
-- `go test ./cmd/zenchron -run 'TestAdmin|TestWorkerToken|TestProductsAndObjectives|TestProfilesAndWorkflows|TestWorkerIsStopped' -count=1`
+- `go test ./cmd/zenchron -run 'TestAdmin|TestAuditAppendFailures|TestWorkerToken|TestProductsAndObjectives|TestProfilesAndWorkflows|TestWorkerIsStopped' -count=1`
   covers the admin API (refusals for developers and worker tokens, grants, removal, the last administrator, audit
-  records without token hashes), token rotation overlap, immediate revocation, an expired previous token, another
-  worker being unaffected, product and objective scoping with negative cases, profile and workflow ownership, and a
-  worker losing its grant mid-run.
+  records without token hashes, failed append rollback), token rotation overlap, immediate revocation, an expired
+  previous token, another worker being unaffected, product and objective scoping with negative cases, profile and
+  workflow ownership, and a worker losing its grant mid-run.
 - `go test ./cmd/zenchron -run 'TestWorkerTokenIsBound|TestWorkerRegistersOnlyApproved|TestRunsAreScoped|TestUsersDispatchOnly|TestRepositoryAccessAlone|TestWorkerCannot|TestRevokingAGrant|TestAccessFileRejects|TestRunRejectsRemoteListener' -count=1`
   covers impersonation, the shared token, unapproved repositories, cross-user reads and writes on runs and projects,
   cross-worker claims and results, personal versus shared workers, revocation without restart, an invalid policy
   denying everything, malformed grants, and the non-loopback startup requirement.
-- `go test ./cmd/zenchron -run 'TestWorkerCanRegisterAProjectIDAfterPreviousWorkerWentOffline' -count=1`
-  confirms an authorized worker can reclaim an ID after its previous registration becomes stale.
 - `go test ./cmd/zenchron-worker -run 'TestGuard|TestNextAttempt|TestAttemptFailsClosed|TestRecordedProcess|TestRunLeaves|TestGuardedRun' -count=1`
   kills a stand-in worker and its guard and checks that provider processes, including one that left the process group
   and dropped the lock, are stopped by the guard or by the next attempt, that an attempt fails closed while something

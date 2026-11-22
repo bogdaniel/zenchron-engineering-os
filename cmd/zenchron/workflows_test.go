@@ -11,7 +11,7 @@ import (
 func TestWorkflowCanBeReadAndSaved(t *testing.T) {
 	server := newMux()
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workflows", nil))
+	server.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/workflows", nil))
 	var workflows []workflow
 	if err := json.NewDecoder(response.Body).Decode(&workflows); err != nil {
 		t.Fatalf("decode workflows: %v", err)
@@ -44,7 +44,7 @@ func TestWorkflowCanBeReadAndSaved(t *testing.T) {
 	}
 	response = httptest.NewRecorder()
 	path := "/api/v1/workflows/" + item.ID
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut, path, strings.NewReader(string(body))))
+	server.ServeHTTP(response, jsonRequest(http.MethodPut, path, strings.NewReader(string(body))))
 	var updated workflow
 	if err := json.NewDecoder(response.Body).Decode(&updated); err != nil {
 		t.Fatalf("decode updated workflow: %v", err)
@@ -56,7 +56,7 @@ func TestWorkflowCanBeReadAndSaved(t *testing.T) {
 
 func TestWorkflowCreateStartsWithValidGraph(t *testing.T) {
 	server := newMux()
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/workflows", strings.NewReader(
+	request := jsonRequest(http.MethodPost, "/api/v1/workflows", strings.NewReader(
 		`{"name":"Build and test","description":"Validate changes"}`,
 	))
 	response := httptest.NewRecorder()
@@ -80,7 +80,7 @@ func TestWorkflowRejectsBrokenGraphAndUnknownFields(t *testing.T) {
     }`,
 		`{"name":"Broken","description":"","status":"draft","nodes":[],"edges":[],"extra":true}`,
 	} {
-		request := httptest.NewRequest(http.MethodPut, "/api/v1/workflows/pr-review-release", strings.NewReader(body))
+		request := jsonRequest(http.MethodPut, "/api/v1/workflows/pr-review-release", strings.NewReader(body))
 		response := httptest.NewRecorder()
 		server.ServeHTTP(response, request)
 		if response.Code != http.StatusBadRequest {

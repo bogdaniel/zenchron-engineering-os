@@ -126,7 +126,7 @@ func (harness *deliveryHarness) call(method, path, body string) *httptest.Respon
 }
 
 func (harness *deliveryHarness) callFrom(remoteAddr, method, path, body string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	request := jsonRequest(method, path, strings.NewReader(body))
 	request.RemoteAddr = remoteAddr
 	response := httptest.NewRecorder()
 	harness.server.ServeHTTP(response, request)

@@ -33,6 +33,7 @@ type EvidenceRun = z.infer<typeof evidenceRunSchema>;
 const eventsSchema = z.array(z.object({
   sequence: z.number(), attempt: z.number(), at: z.string(), kind: z.string(), message: z.string(),
 }));
+const syncReviewsResultSchema = z.object({ imported: z.number().int().nonnegative() });
 const pullRequestSchema = z.object({
   state: z.string(), merged: z.boolean(),
   review_stage: z.enum(['feedback_not_addressed', 'remediation_in_progress', 'awaiting_human_rereview', 'fresh_approval_received']).optional(),
@@ -139,10 +140,10 @@ export function RunEvidence({ run }: { run: EvidenceRun }) {
     mutationFn: async (action: 'sync-reviews' | 'publish') => {
       const response = await fetch(`/api/v1/agent-runs/${run.id}/${action}`, { method: 'POST' });
       if (!response.ok) throw new Error((await response.text()).trim() || `Request failed (${response.status})`);
-      const result = await response.json() as { imported?: number };
-      return action === 'publish' ? 'Pull request published.'
-        : result.imported ? `Imported ${result.imported} change request${result.imported === 1 ? '' : 's'} from GitHub.`
-          : 'No new change requests on GitHub.';
+      if (action === 'publish') return 'Pull request published.';
+      const result = syncReviewsResultSchema.parse(await response.json());
+      return result.imported ? `Imported ${result.imported} change request${result.imported === 1 ? '' : 's'} from GitHub.`
+        : 'No new change requests on GitHub.';
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent-runs'] }),
   });
