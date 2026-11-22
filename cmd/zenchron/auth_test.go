@@ -42,6 +42,7 @@ func TestAuthSessionReportsGitHubWriteCredentialConfiguration(t *testing.T) {
 	t.Setenv("ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", "")
 	server := authHandler(newMux(), nil)
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	request.Host = "127.0.0.1"
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 	var session map[string]any
