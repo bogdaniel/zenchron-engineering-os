@@ -56,7 +56,7 @@ test('Objectives in Mock renders the supplied screen and keeps create and edit l
   });
   await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 401, body: 'authentication required' }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
 
   await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
   await expect(page.locator('.objective-filters .mantine-Select-section[data-position="left"]')).toHaveCount(4);
@@ -271,7 +271,7 @@ test('Objectives in Mock renders the supplied screen and keeps create and edit l
 test('Objectives preview deep link selects the referenced objective', async ({ page }) => {
   await page.route('**/api/v1/**', (route) => route.fulfill({ status: 401, body: 'preview fixture expected' }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto(`http://127.0.0.1:${dashboardPort}/?objective=OBJ-1492#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/?objective=OBJ-1492#objectives`);
   await expect(page.locator('.objective-detail-panel')).toContainText('Improve review velocity');
   await expect(page.locator('.objective-grid-wrap [role="row"].ag-row-selected')).toContainText('Improve review velocity');
 });
@@ -284,7 +284,7 @@ test('Objectives mock layout stays within desktop, tablet, and mobile viewports'
   });
   for (const [width, height] of [[1668, 750], [1440, 900], [1280, 800], [768, 1024], [390, 844]]) {
     await page.setViewportSize({ width, height });
-    await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
+    await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
     await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Objective' })).toBeVisible();
     await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(6);
@@ -355,7 +355,7 @@ test('empty objective workspace shows a first-objective prompt without stale sel
     status: 200, contentType: 'application/json', body: '[]',
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
 
   await expect(page.locator('.ag-overlay-no-rows-center')).toHaveText('No objectives yet. Create one to begin.');
   await expect(page.locator('.objective-grid-toolbar')).not.toContainText('Select an objective to inspect details');
@@ -371,7 +371,7 @@ test('filtered objective table distinguishes no matches from an empty workspace'
     status: 200, contentType: 'application/json', body: '[]',
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
   await page.getByRole('textbox', { name: 'Search objectives' }).fill('missing objective');
 
   await expect(page.locator('.ag-overlay-no-rows-center')).toHaveText('No objectives match these filters.');
@@ -389,7 +389,7 @@ test('objective quarter filter and table, cards, and Kanban views share records'
   }));
   await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
 
   await expect(page.getByRole('button', { name: 'Table', pressed: true })).toBeVisible();
   const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
@@ -475,7 +475,7 @@ test('objective plan options stay available while WorkGraph history is loading',
     await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
   });
   const workGraphRequest = page.waitForRequest('**/api/v1/work-graphs');
-  await page.goto(`http://127.0.0.1:${dashboardPort}/?objective=${objectives[0].id}&tab=plan#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/?objective=${objectives[0].id}&tab=plan#objectives`);
   await workGraphRequest;
 
   await expect(page.getByRole('combobox', { name: 'Repository checkout' })).toBeVisible();
@@ -520,7 +520,7 @@ test('objective create and edit submit the expected API payloads', async ({ page
   await page.route('**/api/v1/products', (route) => route.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify([{ id: productID, name: 'Core Product', description: '', repository_ids: [], created_at: '', updated_at: '' }]) }));
   await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
-  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
 
   await page.getByRole('button', { name: 'New Objective' }).click();
   await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability testing');
@@ -584,7 +584,7 @@ test('a new objective without a due date stays listed under the initial Live fil
   });
   await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
 
   const objectiveRows = page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])');
   await expect(objectiveRows).toHaveCount(1);
@@ -611,7 +611,7 @@ test(`switching Objectives from Mock to Live resets the due-date filter (${viewp
       ...objectives[3], product: 'Unassigned',
     }]),
   }));
-  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
 
   const dueQuarter = page.getByRole('combobox', { name: 'Filter by due quarter' });
   await expect(dueQuarter).toHaveValue('This Quarter');
@@ -670,7 +670,7 @@ test('a late grid selection report does not replace the objective being edited',
     due.forEach((report) => report());
     return due.length;
   }, count);
-  await page.goto(`http://127.0.0.1:${dashboardPort}/?project=${projectID}&workflow=${workflowID}&mode=live#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/?project=${projectID}&workflow=${workflowID}&mode=live#objectives`);
 
   // Deliver reports one at a time until the grid has selected its first row; the report of that selection stays queued.
   const selectedRow = page.locator('.objective-grid-wrap [role="row"].ag-row-selected');
@@ -710,7 +710,7 @@ test('Objectives in Live uses the approved layout with honest unavailable parts'
   await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
   await page.setViewportSize({ width: 1672, height: 941 });
   // A deployed host is always Live, whatever the address asks for.
-  await page.goto(`http://127.0.0.1:${dashboardPort}/?mode=mock#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/?mode=mock#objectives`);
 
   const metrics = page.locator('.objective-metrics-preview .objective-metric');
   await expect(metrics).toHaveCount(6);
@@ -782,7 +782,7 @@ test('Objectives in Live reports failed loads and saves without showing fixtures
     : route.fulfill({ status: listStatus, contentType: 'application/json', body: JSON.stringify(listStatus === 200 ? objectives : {}) }));
   await page.clock.install({ time: new Date('2026-11-04T12:00:00Z') });
   await page.setViewportSize({ width: 1672, height: 941 });
-  await page.goto(`http://127.0.0.1:${dashboardPort}/#objectives`);
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
 
   await expect(page.locator('.objective-grid-wrap').getByRole('alert')).toContainText('Could not load objectives.');
   await expect(page.locator('.objective-metric').nth(2)).toContainText('—');
