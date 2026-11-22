@@ -13,7 +13,7 @@ func TestAgentProfilesCreateAndUpdate(t *testing.T) {
 	body := `{"name":"Code Reviewer","description":"Review diffs","provider":"custom","model":"review-v1",` +
 		`"system_prompt":"Review safely","goal_prompt":"Find defects","tools":["git.read","code.write"]}`
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(body)))
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(body)))
 	var created agentProfile
 	if err := json.NewDecoder(response.Body).Decode(&created); err != nil || response.Code != http.StatusCreated {
 		t.Fatalf("create agent profile = %#v, decode error = %v, HTTP %d", created, err, response.Code)
@@ -31,7 +31,7 @@ func TestAgentProfilesCreateAndUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut,
+	server.ServeHTTP(response, jsonRequest(http.MethodPut,
 		"/api/v1/agents/"+created.ID, strings.NewReader(string(bodyBytes))))
 	var updated agentProfile
 	if err := json.NewDecoder(response.Body).Decode(&updated); err != nil || response.Code != http.StatusOK {
@@ -51,9 +51,18 @@ func TestAgentProfilesRejectUnsupportedOrInvalidFields(t *testing.T) {
 		`{"name":"Unexpected field","provider":"custom","model":"v1","unknown":true}`,
 	} {
 		response := httptest.NewRecorder()
-		server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(body)))
+		server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(body)))
 		if response.Code != http.StatusBadRequest {
 			t.Errorf("create with body %s returned HTTP %d, want %d", body, response.Code, http.StatusBadRequest)
 		}
+	}
+}
+
+func TestAgentProfileCreationRequiresApplicationJSON(t *testing.T) {
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(`{"name":"No content type"}`))
+	newMux().ServeHTTP(response, request)
+	if response.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("create agent profile without JSON content type returned HTTP %d, want %d", response.Code, http.StatusUnsupportedMediaType)
 	}
 }

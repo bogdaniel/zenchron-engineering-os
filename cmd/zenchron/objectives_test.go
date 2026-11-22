@@ -10,7 +10,7 @@ import (
 
 func TestObjectiveCreateListAndComplete(t *testing.T) {
 	server := newMux()
-	create := httptest.NewRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
+	create := jsonRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
 		`{"title":"Ship review workflow","owner":"Alex","product":"Core Product","due_date":"2026-12-15"}`,
 	))
 	response := httptest.NewRecorder()
@@ -24,7 +24,7 @@ func TestObjectiveCreateListAndComplete(t *testing.T) {
 	}
 
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/objectives", nil))
+	server.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/objectives", nil))
 	var listed []objective
 	if err := json.NewDecoder(response.Body).Decode(&listed); err != nil {
 		t.Fatalf("decode objectives: %v", err)
@@ -34,7 +34,7 @@ func TestObjectiveCreateListAndComplete(t *testing.T) {
 	}
 
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPatch,
+	server.ServeHTTP(response, jsonRequest(http.MethodPatch,
 		"/api/v1/objectives/"+created.ID, strings.NewReader(`{"status":"completed"}`)))
 	var updated objective
 	if err := json.NewDecoder(response.Body).Decode(&updated); err != nil {
@@ -48,7 +48,7 @@ func TestObjectiveCreateListAndComplete(t *testing.T) {
 func TestObjectiveUpdateEditableFields(t *testing.T) {
 	server := newMux()
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
 		`{"title":"Ship review workflow","description":"Draft","owner":"Alex","due_date":"2026-12-15"}`,
 	)))
 	var created objective
@@ -57,7 +57,7 @@ func TestObjectiveUpdateEditableFields(t *testing.T) {
 	}
 
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPatch, "/api/v1/objectives/"+created.ID,
+	server.ServeHTTP(response, jsonRequest(http.MethodPatch, "/api/v1/objectives/"+created.ID,
 		strings.NewReader(`{"title":"Ship review v2","description":"Final plan","owner":"Priya","due_date":"2027-01-20"}`)))
 	var updated objective
 	if err := json.NewDecoder(response.Body).Decode(&updated); err != nil || response.Code != http.StatusOK {
@@ -71,7 +71,7 @@ func TestObjectiveUpdateEditableFields(t *testing.T) {
 func TestObjectivesLinkProductsByID(t *testing.T) {
 	server := newMux()
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
 		`{"name":"Core Product","repository_ids":[]}`,
 	)))
 	var product product
@@ -80,7 +80,7 @@ func TestObjectivesLinkProductsByID(t *testing.T) {
 	}
 
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
 		`{"title":"Ship product objective","product_id":"`+product.ID+`"}`,
 	)))
 	var created objective
@@ -92,14 +92,14 @@ func TestObjectivesLinkProductsByID(t *testing.T) {
 	}
 
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/v1/products/"+product.ID, strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPut, "/api/v1/products/"+product.ID, strings.NewReader(
 		`{"name":"Nova Platform","repository_ids":[]}`,
 	)))
 	if response.Code != http.StatusOK {
 		t.Fatalf("rename product returned HTTP %d: %s", response.Code, response.Body.String())
 	}
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/objectives", nil))
+	server.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/objectives", nil))
 	var listed []objective
 	if err := json.NewDecoder(response.Body).Decode(&listed); err != nil || response.Code != http.StatusOK ||
 		len(listed) != 1 || listed[0].ProductID != product.ID || listed[0].Product != "Nova Platform" {
@@ -107,7 +107,7 @@ func TestObjectivesLinkProductsByID(t *testing.T) {
 	}
 
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPatch,
+	server.ServeHTTP(response, jsonRequest(http.MethodPatch,
 		"/api/v1/objectives/"+created.ID, strings.NewReader(`{"product_id":""}`)))
 	var unlinked objective
 	if err := json.NewDecoder(response.Body).Decode(&unlinked); err != nil || response.Code != http.StatusOK ||
@@ -118,7 +118,7 @@ func TestObjectivesLinkProductsByID(t *testing.T) {
 
 func TestObjectiveRejectsUnknownProductID(t *testing.T) {
 	server := newMux()
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
+	request := jsonRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
 		`{"title":"Invalid product link","product_id":"`+testProjectID+`"}`,
 	))
 	response := httptest.NewRecorder()
@@ -147,7 +147,7 @@ func TestObjectiveEndpointsRejectInvalidInput(t *testing.T) {
 		{http.MethodPatch, "/api/v1/objectives/0123456789abcdef0123456789abcdef", `{"progress":50}`, http.StatusNotFound},
 	} {
 		response := httptest.NewRecorder()
-		server.ServeHTTP(response, httptest.NewRequest(testCase.method, testCase.path, strings.NewReader(testCase.body)))
+		server.ServeHTTP(response, jsonRequest(testCase.method, testCase.path, strings.NewReader(testCase.body)))
 		if response.Code != testCase.wantStatus {
 			t.Errorf("%s %s returned HTTP %d, want %d", testCase.method, testCase.path, response.Code, testCase.wantStatus)
 		}

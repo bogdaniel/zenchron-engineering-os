@@ -24,7 +24,8 @@ func signWebhook(secret, body string) string {
 
 // deliver sends one GitHub delivery to a control plane, signed with secret.
 func deliver(server http.Handler, secret, event, delivery, body string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(http.MethodPost, gitHubWebhookPath, strings.NewReader(body))
+	request := jsonRequest(http.MethodPost, gitHubWebhookPath, strings.NewReader(body))
+	request.Host = "tunnel.example"
 	request.RemoteAddr = "140.82.115.10:443"
 	request.Header.Set("X-GitHub-Event", event)
 	request.Header.Set("X-GitHub-Delivery", delivery)
@@ -34,6 +35,17 @@ func deliver(server http.Handler, secret, event, delivery, body string) *httptes
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 	return response
+}
+
+func TestExternalWebhookHostStillRequiresAValidSignature(t *testing.T) {
+	t.Setenv("ZENCHRON_GITHUB_WEBHOOK_SECRET", webhookSecret)
+	server := authHandler(newMux(), nil)
+	if response := deliver(server, webhookSecret, "ping", "tunnel-valid", `{"zen":"ok"}`); response.Code != http.StatusOK {
+		t.Fatalf("signed webhook through external Host returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+	if response := deliver(server, "another-secret-0123456789abcdef", "ping", "tunnel-invalid", `{"zen":"ok"}`); response.Code != http.StatusUnauthorized {
+		t.Fatalf("invalid signature through external Host returned HTTP %d: %s", response.Code, response.Body.String())
+	}
 }
 
 // reviewEvent is a pull_request_review delivery for the harness's pull request #23.
@@ -107,7 +119,8 @@ func TestWebhookRejectsForgedDeliveriesAndIsAbsentWithoutASecret(t *testing.T) {
 		}
 	}
 	// A valid signature over a different body does not authenticate this one.
-	tampered := httptest.NewRequest(http.MethodPost, gitHubWebhookPath, strings.NewReader(body))
+	tampered := jsonRequest(http.MethodPost, gitHubWebhookPath, strings.NewReader(body))
+	tampered.Host = "tunnel.example"
 	tampered.Header.Set("X-GitHub-Event", "pull_request_review")
 	tampered.Header.Set("X-GitHub-Delivery", "d-3")
 	tampered.Header.Set("X-Hub-Signature-256", signWebhook(webhookSecret, strings.Replace(body, "Handle", "Ignore", 1)))
@@ -363,7 +376,7 @@ func TestWebhookFollowUpRunsOnlyWhileTheRunCreatorKeepsAccess(t *testing.T) {
 		t.Fatalf("review after access was restored: %#v", after)
 	}
 	// A webhook is not a session: it cannot be used to read the API.
-	request := httptest.NewRequest(http.MethodGet, gitHubWebhookPath, nil)
+	request := jsonRequest(http.MethodGet, gitHubWebhookPath, nil)
 	recorder := httptest.NewRecorder()
 	harness.server.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusUnauthorized {

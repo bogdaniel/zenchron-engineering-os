@@ -23,6 +23,9 @@ sequenceDiagram
     User->>API: Dashboard API request with session cookie
     API->>API: Validate signature, expiry, allowlist
     API->>API: Reject cross-origin session-authenticated mutations
+    API->>API: On loopback, require loopback Host and same-origin unauthenticated mutations
+    API->>API: Require application/json for decoded JSON bodies
+    GitHub->>API: Signed webhook may use external Host; validate HMAC at the webhook handler
     User->>API: POST /api/v1/auth/logout
     API->>State: Persist per-login session cutoff
     API-->>User: Revoke earlier sessions and expire cookie
@@ -62,6 +65,12 @@ refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does no
   `Origin` against `ZENCHRON_PUBLIC_URL`; requests without an `Origin` remain available to non-browser clients. Worker
   bearer requests use their separate credential check. OAuth state is random, short-lived, HttpOnly, and SameSite Lax.
   The session cookie is HttpOnly, SameSite Lax, Secure on HTTPS, and expires after eight hours.
+- A loopback control plane requires a loopback `Host`; unauthenticated API mutations require a matching loopback
+  `Origin`. The local worker supplies that origin, and the dashboard dev proxy rewrites it only for same-origin local
+  requests. Decoded JSON request bodies require `Content-Type: application/json`.
+- With authentication disabled, requests must use a loopback `Host` and cannot carry forwarding headers. The GitHub
+  webhook remains exempt from those transport checks and relies on signature validation; a tunnel should forward only
+  `/api/v1/github/webhook`.
 - The user access token is used only to fetch the GitHub username and avatar; it is discarded and never used for
   repository access. Repository operations continue to use the control-plane GitHub App or token configuration.
 - The allowlist is checked at login and on each session request, so removing a username takes effect immediately.
