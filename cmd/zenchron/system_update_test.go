@@ -65,6 +65,7 @@ func TestManagedSupervisorCanQuiesceWithoutCreatingAnotherAdmissionPath(t *testi
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(method, path, nil)
 		request.RemoteAddr = "127.0.0.1:1234"
+		request.Host = "127.0.0.1:8080"
 		if token != "" {
 			request.Header.Set("X-Zenchron-Supervisor-Token", token)
 		}
@@ -105,6 +106,7 @@ func TestManagedWorkerCompatibilityRequiresMatchingLiveHeartbeat(t *testing.T) {
 	handler := authHandler(newMuxWithStores(newObjectiveStore(products), newWorkflowStore(), agents, products, registry, runs), nil)
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/system/update/worker-compatible", nil)
 	request.RemoteAddr = "127.0.0.1:1234"
+	request.Host = "127.0.0.1:8080"
 	request.Header.Set("X-Zenchron-Supervisor-Token", os.Getenv("ZENCHRON_MANAGED_SUPERVISOR_TOKEN"))
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -137,6 +139,7 @@ func TestSystemUpdateRunControlsRequireSupervisorTokenAndRecoverLeases(t *testin
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(method, path, nil)
 		request.RemoteAddr = "127.0.0.1:1234"
+		request.Host = "127.0.0.1:8080"
 		if token != "" {
 			request.Header.Set("X-Zenchron-Supervisor-Token", token)
 		}

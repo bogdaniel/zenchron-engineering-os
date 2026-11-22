@@ -80,7 +80,7 @@ func newAccessHarness(t *testing.T) *accessHarness {
 }
 
 func (harness *accessHarness) worker(method, path, token, body string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	request := jsonRequest(method, path, strings.NewReader(body))
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -95,7 +95,7 @@ func (harness *accessHarness) user(login, method, path, body string) *httptest.R
 	if err != nil {
 		harness.t.Fatal(err)
 	}
-	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	request := jsonRequest(method, path, strings.NewReader(body))
 	request.RemoteAddr = "203.0.113.10:41000"
 	request.Header.Set("Content-Type", "application/json")
 	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})

@@ -23,7 +23,7 @@ func signWebhook(secret, body string) string {
 
 // deliver sends one GitHub delivery to a control plane, signed with secret.
 func deliver(server http.Handler, secret, event, delivery, body string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(http.MethodPost, gitHubWebhookPath, strings.NewReader(body))
+	request := jsonRequest(http.MethodPost, gitHubWebhookPath, strings.NewReader(body))
 	request.RemoteAddr = "140.82.115.10:443"
 	request.Header.Set("X-GitHub-Event", event)
 	request.Header.Set("X-GitHub-Delivery", delivery)
@@ -106,7 +106,7 @@ func TestWebhookRejectsForgedDeliveriesAndIsAbsentWithoutASecret(t *testing.T) {
 		}
 	}
 	// A valid signature over a different body does not authenticate this one.
-	tampered := httptest.NewRequest(http.MethodPost, gitHubWebhookPath, strings.NewReader(body))
+	tampered := jsonRequest(http.MethodPost, gitHubWebhookPath, strings.NewReader(body))
 	tampered.Header.Set("X-GitHub-Event", "pull_request_review")
 	tampered.Header.Set("X-GitHub-Delivery", "d-3")
 	tampered.Header.Set("X-Hub-Signature-256", signWebhook(webhookSecret, strings.Replace(body, "Handle", "Ignore", 1)))
@@ -306,7 +306,7 @@ func TestWebhookFollowUpRunsOnlyWhileTheRunCreatorKeepsAccess(t *testing.T) {
 		t.Fatalf("review after access was restored: %#v", after)
 	}
 	// A webhook is not a session: it cannot be used to read the API.
-	request := httptest.NewRequest(http.MethodGet, gitHubWebhookPath, nil)
+	request := jsonRequest(http.MethodGet, gitHubWebhookPath, nil)
 	recorder := httptest.NewRecorder()
 	harness.server.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusUnauthorized {

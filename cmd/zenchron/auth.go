@@ -89,8 +89,19 @@ func loadAuthConfig() (*authConfig, bool, error) {
 
 func authHandler(next http.Handler, config *authConfig) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if (config == nil || config.publicURL == nil || isLoopbackHost(config.publicURL.Hostname())) &&
+			!validLoopbackRequestHost(r.Host) {
+			http.Error(w, "invalid request host", http.StatusForbidden)
+			return
+		}
 		if managedSupervisorRequest(r) {
 			next.ServeHTTP(w, r)
+			return
+		}
+		if config == nil && strings.HasPrefix(r.URL.Path, "/api/v1/") &&
+			r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions &&
+			r.URL.Path != gitHubWebhookPath && !localRequestOrigin(r) {
+			http.Error(w, "invalid request origin", http.StatusForbidden)
 			return
 		}
 		if r.URL.Path == "/auth/github" && r.Method == http.MethodGet {
@@ -126,7 +137,7 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
-			if !validRequestOrigin(r.Header.Get("Origin"), config) {
+			if !validRequestOriginForRequest(r, config) {
 				http.Error(w, "invalid request origin", http.StatusForbidden)
 				return
 			}
@@ -165,6 +176,12 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 	})
 }
 
+func validLoopbackRequestHost(host string) bool {
+	parsed, err := url.Parse("//" + host)
+	return err == nil && parsed.Host == host && parsed.User == nil && parsed.Path == "" && parsed.RawQuery == "" &&
+		parsed.Fragment == "" && isLoopbackHost(parsed.Hostname())
+}
+
 func managedSupervisorRequest(r *http.Request) bool {
 	secret := os.Getenv("ZENCHRON_MANAGED_SUPERVISOR_TOKEN")
 	if secret == "" || !isLoopbackRequest(r) || !hmac.Equal([]byte(r.Header.Get("X-Zenchron-Supervisor-Token")), []byte(secret)) {
@@ -197,7 +214,7 @@ func (config *authConfig) authorize(r *http.Request) (requestAccess, int, string
 		return requestAccess{}, http.StatusUnauthorized, "authentication required"
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions &&
-		!validRequestOrigin(r.Header.Get("Origin"), config) {
+		!validRequestOriginForRequest(r, config) {
 		return requestAccess{}, http.StatusForbidden, "invalid request origin"
 	}
 	if policy == nil {
@@ -263,6 +280,16 @@ func validRequestOrigin(origin string, config *authConfig) bool {
 		return false
 	}
 	return effectiveOriginPort(parsed) == effectiveOriginPort(config.publicURL)
+}
+
+func validRequestOriginForRequest(r *http.Request, config *authConfig) bool {
+	if config == nil || config.publicURL == nil {
+		return r.Header.Get("Origin") == ""
+	}
+	if validRequestOrigin(r.Header.Get("Origin"), config) {
+		return true
+	}
+	return config != nil && config.publicURL != nil && isLoopbackHost(config.publicURL.Hostname()) && localRequestOrigin(r)
 }
 
 func effectiveOriginPort(origin *url.URL) string {

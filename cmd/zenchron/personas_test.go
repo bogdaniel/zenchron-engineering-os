@@ -15,7 +15,7 @@ func TestPersonasPersistVersionsAndBindToProfiles(t *testing.T) {
 		`"responsibilities":["Check trust boundaries"],"instructions":"Inspect auth checks",` +
 		`"behavior":"Cite concrete evidence","review_specialization":"Authorization","status":"active"}`
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/personas", strings.NewReader(create)))
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/personas", strings.NewReader(create)))
 	var persona agentPersona
 	if err := json.NewDecoder(response.Body).Decode(&persona); err != nil || response.Code != http.StatusCreated {
 		t.Fatalf("create persona = %#v, decode error = %v, HTTP %d", persona, err, response.Code)
@@ -28,7 +28,7 @@ func TestPersonasPersistVersionsAndBindToProfiles(t *testing.T) {
 		`"status":"active","system_prompt":"Keep reviewing","goal_prompt":"Find defects",` +
 		`"tools":["git.read"],"persona_id":"` + persona.ID + `"}`
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(profileBody)))
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(profileBody)))
 	var profile agentProfile
 	if err := json.NewDecoder(response.Body).Decode(&profile); err != nil || response.Code != http.StatusCreated {
 		t.Fatalf("create linked profile = %#v, decode error = %v, HTTP %d", profile, err, response.Code)
@@ -39,7 +39,7 @@ func TestPersonasPersistVersionsAndBindToProfiles(t *testing.T) {
 
 	update := strings.Replace(create, "Security reviewer", "Platform reviewer", 1)
 	response = httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPut, "/api/v1/personas/"+persona.ID, strings.NewReader(update))
+	request := jsonRequest(http.MethodPut, "/api/v1/personas/"+persona.ID, strings.NewReader(update))
 	server.ServeHTTP(response, request)
 	var revised agentPersona
 	if err := json.NewDecoder(response.Body).Decode(&revised); err != nil || response.Code != http.StatusOK {
@@ -54,7 +54,7 @@ func TestPersonasPersistVersionsAndBindToProfiles(t *testing.T) {
 func TestAgentProfileRejectsMissingOrDisabledPersona(t *testing.T) {
 	server := newMux()
 	personaResponse := httptest.NewRecorder()
-	server.ServeHTTP(personaResponse, httptest.NewRequest(http.MethodPost, "/api/v1/personas", strings.NewReader(
+	server.ServeHTTP(personaResponse, jsonRequest(http.MethodPost, "/api/v1/personas", strings.NewReader(
 		`{"name":"Disabled","role":"Disabled role","status":"disabled"}`)))
 	var disabled agentPersona
 	if err := json.NewDecoder(personaResponse.Body).Decode(&disabled); err != nil || personaResponse.Code != http.StatusCreated {
@@ -64,7 +64,7 @@ func TestAgentProfileRejectsMissingOrDisabledPersona(t *testing.T) {
 		body := `{"name":"Reviewer","provider":"codex-cli","model":"default","status":"active",` +
 			`"system_prompt":"","goal_prompt":"","tools":[],"persona_id":"` + personaID + `"}`
 		response := httptest.NewRecorder()
-		server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(body)))
+		server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(body)))
 		want := http.StatusBadRequest
 		if personaID == "" {
 			want = http.StatusCreated
@@ -83,7 +83,7 @@ func TestPersonaVersionIsPinnedInRunSnapshotAcrossEditAndRestart(t *testing.T) {
 	}
 	personaBody := `{"name":"Reviewer","role":"Find defects","instructions":"Check version one","status":"active"}`
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/personas", strings.NewReader(personaBody)))
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/personas", strings.NewReader(personaBody)))
 	var persona agentPersona
 	if err := json.NewDecoder(response.Body).Decode(&persona); err != nil || response.Code != http.StatusCreated {
 		t.Fatalf("create persona: decode error %v, HTTP %d", err, response.Code)
@@ -91,7 +91,7 @@ func TestPersonaVersionIsPinnedInRunSnapshotAcrossEditAndRestart(t *testing.T) {
 	profileBody := `{"name":"Reviewer","provider":"codex-cli","model":"default","status":"active",` +
 		`"tools":["git.read"],"persona_id":"` + persona.ID + `"}`
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(profileBody)))
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(profileBody)))
 	var profile agentProfile
 	if err := json.NewDecoder(response.Body).Decode(&profile); err != nil || response.Code != http.StatusCreated {
 		t.Fatalf("create linked profile: decode error %v, HTTP %d", err, response.Code)
@@ -110,7 +110,7 @@ func TestPersonaVersionIsPinnedInRunSnapshotAcrossEditAndRestart(t *testing.T) {
 	}
 	updatedBody := strings.Replace(personaBody, "Check version one", "Check version two", 1)
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/v1/personas/"+persona.ID, strings.NewReader(updatedBody)))
+	server.ServeHTTP(response, jsonRequest(http.MethodPut, "/api/v1/personas/"+persona.ID, strings.NewReader(updatedBody)))
 	if response.Code != http.StatusOK {
 		t.Fatalf("update persona returned HTTP %d: %s", response.Code, response.Body.String())
 	}

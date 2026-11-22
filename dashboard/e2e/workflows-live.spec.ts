@@ -22,11 +22,6 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
     });
   });
   await useLocalSession(page);
-  await page.route('**/api/v1/workflows**', (route) => {
-    const apiURL = new URL(route.request().url());
-    apiURL.port = '8083';
-    return route.continue({ url: apiURL.toString() });
-  });
   await page.setViewportSize({ width: 1672, height: 941 });
   const workflowList = page.waitForResponse((response) => response.url().includes('/api/v1/workflows') &&
     response.request().method() === 'GET');

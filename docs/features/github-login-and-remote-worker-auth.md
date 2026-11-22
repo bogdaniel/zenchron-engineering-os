@@ -22,6 +22,8 @@ sequenceDiagram
     User->>API: Dashboard API request with session cookie
     API->>API: Validate signature, expiry, allowlist
     API->>API: Reject cross-origin session-authenticated mutations
+    API->>API: On loopback, require a loopback Host and same-origin mutations without auth
+    API->>API: Require application/json for decoded JSON bodies
     Worker->>API: Worker endpoint with Bearer worker token over HTTPS
     API->>API: Validate worker credential
 ```
@@ -55,7 +57,10 @@ refuse HTTP control-plane URLs and missing tokens. Loopback worker setup does no
 ## Security boundary and limits
 
 - Dashboard API requests require a signed session cookie. State-changing dashboard requests also validate a supplied
-  `Origin` against `ZENCHRON_PUBLIC_URL`; requests without an `Origin` remain available to non-browser clients. Worker
+  `Origin` against `ZENCHRON_PUBLIC_URL`; requests without an `Origin` remain available to non-browser clients. On a
+  loopback control plane, every request must use a loopback `Host`, and unauthenticated API mutations must carry a
+  matching loopback `Origin`. The local worker supplies that origin; the dashboard dev proxy rewrites it only for
+  same-origin requests from its loopback address. JSON request bodies require `Content-Type: application/json`. Worker
   bearer requests use their separate credential check. OAuth state is random, short-lived, HttpOnly, and SameSite Lax.
   The session cookie is HttpOnly, SameSite Lax, Secure on HTTPS, and expires after eight hours.
 - The user access token is used only to fetch the GitHub username and avatar; it is discarded and never used for
