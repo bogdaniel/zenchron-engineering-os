@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 10019)
+Total output lines: 575
+
 import { expect, test, type Page } from '@playwright/test';
 
 async function chooseFromWorkflowMenu(page: Page, item: string | RegExp) {
@@ -275,8 +278,7 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(emptyStates).toHaveText([/^Unavailable · the control plane stores/, 'No notification rules are stored for this workflow.']);
   await expect(page.getByRole('button', { name: 'Archive Workflow' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'View Audit Log' })).toBeDisabled();
-  const renamedWorkflow = `${workflowName} renamed`;
-  await page.getByLabel('Workflow name').fill(renamedWorkflow);
+  const renamedWorkflow = `${w…19 tokens truncated…dWorkflow);
   await page.getByLabel('Status').selectOption('active');
   const settingsRequest = page.waitForRequest((request) => request.method() === 'PUT' && request.url().includes('/api/v1/workflows/'));
   await page.getByRole('button', { name: 'Save Settings' }).click();
@@ -332,6 +334,15 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await chooseFromWorkflowMenu(page, 'Auto layout');
   await expect(page.locator('.workflow-status')).toContainText('Layout updated');
   await page.getByRole('button', { name: 'Fit graph to canvas' }).click();
+  const viewport = page.locator('.workflow-canvas .react-flow__viewport');
+  let lastTransform = '';
+  let stableSamples = 0;
+  await expect.poll(async () => {
+    const transform = await viewport.getAttribute('style');
+    stableSamples = transform === lastTransform ? stableSamples + 1 : 0;
+    lastTransform = transform ?? '';
+    return stableSamples;
+  }, { intervals: [50, 100, 150] }).toBeGreaterThanOrEqual(2);
   const dragHandle = page.getByRole('button', { name: 'Drag Agent Task to canvas' });
   const source = await dragHandle.boundingBox();
   expect(source).not.toBeNull();
