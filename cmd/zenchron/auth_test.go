@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -178,6 +179,78 @@ func TestRequestOriginAcceptsImplicitHTTPSPort(t *testing.T) {
 	}
 }
 
+func TestLogoutRevokesCopiedSession(t *testing.T) {
+	config := testAuthConfig()
+	statePath := filepath.Join(t.TempDir(), "auth-sessions.json")
+	revocations, err := loadSessionRevocations(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.sessionRevocations = revocations
+	user := authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	session, err := signSession(user, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := authHandler(http.NotFoundHandler(), config)
+	logout := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	logout.Header.Set("Origin", config.publicURL.String())
+	logout.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, logout)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("logout returned HTTP %d", response.Code)
+	}
+
+	config.sessionRevocations, err = loadSessionRevocations(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	replay.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, replay)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("copied session remained valid after logout: HTTP %d", response.Code)
+	}
+
+	issuedAt := time.Now().UnixNano()
+	replacement, err := signSession(authUser{Login: "Engineer", IssuedAt: issuedAt,
+		ExpiresAt: time.Unix(0, issuedAt).Add(time.Hour).Unix()}, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay = httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	replay.AddCookie(&http.Cookie{Name: authSessionCookie, Value: replacement})
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, replay)
+	if response.Code != http.StatusOK {
+		t.Fatalf("new session after logout returned HTTP %d", response.Code)
+	}
+}
+
+func TestLogoutDoesNotClearCookieWhenRevocationCannotPersist(t *testing.T) {
+	config := testAuthConfig()
+	revocations, err := loadSessionRevocations(filepath.Join(t.TempDir(), "missing", "auth-sessions.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.sessionRevocations = revocations
+	user := authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	session, err := signSession(user, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logout := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	logout.Header.Set("Origin", config.publicURL.String())
+	logout.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response := httptest.NewRecorder()
+	authHandler(http.NotFoundHandler(), config).ServeHTTP(response, logout)
+	if response.Code != http.StatusInternalServerError || len(response.Result().Cookies()) != 0 {
+		t.Fatalf("failed revocation returned HTTP %d and cookies %#v", response.Code, response.Result().Cookies())
+	}
+}
+
 func TestGitHubOAuthCreatesAllowlistedSession(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -256,6 +329,13 @@ func TestGitHubOAuthCreatesAllowlistedSession(t *testing.T) {
 	server.ServeHTTP(response, logout)
 	if response.Code != http.StatusNoContent || response.Result().Cookies()[0].MaxAge >= 0 {
 		t.Fatalf("logout response = HTTP %d, cookies %#v", response.Code, response.Result().Cookies())
+	}
+	replay := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	replay.AddCookie(sessionCookie)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, replay)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("copied session remained valid after logout: HTTP %d", response.Code)
 	}
 	logout.Header.Set("Origin", "https://attacker.example")
 	response = httptest.NewRecorder()
@@ -376,7 +456,8 @@ func TestReadSessionRejectsTamperingAndExpiry(t *testing.T) {
 func testAuthConfig() *authConfig {
 	return &authConfig{clientID: "client-id", clientSecret: "client-secret", sessionKey: []byte(strings.Repeat("s", 32)),
 		workerToken: testWorkerToken, allowedUsers: []string{"engineer"}, publicURL: mustURL("https://zenchron.example"), https: true,
-		githubURL: "https://github.com", githubAPIURL: "https://api.github.com"}
+		githubURL: "https://github.com", githubAPIURL: "https://api.github.com",
+		sessionRevocations: &sessionRevocations{revokedBefore: make(map[string]int64)}}
 }
 
 const testWorkerToken = "worker-secret-for-auth-tests-1234567890"
