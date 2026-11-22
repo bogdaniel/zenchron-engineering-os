@@ -51,7 +51,7 @@ func TestIntegrationRunMergesExactCandidatesVerifiesTheCombinationAndPublishesOn
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	harness.gitRemote = "github.com/test/repository"
-	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository.git")
+	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
 	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
 	harness.command.Merge = []workerapi.MergeInput{
 		harness.candidate(firstCandidateRun, "a.txt", "from a\n"), harness.candidate(secondCandidateRun, "b.txt", "from b\n")}
