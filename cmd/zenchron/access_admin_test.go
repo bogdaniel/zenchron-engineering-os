@@ -25,6 +25,7 @@ func newAdminHarness(t *testing.T) *accessHarness {
 	}
 	harness.config.access = &accessPolicy{path: harness.path, auditPath: harness.path + ".audit.jsonl"}
 	registry, agents, products := newWorkerRegistry(), newAgentProfileStore(), newProductStore()
+	harness.registry = registry
 	agents.items[harness.profile.ID] = harness.profile
 	harness.server = authHandler(newMuxWithStores(newObjectiveStore(products), newWorkflowStore(), agents,
 		products, registry, newAgentRunStore(registry, agents)), harness.config)

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 const (
@@ -44,11 +46,12 @@ func writeAccessFile(t *testing.T, content string) string {
 // accessHarness is the authenticated control plane with Alice on project A, Bob on project C, each
 // with their own worker, and a shared worker on project A.
 type accessHarness struct {
-	t       *testing.T
-	server  http.Handler
-	config  *authConfig
-	path    string
-	profile agentProfile
+	t        *testing.T
+	server   http.Handler
+	config   *authConfig
+	path     string
+	profile  agentProfile
+	registry *workerRegistry
 }
 
 func accessFileContent(workers string) string {
@@ -70,6 +73,7 @@ func newAccessHarness(t *testing.T) *accessHarness {
 	harness.config.allowedUsers = []string{"alice", "bob", "carol"}
 	harness.config.access = &accessPolicy{path: harness.path}
 	registry := newWorkerRegistry()
+	harness.registry = registry
 	agents := newAgentProfileStore()
 	harness.profile = agentProfile{ID: "abcdefabcdefabcdefabcdefabcdefab", Name: "Engineer", Provider: "codex-cli", Model: "default",
 		Status: "active", Version: 1, UpdatedAt: time.Now().UTC(), Tools: []string{"code.write"}}
@@ -80,7 +84,7 @@ func newAccessHarness(t *testing.T) *accessHarness {
 }
 
 func (harness *accessHarness) worker(method, path, token, body string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	request := jsonRequest(method, path, strings.NewReader(body))
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -95,7 +99,7 @@ func (harness *accessHarness) user(login, method, path, body string) *httptest.R
 	if err != nil {
 		harness.t.Fatal(err)
 	}
-	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	request := jsonRequest(method, path, strings.NewReader(body))
 	request.RemoteAddr = "203.0.113.10:41000"
 	request.Header.Set("Content-Type", "application/json")
 	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
@@ -147,6 +151,18 @@ func TestWorkerTokenIsBoundToItsEnrolledIdentity(t *testing.T) {
 	}
 	if response := harness.worker(http.MethodGet, "/api/v1/agent-runs", aliceToken, ""); response.Code != http.StatusUnauthorized {
 		t.Errorf("worker token read the dashboard API: HTTP %d", response.Code)
+	}
+}
+
+func TestWorkerHeartbeatReportsRepositoryGrantRejections(t *testing.T) {
+	harness := newAccessHarness(t)
+	body := `{"name":"alice-worker","projects":[` + projectJSON(projectC, repositoryC) + `]}`
+	response := harness.worker(http.MethodPut, "/api/v1/workers/"+aliceWorkerID+"/heartbeat", aliceToken, body)
+	var reply workerapi.HeartbeatReply
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &reply) != nil ||
+		len(reply.SkippedProjects) != 1 || reply.SkippedProjects[0].ID != projectC ||
+		reply.SkippedProjects[0].Reason != workerapi.SkippedProjectRepositoryNotGranted {
+		t.Fatalf("heartbeat = %s (HTTP %d), want repository grant reason", response.Body.String(), response.Code)
 	}
 }
 
@@ -325,6 +341,39 @@ func TestWorkerCannotRegisterAProjectIDAnotherWorkerHolds(t *testing.T) {
 	projects := decodeList[projectStatus](t, harness.user("alice", http.MethodGet, "/api/v1/projects", ""))
 	if len(projects) != 1 || projects[0].WorkerID != aliceWorkerID {
 		t.Fatalf("project id is registered to %#v", projects)
+	}
+}
+
+func TestWorkerCanRegisterAProjectIDAfterPreviousWorkerWentOffline(t *testing.T) {
+	harness := newAccessHarness(t)
+	if status := harness.heartbeat(aliceWorkerID, aliceToken, projectJSON(projectA, repositoryA)); status != http.StatusOK {
+		t.Fatalf("initial worker heartbeat returned HTTP %d", status)
+	}
+	harness.registry.mu.Lock()
+	projectKey := aliceWorkerID + ":" + projectA
+	project := harness.registry.projects[projectKey]
+	project.LastSeen = time.Now().Add(-2 * workerOnlineWindow)
+	harness.registry.projects[projectKey] = project
+	worker := harness.registry.workers[aliceWorkerID]
+	worker.LastSeen = project.LastSeen
+	harness.registry.workers[aliceWorkerID] = worker
+	harness.registry.mu.Unlock()
+
+	if status := harness.heartbeat(sharedWorkerID, sharedToken, projectJSON(projectA, repositoryA)); status != http.StatusOK {
+		t.Fatalf("replacement worker heartbeat returned HTTP %d", status)
+	}
+	projects := decodeList[projectStatus](t, harness.user("alice", http.MethodGet, "/api/v1/projects", ""))
+	var onlineWorker string
+	for _, project := range projects {
+		if project.ID == projectA && project.WorkerStatus == "online" {
+			if onlineWorker != "" {
+				t.Fatalf("project %s has multiple online registrations", projectA)
+			}
+			onlineWorker = project.WorkerID
+		}
+	}
+	if onlineWorker != sharedWorkerID {
+		t.Fatalf("project %s is online on worker %q, want %q", projectA, onlineWorker, sharedWorkerID)
 	}
 }
 

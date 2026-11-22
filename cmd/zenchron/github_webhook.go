@@ -275,12 +275,13 @@ func (store *agentRunStore) applyReviewEvent(access requestAccess, event gitHubW
 	// a creator who lost the repository or the worker can no longer have work queued in their name. Such a
 	// request is not imported either, so an authorized user can still import and queue it with sync-reviews.
 	creator := access.forUser(item.CreatedBy)
+	observationRecorded := false
 	switch {
 	case !requestsChanges || !reviewableAgentRun(item):
 	case !creator.allows(item.Repository) || !creator.mayDispatchTo(item.WorkerID):
 		outcome = "recorded; the run's creator may no longer queue work, import it with sync-reviews"
 	default:
-		queued, status, message := store.importReview(creator, item, review.gitHubReview, true)
+		queued, imported, status, message := store.importReview(creator, item, review.gitHubReview, true, &observation)
 		if status == http.StatusConflict {
 			// A full feedback history is a normal end state, not a failure GitHub should see.
 			outcome = "recorded; " + message
@@ -289,38 +290,67 @@ func (store *agentRunStore) applyReviewEvent(access requestAccess, event gitHubW
 		if status != 0 {
 			return message, status
 		}
-		observation.Imported, observation.Queued = true, queued.Status == "queued"
+		if !imported {
+			return "ignored: the review is already recorded", 0
+		}
+		observationRecorded = true
 		outcome = "feedback recorded"
-		if observation.Queued {
+		if queued.Status == "queued" {
 			outcome = "follow-up attempt queued"
 		}
 	}
-	_, status, message := store.update(runID, func(item *agentRun) (int, string) {
-		item.GitHubReviews = append(slices.Clone(item.GitHubReviews), observation)
-		if len(item.GitHubReviews) > maxRunReviews {
-			item.GitHubReviews = item.GitHubReviews[len(item.GitHubReviews)-maxRunReviews:]
+	if !observationRecorded {
+		_, status, message := store.update(runID, func(item *agentRun) (int, string) {
+			if review.ID <= item.ImportedReviewID ||
+				slices.ContainsFunc(item.GitHubReviews, func(known runReview) bool { return known.ID == review.ID }) {
+				return 0, ""
+			}
+			appendRunReview(item, observation)
+			observationRecorded = true
+			return 0, ""
+		})
+		if status != 0 {
+			return message, status
 		}
-		return 0, ""
-	})
-	if status != 0 {
-		return message, status
+		if !observationRecorded {
+			return "ignored: the review is already recorded", 0
+		}
 	}
 	store.appendEvents(runID, item.Attempts, workerapi.AgentRunEvent{Kind: "status",
 		Message: fmt.Sprintf("GitHub review by %s: %s (%s)", observation.Author, observation.State, outcome)})
 	return outcome, 0
 }
 
+func appendRunReview(item *agentRun, observation runReview) {
+	item.GitHubReviews = append(slices.Clone(item.GitHubReviews), observation)
+	if len(item.GitHubReviews) > maxRunReviews {
+		item.GitHubReviews = item.GitHubReviews[len(item.GitHubReviews)-maxRunReviews:]
+	}
+}
+
 // importReview hands one GitHub change request to a run as feedback and remembers that it was imported.
 // With queue set it also starts a follow-up attempt when the run and the caller allow one.
-func (store *agentRunStore) importReview(access requestAccess, item agentRun, review gitHubReview, queue bool) (agentRun, int, string) {
+func (store *agentRunStore) importReview(
+	access requestAccess, item agentRun, review gitHubReview, queue bool, observation *runReview,
+) (agentRun, bool, int, string) {
 	comment := truncateUTF8(review.User.Login+" on GitHub: "+strings.TrimSpace(review.Body), maxAgentRunCommentSize)
-	if _, status, message := store.recordReview(access, item.ID, "", comment, queue, false); status != 0 {
-		return agentRun{}, status, message
-	}
-	return store.update(item.ID, func(item *agentRun) (int, string) {
-		item.ImportedReviewID = max(item.ImportedReviewID, review.ID)
+	imported := false
+	updated, status, message := store.update(item.ID, func(item *agentRun) (int, string) {
+		if review.ID <= item.ImportedReviewID {
+			return 0, ""
+		}
+		if status, message := store.recordReviewLocked(item, access, comment, queue, false); status != 0 {
+			return status, message
+		}
+		item.ImportedReviewID = review.ID
+		imported = true
+		if observation != nil {
+			observation.Imported, observation.Queued = true, item.Status == "queued"
+			appendRunReview(item, *observation)
+		}
 		return 0, ""
 	})
+	return updated, imported, status, message
 }
 
 // applyCheckRunEvent stores a completed check run on the run whose published commit it checked. A

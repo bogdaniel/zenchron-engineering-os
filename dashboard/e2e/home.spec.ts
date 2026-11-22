@@ -508,10 +508,13 @@ test('Product Workspace groups live repositories into persisted products', async
   let productID = '';
   // Keep the first-use view independent of products created by concurrent real-backend specs.
   await page.route('**/api/v1/products', async (route) => {
-    const upstream = new URL(route.request().url());
-    upstream.hostname = '127.0.0.1';
-    upstream.port = '8083';
-    const response = await route.fetch({ url: upstream.toString() });
+    const proxyURL = new URL(route.request().url());
+    const pageHost = proxyURL.host;
+    proxyURL.hostname = '127.0.0.1';
+    const response = await route.fetch({
+      url: proxyURL.toString(),
+      headers: { ...route.request().headers(), host: pageHost },
+    });
     if (route.request().method() === 'POST') {
       const created: { id: string } = await response.json();
       productID = created.id;

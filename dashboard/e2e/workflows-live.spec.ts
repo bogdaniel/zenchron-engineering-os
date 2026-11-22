@@ -15,6 +15,30 @@ async function useLocalSession(page: Page) {
   }));
 }
 
+test('Live workflow keeps saved node positions when loading the canvas', async ({ page }) => {
+  const workflow = {
+    id: 'a'.repeat(32), name: 'Arranged workflow', description: 'Preserve the saved canvas layout.',
+    status: 'draft', version: 1, updated_at: '2026-11-02T10:00:00Z',
+    nodes: [
+      { id: 'trigger', type: 'trigger', position: { x: 100, y: 80 }, data: { label: 'Trigger', description: 'Start' } },
+      { id: 'planner', type: 'planner', position: { x: 420, y: 180 }, data: { label: 'Planner', description: 'Plan' } },
+    ],
+    edges: [{ id: 'start-plan', source: 'trigger', target: 'planner', label: '' }],
+  };
+  await page.route('**/api/v1/**', (route) => route.fulfill({ json: [] }));
+  await page.route('**/healthz', (route) => route.fulfill({ json: { status: 'ok' } }));
+  await page.route('**/api/v1/workflows', (route) => route.fulfill({ json: [workflow] }));
+  await useLocalSession(page);
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto('/?mode=live#workflows');
+  for (const [id, x, y] of [['trigger', 100, 80], ['planner', 420, 180]] as const) {
+    await expect.poll(() => page.locator(`.workflow-canvas .react-flow__node[data-id="${id}"]`).evaluate((node) => {
+      const match = (node as HTMLElement).style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+      return match ? [Number(match[1]), Number(match[2])] : null;
+    })).toEqual([x, y]);
+  }
+});
+
 test('workflow graph can be edited and saved to the control plane', async ({ page }) => {
   await page.addInitScript(() => {
     if (!crypto.randomUUID) Object.defineProperty(Crypto.prototype, 'randomUUID', {
@@ -24,8 +48,12 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await useLocalSession(page);
   await page.route('**/api/v1/workflows**', (route) => {
     const apiURL = new URL(route.request().url());
+    apiURL.hostname = '127.0.0.1';
     apiURL.port = '8083';
-    return route.continue({ url: apiURL.toString() });
+    return route.fetch({
+      url: apiURL.toString(),
+      headers: { ...route.request().headers(), host: apiURL.host, origin: apiURL.origin },
+    }).then((response) => route.fulfill({ response }));
   });
   await page.setViewportSize({ width: 1672, height: 941 });
   const workflowList = page.waitForResponse((response) => response.url().includes('/api/v1/workflows') &&
@@ -317,13 +345,14 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await page.mouse.up();
   const droppedNodes = page.locator('.workflow-canvas .workflow-node').filter({ hasText: 'Agent Task' });
   await expect(droppedNodes).toHaveCount(2);
-  const droppedNode = droppedNodes.last();
-  await expect.poll(async () => {
-    const bounds = await droppedNode.boundingBox();
-    if (!bounds) return false;
-    return Math.abs(bounds.x + bounds.width / 2 - dropPoint.x) < 30 &&
-      Math.abs(bounds.y + bounds.height / 2 - dropPoint.y) < 30;
-  }).toBe(true);
+  const droppedBounds = await droppedNodes.last().boundingBox();
+  expect(droppedBounds).not.toBeNull();
+  const droppedX = Math.round(droppedBounds!.x + droppedBounds!.width / 2);
+  const droppedY = Math.round(droppedBounds!.y + droppedBounds!.height / 2);
+  expect(droppedX).toBeGreaterThan(dropPoint.x - 30);
+  expect(droppedX).toBeLessThan(dropPoint.x + 30);
+  expect(droppedY).toBeGreaterThan(dropPoint.y - 30);
+  expect(droppedY).toBeLessThan(dropPoint.y + 30);
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(11);
   await expect(page.locator('.workflow-properties .workflow-subheading h3')).toHaveText('Agent Task');
   const splitter = page.getByRole('separator');

@@ -43,6 +43,7 @@ type workerRecord struct {
 	Providers       []workerapi.ProviderStatus `json:"providers,omitempty"`
 	ProtocolVersion int                        `json:"protocol_version,omitempty"`
 	ReleaseRevision string                     `json:"release_revision,omitempty"`
+	SkippedProjects []workerapi.SkippedProject `json:"skipped_projects,omitempty"`
 }
 
 type projectRecord struct {
@@ -231,9 +232,15 @@ func registerDashboard(mux *http.ServeMux, directory string) {
 		if filepath.Base(path) == "index.html" {
 			w.Header().Set("Cache-Control", "no-cache")
 		}
+		w.Header().Set("Content-Security-Policy", dashboardContentSecurityPolicy)
 		http.ServeFile(w, r, path)
 	})
 }
+
+// Mantine emits inline style elements and style attributes for global classes and component values.
+const dashboardContentSecurityPolicy = "default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self' data:; " +
+	"form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https://avatars.githubusercontent.com; " +
+	"object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:"
 
 func (registry *workerRegistry) ready(w http.ResponseWriter, _ *http.Request) {
 	registry.mu.RLock()
@@ -384,12 +391,23 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 	access := accessFor(r)
 	claimed := make(map[string]bool, len(registry.projects))
 	for _, project := range registry.projects {
-		claimed[project.ID] = true
+		if time.Since(project.LastSeen) <= workerOnlineWindow {
+			claimed[project.ID] = true
+		}
 	}
 	for _, project := range request.Projects {
 		// An enrolled worker registers only the repositories it was approved for, and never a project id
 		// another worker already registered: lookups by project id must name exactly one checkout.
-		if !access.allows(project.Remote) || claimed[project.ID] {
+		if !access.allows(project.Remote) {
+			worker.SkippedProjects = append(worker.SkippedProjects, workerapi.SkippedProject{
+				ID: project.ID, Reason: workerapi.SkippedProjectRepositoryNotGranted,
+			})
+			continue
+		}
+		if claimed[project.ID] {
+			worker.SkippedProjects = append(worker.SkippedProjects, workerapi.SkippedProject{
+				ID: project.ID, Reason: workerapi.SkippedProjectRegisteredElsewhere,
+			})
 			continue
 		}
 		key := id + ":" + project.ID

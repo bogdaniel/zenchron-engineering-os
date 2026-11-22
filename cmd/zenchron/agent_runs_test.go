@@ -72,7 +72,7 @@ func TestAgentRunQueuePersistsAndFencesClaims(t *testing.T) {
 		newProductStore(), registry, store)
 	call := func(method, path, body string) *httptest.ResponseRecorder {
 		response := httptest.NewRecorder()
-		server.ServeHTTP(response, httptest.NewRequest(method, path, strings.NewReader(body)))
+		server.ServeHTTP(response, jsonRequest(method, path, strings.NewReader(body)))
 		return response
 	}
 	heartbeat := `{"name":"worker","projects":[{"id":"` + testProjectID + `","name":"repo","branch":"main"}]}`
@@ -291,7 +291,7 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 		LeaseUntil: time.Now().Add(time.Minute), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 		Profile: &profile, PullRequestEnabled: true}
 	store.items[item.ID] = item
-	request := httptest.NewRequest(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+item.ID,
+	request := jsonRequest(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+item.ID,
 		strings.NewReader(`{"status":"succeeded","output":"Agent summary.","attempts":1,"commit_sha":"`+
 			strings.Repeat("a", 40)+`","diff":"diff --git a/file b/file\n+change","branch_pushed":true}`))
 	request.SetPathValue("id", testWorkerID)
@@ -318,7 +318,7 @@ func TestAgentRunClaimEnablesPullRequestForGitHubProjectWithToken(t *testing.T) 
 	agents.items[profile.ID] = profile
 	store := newAgentRunStore(registry, agents)
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/agent-runs",
+	request := jsonRequest(http.MethodPost, "/api/v1/agent-runs",
 		strings.NewReader(`{"agent_id":"`+profile.ID+`","project_id":"`+testProjectID+`","prompt":"Add a feature"}`))
 	store.create(response, request)
 	var queued agentRun
@@ -326,7 +326,7 @@ func TestAgentRunClaimEnablesPullRequestForGitHubProjectWithToken(t *testing.T) 
 		t.Fatalf("queued run = %#v, decode error = %v, HTTP %d", queued, err, response.Code)
 	}
 	response = httptest.NewRecorder()
-	request = httptest.NewRequest(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", nil)
+	request = jsonRequest(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", nil)
 	request.SetPathValue("id", testWorkerID)
 	store.claim(response, request)
 	var command workerapi.AgentRunCommand
@@ -347,7 +347,7 @@ func TestAgentRunRefusesProfilesWithoutAnExecutionAdapter(t *testing.T) {
 	agents.items[profile.ID] = profile
 	store := newAgentRunStore(registry, agents)
 	response := httptest.NewRecorder()
-	store.create(response, httptest.NewRequest(http.MethodPost, "/api/v1/agent-runs",
+	store.create(response, jsonRequest(http.MethodPost, "/api/v1/agent-runs",
 		strings.NewReader(`{"agent_id":"`+profile.ID+`","project_id":"`+testProjectID+`","prompt":"Add a feature"}`)))
 	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "no execution adapter") || len(store.items) != 0 {
 		t.Fatalf("run for a provider without an adapter: HTTP %d %q, %d queued", response.Code, response.Body.String(), len(store.items))

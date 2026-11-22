@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -84,6 +85,12 @@ func runControlPlane() error {
 		return err
 	}
 	defer lock.Close()
+	if auth != nil {
+		auth.sessionRevocations, err = loadSessionRevocations(filepath.Join(dataDir, "auth-sessions.json"))
+		if err != nil {
+			return err
+		}
+	}
 	handler, err := newPersistentMux(dataDir)
 	if err != nil {
 		return fmt.Errorf("initialize control-plane state: %w", err)
@@ -94,10 +101,7 @@ func runControlPlane() error {
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", addr, err)
 	}
-	server := &http.Server{
-		Handler:           handler,
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	server := newControlPlaneHTTPServer(handler)
 	serveErr := make(chan error, 1)
 	go func() {
 		serveErr <- server.Serve(listener)
@@ -122,6 +126,15 @@ func runControlPlane() error {
 			return fmt.Errorf("serve HTTP: %w", err)
 		}
 		return nil
+	}
+}
+
+func newControlPlaneHTTPServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 	}
 }
 

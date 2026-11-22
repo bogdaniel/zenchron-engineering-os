@@ -84,7 +84,7 @@ func TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions(t *t
 	if err != nil {
 		t.Fatalf("reopen work graph history: %v", err)
 	}
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/products/"+alpha+"/environment", nil)
+	request := jsonRequest(http.MethodGet, "/api/v1/products/"+alpha+"/environment", nil)
 	request.SetPathValue("id", alpha)
 	response = httptest.NewRecorder()
 	reopened.environment(response, request)

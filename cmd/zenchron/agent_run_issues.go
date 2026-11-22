@@ -26,7 +26,7 @@ func (store *agentRunStore) attachIssue(ctx context.Context, item *agentRun, num
 	if !trustedGitHubAuthor(issue.AuthorAssociation) {
 		return http.StatusForbidden, "issue author is not an owner, member, or collaborator of the repository"
 	}
-	comments, err := store.registry.github.issueComments(ctx, owner, repository, number)
+	comments, commentsTruncated, err := store.registry.github.issueComments(ctx, owner, repository, number, issue.Comments)
 	if err != nil {
 		return http.StatusBadGateway, "GitHub issue comments are unavailable"
 	}
@@ -38,19 +38,50 @@ func (store *agentRunStore) attachIssue(ctx context.Context, item *agentRun, num
 			issueContext.WriteString(" " + label.Name)
 		}
 	}
-	for _, comment := range comments {
-		if body := strings.TrimSpace(comment.Body); body != "" && trustedGitHubAuthor(comment.AuthorAssociation) {
-			issueContext.WriteString("\n\nComment by " + comment.User.Login + ":\n" + body)
-		}
-	}
 	item.IssueNumber, item.IssueURL = issue.Number, issue.HTMLURL
 	item.IssueTitle = truncateUTF8(strings.TrimSpace(issue.Title), 300)
-	item.IssueContext = truncateUTF8(issueContext.String(), maxIssueContextSize)
+	item.IssueContext = issueContextWithComments(issueContext.String(), comments, commentsTruncated)
 	if item.Prompt == "" {
 		item.Prompt = fmt.Sprintf("Resolve GitHub issue #%d: %s", issue.Number, item.IssueTitle)
 		item.Prompt = truncateUTF8(item.Prompt, 5000)
 	}
 	return 0, ""
+}
+
+func issueContextWithComments(base string, comments []gitHubIssueComment, commentsTruncated bool) string {
+	entries := make([]string, 0, len(comments))
+	totalSize := len(base)
+	for _, comment := range comments {
+		body := strings.TrimSpace(comment.Body)
+		if body == "" || !trustedGitHubAuthor(comment.AuthorAssociation) {
+			continue
+		}
+		entry := "\n\nComment by " + comment.User.Login + ":\n" + body
+		entries = append(entries, entry)
+		totalSize += len(entry)
+	}
+	if !commentsTruncated && totalSize <= maxIssueContextSize {
+		return base + strings.Join(entries, "")
+	}
+	const notice = "\n\n[Issue context truncated to its size limit; some content and comments are omitted.]"
+	base = truncateUTF8(base, maxIssueContextSize-len(notice))
+	remaining := maxIssueContextSize - len(base) - len(notice)
+	newest := make([]string, 0, len(entries))
+	for index := len(entries) - 1; index >= 0; index-- {
+		if len(entries[index]) > remaining {
+			break
+		}
+		newest = append(newest, entries[index])
+		remaining -= len(entries[index])
+	}
+	var context strings.Builder
+	context.Grow(maxIssueContextSize)
+	context.WriteString(base)
+	for index := len(newest) - 1; index >= 0; index-- {
+		context.WriteString(newest[index])
+	}
+	context.WriteString(notice)
+	return context.String()
 }
 
 // truncateUTF8 cuts value to at most limit bytes without leaving a broken character at the end.
@@ -217,22 +248,26 @@ func (store *agentRunStore) syncReviews(w http.ResponseWriter, r *http.Request) 
 		return review.ID <= item.ImportedReviewID || review.State != "CHANGES_REQUESTED" ||
 			strings.TrimSpace(review.Body) == "" || !trustedGitHubAuthor(review.AuthorAssociation)
 	})
+	importedCount := 0
 	for index, review := range pending {
 		// Only the newest request queues the follow-up pass; a queued run cannot take further feedback.
 		newest := index == len(pending)-1
 		var status int
 		var message string
-		if item, status, message = store.importReview(accessFor(r), item, review, newest); status != 0 {
+		var imported bool
+		if item, imported, status, message = store.importReview(accessFor(r), item, review, newest, nil); status != 0 {
 			http.Error(w, message, status)
 			return
 		}
+		if imported {
+			importedCount++
+		}
 	}
-	imported := len(pending)
 	item.CanRequestChanges = store.canRequestChanges(item)
 	writeJSON(w, http.StatusOK, struct {
 		Imported int      `json:"imported"`
 		Run      agentRun `json:"run"`
-	}{imported, publicAgentRun(item)})
+	}{importedCount, publicAgentRun(item)})
 }
 
 // findByPullRequest returns the run that published a pull request, using the stored identity rather
