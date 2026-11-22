@@ -43,6 +43,14 @@ sequenceDiagram
   API->>Store: Persist publication and pull-request identity
   User->>UI: Reviews > Local branches > Evidence, Code changes
   UI->>API: GET /api/v1/agent-runs, .../events, .../diff, .../pull-request
+  User->>UI: Retry publication or import change requests
+  alt Retry publication
+    UI->>API: POST .../publish
+    API-->>UI: 2xx; show success without parsing a body
+  else Import change requests
+    UI->>API: POST .../sync-reviews
+    API-->>UI: {imported}; validate response and refresh runs
+  end
   User->>UI: Request changes
   UI->>API: POST .../request-changes
   API->>Store: Requeue the same run and branch with the feedback
@@ -121,6 +129,8 @@ that exits successfully is therefore not reported as delivered work unless verif
   from GitHub with `sync-reviews`, queues another attempt on the
   same branch and worktree; the new commit lands on the same pull request. A run has at most three attempts. When
   several change requests are imported at once, all are kept and the newest queues the attempt.
+- Evidence actions validate the `sync-reviews` response before showing the imported count. Publication retry is a
+  success on any 2xx response and does not depend on a response body.
 - The worker retries delivering a result up to four times after a connection or server error, so a finished run is
   not repeated because one request failed. It stops an attempt when the control plane answers a progress report with
   conflict, unauthorized, forbidden, or not found, and never pushes from an attempt that lost its lease.
