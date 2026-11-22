@@ -60,7 +60,8 @@ function pageFromHash() {
 
 const queryClient = new QueryClient();
 const healthResponse = z.object({ status: z.literal('ok') });
-const authResponse = z.object({ authenticated: z.boolean(), local: z.boolean(), login: z.string(), avatar_url: z.string().optional() });
+const authResponse = z.object({ authenticated: z.boolean(), local: z.boolean(), login: z.string(),
+  avatar_url: z.string().optional(), github_write_configured: z.boolean().optional() });
 const workersResponse = z.array(
   z.object({
     id: z.string(),
@@ -323,6 +324,7 @@ function App() {
               canManageUpdates={localDevelopment}
               apiOnline={health.isSuccess}
               githubLogin={auth.data?.local === false}
+              githubWriteConfigured={auth.data?.github_write_configured}
               workerCount={workers.data?.length ?? 0}
               onlineWorkerCount={onlineWorkers.length}
               projectCount={projects.data?.length ?? 0}

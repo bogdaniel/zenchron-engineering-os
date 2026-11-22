@@ -107,8 +107,10 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 		}
 		if r.URL.Path == "/api/v1/auth/session" && r.Method == http.MethodGet {
 			w.Header().Set("Cache-Control", "no-store")
+			githubWriteConfigured := newGitHubClient().authConfigured()
 			if config == nil {
-				writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "local": true, "login": "Local workspace"})
+				writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "local": true, "login": "Local workspace",
+					"github_write_configured": githubWriteConfigured})
 				return
 			}
 			user, ok := readSession(r, config)
@@ -117,7 +119,8 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 				return
 			}
 			writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "local": false, "login": user.Login,
-				"avatar_url": user.AvatarURL, "admin": config.isAdmin(user.Login)})
+				"avatar_url": user.AvatarURL, "admin": config.isAdmin(user.Login),
+				"github_write_configured": githubWriteConfigured})
 			return
 		}
 		if r.URL.Path == "/api/v1/auth/logout" && r.Method == http.MethodPost {
