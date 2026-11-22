@@ -212,8 +212,10 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['personas'] });
+      setPersonaError('');
       setPersonaEdit(null); setPersonaEditorOpen(false);
     },
+    onError: (error) => setPersonaError(message(error)),
   });
   function openPersona(persona?: AgentPersona) {
     setPersonasOpen(false);
@@ -225,13 +227,17 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
       behavior: persona.behavior, review_specialization: persona.review_specialization, status: persona.status,
     } : blankPersona);
   }
-  function mutatePersona(persona: AgentPersona, input: AgentPersonaInput) {
-    savePersona.mutate({ id: persona.id, input });
+  function submitPersona(input: unknown, id?: string) {
+    const result = agentPersonaInputSchema.safeParse(input);
+    if (!result.success) { setPersonaError(result.error.issues[0].message); return; }
+    setPersonaError('');
+    savePersona.mutate({ id, input: result.data });
+  }
+  function mutatePersona(persona: AgentPersona, input: unknown) {
+    submitPersona(input, persona.id);
   }
   function personaInput(values: AgentPersonaInput) {
-    const result = agentPersonaInputSchema.safeParse(values);
-    if (!result.success) { setPersonaError(result.error.issues[0].message); return; }
-    savePersona.mutate({ id: personaEdit?.id, input: result.data }, { onError: (error) => setPersonaError(message(error)) });
+    submitPersona(values, personaEdit?.id);
   }
   const onlineProjects = projects.filter((project) => project.worker_status === 'online');
   const workersByID = new Map(workers.map((worker) => [worker.id, worker]));
@@ -668,17 +674,18 @@ export function AgentsPage({ projects, workers, designPreview = false, onNavigat
       <div className="persona-list">
         {personasQuery.isLoading && <Text role="status">Loading personas…</Text>}
         {personasQuery.isError && <Text role="alert">Could not load personas: {message(personasQuery.error)}</Text>}
+        {personaError && <Text className="agents-error" role="alert">{personaError}</Text>}
         {!personasQuery.isLoading && !personasQuery.isError && personas.length === 0 && <Text role="status">No personas yet.</Text>}
         {personas.map((persona) => <div className="persona-list-row" key={persona.id}>
           <span><b>{persona.name}</b><small>{persona.role} · v{persona.version} · {persona.status}</small></span>
           <Button size="xs" variant="default" onClick={() => openPersona(persona)}>Edit</Button>
-          <Button size="xs" variant="default" onClick={() => savePersona.mutate({ input: agentPersonaInputSchema.parse({
+          <Button size="xs" variant="default" onClick={() => submitPersona({
             name: `${persona.name} Copy`, role: persona.role, responsibilities: persona.responsibilities,
             instructions: persona.instructions, behavior: persona.behavior, review_specialization: persona.review_specialization,
             status: 'active',
-          }) })}>Duplicate</Button>
+          })}>Duplicate</Button>
           <Button size="xs" variant="default" disabled={savePersona.isPending} onClick={() => mutatePersona(persona,
-            agentPersonaInputSchema.parse({ ...persona, status: persona.status === 'active' ? 'disabled' : 'active' }))}>
+            { ...persona, status: persona.status === 'active' ? 'disabled' : 'active' })}>
             {persona.status === 'active' ? 'Disable' : 'Enable'}
           </Button>
         </div>)}

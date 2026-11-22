@@ -14,6 +14,7 @@ are labels only; credentials are not stored. Reusable personas define role, resp
 expectations, and review specialization. Profiles bind to personas by ID. The Agents page can create, edit, duplicate,
 disable, and enable personas and shows the linked persona version on its profile. A persona does not grant tools:
 profile tools and worker sandbox controls remain authoritative.
+Persona actions validate before sending requests and show validation or API failures in an accessible alert.
 
 The page has one layout in both data modes (see [One dashboard, two data modes](../architecture/dashboard-modes.md)).
 The Overview tab shows the profile fields, 30-day performance, numbered prompt previews, Variables & Templates, Tool
@@ -52,6 +53,7 @@ flowchart LR
     Dashboard -->|GET /api/v1/workers · runtime readiness| API
     Dashboard -->|Queue agent run| Runs[Agent run API]
     Dashboard -->|GET /api/v1/personas · POST · PUT| API
+    API -->|Validation or write error| Dashboard
     API --> Store[(agents.json<br/>profiles and personas)]
     Runs --> RunStore[(Versioned agent-runs.json snapshot)]
     Dashboard -->|Run history, metrics, and 30-day trend| Runs
@@ -81,6 +83,8 @@ The API validates field lengths and rejects unknown JSON fields, duplicate tools
   `TestPlanPinsProfileConfigurationAndRejectsStaleApproval` cover persona persistence, validation, and pinning.
 - `cd dashboard && npm run test:e2e -- e2e/z_agents.spec.ts --grep 'Live personas persist'` exercises persona CRUD and
   profile binding against the isolated real control plane.
+- `cd dashboard && npm run test:e2e -- e2e/agents-personas-errors.spec.ts` checks that overlong duplicate names and
+  rejected persona updates show accessible errors without throwing from click handlers.
 - `cd dashboard && npm run test:e2e -- e2e/z_agents.spec.ts` checks runtime readiness, profile search and edits, and a
   completed worker run against a loopback model stub; local preview checks cover filters, sorting, and actions
   without API calls.
