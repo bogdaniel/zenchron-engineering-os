@@ -2,16 +2,28 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/exec"
 	"fmt"
 	"strings"
 )
+
+// runBranchRemoteGitCommand permits SSH-agent authentication to the already validated
+// project origin without passing provider API keys or worker bearer credentials.
+func runBranchRemoteGitCommand(ctx context.Context, args ...string) *exec.Cmd {
+	command := agentRunGitCommand(ctx, args...)
+	if socket := os.Getenv("SSH_AUTH_SOCK"); socket != "" {
+		command.Env = append(command.Env, "SSH_AUTH_SOCK="+socket)
+	}
+	return command
+}
 
 func reconcileRunBranch(ctx context.Context, worktree, branch, runID string, attempt int) error {
 	if err := validateGitBranch(ctx, worktree, branch); err != nil {
 		return err
 	}
 	remoteRef := "refs/heads/" + branch
-	output, err := agentRunGitCommand(ctx, "-C", worktree, "ls-remote", "--refs", "origin", remoteRef).Output()
+	output, err := runBranchRemoteGitCommand(ctx, "-C", worktree, "ls-remote", "--refs", "origin", remoteRef).Output()
 	if err != nil {
 		return fmt.Errorf("inspect published run branch: %w", err)
 	}
@@ -22,7 +34,7 @@ func reconcileRunBranch(ctx context.Context, worktree, branch, runID string, att
 	if len(fields) != 2 || fields[1] != remoteRef {
 		return fmt.Errorf("unexpected published run branch response %q", strings.TrimSpace(string(output)))
 	}
-	if err := agentRunGitCommand(ctx, "-C", worktree, "fetch", "--no-tags", "origin", remoteRef).Run(); err != nil {
+	if err := runBranchRemoteGitCommand(ctx, "-C", worktree, "fetch", "--no-tags", "origin", remoteRef).Run(); err != nil {
 		return fmt.Errorf("fetch published run branch: %w", err)
 	}
 	remoteCommitOutput, err := agentRunGitCommand(ctx, "-C", worktree, "rev-parse", "--verify", "FETCH_HEAD^{commit}").Output()
