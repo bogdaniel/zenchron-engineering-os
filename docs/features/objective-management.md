@@ -10,6 +10,7 @@ icons, and the installed AG Grid Community table.
 ```mermaid
 flowchart LR
     URL["One-shot objective link parameters"] -->|"Capture objective and tab in page state, then remove from URL"| Page
+    Page -->|"Objective sections are tabs; view switches are a separate button group"| ViewControls[Accessible objective views]
     User[Engineering user] --> Page["ObjectivesPage · objectives.tsx<br/>filters, views, create dialog"]
     Page --> Detail["ObjectiveDetail.tsx<br/>summary, tabs, editor, milestones"]
     Page -->|reads| Source{"ObjectivesSource · objectivesView.ts"}
@@ -72,6 +73,7 @@ flowchart LR
   open the matching tab.
 - Objective and tab parameters are removed after the page captures them, so hash navigation does not replay an old
   selection. Workspace create context remains until the dialog is submitted or canceled.
+- The Objective, Planning, and Roadmap tabs form one tablist; Kanban, Table, and Cards are separate view buttons.
 - On a phone the status badge and the three header actions keep their full width; the title wraps instead.
 - The search row above the table is hidden only in Mock at the approved desktop frame (1351px or wider and 840px or
   taller), which has no room for it; Live keeps search, the count, and retry visible at every size.
@@ -98,6 +100,6 @@ honest unavailable parts, validation, and failed loads and saves; empty states, 
 table/cards/Kanban/planning/roadmap views, full objective create/edit payloads, an edit that still reaches the
 created objective when the table reports its first selection late, and responsive layouts. The mobile layout check asserts that every
 milestone row remains inside the preview card:
-`cd dashboard && npm run test:e2e -- e2e/objectives-views.spec.ts`.
+`cd dashboard && npm run test:e2e -- e2e/objectives-views.spec.ts` also verifies view buttons stay outside the objective tablist.
 
 Playwright review captures at the mock viewport are in `docs/screenshots/`.

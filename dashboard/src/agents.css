@@ -381,7 +381,7 @@
   margin-bottom: 10px;
 }
 .agent-prompt-editor-field { min-width: 0; }
-.agent-prompt-editor-field > label {
+.agent-prompt-editor-field > span {
   display: block;
   margin-bottom: 4px;
   color: #b4aec3;
