@@ -147,7 +147,7 @@ export function ObjectivePlanPanel({ objectiveID, productID, sampleData }: {
   const mock = useMockOrchestration(objectiveID);
   const live = useLiveOrchestration(!sampleData, objectiveID, productID);
   const source = sampleData ? mock : live;
-  const requestedGraphID = new URLSearchParams(window.location.search).get('graph_id');
+  const [requestedGraphID] = useState(() => new URLSearchParams(window.location.search).get('graph_id'));
   const graph = source.graphs.find((item) => item.id === requestedGraphID && item.objective_id === objectiveID)
     ?? graphOfObjective(source.graphs, objectiveID);
   if (source.failed || source.plansFailed) return <div className="work-panel" role="tabpanel">

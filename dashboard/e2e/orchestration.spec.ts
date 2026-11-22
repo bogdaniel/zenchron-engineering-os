@@ -512,16 +512,37 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(report).toContainText('Unknown');
   await page.evaluate(() => {
     const createObjectURL = URL.createObjectURL.bind(URL);
+    const revokeObjectURL = URL.revokeObjectURL.bind(URL);
+    const setTimeout = window.setTimeout.bind(window);
+    const state = window as typeof window & {
+      __deliveryRevokeDelay?: number; __deliveryRevoked?: boolean; __deliveryRevoke?: () => void;
+    };
     URL.createObjectURL = (blob: Blob) => {
       void blob.text().then((content) => {
         (window as typeof window & { __deliveryExport?: string }).__deliveryExport = content;
       });
       return createObjectURL(blob);
     };
+    URL.revokeObjectURL = (url) => {
+      state.__deliveryRevoked = true;
+      revokeObjectURL(url);
+    };
+    window.setTimeout = ((callback: TimerHandler, delay?: number, ...args: unknown[]) => {
+      if (typeof callback === 'function' && callback.toString().includes('revokeObjectURL')) {
+        state.__deliveryRevokeDelay = delay;
+        state.__deliveryRevoke = callback as () => void;
+        return 0;
+      }
+      return setTimeout(callback, delay, ...args);
+    }) as typeof window.setTimeout;
   });
   const [download] = await Promise.all([page.waitForEvent('download'),
     report.getByRole('button', { name: 'Export JSON' }).click()]);
   expect(download.suggestedFilename()).toMatch(/^zenchron-delivery-[a-f0-9]{32}\.json$/);
+  expect(await page.evaluate(() => (window as typeof window & { __deliveryRevokeDelay?: number }).__deliveryRevokeDelay)).toBe(1000);
+  expect(await page.evaluate(() => (window as typeof window & { __deliveryRevoked?: boolean }).__deliveryRevoked)).toBeUndefined();
+  await page.evaluate(() => (window as typeof window & { __deliveryRevoke?: () => void }).__deliveryRevoke?.());
+  expect(await page.evaluate(() => (window as typeof window & { __deliveryRevoked?: boolean }).__deliveryRevoked)).toBe(true);
   const exported = await page.evaluate(async () => {
     const getExport = () => (window as typeof window & { __deliveryExport?: string }).__deliveryExport;
     for (let attempt = 0; attempt < 20 && !getExport(); attempt++) await new Promise((resolve) => setTimeout(resolve, 10));

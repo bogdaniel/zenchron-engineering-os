@@ -150,3 +150,23 @@ test('Settings reflects an authenticated GitHub session', async ({ page }) => {
   await expect(page.locator('#system-preview-controller .system-preview-controller-values').filter({ hasText: 'Dashboard auth' }))
     .toContainText('GitHub OAuth');
 });
+
+test('GitHub integration status reflects control-plane write credential configuration', async ({ page }) => {
+  let configured = true;
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ json: {
+    authenticated: true, local: true, login: 'Local workspace', github_write_configured: configured,
+  } }));
+  await page.route('**/api/v1/projects', (route) => route.fulfill({ json: [{
+    id: 'project', name: 'Repository', branch: 'main', git_remote: 'github.com/acme/repository',
+    worker_id: 'worker', worker_name: 'Local worker', last_seen: new Date().toISOString(), worker_status: 'online',
+  }] }));
+  await page.goto('/#integrations');
+  const card = page.locator('.system-preview-provider').filter({ has: page.getByRole('heading', { name: 'GitHub' }) });
+  await expect(card).toContainText('Credential configured');
+  await expect(card).toContainText('Reviews, issue comments, issue updates, and merge');
+
+  configured = false;
+  await page.reload();
+  await expect(card).toContainText('Read-only sync');
+  await expect(card).toContainText('need a configured control-plane credential');
+});

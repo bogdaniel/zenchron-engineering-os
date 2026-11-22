@@ -12,7 +12,7 @@ before static-file handling.
 ```mermaid
 flowchart LR
     Shell["App shell · dashboard/src/main.tsx"] -->|"GET /healthz"| CP[(Go control plane)]
-    Shell -->|"GET /api/v1/auth/session"| CP
+    Shell -->|"GET /api/v1/auth/session<br>GitHub credential configured"| CP
     Shell -->|"GET /api/v1/workers"| CP
     Shell -->|"GET /api/v1/projects"| CP
     Worker[Local worker] -->|"PUT /api/v1/workers/{id}/heartbeat<br/>endpoint flag, CLI readiness"| CP
@@ -34,8 +34,9 @@ flowchart LR
   filters provider groups or scrolls to the related settings card in both modes.
 - **Live provider cards.** Eleven cards. Five report real state: Control plane API (`/healthz`, online or offline),
   Local workers (heartbeat counts and which coding CLIs are ready on online workers), GitHub (github.com checkouts
-  detected, read-only sync), OpenAI and Anthropic (the Codex and Claude Code CLIs signed in on online workers). There
-  is no model endpoint card: runs execute only through those CLIs. Storage / Evidence is always "Not configured".
+  detected, plus whether a control-plane write credential is configured), OpenAI and Anthropic (the Codex and Claude
+  Code CLIs signed in on online workers). There is no model endpoint card: runs execute only through those CLIs.
+  Storage / Evidence is always "Not configured".
   GitLab, Slack, Linear / Jira, Docker / Registry, and Google (Vertex AI) say "Not connected" and "Not integrated
   with the control plane." Category counts are computed from these cards. A card's switch reflects its status and is
   disabled.
@@ -59,6 +60,8 @@ flowchart LR
 - **Authority.** A sanitized `github.com/owner/repository` locator enables issue and PR sync in Reviews. PR review
   submission requires control-plane GitHub authentication with Pull requests write permission; GitHub records the app
   or token actor. The dashboard session identifies an allowlisted OAuth user, but organization roles are not enforced.
+  Settings reads whether a control-plane GitHub credential is configured from the authenticated session response; it
+  does not verify that credential's scopes or access to each repository. GitHub remains the authority for those checks.
   The worker reports only which coding CLIs are installed and ready; their sign-ins stay on that worker.
   GitHub App credentials or the `ZENCHRON_GITHUB_TOKEN` fallback are configured in the control-plane environment,
   never in the worker or dashboard.

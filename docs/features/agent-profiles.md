@@ -12,8 +12,12 @@ model identifiers, and shows up to three allowed tool IDs with a count for any a
 status stays unknown, and runs queued on a worker without a configured runtime remain queued. Provider identifiers
 are labels only; credentials are not stored. Reusable personas define role, responsibilities, instructions, behavior
 expectations, and review specialization. Profiles bind to personas by ID. The Agents page can create, edit, duplicate,
-disable, and enable personas and shows the linked persona version on its profile. A persona does not grant tools:
+disable, and enable personas and shows the linked persona version on its profile. Persona responsibility line breaks
+remain editable while typing; blank lines are omitted when the persona is saved. A persona does not grant tools:
 profile tools and worker sandbox controls remain authoritative.
+
+Filtering the profile list does not change the selected profile; its detail, unsaved edits, and Run Agent target stay
+bound to that profile until the user selects another one.
 
 The page has one layout in both data modes (see [One dashboard, two data modes](../architecture/dashboard-modes.md)).
 The Overview tab shows the profile fields, 30-day performance, numbered prompt previews, Variables & Templates, Tool
@@ -47,14 +51,17 @@ operating contract. Tool permissions are passed separately and cannot be expande
 
 ```mermaid
 flowchart LR
+    Link["Profile deep link"] -->|Select profile; clear profile parameter on navigation away| Dashboard
     User[Engineering user] --> Dashboard[Agents workspace]
     Dashboard[Agents workspace<br/>Overview, Prompts, Tools, Run History] -->|GET, POST, PUT /api/v1/agents| API[Go control plane]
     Dashboard -->|GET /api/v1/workers · runtime readiness| API
     Dashboard -->|Queue agent run| Runs[Agent run API]
     Dashboard -->|GET /api/v1/personas · POST · PUT| API
+    Dashboard -->|Persona editor preserves line breaks; save omits blank lines| API
     API --> Store[(agents.json<br/>profiles and personas)]
     Runs --> RunStore[(Versioned agent-runs.json snapshot)]
     Dashboard -->|Run history, metrics, and 30-day trend| Runs
+    Dashboard -->|Filter list without changing selection| Detail[Selected profile detail and run target]
     Tools[Profile tool allowlist] --> Store
     Runs -->|claim with profile snapshot| Worker[Configured local worker]
     Worker -->|start process, provider codex-cli or claude-code| Harness[Codex or Claude Code CLI]
@@ -81,6 +88,8 @@ The API validates field lengths and rejects unknown JSON fields, duplicate tools
   `TestPlanPinsProfileConfigurationAndRejectsStaleApproval` cover persona persistence, validation, and pinning.
 - `cd dashboard && npm run test:e2e -- e2e/z_agents.spec.ts --grep 'Live personas persist'` exercises persona CRUD and
   profile binding against the isolated real control plane.
+- `cd dashboard && npm run test:e2e -- e2e/agents-selection.spec.ts` checks that filtering keeps the selected profile
+  and its unsaved edits.
 - `cd dashboard && npm run test:e2e -- e2e/z_agents.spec.ts` checks runtime readiness, profile search and edits, and a
   completed worker run against a loopback model stub; local preview checks cover filters, sorting, and actions
   without API calls.

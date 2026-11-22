@@ -180,7 +180,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
         ...definition,
         nodes: nodes.map(({ id, position, data }) => ({
           id, type: data.kind, position, data: { label: data.label, description: data.description,
-            agent_id: data.agent_id ?? '', persona_id: data.persona_id ?? '', acceptance: data.acceptance ?? [] },
+            agent_id: data.agent_id ?? '', persona_id: data.persona_id ?? '',
+            acceptance: (data.acceptance ?? []).filter(Boolean) },
         })),
         edges: edges.map(({ id, source: from, target, label }) => ({
           id, source: from, target, label: typeof label === 'string' ? label : '',
@@ -297,7 +298,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
     node.id === selectedId ? { ...node, data: { ...node.data, [key]: value } } : node
   )));
   const updateAcceptance = (value: string) => setNodes((current) => current.map((node) => (
-    node.id === selectedId ? { ...node, data: { ...node.data, acceptance: value.split('\n').filter(Boolean) } } : node
+    node.id === selectedId ? { ...node, data: { ...node.data, acceptance: value.split('\n') } } : node
   )));
   const validate = async () => {
     if (designPreview) {
@@ -316,7 +317,7 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
       const result = await source.validate(activeWorkflow.id, {
         nodes: nodes.map(({ id, position, data }) => ({ id, type: data.kind, position, data: {
           label: data.label, description: data.description, agent_id: data.agent_id ?? '',
-          persona_id: data.persona_id ?? '', acceptance: data.acceptance ?? [],
+          persona_id: data.persona_id ?? '', acceptance: (data.acceptance ?? []).filter(Boolean),
         } })),
         edges: edges.map(({ id, source: from, target, label }) => ({ id, source: from, target, label: typeof label === 'string' ? label : '' })),
       });
@@ -349,7 +350,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
   const isBuilder = section === 'Builder';
   const layoutClasses = [
     'workflow-builder-layout', 'workflow-design-preview', !isBuilder && 'workflow-section-view',
-    !inspectorOpen && 'workflow-inspector-closed', view.positions && 'workflow-arranged', view.timeline && 'workflow-steps-passed',
+    !inspectorOpen && 'workflow-inspector-closed', designPreview && view.positions && 'workflow-arranged',
+    view.timeline && 'workflow-steps-passed',
   ].filter(Boolean).join(' ');
   return <section className={`workflow-page${isBuilder ? ' workflow-run-mock' : ''}`}>
     <header className="workflow-mobile-header" aria-label="Workflow navigation">

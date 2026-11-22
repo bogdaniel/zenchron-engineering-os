@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 const (
@@ -147,6 +149,18 @@ func TestWorkerTokenIsBoundToItsEnrolledIdentity(t *testing.T) {
 	}
 	if response := harness.worker(http.MethodGet, "/api/v1/agent-runs", aliceToken, ""); response.Code != http.StatusUnauthorized {
 		t.Errorf("worker token read the dashboard API: HTTP %d", response.Code)
+	}
+}
+
+func TestWorkerHeartbeatReportsRepositoryGrantRejections(t *testing.T) {
+	harness := newAccessHarness(t)
+	body := `{"name":"alice-worker","projects":[` + projectJSON(projectC, repositoryC) + `]}`
+	response := harness.worker(http.MethodPut, "/api/v1/workers/"+aliceWorkerID+"/heartbeat", aliceToken, body)
+	var reply workerapi.HeartbeatReply
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &reply) != nil ||
+		len(reply.SkippedProjects) != 1 || reply.SkippedProjects[0].ID != projectC ||
+		reply.SkippedProjects[0].Reason != workerapi.SkippedProjectRepositoryNotGranted {
+		t.Fatalf("heartbeat = %s (HTTP %d), want repository grant reason", response.Body.String(), response.Code)
 	}
 }
 
