@@ -197,9 +197,12 @@ func TestProviderArgumentsBoundAgentPermissions(t *testing.T) {
 	}
 
 	claudeWrite, claudeRead := strings.Join(claudeArguments(write, workspace), " "), strings.Join(claudeArguments(read, workspace), " ")
+	writeArgs, readArgs := claudeArguments(write, workspace), claudeArguments(read, workspace)
+	writeSource, readSource := slices.Index(writeArgs, "--setting-sources"), slices.Index(readArgs, "--setting-sources")
 	if !strings.Contains(claudeWrite, "--permission-mode acceptEdits --tools Read,Edit,Write,Glob,Grep --model=gpt-test") ||
 		!strings.Contains(claudeRead, "--permission-mode default --tools Read,Glob,Grep") ||
 		strings.Contains(claudeWrite+claudeRead, "Bash") || strings.Contains(claudeWrite+claudeRead, "dangerously") ||
+		writeSource < 0 || writeArgs[writeSource+1] != "user" || readSource < 0 || readArgs[readSource+1] != "user" ||
 		!strings.Contains(claudeRead, "--strict-mcp-config") ||
 		!strings.Contains(claudeWrite, `--settings {"disableAllHooks":true}`) || !strings.Contains(claudeRead, `--settings {"disableAllHooks":true}`) {
 		t.Errorf("claude arguments = %s / %s", claudeWrite, claudeRead)

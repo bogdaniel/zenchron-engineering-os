@@ -84,7 +84,7 @@ function StatusRows({ rows }: { rows: WorkspaceStatusRow[] }) {
 }
 
 export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePageProps) {
-  const [selectedID, setSelectedID] = useState('');
+  const [selectedID, setSelectedID] = useState(() => new URLSearchParams(window.location.search).get('product') ?? '');
   const mock = useMockWorkspace();
   const live = useLiveWorkspace(!designPreview, facts, selectedID);
   const source = designPreview ? mock : live;
@@ -101,6 +101,8 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
   const [stakeholdersOpen, setStakeholdersOpen] = useState(false);
   const { products } = source;
   const selected = products.find((product) => product.id === selectedID) ?? products[0];
+  const shareURL = new URL(window.location.href);
+  if (selected) shareURL.searchParams.set('product', selected.id);
   const view = source.view(selected?.id, roadmapQuarter);
   const { metrics, roadmap, objectives, repositories, workflows, files, stakeholders, releases, decisions, history, delivery } = view;
   const visibleTabs = (workspaceFoci[focus].tabs as readonly WorkspaceTab[]).filter((tab) => !designPreview || tab !== 'History');
@@ -356,7 +358,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
       onSave={saveProduct} isSaving={source.saving} error={saveError} />
     <Modal opened={shareOpen} onClose={() => setShareOpen(false)} title="Share Product Workspace" centered>
       <p>{source.shareNote}</p>
-      <TextInput aria-label="Workspace link" value={window.location.href} readOnly />
+      <TextInput aria-label="Workspace link" value={shareURL.toString()} readOnly />
     </Modal>
     <Modal opened={stakeholdersOpen} onClose={() => setStakeholdersOpen(false)} title="Stakeholders" centered>
       <p>{stakeholders.manageNote}</p>

@@ -11,10 +11,22 @@ const server = createServer({
     const incoming = request.request;
     const outgoing = response.response;
     if (!incoming.url.startsWith('/api/') && incoming.url !== '/healthz') return response.emit('next');
+    const headers = { ...incoming.headers, host: api.host };
+    if (incoming.headers.origin) {
+      try {
+        const origin = new URL(incoming.headers.origin);
+        if (origin.origin === incoming.headers.origin && origin.protocol === 'http:' &&
+            origin.host === incoming.headers.host && ['127.0.0.1', 'localhost', 'zenchron.test'].includes(origin.hostname)) {
+          headers.origin = api.origin;
+        }
+      } catch {
+        // Preserve malformed origins so the API can reject them.
+      }
+    }
     const upstream = transport.request({
       hostname: api.hostname, port: api.port || (api.protocol === 'https:' ? 443 : 80),
       path: incoming.url, method: incoming.method,
-      headers: { ...incoming.headers, host: api.host },
+      headers,
     }, (result) => {
       outgoing.writeHead(result.statusCode, result.headers);
       result.pipe(outgoing);

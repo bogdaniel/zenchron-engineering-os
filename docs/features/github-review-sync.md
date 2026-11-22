@@ -9,7 +9,8 @@ App, or as the account that owns `ZENCHRON_GITHUB_TOKEN` when the personal-token
 When a successful agent run changes files in a supported GitHub checkout, the worker pushes only its isolated run
 branch with the workstation's configured Git credentials. The control plane uses its GitHub App installation token or
 personal-token fallback to find or create the matching pull request against the run's base branch and returns its link
-to Reviews. No merge is performed.
+to Reviews. Verification has its own deadline; the push receives a fresh bounded Git deadline after verification. No
+merge is performed.
 
 ```mermaid
 sequenceDiagram
@@ -71,6 +72,7 @@ sequenceDiagram
     GH-->>API: Updated issue
     API-->>UI: Updated state
     opt Successful non-empty agent run with configured auth and GitHub origin
+        Worker->>Worker: Commit and verify; start fresh bounded push deadline
         Worker->>Remote: Push isolated run branch with local Git credentials
         Worker->>API: Report branch push result with run completion
         API->>GH: Find or create pull request for branch and base

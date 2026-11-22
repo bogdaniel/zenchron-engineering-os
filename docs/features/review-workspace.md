@@ -16,6 +16,8 @@ plane credential, and GitHub enforces branch protection.
 
 ```mermaid
 flowchart LR
+    Link["Run deep link"] -->|Select run; clear run parameter on navigation away| Page
+    Page -->|"Enter or Space opens the focused local branch row"| RunDetail[Selected run evidence]
     User[Developer or reviewer] --> Page["ReviewsPage · reviews.tsx<br/>one layout, search / filter / pinned selection state"]
     Page -->|reads| Source{"ReviewsSource · reviewsView.ts"}
     Source -->|Mock| Mock["useMockReviews · review-preview.tsx<br/>fixtures, useState only, no requests"]
@@ -41,8 +43,11 @@ flowchart LR
     Evidence -->|"POST /api/v1/agent-runs/{id}/sync-reviews, /publish"| API
     API -->|open items, head-bound diff, paged checks and reviews, operator permission, review / issue / protected merge writes| GitHub[GitHub REST API]
     API -->|request changes: requeue the same run and branch| Worker[Assigned local worker]
-    GitHub -->|Markdown / HTML body| Render[marked, then DOMPurify; images removed]
-    Render --> Summary
+    GitHub -->|Markdown / HTML body| Render[marked, then DOMPurify HTML profile; active tags and style attrs removed]
+    Render -->|sanitized HTML| Detail
+    Render -->|sanitized HTML| Summary
+    API -->|dashboard document with response policy| CSP[Dashboard CSP: same-origin scripts and connections; no framing or external forms]
+    CSP --> Page
     Mock -. sends no request .-> API
 ```
 
@@ -94,6 +99,9 @@ Live only:
   feedback on a Zenchron pull request is attached to its run, and an eligible request for changes queues a follow-up.
 - **Issue.** Labels, the link to GitHub, and the description; Conversations comments on the issue and closes or
   reopens it.
+- **Untrusted Markdown.** GitHub descriptions and agent output use the HTML profile; styles, forms, controls, media,
+  SVG, MathML and images are removed. Links get `rel="noopener noreferrer"`; the dashboard CSP limits resources to
+  the dashboard origin (with GitHub profile avatars allowed) and prevents framing and external form submissions.
 - **Selection safety.** Changing the selected pull request, issue, or run clears its unsent draft and action feedback.
   A hidden selected item never falls through to the first visible row, so writes cannot silently target a different item.
 - **Local branch.** Agent runs in an AG Grid. The detail shows the run's diff in read-only Monaco with its commit, the
@@ -137,6 +145,7 @@ Mock only:
   the Unified minimap, coloured change rows, Split view, the phone layout, and no API traffic beyond the session check.
 - `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Reviews'`: the approved frame geometry, the
   not-connected state, local branch diffs and statistics, comments, request-changes, disabled merge, and resizing.
+- `cd dashboard && npm run test:e2e -- e2e/keyboard-selection.spec.ts`: local branch rows open from keyboard focus.
 - `cd dashboard && npm run test:e2e -- e2e/z_run_evidence.spec.ts e2e/z_agents.spec.ts`: run evidence at desktop and
   phone size, review import, publish retry, and request changes, cancel, and evidence against a real worker.
 - The approved build and this build's Mock were pixel-compared at 1672×941, 1672×749, 1512×874, 1440×900, 1280×800,

@@ -43,9 +43,10 @@ function diffLineDecorations(editor: Editor) {
   }) ?? [];
 }
 
-export function MonacoEditor({ value, label, mode, readOnly, onChange, className, lineNumbers }: {
+export function MonacoEditor({ value, label, labelledBy, mode, readOnly, onChange, className, lineNumbers }: {
   value: string;
   label: string;
+  labelledBy?: string;
   mode: EditorMode;
   readOnly: boolean;
   onChange?: (value: string) => void;
@@ -90,6 +91,7 @@ export function MonacoEditor({ value, label, mode, readOnly, onChange, className
         links: false,
       });
       editor.current = instance;
+      if (labelledBy) instance.getDomNode()?.setAttribute('aria-labelledby', labelledBy);
       if (mode === 'diff') decorations.current = instance.deltaDecorations([], diffLineDecorations(instance));
       changeSubscription = instance.onDidChangeModelContent(() => onChangeRef.current?.(instance!.getValue()));
     }).catch(() => {
@@ -101,7 +103,7 @@ export function MonacoEditor({ value, label, mode, readOnly, onChange, className
       instance?.dispose();
       if (editor.current === instance) editor.current = undefined;
     };
-  }, [label, mode]);
+  }, [label, labelledBy, mode]);
 
   useEffect(() => {
     if (!editor.current) return;

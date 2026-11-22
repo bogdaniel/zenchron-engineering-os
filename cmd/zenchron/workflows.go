@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"mime"
 	"net/http"
 	"slices"
 	"sort"
@@ -331,6 +332,11 @@ func validWorkflowNodeType(nodeType string) bool {
 }
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, target any) bool {
+	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || contentType != "application/json" {
+		http.Error(w, "request body must use application/json", http.StatusUnsupportedMediaType)
+		return false
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxJSONRequestBody)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()

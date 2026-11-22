@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"slices"
 	"strings"
@@ -22,7 +23,14 @@ const (
 	maxClaimResponseSize  = 1 << 20
 )
 
-func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch string) error {
+func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch, commitSHA string) error {
+	if err := validateAgentRunRemote(ctx, worktree, expectedRemote, branch); err != nil {
+		return err
+	}
+	return pushGitCommit(ctx, worktree, branch, commitSHA)
+}
+
+func validateAgentRunRemote(ctx context.Context, worktree, expectedRemote, branch string) error {
 	parts := strings.Split(expectedRemote, "/")
 	if len(parts) != 3 || parts[0] != "github.com" || parts[1] == "" || parts[2] == "" {
 		return errors.New("project is not a GitHub repository")
@@ -30,23 +38,37 @@ func pushAgentBranch(ctx context.Context, worktree, expectedRemote, branch strin
 	if err := validateGitBranch(ctx, worktree, branch); err != nil {
 		return err
 	}
-	remote, err := gitOutput(ctx, "-C", worktree, "remote", "get-url", "--push", "origin")
-	if err != nil || repositoryLocator(strings.TrimSpace(remote)) != expectedRemote {
+	fetchRemote, err := gitOutput(ctx, "-C", worktree, "config", "--get-all", "remote.origin.url")
+	fetchURLs := strings.Fields(fetchRemote)
+	if err != nil || len(fetchURLs) != 1 || repositoryLocator(fetchURLs[0]) != expectedRemote {
+		return errors.New("Git fetch origin does not match the project's GitHub repository")
+	}
+	pushRemote, err := gitOutput(ctx, "-C", worktree, "remote", "get-url", "--push", "origin")
+	if err != nil || repositoryLocator(strings.TrimSpace(pushRemote)) != expectedRemote {
 		return errors.New("Git push origin does not match the project's GitHub repository")
 	}
-	return pushGitBranch(ctx, worktree, branch)
+	return nil
 }
 
-func pushGitBranch(ctx context.Context, worktree, branch string) error {
+func pushGitCommit(ctx context.Context, worktree, branch, commitSHA string) error {
 	pushCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	push := gitCommand(pushCtx, "-C", worktree, "push", "origin",
-		"refs/heads/"+branch+":refs/heads/"+branch)
+		commitSHA+":refs/heads/"+branch)
 	push.Stdout, push.Stderr = io.Discard, io.Discard
 	if err := push.Run(); err != nil {
 		return errors.New("Git push failed")
 	}
 	return nil
+}
+
+// Agent-created nested repositories can install fsmonitor commands, so these Git children get
+// neither that hook nor worker secrets.
+func agentRunGitCommand(ctx context.Context, args ...string) *exec.Cmd {
+	command := gitCommand(ctx, args...)
+	command.Env = append(providerEnvironment(os.Environ()),
+		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.fsmonitor", "GIT_CONFIG_VALUE_0=false")
+	return command
 }
 
 // agentIdentity is the author of every commit the worker creates on a run branch.
@@ -77,18 +99,19 @@ func (buffer *boundedDiff) Write(input []byte) (int, error) {
 func (buffer *boundedDiff) String() string { return strings.ToValidUTF8(string(buffer.data), "") }
 
 func collectAgentRunDiff(ctx context.Context, worktree, baseBranch string) (string, bool, error) {
-	add := gitCommand(ctx, "add", "--intent-to-add", "--", ".")
+	add := agentRunGitCommand(ctx, "add", "--intent-to-add", "--", ".")
 	add.Dir = worktree
 	if err := add.Run(); err != nil {
 		return "", false, err
 	}
-	mergeBase := gitCommand(ctx, "merge-base", baseBranch, "HEAD")
+	mergeBase := agentRunGitCommand(ctx, "merge-base", baseBranch, "HEAD")
 	mergeBase.Dir = worktree
 	base, err := mergeBase.Output()
 	if err != nil {
 		return "", false, fmt.Errorf("find agent branch base: %w", err)
 	}
-	command := gitCommand(ctx, "diff", strings.TrimSpace(string(base)), "--no-ext-diff", "--no-textconv", "--no-color", "--")
+	command := agentRunGitCommand(ctx, "diff", strings.TrimSpace(string(base)), "--no-ext-diff", "--no-textconv",
+		"--no-color", "--ignore-submodules=all", "--")
 	command.Dir = worktree
 	buffer := &boundedDiff{}
 	command.Stdout, command.Stderr = buffer, io.Discard
@@ -99,19 +122,19 @@ func collectAgentRunDiff(ctx context.Context, worktree, baseBranch string) (stri
 }
 
 func commitAgentRunChanges(ctx context.Context, worktree, baseBranch, runID string, attempt int) (string, error) {
-	add := gitCommand(ctx, "add", "-A", "--", ".")
+	add := agentRunGitCommand(ctx, "add", "-A", "--", ".")
 	add.Dir = worktree
 	if err := add.Run(); err != nil {
 		return "", fmt.Errorf("stage agent branch changes: %w", err)
 	}
-	check := gitCommand(ctx, "diff", "--cached", "--quiet")
+	check := agentRunGitCommand(ctx, "diff", "--cached", "--quiet")
 	check.Dir = worktree
 	if err := check.Run(); err != nil {
 		var exitError *exec.ExitError
 		if !errors.As(err, &exitError) || exitError.ExitCode() != 1 {
 			return "", fmt.Errorf("check staged agent changes: %w", err)
 		}
-		commit := gitCommand(ctx, append(slices.Clone(agentIdentity), "commit", "-m",
+		commit := agentRunGitCommand(ctx, append(slices.Clone(agentIdentity), "commit", "-m",
 			fmt.Sprintf("Agent run %s attempt %d", runID, attempt))...)
 		commit.Dir = worktree
 		commit.Stdout, commit.Stderr = io.Discard, io.Discard
@@ -119,13 +142,13 @@ func commitAgentRunChanges(ctx context.Context, worktree, baseBranch, runID stri
 			return "", fmt.Errorf("create isolated agent commit: %w", err)
 		}
 	}
-	head := gitCommand(ctx, "rev-parse", "--verify", "HEAD")
+	head := agentRunGitCommand(ctx, "rev-parse", "--verify", "HEAD")
 	head.Dir = worktree
 	commitID, err := head.Output()
 	if err != nil {
 		return "", fmt.Errorf("read isolated agent commit: %w", err)
 	}
-	base := gitCommand(ctx, "merge-base", baseBranch, "HEAD")
+	base := agentRunGitCommand(ctx, "merge-base", baseBranch, "HEAD")
 	base.Dir = worktree
 	baseID, err := base.Output()
 	if err != nil {
