@@ -137,8 +137,9 @@ flowchart LR
 - The integrate unit starts when its dependencies are settled, with every produce unit's branch and admitted commit as
   inputs in plan order. Every producer must be settled, including producers reached only through transitive
   dependencies; an active retry cannot be paired with its previous candidate.
-- The worker refuses inputs whose branch moved, aborts a conflicting merge and reports the branch and files, and
-  otherwise commits the merges, runs the repository's verification commands on the result, and reports the commit.
+- The worker refuses inputs whose branch moved, aborts a conflicting merge and reports the branch and exact file
+  paths, including paths with spaces, and otherwise commits the merges, runs the repository's verification commands on
+  the result, and reports the commit.
 - A conflict becomes a finding for the producer whose branch did not merge, and integration runs again after that
   producer hands off. Failed verification of the combined candidate fails the unit.
 - With reviews of the integrate unit, the candidate is pushed and the pull request created only after they accept, by
@@ -198,7 +199,7 @@ Worker tests with a real Git repository and a fake CLI (`go test ./cmd/zenchron-
 | `TestWorkerExecutesTwoRunsOfOneCheckoutAtTheSameTimeInSeparateWorktrees` | Real overlap: each provider process waits until it sees the other running |
 | `TestWorkerWithOneSlotExecutesQueuedRunsOneAfterTheOther`, `TestRunConcurrencyIsConfigurableAndBounded` | The concurrency limit |
 | `TestIntegrationRunMergesExactCandidatesVerifiesTheCombinationAndPublishesOnce` | Deterministic merge, verification of the combination, idempotent publication pass |
-| `TestIntegrationRunReportsConflictsAndStaleInputsWithoutCombiningThem` | Aborted conflicting merge, refused stale input |
+| `TestIntegrationRunReportsConflictsAndStaleInputsWithoutCombiningThem` | Exact conflict path with spaces, aborted merge, refused stale input |
 | `TestTypedResultIsTheLastFencedResultBlockOfTheFinalMessage` | Result extraction |
 
 Browser, real control plane and worker with the fake Codex CLI
