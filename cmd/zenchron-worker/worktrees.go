@@ -56,7 +56,14 @@ func prepareWorktree(ctx context.Context, root string, project discoveredProject
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create worktree parent: %w", err)
 	}
+	existingBranch, err := gitOutput(ctx, "-C", project.Path, "branch", "--list", "--format=%(refname:short)", "--", branch)
+	if err != nil {
+		return fmt.Errorf("check run branch: %w", err)
+	}
 	args := []string{"-C", project.Path, "worktree", "add", "-b", branch, path, baseBranch}
+	if strings.TrimSpace(existingBranch) == branch {
+		args = []string{"-C", project.Path, "worktree", "add", path, branch}
+	}
 	if _, err := gitOutput(ctx, args...); err != nil {
 		return fmt.Errorf("create isolated worktree: %w", err)
 	}
