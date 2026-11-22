@@ -331,15 +331,27 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect(page.getByRole('textbox', { name: 'Node Name' })).toHaveValue('Agent Task');
   await chooseFromWorkflowMenu(page, 'Auto layout');
   await expect(page.locator('.workflow-status')).toContainText('Layout updated');
+  await page.getByRole('button', { name: 'Fit graph to canvas' }).click();
   const dragHandle = page.getByRole('button', { name: 'Drag Agent Task to canvas' });
   const source = await dragHandle.boundingBox();
-  const canvas = await page.locator('.workflow-canvas').boundingBox();
   expect(source).not.toBeNull();
-  expect(canvas).not.toBeNull();
-  const dropPoint = { x: canvas!.x + canvas!.width / 2, y: canvas!.y + canvas!.height / 2 };
+  const dropPoint = await page.locator('.workflow-canvas').evaluate((canvas) => {
+    const bounds = canvas.getBoundingClientRect();
+    const nodes = [...canvas.querySelectorAll('.workflow-node')].map((node) => node.getBoundingClientRect());
+    for (let y = bounds.top + 30; y < bounds.bottom - 30; y += 30) {
+      for (let x = bounds.left + 30; x < bounds.right - 30; x += 30) {
+        if (nodes.every((node) => x < node.left - 10 || x > node.right + 10 || y < node.top - 10 || y > node.bottom + 10)) {
+          return { x, y };
+        }
+      }
+    }
+    return null;
+  });
+  expect(dropPoint, 'the fitted graph leaves room for a palette drop').not.toBeNull();
+  const target = dropPoint!;
   await page.mouse.move(source!.x + source!.width / 2, source!.y + source!.height / 2);
   await page.mouse.down();
-  await page.mouse.move(dropPoint.x, dropPoint.y, { steps: 8 });
+  await page.mouse.move(target.x, target.y, { steps: 8 });
   await page.mouse.up();
   const droppedNodes = page.locator('.workflow-canvas .workflow-node').filter({ hasText: 'Agent Task' });
   await expect(droppedNodes).toHaveCount(2);
@@ -347,8 +359,8 @@ test('workflow graph can be edited and saved to the control plane', async ({ pag
   await expect.poll(async () => {
     const bounds = await droppedNode.boundingBox();
     if (!bounds) return false;
-    return Math.abs(bounds.x + bounds.width / 2 - dropPoint.x) < 30 &&
-      Math.abs(bounds.y + bounds.height / 2 - dropPoint.y) < 30;
+    return Math.abs(bounds.x + bounds.width / 2 - target.x) < 30 &&
+      Math.abs(bounds.y + bounds.height / 2 - target.y) < 30;
   }).toBe(true);
   await expect(page.locator('.workflow-canvas .workflow-node')).toHaveCount(11);
   await expect(page.locator('.workflow-properties .workflow-subheading h3')).toHaveText('Agent Task');
