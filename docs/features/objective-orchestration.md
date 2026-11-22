@@ -11,6 +11,7 @@ decisions are in [Objective orchestration: architecture and decisions](../archit
 
 ```mermaid
 flowchart LR
+  URL["One-shot plan link parameters"] -->|"Capture project, workflow, and graph before clearing"| Plan
   Operator[Operator] --> Plan["Objectives → Plan tab<br/>ObjectivePlanPanel, WorkGraphView"]
   Operator --> Views["Product Workspace, Agents, Reviews<br/>WorkspaceExecution, AgentWorkUnits, RunGraphContext"]
   Plan -->|"GET, POST /api/v1/objectives/{id}/plans"| Plans[orchestration_api.go]

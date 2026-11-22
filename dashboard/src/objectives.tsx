@@ -131,6 +131,17 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }
 
+  function closeCreateDialog() {
+    setCreateOpen(false);
+    createForm.reset();
+    createForm.setFieldValue('product_id', '');
+    clearWorkspaceCreateContext();
+    const url = new URL(window.location.href);
+    url.searchParams.delete('workflow');
+    url.searchParams.delete('project');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }
+
   function selectObjective(item: Objective) {
     selectedIDRef.current = item.id;
     setSelectedID(item.id);
@@ -398,12 +409,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
         </div>
       </div>
 
-      <Modal opened={createOpen} onClose={() => {
-        setCreateOpen(false);
-        createForm.reset();
-        createForm.setFieldValue('product_id', '');
-        clearWorkspaceCreateContext();
-      }} title="New objective" centered className="objective-modal">
+      <Modal opened={createOpen} onClose={closeCreateDialog} title="New objective" centered className="objective-modal">
         <form onSubmit={createForm.onSubmit((values) => void createObjective(values))}>
           <TextInput label="Objective title" placeholder="e.g. Improve review velocity" required {...createForm.getInputProps('title')} />
           <Textarea label="Description" placeholder="Describe the outcome and why it matters" minRows={3} {...createForm.getInputProps('description')} />
@@ -415,7 +421,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
           {source.productsFailed && <Text className="form-error" role="alert">Product choices are unavailable. You can create this objective without a product.</Text>}
           <TextInput label="Due date" type="date" {...createForm.getInputProps('due_date')} />
           {submitError && <Text className="form-error" role="alert">{submitError}</Text>}
-          <div className="objective-form-actions"><Button variant="subtle" type="button" onClick={() => setCreateOpen(false)}>Cancel</Button><Button className="new-objective-button" type="submit" loading={creating}>Create objective</Button></div>
+          <div className="objective-form-actions"><Button variant="subtle" type="button" onClick={closeCreateDialog}>Cancel</Button><Button className="new-objective-button" type="submit" loading={creating}>Create objective</Button></div>
         </form>
       </Modal>
     </div>

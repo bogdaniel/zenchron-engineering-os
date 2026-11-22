@@ -15,6 +15,7 @@ Live workflows retain saved node positions on load; graphs whose nodes are all a
 
 ```mermaid
 flowchart LR
+    Link["Workflow deep link"] -->|Select workflow; clear workflow parameter on navigation away| Page
     User[Engineering user] --> Page["WorkflowsPage · dashboard/src/workflows.tsx<br/>one layout"]
     Page -->|reads| Source{"WorkflowsSource · workflowsView.ts<br/>workflows, save, create, describe"}
     Source -->|Mock| Fixtures["useMockWorkflows · workflow-preview-data.ts<br/>useState only, no requests"]
