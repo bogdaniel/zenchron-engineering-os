@@ -349,7 +349,8 @@ export function WorkflowsPage({ designPreview = false }: { designPreview?: boole
   const isBuilder = section === 'Builder';
   const layoutClasses = [
     'workflow-builder-layout', 'workflow-design-preview', !isBuilder && 'workflow-section-view',
-    !inspectorOpen && 'workflow-inspector-closed', view.positions && 'workflow-arranged', view.timeline && 'workflow-steps-passed',
+    !inspectorOpen && 'workflow-inspector-closed', designPreview && view.positions && 'workflow-arranged',
+    view.timeline && 'workflow-steps-passed',
   ].filter(Boolean).join(' ');
   return <section className={`workflow-page${isBuilder ? ' workflow-run-mock' : ''}`}>
     <header className="workflow-mobile-header" aria-label="Workflow navigation">
