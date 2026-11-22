@@ -94,6 +94,8 @@ test('Objectives in Mock renders the supplied screen and keeps create and edit l
   await expect(page.getByRole('tab', { name: 'Activity', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   await objectiveRows.first().click();
+  await expect(page.getByRole('tablist', { name: 'Objective sections' }).getByRole('tab')).toHaveCount(3);
+  await expect(page.getByRole('group', { name: 'Objective views' }).getByRole('button')).toHaveCount(3);
   const tableComposition = await page.evaluate(() => {
     const tabs = document.querySelector('.objectives-tabs')!;
     const panel = document.querySelector('.objective-table-panel')!;

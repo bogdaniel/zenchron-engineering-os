@@ -14,7 +14,7 @@ func TestWorkerHeartbeatAppearsInWorkerList(t *testing.T) {
 	server := newMux()
 	id := "0123456789abcdef0123456789abcdef"
 	body := `{"name":"dev-machine","providers":[{"id":"codex-cli","version":"1.2.3","ready":true}],"projects":[{"id":"abcdef0123456789abcdef0123456789","name":"repo","branch":"feature/work","git_remote":"github.com/acme/repo"}]}`
-	request := httptest.NewRequest(http.MethodPut, "/api/v1/workers/"+id+"/heartbeat", strings.NewReader(body))
+	request := jsonRequest(http.MethodPut, "/api/v1/workers/"+id+"/heartbeat", strings.NewReader(body))
 	response := httptest.NewRecorder()
 	server.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
@@ -22,7 +22,7 @@ func TestWorkerHeartbeatAppearsInWorkerList(t *testing.T) {
 	}
 
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workers", nil))
+	server.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/workers", nil))
 	var workers []struct {
 		ID        string                     `json:"id"`
 		Name      string                     `json:"name"`
@@ -38,7 +38,7 @@ func TestWorkerHeartbeatAppearsInWorkerList(t *testing.T) {
 		t.Fatalf("worker list = %#v (HTTP %d), want registered online dev-machine", workers, response.Code)
 	}
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/projects", nil))
+	server.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/projects", nil))
 	var projects []struct {
 		ID           string `json:"id"`
 		Name         string `json:"name"`
@@ -98,7 +98,7 @@ func TestWorkerHeartbeatRejectsInvalidIdentityAndName(t *testing.T) {
 		{path: "/api/v1/workers/0123456789abcdef0123456789abcdef/heartbeat", body: `{"name":"dev","projects":[{"id":"abcdef0123456789abcdef0123456789","name":"repo","branch":"main","git_remote":"https://user:secret@github.com/acme/repo.git"}]}`},
 	} {
 		response := httptest.NewRecorder()
-		server.ServeHTTP(response, httptest.NewRequest(http.MethodPut, testCase.path, strings.NewReader(testCase.body)))
+		server.ServeHTTP(response, jsonRequest(http.MethodPut, testCase.path, strings.NewReader(testCase.body)))
 		if response.Code != http.StatusBadRequest {
 			t.Errorf("heartbeat %s returned HTTP %d, want %d", testCase.path, response.Code, http.StatusBadRequest)
 		}
@@ -140,18 +140,18 @@ func TestIsLoopbackHost(t *testing.T) {
 func TestWorkerReadinessRequiresRecentHeartbeat(t *testing.T) {
 	server := newMux()
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workers/healthz", nil))
+	server.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/workers/healthz", nil))
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("empty worker readiness = HTTP %d, want %d", response.Code, http.StatusServiceUnavailable)
 	}
 
 	id := "0123456789abcdef0123456789abcdef"
-	heartbeat := httptest.NewRequest(
+	heartbeat := jsonRequest(
 		http.MethodPut, "/api/v1/workers/"+id+"/heartbeat", strings.NewReader(`{"name":"dev-machine"}`),
 	)
 	server.ServeHTTP(httptest.NewRecorder(), heartbeat)
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workers/healthz", nil))
+	server.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/workers/healthz", nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("worker readiness = HTTP %d, want %d", response.Code, http.StatusOK)
 	}

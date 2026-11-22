@@ -17,6 +17,7 @@ plane credential, and GitHub enforces branch protection.
 ```mermaid
 flowchart LR
     Link["Run deep link"] -->|Select run; clear run parameter on navigation away| Page
+    Page -->|"Enter or Space opens the focused local branch row"| RunDetail[Selected run evidence]
     User[Developer or reviewer] --> Page["ReviewsPage · reviews.tsx<br/>one layout, search / filter / pinned selection state"]
     Page -->|reads| Source{"ReviewsSource · reviewsView.ts"}
     Source -->|Mock| Mock["useMockReviews · review-preview.tsx<br/>fixtures, useState only, no requests"]
@@ -144,6 +145,7 @@ Mock only:
   the Unified minimap, coloured change rows, Split view, the phone layout, and no API traffic beyond the session check.
 - `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Reviews'`: the approved frame geometry, the
   not-connected state, local branch diffs and statistics, comments, request-changes, disabled merge, and resizing.
+- `cd dashboard && npm run test:e2e -- e2e/keyboard-selection.spec.ts`: local branch rows open from keyboard focus.
 - `cd dashboard && npm run test:e2e -- e2e/z_run_evidence.spec.ts e2e/z_agents.spec.ts`: run evidence at desktop and
   phone size, review import, publish retry, and request changes, cancel, and evidence against a real worker.
 - The approved build and this build's Mock were pixel-compared at 1672×941, 1672×749, 1512×874, 1440×900, 1280×800,

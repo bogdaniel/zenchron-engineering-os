@@ -148,6 +148,77 @@ func TestUnauthenticatedRequestsRejectForwardedAndNonLoopbackHosts(t *testing.T)
 	}
 }
 
+func TestLoopbackAPIMutationsRequireSameOriginAndLoopbackHost(t *testing.T) {
+	t.Setenv("ZENCHRON_MANAGED_SUPERVISOR_TOKEN", "")
+	passed := 0
+	server := authHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		passed++
+		w.WriteHeader(http.StatusNoContent)
+	}), nil)
+	for _, test := range []struct {
+		method, path, host, origin string
+		status                     int
+	}{
+		{method: http.MethodGet, path: "/api/v1/test", host: "attacker.example:8080", status: http.StatusForbidden},
+		{method: http.MethodPost, path: "/api/v1/test", host: "127.0.0.1:8080", origin: "http://attacker.example:8080", status: http.StatusForbidden},
+		{method: http.MethodPost, path: "/api/v1/test", host: "127.0.0.1:8080", status: http.StatusForbidden},
+		{method: http.MethodPost, path: "/api/v1/test", host: "127.0.0.1:8080", origin: "http://127.0.0.1:8080", status: http.StatusNoContent},
+		{method: http.MethodPost, path: "/api/v1/test", host: "localhost", origin: "http://localhost", status: http.StatusNoContent},
+		{method: http.MethodPut, path: "/api/v1/workers/0123456789abcdef0123456789abcdef/heartbeat",
+			host: "127.0.0.1:8080", status: http.StatusForbidden},
+		{method: http.MethodPut, path: "/api/v1/workers/0123456789abcdef0123456789abcdef/heartbeat",
+			host: "127.0.0.1:8080", origin: "http://127.0.0.1:8080", status: http.StatusNoContent},
+	} {
+		request := httptest.NewRequest(test.method, test.path, nil)
+		request.Host = test.host
+		if test.origin != "" {
+			request.Header.Set("Origin", test.origin)
+		}
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != test.status {
+			t.Errorf("%s %s with Host %q and Origin %q returned HTTP %d, want %d",
+				test.method, test.path, test.host, test.origin, response.Code, test.status)
+		}
+	}
+	if passed != 3 {
+		t.Fatalf("allowed requests passed through %d times, want 3", passed)
+	}
+}
+
+func TestAuthenticatedLoopbackAcceptsRewrittenProxyOrigin(t *testing.T) {
+	config := testAuthConfig()
+	config.publicURL, config.https = mustURL("http://127.0.0.1:4173"), false
+	session, err := signSession(authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passed := 0
+	server := authHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		passed++
+		w.WriteHeader(http.StatusNoContent)
+	}), config)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/test", nil)
+	request.Host = "127.0.0.1:8080"
+	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || passed != 1 {
+		t.Fatalf("proxied local mutation returned HTTP %d and passed through %d times", response.Code, passed)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/test", nil)
+	request.Host = "127.0.0.1:8080"
+	request.Header.Set("Origin", "http://attacker.example")
+	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || passed != 1 {
+		t.Fatalf("hostile proxied mutation returned HTTP %d and passed through %d times", response.Code, passed)
+	}
+}
+
 func TestAuthenticatedGitHubLoginIsAvailableWithoutRepositoryPolicy(t *testing.T) {
 	config := testAuthConfig()
 	user := authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}

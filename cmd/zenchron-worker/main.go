@@ -236,9 +236,15 @@ type workerAuthTransport struct {
 }
 
 func (transport workerAuthTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if transport.token == "" && !isLoopbackWorkerHost(request.URL.Hostname()) {
+		return http.DefaultTransport.RoundTrip(request)
+	}
+	request = request.Clone(request.Context())
 	if transport.token != "" {
-		request = request.Clone(request.Context())
 		request.Header.Set("Authorization", "Bearer "+transport.token)
+	}
+	if isLoopbackWorkerHost(request.URL.Hostname()) {
+		request.Header.Set("Origin", request.URL.Scheme+"://"+request.URL.Host)
 	}
 	return http.DefaultTransport.RoundTrip(request)
 }

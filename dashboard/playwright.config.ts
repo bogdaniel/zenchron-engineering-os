@@ -14,7 +14,7 @@ export default defineConfig({
   use: {
     baseURL: `http://zenchron.test:${dashboardPort}`,
     launchOptions: { args: ['--host-resolver-rules=MAP zenchron.test 127.0.0.1'] },
-  },
+      },
   webServer: [
     {
       command: 'sh ./test-server.sh',

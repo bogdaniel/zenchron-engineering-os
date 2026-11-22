@@ -52,6 +52,7 @@ operating contract. Tool permissions are passed separately and cannot be expande
 ```mermaid
 flowchart LR
     Link["Profile deep link"] -->|Select profile; clear profile parameter on navigation away| Dashboard
+    Dashboard -->|Monaco prompt editor is labelled by visible text| PromptEditor[Prompt editor]
     User[Engineering user] --> Dashboard[Agents workspace]
     Dashboard[Agents workspace<br/>Overview, Prompts, Tools, Run History] -->|GET, POST, PUT /api/v1/agents| API[Go control plane]
     Dashboard -->|GET /api/v1/workers · runtime readiness| API
@@ -80,6 +81,7 @@ flowchart LR
 - Supported tool identifiers: `code.search`, `code.write`, `docs.search`, `git.diff`, `git.read`, and `tests.run`.
 
 The API validates field lengths and rejects unknown JSON fields, duplicate tools, and unsupported tool identifiers.
+Prompt editor labels are programmatically associated with Monaco's editor surface.
 
 ## Verification
 
@@ -93,6 +95,7 @@ The API validates field lengths and rejects unknown JSON fields, duplicate tools
 - `cd dashboard && npm run test:e2e -- e2e/z_agents.spec.ts` checks runtime readiness, profile search and edits, and a
   completed worker run against a loopback model stub; local preview checks cover filters, sorting, and actions
   without API calls.
+- The profile edit flow also checks that Monaco's editor is labelled by the visible prompt label.
 - The populated desktop layout fixture uses six profiles (five active) plus a completed run; focused tablet and phone
   checks verify that the profile, detail, and run panels do not overlap.
 - `cd dashboard && npm run test:e2e -- e2e/agents-mobile-preview.spec.ts` verifies the 390×844 summary, local tabs and

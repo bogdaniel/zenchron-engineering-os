@@ -16,7 +16,7 @@ const server = createServer({
       try {
         const origin = new URL(incoming.headers.origin);
         if (origin.origin === incoming.headers.origin && origin.protocol === 'http:' &&
-            origin.host === incoming.headers.host && ['127.0.0.1', 'localhost'].includes(origin.hostname)) {
+            origin.host === incoming.headers.host && ['127.0.0.1', 'localhost', 'zenchron.test'].includes(origin.hostname)) {
           headers.origin = api.origin;
         }
       } catch {

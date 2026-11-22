@@ -177,6 +177,10 @@ func TestWorkerHTTPClientAddsBearerCredential(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer worker-secret-for-auth-tests-1234567890" {
 			t.Errorf("Authorization = %q", r.Header.Get("Authorization"))
 		}
+		origin, err := url.Parse(r.Header.Get("Origin"))
+		if err != nil || origin.Scheme != "http" || origin.Host != r.Host {
+			t.Errorf("Origin = %q, want local server origin", r.Header.Get("Origin"))
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer server.Close()
@@ -185,6 +189,25 @@ func TestWorkerHTTPClientAddsBearerCredential(t *testing.T) {
 		t.Fatal(err)
 	}
 	response, err := newWorkerHTTPClient("worker-secret-for-auth-tests-1234567890").Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("response status = %d", response.StatusCode)
+	}
+}
+
+func TestWorkerHTTPClientAddsOriginForUnauthenticatedLoopback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin, err := url.Parse(r.Header.Get("Origin"))
+		if err != nil || origin.Scheme != "http" || origin.Host != r.Host {
+			t.Errorf("Origin = %q, want the loopback request origin", r.Header.Get("Origin"))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	response, err := newWorkerHTTPClient("").Get(server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
