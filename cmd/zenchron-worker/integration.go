@@ -65,8 +65,11 @@ func (runner *agentRunner) integrate(
 		mergeCommand := gitCommand(gitCtx, append(arguments, "merge", "--no-ff", "--no-edit", "-m", "Integrate "+input.Branch, input.Commit)...)
 		mergeCommand.Stdout, mergeCommand.Stderr = io.Discard, io.Discard
 		if err := mergeCommand.Run(); err != nil {
-			conflicts, _ := gitOutput(gitCtx, "-C", worktree, "diff", "--name-only", "--diff-filter=U")
-			merge.ConflictBranch, merge.ConflictFiles = input.Branch, strings.Fields(conflicts)
+			conflicts, _ := gitOutput(gitCtx, "-C", worktree, "diff", "--name-only", "-z", "--diff-filter=U")
+			merge.ConflictBranch = input.Branch
+			if conflicts != "" {
+				merge.ConflictFiles = strings.Split(strings.TrimSuffix(conflicts, "\x00"), "\x00")
+			}
 			merge.ConflictFiles = merge.ConflictFiles[:min(len(merge.ConflictFiles), maxConflictFiles)]
 			_, abortErr := gitOutput(gitCtx, "-C", worktree, "merge", "--abort")
 			if abortErr != nil || len(merge.ConflictFiles) == 0 {

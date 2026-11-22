@@ -14,7 +14,7 @@ import (
 func TestProductsCanBeCreatedUpdatedAndListed(t *testing.T) {
 	server := newMux()
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
 		`{"name":"Core Product","description":"Platform APIs","repository_ids":["`+testProjectID+`"],"default_workflow_id":"pr-review-release"}`,
 	)))
 	var created product
@@ -27,7 +27,7 @@ func TestProductsCanBeCreatedUpdatedAndListed(t *testing.T) {
 	}
 
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/v1/products/"+created.ID, strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPut, "/api/v1/products/"+created.ID, strings.NewReader(
 		`{"name":"Core Product","description":"Updated","repository_ids":[]}`,
 	)))
 	var updated product
@@ -42,7 +42,7 @@ func TestProductsCanBeCreatedUpdatedAndListed(t *testing.T) {
 	}
 
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/products", nil))
+	server.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/products", nil))
 	var items []product
 	if err := json.NewDecoder(response.Body).Decode(&items); err != nil || response.Code != http.StatusOK ||
 		len(items) != 1 || items[0].ID != created.ID || items[0].Description != "Updated" {
@@ -53,7 +53,7 @@ func TestProductsCanBeCreatedUpdatedAndListed(t *testing.T) {
 func TestProductConfigurationRevisionAdvancesOnlyWhenConfigurationChanges(t *testing.T) {
 	server := newMux()
 	create := httptest.NewRecorder()
-	server.ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
+	server.ServeHTTP(create, jsonRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
 		`{"name":"Versioned","description":"Initial","repository_ids":[]}`)))
 	var created map[string]json.RawMessage
 	if err := json.NewDecoder(create.Body).Decode(&created); err != nil || create.Code != http.StatusCreated {
@@ -71,7 +71,7 @@ func TestProductConfigurationRevisionAdvancesOnlyWhenConfigurationChanges(t *tes
 	update := func(description string) int {
 		t.Helper()
 		response := httptest.NewRecorder()
-		server.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/v1/products/"+id, strings.NewReader(
+		server.ServeHTTP(response, jsonRequest(http.MethodPut, "/api/v1/products/"+id, strings.NewReader(
 			`{"name":"Versioned","description":"`+description+`","repository_ids":[]}`)))
 		var product map[string]json.RawMessage
 		if err := json.NewDecoder(response.Body).Decode(&product); err != nil || response.Code != http.StatusOK {
@@ -123,7 +123,7 @@ func TestLegacyProductWithoutConfigurationRevisionRemainsReadableAndAdvances(t *
 	if !exists || loaded.public().ConfigurationRevision != 1 {
 		t.Fatalf("legacy product = %#v, exists %t; expected revision 1", loaded, exists)
 	}
-	request := httptest.NewRequest(http.MethodPut, "/api/v1/products/"+id,
+	request := jsonRequest(http.MethodPut, "/api/v1/products/"+id,
 		strings.NewReader(`{"name":"Legacy","description":"Updated","repository_ids":[]}`))
 	request.SetPathValue("id", id)
 	response := httptest.NewRecorder()
@@ -138,14 +138,14 @@ func TestLegacyProductWithoutConfigurationRevisionRemainsReadableAndAdvances(t *
 func TestProductDefaultWorkflowMustExistAndCanBeCleared(t *testing.T) {
 	server := newMux()
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
 		`{"name":"Invalid","repository_ids":[],"default_workflow_id":"missing"}`)))
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("unknown default workflow returned HTTP %d", response.Code)
 	}
 
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
 		`{"name":"Configured","repository_ids":[],"default_workflow_id":"pr-review-release"}`)))
 	var created product
 	if err := json.NewDecoder(response.Body).Decode(&created); err != nil || response.Code != http.StatusCreated ||
@@ -154,7 +154,7 @@ func TestProductDefaultWorkflowMustExistAndCanBeCleared(t *testing.T) {
 	}
 
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/v1/products/"+created.ID, strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPut, "/api/v1/products/"+created.ID, strings.NewReader(
 		`{"name":"Configured","repository_ids":[],"default_workflow_id":""}`)))
 	var updated product
 	if err := json.NewDecoder(response.Body).Decode(&updated); err != nil || response.Code != http.StatusOK ||
@@ -170,20 +170,20 @@ func TestProductsRejectInvalidAndDuplicateNames(t *testing.T) {
 		`{"name":"Core Product"}`,
 	} {
 		response := httptest.NewRecorder()
-		server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(body)))
+		server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/products", strings.NewReader(body)))
 		if response.Code != http.StatusBadRequest {
 			t.Errorf("invalid product body returned HTTP %d: %s", response.Code, response.Body.String())
 		}
 	}
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
 		`{"name":"Core Product","repository_ids":[]}`,
 	)))
 	if response.Code != http.StatusCreated {
 		t.Fatalf("create first product returned HTTP %d: %s", response.Code, response.Body.String())
 	}
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
 		`{"name":"core product","repository_ids":[]}`,
 	)))
 	if response.Code != http.StatusConflict {

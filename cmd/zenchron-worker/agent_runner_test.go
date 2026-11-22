@@ -23,6 +23,7 @@ const fakeWorkerToken = "worker-token-0123456789abcdef0123456789abcdef"
 type runHarness struct {
 	t          *testing.T
 	repository string
+	gitRemote  string
 	worktree   string
 	command    workerapi.AgentRunCommand
 	runner     *agentRunner
@@ -164,7 +165,7 @@ func (harness *runHarness) serve(w http.ResponseWriter, r *http.Request) {
 
 func (harness *runHarness) process() error {
 	return harness.runner.process(context.Background(),
-		[]discoveredProject{{ID: harness.command.ProjectID, Name: "repository", Path: harness.repository}})
+		[]discoveredProject{{ID: harness.command.ProjectID, Name: "repository", Path: harness.repository, Remote: harness.gitRemote}})
 }
 
 func (harness *runHarness) result() workerapi.AgentRunResult {
@@ -250,6 +251,104 @@ func TestCLIRunVerificationFailureKeepsCommitAndDoesNotPublish(t *testing.T) {
 	}
 	if events := harness.eventText(); !strings.Contains(events, "verification: failed: sh -c echo boom-detail; exit 3\nboom-detail") {
 		t.Fatalf("events missing verification failure:\n%s", events)
+	}
+}
+
+func TestCLIRunPushesVerifiedCommitWhenVerificationMovesBranch(t *testing.T) {
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	if err := os.MkdirAll(bare, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, bare, "init", "--bare")
+	harness := newRunHarness(t, fakeChangeScript, [][]string{{
+		"git", "-c", "user.name=Verification", "-c", "user.email=verification@example.invalid",
+		"commit", "--amend", "--allow-empty", "-m", "verification moved branch",
+	}})
+	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
+	harness.gitRemote = "github.com/test/repository"
+	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
+	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
+	harness.command.PublishPullRequest = true
+	var headAtPush string
+	harness.runner.push = func(ctx context.Context, worktree, _, branch, commitSHA string) error {
+		head, err := gitOutput(ctx, "-C", worktree, "rev-parse", "HEAD")
+		if err != nil {
+			return err
+		}
+		headAtPush = strings.TrimSpace(head)
+		return gitCommand(ctx, "-C", worktree, "push", bare, commitSHA+":refs/heads/"+branch).Run()
+	}
+	if err := harness.process(); err != nil {
+		t.Fatalf("process run: %v", err)
+	}
+	result := harness.result()
+	remoteCommit := strings.TrimSpace(runGit(t, bare, "rev-parse", "refs/heads/"+harness.command.Branch))
+	if headAtPush == result.CommitSHA || result.Status != "succeeded" || result.Verification != workerapi.VerificationPassed || !result.BranchPushed ||
+		remoteCommit != result.CommitSHA {
+		t.Fatalf("result = %#v; remote branch points to %q, want verified commit %q", result, remoteCommit, result.CommitSHA)
+	}
+}
+
+func TestCLIRunRetryReconcilesPublishedBranchAfterWorktreeCleanup(t *testing.T) {
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	if err := os.MkdirAll(bare, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, bare, "init", "--bare")
+	harness := newRunHarness(t, fakeChangeScript, [][]string{{
+		"git", "-c", "user.name=Verification", "-c", "user.email=verification@example.invalid",
+		"commit", "--amend", "--allow-empty", "-m", "verification moved branch",
+	}})
+	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
+	harness.gitRemote = "github.com/test/repository"
+	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
+	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
+	first := harness.command
+	first.PublishPullRequest = true
+	second := first
+	second.Attempts = 2
+	second.Prompt = "Apply the reviewer change."
+	harness.command = first
+	harness.runner.push = func(ctx context.Context, worktree, _, branch, commitSHA string) error {
+		return gitCommand(ctx, "-C", worktree, "push", bare, commitSHA+":refs/heads/"+branch).Run()
+	}
+	harness.queue = []workerapi.AgentRunCommand{first, second}
+	if err := harness.process(); err != nil {
+		t.Fatalf("first attempt: %v", err)
+	}
+	firstResult := harness.results[0]
+	localRecovery := strings.TrimSpace(runGit(t, harness.repository, "rev-parse", "refs/heads/"+first.Branch))
+	if firstResult.Status != "succeeded" || localRecovery == firstResult.CommitSHA {
+		t.Fatalf("first result = %#v; local branch %q should have moved past published %q",
+			firstResult, localRecovery, firstResult.CommitSHA)
+	}
+	root := filepath.Dir(filepath.Dir(harness.worktree))
+	removed, kept, err := cleanupWorktrees(context.Background(), root,
+		[]discoveredProject{{ID: first.ProjectID, Name: "repository", Path: harness.repository}})
+	if err != nil || len(removed) != 1 || len(kept) != 0 {
+		t.Fatalf("cleanup removed %v and kept %v, error %v", removed, kept, err)
+	}
+	secondScript := `echo "second attempt" >> README.md
+echo '{"type":"item.completed","item":{"id":"m2","type":"agent_message","text":"reviewer change applied"}}'
+echo '{"type":"turn.completed","usage":{"input_tokens":2,"output_tokens":1}}'
+`
+	if err := os.WriteFile(harness.runner.providers[workerapi.ProviderCodex].path,
+		[]byte("#!/bin/sh\n"+secondScript), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := harness.process(); err != nil {
+		t.Fatalf("second attempt: %v", err)
+	}
+	secondResult := harness.results[1]
+	remoteCommit := strings.TrimSpace(runGit(t, bare, "rev-parse", "refs/heads/"+first.Branch))
+	recovery := strings.TrimSpace(runGit(t, harness.repository, "rev-parse",
+		"refs/heads/zenchron/recovery/"+first.ID+"/2-"+localRecovery))
+	if secondResult.Status != "succeeded" || secondResult.Attempts != 2 || !secondResult.BranchPushed ||
+		remoteCommit != secondResult.CommitSHA || recovery != localRecovery ||
+		!strings.Contains(strings.TrimSpace(runGit(t, bare, "show", "refs/heads/"+first.Branch+":README.md")), "second attempt") {
+		t.Fatalf("second result = %#v; remote %q; recovery %q, want %q", secondResult, remoteCommit, recovery, localRecovery)
 	}
 }
 
@@ -345,6 +444,29 @@ func TestGitStageDeadlineStartsAfterProviderFinishes(t *testing.T) {
 	}
 	if result := harness.result(); result.Status != "succeeded" || len(result.CommitSHA) != 40 {
 		t.Fatalf("run longer than the git stage deadline = %#v", result)
+	}
+}
+
+func TestPushGetsFreshDeadlineAfterVerification(t *testing.T) {
+	harness := newRunHarness(t, fakeChangeScript, [][]string{{"sh", "-c", "sleep 2.5"}})
+	harness.runner.limits.gitStage = 2 * time.Second
+	harness.runner.limits.verification = 5 * time.Second
+	harness.command.PublishPullRequest = true
+	pushed := false
+	harness.runner.push = func(ctx context.Context, _, _, _, _ string) error {
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) < time.Second {
+			return context.DeadlineExceeded
+		}
+		pushed = true
+		return ctx.Err()
+	}
+	if err := harness.process(); err != nil {
+		t.Fatalf("process run: %v", err)
+	}
+	if result := harness.result(); result.Status != "succeeded" || !result.BranchPushed || !pushed ||
+		result.Verification != workerapi.VerificationPassed {
+		t.Fatalf("run after verification exceeded the staging deadline = %#v; pushed %t", result, pushed)
 	}
 }
 
@@ -456,7 +578,7 @@ func TestBoundedDiffStaysValidAndWithinLimitWhenCutMidCharacter(t *testing.T) {
 
 func TestAttemptThatLosesItsLeaseAfterCommittingDoesNotPush(t *testing.T) {
 	pushes := 0
-	countPush := func(context.Context, string, string, string) error {
+	countPush := func(context.Context, string, string, string, string) error {
 		pushes++
 		return nil
 	}

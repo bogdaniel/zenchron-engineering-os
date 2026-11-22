@@ -322,12 +322,13 @@ test('Reviews evidence imports GitHub change requests and retries a failed pull 
   await page.route(`**/api/v1/agent-runs/${runID}/publish`, (route) => {
     calls.push('publish');
     run = { ...evidenceRun };
-    return route.fulfill(json(run));
+    return route.fulfill({ status: 204, body: '' });
   });
   let importStatus = 409;
+  let importBody: unknown = { imported: 2, run };
   await page.route(`**/api/v1/agent-runs/${runID}/sync-reviews`, (route) => {
     calls.push('sync-reviews');
-    return route.fulfill(importStatus === 200 ? json({ imported: 2, run }) : { status: 409, body: 'agent run review history is full' });
+    return route.fulfill(importStatus === 200 ? json(importBody) : { status: 409, body: 'agent run review history is full' });
   });
   await page.goto('/#reviews');
   await page.getByRole('button', { name: 'Local branches' }).click();
@@ -342,9 +343,13 @@ test('Reviews evidence imports GitHub change requests and retries a failed pull 
   await page.getByRole('button', { name: 'Import change requests from GitHub' }).click();
   await expect(page.locator('.run-evidence-actions').getByRole('alert')).toHaveText('agent run review history is full');
   importStatus = 200;
+  importBody = { wrong: true };
+  await page.getByRole('button', { name: 'Import change requests from GitHub' }).click();
+  await expect(page.locator('.run-evidence-actions').getByRole('alert')).toContainText('Invalid input');
+  importBody = { imported: 2, run };
   await page.getByRole('button', { name: 'Import change requests from GitHub' }).click();
   await expect(page.locator('.run-evidence-actions').getByRole('status')).toHaveText('Imported 2 change requests from GitHub.');
-  expect(calls).toEqual(['publish', 'sync-reviews', 'sync-reviews']);
+  expect(calls).toEqual(['publish', 'sync-reviews', 'sync-reviews', 'sync-reviews']);
 });
 
 test('the Mock and Live switch selects the data source, keeps the page, and stays in the address', async ({ page, baseURL }) => {

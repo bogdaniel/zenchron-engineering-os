@@ -100,30 +100,32 @@ func (store *agentRunStore) reviewRun(w http.ResponseWriter, r *http.Request, re
 func (store *agentRunStore) recordReview(
 	access requestAccess, runID, projectID, comment string, requestChanges, requireQueue bool,
 ) (agentRun, int, string) {
-	store.mu.Lock()
-	item, exists := store.items[runID]
-	if !exists {
-		store.mu.Unlock()
-		return agentRun{}, http.StatusNotFound, "agent run not found"
+	updated, status, message := store.update(runID, func(item *agentRun) (int, string) {
+		if projectID != "" && item.ProjectID != projectID {
+			return http.StatusNotFound, "agent run not found"
+		}
+		return store.recordReviewLocked(item, access, comment, requestChanges, requireQueue)
+	})
+	if status == http.StatusInternalServerError {
+		return agentRun{}, status, "could not persist agent run review"
 	}
-	if projectID != "" && item.ProjectID != projectID {
-		store.mu.Unlock()
-		return agentRun{}, http.StatusNotFound, "agent run not found"
-	}
-	if !reviewableAgentRun(item) {
-		store.mu.Unlock()
-		return agentRun{}, http.StatusConflict, "only completed agent runs can be reviewed"
+	return updated, status, message
+}
+
+// recordReviewLocked changes a run's review state while its store lock is held.
+func (store *agentRunStore) recordReviewLocked(
+	item *agentRun, access requestAccess, comment string, requestChanges, requireQueue bool,
+) (int, string) {
+	if !reviewableAgentRun(*item) {
+		return http.StatusConflict, "only completed agent runs can be reviewed"
 	}
 	if len(item.ReviewComments) >= maxAgentRunComments {
-		store.mu.Unlock()
-		return agentRun{}, http.StatusConflict, "agent run review history is full"
+		return http.StatusConflict, "agent run review history is full"
 	}
-	canQueue := requestChanges && store.canRequestChanges(item) && access.mayDispatchTo(item.WorkerID)
+	canQueue := requestChanges && store.canRequestChanges(*item) && access.mayDispatchTo(item.WorkerID)
 	if requestChanges && !canQueue && requireQueue {
-		store.mu.Unlock()
-		return agentRun{}, http.StatusConflict, "agent run cannot accept another code-change pass"
+		return http.StatusConflict, "agent run cannot accept another code-change pass"
 	}
-	previous := item
 	item.ReviewComments = append(item.ReviewComments, agentRunComment{
 		Body: comment, RequestChanges: requestChanges, CreatedAt: time.Now().UTC(),
 	})
@@ -131,14 +133,7 @@ func (store *agentRunStore) recordReview(
 	if canQueue {
 		item.requeue()
 	}
-	store.items[runID] = item
-	if err := store.persistLocked(); err != nil {
-		store.items[runID] = previous
-		store.mu.Unlock()
-		return agentRun{}, http.StatusInternalServerError, "could not persist agent run review"
-	}
-	store.mu.Unlock()
-	return item, 0, ""
+	return 0, ""
 }
 
 // requeue returns a finished run to the queue for another pass on the same branch and worktree.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -69,17 +70,23 @@ func TestSendHeartbeatUsesWorkerEndpoint(t *testing.T) {
 			body.Projects[0].Remote != project.Remote || body.Projects[0].Path != "" {
 			t.Errorf("heartbeat body = %#v, decode error = %v", body, err)
 		}
-		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(workerapi.HeartbeatReply{SkippedProjects: []workerapi.SkippedProject{{
+			ID: project.ID, Reason: workerapi.SkippedProjectRepositoryNotGranted,
+		}}})
 	}))
 	defer server.Close()
 	baseURL, err := url.Parse(server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sendHeartbeat(context.Background(), server.Client(), baseURL,
+	skipped, err := sendHeartbeat(context.Background(), server.Client(), baseURL,
 		"0123456789abcdef0123456789abcdef", workerapi.Heartbeat{Name: "dev-machine",
-			Projects: wireProjects([]discoveredProject{project})}); err != nil {
+			Projects: wireProjects([]discoveredProject{project})})
+	if err != nil {
 		t.Fatalf("sendHeartbeat: %v", err)
+	}
+	if len(skipped) != 1 || skipped[0].ID != project.ID || skipped[0].Reason != workerapi.SkippedProjectRepositoryNotGranted {
+		t.Fatalf("skipped projects = %#v", skipped)
 	}
 }
 
@@ -127,14 +134,14 @@ func TestProviderDetectionDoesNotBlockWorkerHeartbeat(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(workerapi.HeartbeatReply{})
 	}))
 	defer server.Close()
 	baseURL, err := url.Parse(server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sendHeartbeat(context.Background(), server.Client(), baseURL,
+	if _, err := sendHeartbeat(context.Background(), server.Client(), baseURL,
 		"0123456789abcdef0123456789abcdef", workerapi.Heartbeat{ProtocolVersion: workerapi.ProtocolVersion,
 			ReleaseRevision: "main-test"}); err != nil {
 		t.Fatalf("heartbeat while provider detection is blocked: %v", err)
@@ -142,10 +149,37 @@ func TestProviderDetectionDoesNotBlockWorkerHeartbeat(t *testing.T) {
 	stopDetection()
 }
 
+func TestSkippedProjectsAreLoggedOnlyWhenSetChanges(t *testing.T) {
+	projects := []discoveredProject{{ID: "project-1", Name: "private-repo"}}
+	skipped := []workerapi.SkippedProject{{ID: "project-1", Reason: workerapi.SkippedProjectRepositoryNotGranted}}
+	var output bytes.Buffer
+	previous := reportSkippedProjects(&output, nil, skipped, projects)
+	if got, want := output.String(), "project \"private-repo\" skipped: repository_not_granted\n"; got != want {
+		t.Fatalf("first log = %q, want %q", got, want)
+	}
+	output.Reset()
+	previous = reportSkippedProjects(&output, previous, skipped, projects)
+	if output.Len() != 0 {
+		t.Fatalf("unchanged skipped projects logged again: %q", output.String())
+	}
+	previous = reportSkippedProjects(&output, previous, nil, projects)
+	if len(previous) != 0 {
+		t.Fatalf("cleared skipped-project set = %#v", previous)
+	}
+	previous = reportSkippedProjects(&output, previous, skipped, projects)
+	if output.Len() == 0 {
+		t.Fatal("skipped project was not logged after the set changed and returned")
+	}
+}
+
 func TestWorkerHTTPClientAddsBearerCredential(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer worker-secret-for-auth-tests-1234567890" {
 			t.Errorf("Authorization = %q", r.Header.Get("Authorization"))
+		}
+		origin, err := url.Parse(r.Header.Get("Origin"))
+		if err != nil || origin.Scheme != "http" || origin.Host != r.Host {
+			t.Errorf("Origin = %q, want local server origin", r.Header.Get("Origin"))
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -155,6 +189,25 @@ func TestWorkerHTTPClientAddsBearerCredential(t *testing.T) {
 		t.Fatal(err)
 	}
 	response, err := newWorkerHTTPClient("worker-secret-for-auth-tests-1234567890").Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("response status = %d", response.StatusCode)
+	}
+}
+
+func TestWorkerHTTPClientAddsOriginForUnauthenticatedLoopback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin, err := url.Parse(r.Header.Get("Origin"))
+		if err != nil || origin.Scheme != "http" || origin.Host != r.Host {
+			t.Errorf("Origin = %q, want the loopback request origin", r.Header.Get("Origin"))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	response, err := newWorkerHTTPClient("").Get(server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}

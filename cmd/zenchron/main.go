@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -84,6 +85,12 @@ func runControlPlane() error {
 		return err
 	}
 	defer lock.Close()
+	if auth != nil {
+		auth.sessionRevocations, err = loadSessionRevocations(filepath.Join(dataDir, "auth-sessions.json"))
+		if err != nil {
+			return err
+		}
+	}
 	handler, err := newPersistentMux(dataDir)
 	if err != nil {
 		return fmt.Errorf("initialize control-plane state: %w", err)

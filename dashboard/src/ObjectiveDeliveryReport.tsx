@@ -62,7 +62,7 @@ function downloadReport(report: Report) {
     link.href = url;
     link.download = `zenchron-delivery-${report.graph_id}.json`;
     link.click();
-  } finally { URL.revokeObjectURL(url); }
+  } finally { window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
 }
 
 export function ObjectiveDeliveryReport({ graphID }: { graphID: string }) {

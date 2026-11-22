@@ -24,7 +24,7 @@ func TestAgentRunCancellationFencesWorkerAndKeepsPartialDiff(t *testing.T) {
 		newProductStore(), registry, runs)
 	call := func(method, path, body string) *httptest.ResponseRecorder {
 		response := httptest.NewRecorder()
-		server.ServeHTTP(response, httptest.NewRequest(method, path, strings.NewReader(body)))
+		server.ServeHTTP(response, jsonRequest(method, path, strings.NewReader(body)))
 		return response
 	}
 	heartbeat := `{"name":"worker","providers":[{"id":"codex-cli","version":"1","ready":true}],"projects":[{"id":"` + testProjectID + `","name":"repo","branch":"main"}]}`
