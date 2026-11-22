@@ -27,6 +27,7 @@ sequenceDiagram
   Worker->>API: PUT /api/v1/workers/{id}/heartbeat with Bearer token
   API->>Policy: Token hash must match the grant for exactly this id
   API->>API: Register only projects whose repository is granted to this worker
+  API->>API: Reserve project ids only while their existing registrations are online
   Developer->>API: POST /api/v1/agent-runs (session cookie)
   API->>Policy: User may touch the repository and may dispatch to this worker
   Worker->>API: POST /api/v1/workers/{id}/agent-runs/claim
@@ -148,7 +149,8 @@ the previous one keeps working for 24 hours, so the worker can be restarted at a
   action (`user.set`, `user.delete`, `worker.set`, `worker.delete`), the target, and the state before and after. A
   token rotation is recorded as `token_changed`; hashes are not written. If the record cannot be written the change is
   undone and the request fails. The last administrator cannot be removed or demoted.
-- A project id belongs to the first worker that registers it; another worker cannot register the same id.
+- A project id belongs to the first worker that registers it while online. When that registration goes offline, the
+  next authorized worker can reclaim the id; the old offline entry remains visible until that worker heartbeats again.
 - If the policy file is missing or invalid, every API request is refused until it is fixed.
 - A control plane on a non-loopback address refuses to start without an access policy, GitHub sign-in, and an HTTPS
   public URL.
@@ -259,6 +261,8 @@ Not covered, and blocking multi-organization or untrusted deployment:
   covers impersonation, the shared token, unapproved repositories, cross-user reads and writes on runs and projects,
   cross-worker claims and results, personal versus shared workers, revocation without restart, an invalid policy
   denying everything, malformed grants, and the non-loopback startup requirement.
+- `go test ./cmd/zenchron -run 'TestWorkerCanRegisterAProjectIDAfterPreviousWorkerWentOffline' -count=1`
+  confirms an authorized worker can reclaim an ID after its previous registration becomes stale.
 - `go test ./cmd/zenchron-worker -run 'TestGuard|TestNextAttempt|TestAttemptFailsClosed|TestRecordedProcess|TestRunLeaves|TestGuardedRun' -count=1`
   kills a stand-in worker and its guard and checks that provider processes, including one that left the process group
   and dropped the lock, are stopped by the guard or by the next attempt, that an attempt fails closed while something

@@ -384,7 +384,9 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 	access := accessFor(r)
 	claimed := make(map[string]bool, len(registry.projects))
 	for _, project := range registry.projects {
-		claimed[project.ID] = true
+		if time.Since(project.LastSeen) <= workerOnlineWindow {
+			claimed[project.ID] = true
+		}
 	}
 	for _, project := range request.Projects {
 		// An enrolled worker registers only the repositories it was approved for, and never a project id
