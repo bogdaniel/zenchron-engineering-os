@@ -74,8 +74,13 @@ test('Live connected journey: persona and CLI profile configure an executable ob
   await page.getByRole('option', { name: 'Builder producer · codex-cli · default', exact: true }).click();
   await page.getByRole('combobox', { name: 'Required persona' }).click();
   await page.getByRole('option', { name: `${personaName} · v1`, exact: true }).click();
-  const acceptance = 'The compiled plan retains this workflow acceptance criterion.';
-  await page.getByRole('textbox', { name: 'Acceptance criteria (one per line)' }).fill(acceptance);
+  const acceptance = ['The compiled plan retains this criterion.', 'It also keeps the second line.'];
+  const acceptanceField = page.getByRole('textbox', { name: 'Acceptance criteria (one per line)' });
+  await acceptanceField.fill(acceptance[0]);
+  await acceptanceField.press('Enter');
+  await expect(acceptanceField).toHaveValue(`${acceptance[0]}\n`);
+  await acceptanceField.pressSequentially(acceptance[1]);
+  await expect(acceptanceField).toHaveValue(acceptance.join('\n'));
 
   const saveResponse = page.waitForResponse((response) => response.request().method() === 'PUT' &&
     new URL(response.url()).pathname === `/api/v1/workflows/${workflow.id}`);
@@ -83,7 +88,7 @@ test('Live connected journey: persona and CLI profile configure an executable ob
   const savedWorkflow = await (await saveResponse).json();
   expect(savedWorkflow.version).toBe(2);
   expect(savedWorkflow.nodes.find((node: { type: string }) => node.type === 'agent-task').data)
-    .toMatchObject({ agent_id: configured.profileID, persona_id: configured.personaID, acceptance: [acceptance] });
+    .toMatchObject({ agent_id: configured.profileID, persona_id: configured.personaID, acceptance });
   await page.getByRole('button', { name: 'Validate', exact: true }).click();
   await expect(page.locator('.workflow-status')).toContainText(
     'Executable workflow configuration validated · saved identity v2');
@@ -114,14 +119,14 @@ test('Live connected journey: persona and CLI profile configure an executable ob
   await expect(page.getByRole('tabpanel')).toContainText(`Compiled from workflow ${workflow.id} · version 2`);
   await expect(revision).toContainText('Configured producer');
   await expect(revision).toContainText(`Planned persona ${configured.personaID} · v1`);
-  await expect(revision).toContainText(acceptance);
+  for (const criterion of acceptance) await expect(revision).toContainText(criterion);
 
   const plans = await page.evaluate(async (id: string) => fetch(`/api/v1/objectives/${id}/plans`).then((r) => r.json()),
     objective.id);
   const producer = plans[0].units.find((unit: { kind: string }) => unit.kind === 'produce');
   expect(plans[0]).toMatchObject({ workflow_id: workflow.id, workflow_version: 2 });
   expect(producer).toMatchObject({ agent_id: configured.profileID, persona_id: configured.personaID,
-    acceptance: [acceptance] });
+    acceptance });
 });
 
 test('Live connected journey: workspace selections keep objective plan provenance', async ({ page }) => {

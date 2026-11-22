@@ -12,7 +12,8 @@ model identifiers, and shows up to three allowed tool IDs with a count for any a
 status stays unknown, and runs queued on a worker without a configured runtime remain queued. Provider identifiers
 are labels only; credentials are not stored. Reusable personas define role, responsibilities, instructions, behavior
 expectations, and review specialization. Profiles bind to personas by ID. The Agents page can create, edit, duplicate,
-disable, and enable personas and shows the linked persona version on its profile. A persona does not grant tools:
+disable, and enable personas and shows the linked persona version on its profile. Persona responsibility line breaks
+remain editable while typing; blank lines are omitted when the persona is saved. A persona does not grant tools:
 profile tools and worker sandbox controls remain authoritative.
 
 The page has one layout in both data modes (see [One dashboard, two data modes](../architecture/dashboard-modes.md)).
@@ -52,6 +53,7 @@ flowchart LR
     Dashboard -->|GET /api/v1/workers · runtime readiness| API
     Dashboard -->|Queue agent run| Runs[Agent run API]
     Dashboard -->|GET /api/v1/personas · POST · PUT| API
+    Dashboard -->|Persona editor preserves line breaks; save omits blank lines| API
     API --> Store[(agents.json<br/>profiles and personas)]
     Runs --> RunStore[(Versioned agent-runs.json snapshot)]
     Dashboard -->|Run history, metrics, and 30-day trend| Runs

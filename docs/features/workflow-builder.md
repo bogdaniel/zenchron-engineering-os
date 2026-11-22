@@ -30,6 +30,7 @@ flowchart LR
     Menu -->|Auto layout| ELK["ELK layered layout<br/>compact card sizes"]
     ELK --> Canvas
     Canvas -->|select| Inspector["Inspector<br/>name · description · delete · WorkflowNodeSettings"]
+    Inspector -->|"Acceptance textarea keeps line breaks; save and validate omit blank lines"| Hook
     Page --> RunPreview["Run Preview · WorkflowRun.tsx<br/>Mock: fixture timeline · Live: select workflow in Objective Plan"]
     Page --> Phone["Phone run detail · WorkflowPhoneRunCards<br/>six stages from the saved graph"]
     Page --> Sections["WorkflowSections.tsx<br/>Runs · Versions · Schedules · Permissions · Settings"]
@@ -73,6 +74,7 @@ flowchart LR
 - Save sends `PUT /api/v1/workflows/{id}` with the name, description, status, nodes, and edges, and confirms with the
   new version. "New workflow…" sends `POST /api/v1/workflows` and opens the result; a rejected create is reported in
   the dialog, a rejected save in the Execution Flow card or the section note.
+- Acceptance criteria keep line breaks while editing; blank lines are omitted on save and validation.
 - A new Live workflow starts with Trigger, Agent Task, and Integrate and publish nodes. Agent Task, Test Generator,
   and Code Reviewer nodes compile to produce/review WorkUnits; Integrate is the existing deterministic WorkGraph
   integration unit. Agent and persona assignments, dependencies, acceptance criteria, workflow ID, and version flow
