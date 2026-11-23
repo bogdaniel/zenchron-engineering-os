@@ -132,7 +132,10 @@ for (const viewport of viewports) {
       graph_id: graphID, graph_revision: 12, objective_id: objectiveID,
       objective_title: objective.title, plan_revision: 1,
       status: 'completed', approved_plan: { revision: 1, status: 'approved', hash: 'h', summary: 'One producer, one review.' },
-      units: [], handoffs: [], decisions: [], outstanding_steps: [],
+      units: [{ key: 'final-review', kind: 'review', agent_name: 'Independent reviewer', state: 'completed',
+        run_ids: ['review-run'], attempts: 1, providers: [],
+        executions: [{ run_id: 'review-run', result_attempt: 1, updated_at: now, status: 'succeeded', attempts: 1,
+          base_commit_sha: 'c'.repeat(40), review_verdict: 'accept' }] }], handoffs: [], decisions: [], outstanding_steps: [],
       measurements: { unit_count: 0, run_count: 0, attempt_count: 0, failed_attempts: 0, review_rounds: 0, findings: 0,
         remediation_passes: 0, decisions_requested: 0, decisions_resolved: 0, human_actions: 0,
         human_actions_complete: false, max_concurrency: 0, runs_with_usage: 0, runs_with_cost: 0, unknown: [] },
@@ -152,6 +155,7 @@ for (const viewport of viewports) {
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('observed');
     await expect(report.getByLabel('GitHub checks for integrated candidate')).toContainText('Check #101 · go · completed · success');
     await expect(report).toContainText(`WorkGraph ${graphID} · revision 12`);
+    await expect(report).toContainText(`Reviewed candidate: ${'c'.repeat(40)}`);
     await expect(report).toContainText([
       'Unknown evidence: independent policy-backed assurance', 'publication authority',
     ].join(', '));

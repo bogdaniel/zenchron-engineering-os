@@ -194,7 +194,8 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	}
 	if !slices.Equal(uiUnit.Providers, []string{workerapi.ProviderCodex + " 1.2.3"}) || review.Verdict != "accept" ||
 		len(uiUnit.Executions) != 1 || uiUnit.Executions[0].Verification != workerapi.VerificationPassed ||
-		len(review.RunIDs) != 2 || review.Attempts != 2 || !slices.Equal(review.Providers, []string{workerapi.ProviderCodex}) {
+		len(review.RunIDs) != 2 || review.Attempts != 2 || !slices.Equal(review.Providers, []string{workerapi.ProviderCodex}) ||
+		len(review.Executions) != 2 || review.Executions[0].BaseCommit != commit(1) || review.Executions[1].BaseCommit != commit(3) {
 		t.Fatalf("ui unit = %#v, review unit = %#v", uiUnit, review)
 	}
 	if !slices.Equal(report.UnknownEvidence, []string{"policy_backed_assurance", "publication_authority"}) {

@@ -10,7 +10,8 @@ const executionSchema = z.object({
   profile_id: z.string().optional(), profile_name: z.string().optional(),
   profile_version: z.number().optional(), persona_id: z.string().optional(), persona_name: z.string().optional(),
   persona_version: z.number().optional(), provider: z.string().optional(), provider_version: z.string().optional(),
-  attempts: z.number(), candidate_commit: z.string().optional(), candidate_tree_sha: z.string().optional(), review_verdict: z.string().optional(),
+  attempts: z.number(), candidate_commit: z.string().optional(), base_commit_sha: z.string().optional(),
+  candidate_tree_sha: z.string().optional(), review_verdict: z.string().optional(),
   verification: z.string().optional(), publication: z.string().optional(), pull_request_url: z.string().optional(),
   failure_recorded: z.boolean().optional(),
 });
@@ -116,6 +117,7 @@ function ReportDetails({ report }: { report: Report }) {
         <span>{run.profile_name ? `${run.profile_name} v${run.profile_version ?? 'unknown'}` : 'Zenchron integration'}
           {run.persona_name && ` · ${run.persona_name} v${run.persona_version ?? 'unknown'}`}
           {run.provider && ` · ${run.provider}${run.provider_version ? ` ${run.provider_version}` : ''}`}</span>
+        {unit.kind === 'review' && <span>Reviewed candidate: {run.base_commit_sha ? <code>{run.base_commit_sha}</code> : 'unknown'}</span>}
         <span>Worker-reported verification: {run.verification || 'Not run'}</span>
         {run.candidate_commit && <span>Commit <code>{run.candidate_commit}</code></span>}
         {run.candidate_tree_sha && <span>Tree <code>{run.candidate_tree_sha}</code></span>}

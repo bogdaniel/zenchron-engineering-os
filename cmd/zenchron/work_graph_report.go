@@ -214,6 +214,7 @@ type reportExecution struct {
 	Verification    string    `json:"verification,omitempty"`
 	Attempts        int       `json:"attempts"`
 	CandidateCommit string    `json:"candidate_commit,omitempty"`
+	BaseCommit      string    `json:"base_commit_sha,omitempty"`
 	CandidateTree   string    `json:"candidate_tree_sha,omitempty"`
 	ReviewVerdict   string    `json:"review_verdict,omitempty"`
 	Publication     string    `json:"publication,omitempty"`
@@ -359,7 +360,8 @@ func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecut
 		}
 		execution := reportExecution{RunID: id, ResultAttempt: run.ResultAttempt, UpdatedAt: run.UpdatedAt,
 			Status: run.Status, Attempts: run.Attempts,
-			CandidateCommit: run.CommitSHA, CandidateTree: run.CommitTreeSHA, Provider: run.Provider, ProviderVersion: run.ProviderVersion,
+			CandidateCommit: run.CommitSHA, BaseCommit: run.BaseCommit, CandidateTree: run.CommitTreeSHA,
+			Provider: run.Provider, ProviderVersion: run.ProviderVersion,
 			Verification: run.Verification, Publication: run.Publication, PullRequestURL: run.PullRequestURL,
 			FailureRecorded: run.Error != ""}
 		if run.Profile != nil {
