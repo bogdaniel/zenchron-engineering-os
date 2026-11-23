@@ -62,6 +62,7 @@ func TestManagedOAuthConfigEnablesLoopbackSignInWithoutReplacingWorkerCredential
 
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/auth/github?return="+url.QueryEscape("/?mode=live#settings"), nil)
+	request.Host = "127.0.0.1:8080"
 	authHandler(http.NotFoundHandler(), auth).ServeHTTP(response, request)
 	if response.Code != http.StatusFound {
 		t.Fatalf("OAuth start returned HTTP %d: %s", response.Code, response.Body.String())
@@ -117,8 +118,9 @@ func TestManagedOAuthSetupCompletesAllowlistedDashboardLogin(t *testing.T) {
 	server := authHandler(http.NotFoundHandler(), auth)
 	returnTo := "/?mode=live#settings"
 	start := httptest.NewRecorder()
-	server.ServeHTTP(start, httptest.NewRequest(http.MethodGet,
-		"/auth/github?return="+url.QueryEscape(returnTo), nil))
+	startRequest := httptest.NewRequest(http.MethodGet, "/auth/github?return="+url.QueryEscape(returnTo), nil)
+	startRequest.Host = "127.0.0.1:8080"
+	server.ServeHTTP(start, startRequest)
 	stateCookie := start.Result().Cookies()[0]
 	authorizeURL, err := url.Parse(start.Header().Get("Location"))
 	if err != nil {
@@ -128,6 +130,7 @@ func TestManagedOAuthSetupCompletesAllowlistedDashboardLogin(t *testing.T) {
 	callback := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet,
 		"/auth/github/callback?code=short-lived&state="+url.QueryEscape(state), nil)
+	request.Host = "127.0.0.1:8080"
 	request.AddCookie(stateCookie)
 	server.ServeHTTP(callback, request)
 	if callback.Code != http.StatusSeeOther || callback.Header().Get("Location") != returnTo {
@@ -138,6 +141,7 @@ func TestManagedOAuthSetupCompletesAllowlistedDashboardLogin(t *testing.T) {
 			continue
 		}
 		check := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+		check.Host = "127.0.0.1:8080"
 		check.AddCookie(cookie)
 		response := httptest.NewRecorder()
 		server.ServeHTTP(response, check)
@@ -234,6 +238,7 @@ func TestManagedOAuthDoesNotReplaceExistingAccessPolicyCredentials(t *testing.T)
 func TestGitHubSignInNotConfiguredExplainsManagedSetup(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/auth/github", nil)
+	request.Host = "127.0.0.1:8080"
 	authHandler(http.NotFoundHandler(), nil).ServeHTTP(response, request)
 	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "zenchron-engineering auth setup") ||
 		response.Header().Get("Cache-Control") != "no-store" {
@@ -304,7 +309,7 @@ func TestManagedOAuthSetupRechecksActiveRunsBeforeWritingConfig(t *testing.T) {
 				t.Fatal("final active-run check happened before OAuth prompts")
 			}
 			return preflightErr
-		})
+		}, func() (int, error) { return 1, nil })
 	if err == nil || !strings.Contains(err.Error(), preflightErr.Error()) {
 		t.Fatalf("setup error = %v, want final active-run deferral", err)
 	}

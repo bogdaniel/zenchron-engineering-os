@@ -31,13 +31,20 @@ func runAuthCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := readManagedOAuthConfig(home); err != nil {
+	storedConfig, err := readManagedOAuthConfig(home)
+	if err != nil {
 		return err
-	} else if _, err := os.Stat(managedOAuthConfigPath(home)); err == nil {
-		fmt.Println("GitHub sign-in is already configured; no credentials or files were changed.")
-		return nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("inspect GitHub sign-in configuration: %w", err)
+	}
+	if storedConfig != nil {
+		configured, err := managedOAuthAlreadyConfigured(home)
+		if err != nil {
+			return err
+		}
+		if configured {
+			fmt.Println("GitHub sign-in is already configured; no credentials or files were changed.")
+			return nil
+		}
+		return errors.New("GitHub OAuth credentials are saved but the managed runtime has not confirmed them; wait for active work to drain or start the existing managed service if it is stopped, then verify /auth/github")
 	}
 	if configured, err := managedOAuthAlreadyConfigured(home); err != nil {
 		return err
@@ -57,9 +64,9 @@ func runAuthCommand(args []string) error {
 		return errors.New("GitHub sign-in setup requires an interactive terminal; no credentials were read")
 	}
 	defer terminal.Close()
-	return setupManagedOAuth(home, terminal, terminal, readTerminalSecret, func() error {
-		return managedOAuthSetupPreflight(home, statusToken, client)
-	})
+	activeRunCount := func() (int, error) { return managedOAuthActiveRunCount(statusToken, client) }
+	return setupManagedOAuth(home, terminal, terminal, readTerminalSecret,
+		func() error { return managedOAuthSetupPreflight(home, statusToken, client) }, activeRunCount)
 }
 
 func managedOAuthSetupPreflight(home, statusToken string, client *http.Client) error {
@@ -73,18 +80,33 @@ func managedOAuthSetupPreflight(home, statusToken string, client *http.Client) e
 	if !ready {
 		return errors.New("could not verify the active managed installation and work state")
 	}
+	active, err := managedOAuthActiveRunCount(statusToken, client)
+	if err != nil {
+		return fmt.Errorf("could not verify active agent runs: %w", err)
+	}
+	if active > 0 {
+		return fmt.Errorf("OAuth setup is deferred until active work finishes (%d active agent run(s)); credentials were not saved and the managed service was not restarted",
+			active)
+	}
+	return nil
+}
+
+func managedOAuthActiveRunCount(statusToken string, client *http.Client) (int, error) {
+	if strings.TrimSpace(statusToken) == "" {
+		return 0, errors.New("local status credential is unavailable")
+	}
 	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
 	if err != nil {
-		return fmt.Errorf("check managed agent runs before setup: %w", err)
+		return 0, fmt.Errorf("create managed status request: %w", err)
 	}
 	request.Header.Set("X-Zenchron-Local-Status-Token", statusToken)
 	response, err := client.Do(request)
 	if err != nil {
-		return fmt.Errorf("check managed agent runs before setup: %w", err)
+		return 0, fmt.Errorf("request managed status: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("could not verify active agent runs (HTTP %d)", response.StatusCode)
+		return 0, fmt.Errorf("managed status returned HTTP %d", response.StatusCode)
 	}
 	var status struct {
 		Work struct {
@@ -93,17 +115,13 @@ func managedOAuthSetupPreflight(home, statusToken string, client *http.Client) e
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 4096)).Decode(&status); err != nil ||
 		status.Work.ActiveAgentRuns == nil || *status.Work.ActiveAgentRuns < 0 {
-		return errors.New("could not read active agent run count")
+		return 0, errors.New("managed status did not include a valid active agent run count")
 	}
-	if active := *status.Work.ActiveAgentRuns; active > 0 {
-		return fmt.Errorf("OAuth setup is deferred until active work finishes (%d active agent run(s)); credentials were not saved and the managed service was not restarted",
-			active)
-	}
-	return nil
+	return *status.Work.ActiveAgentRuns, nil
 }
 
 func setupManagedOAuth(home string, input io.Reader, output io.Writer, readSecret func(io.Writer) (string, error),
-	verifyIdle func() error) error {
+	verifyIdle func() error, activeRunCount func() (int, error)) error {
 	if _, err := os.Stat(managedOAuthConfigPath(home)); err == nil {
 		return errors.New("GitHub sign-in is already configured; existing credentials were left unchanged")
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -120,20 +138,36 @@ func setupManagedOAuth(home string, input io.Reader, output io.Writer, readSecre
 		return err
 	}
 	if err := restartManagedForOAuth(); err != nil {
-		rollbackErr := rollbackManagedOAuthConfig(home, restartManagedForOAuth, waitForLocalWorkspace)
-		return errors.Join(fmt.Errorf("managed GitHub sign-in was not activated: %w", err),
-			wrapRollbackError(home, rollbackErr))
+		return rollbackManagedOAuthAfterFailure(home, activeRunCount, restartManagedForOAuth,
+			waitForLocalWorkspace, fmt.Errorf("managed GitHub sign-in was not activated: %w", err))
 	}
 	if err := waitForConfiguredOAuth(home); err != nil {
-		rollbackErr := rollbackManagedOAuthConfig(home, restartManagedForOAuth, waitForLocalWorkspace)
-		return errors.Join(fmt.Errorf("managed runtime did not activate GitHub sign-in: %w", err),
-			wrapRollbackError(home, rollbackErr))
+		return rollbackManagedOAuthAfterFailure(home, activeRunCount, restartManagedForOAuth,
+			waitForLocalWorkspace, fmt.Errorf("managed runtime did not activate GitHub sign-in: %w", err))
 	}
 	if _, err := fmt.Fprintf(output, "GitHub sign-in is configured for %s. The managed runtime restarted; local workspace data and updater credentials were left unchanged.\n",
 		managedOAuthCallback); err != nil {
 		return fmt.Errorf("write setup result: %w", err)
 	}
 	return nil
+}
+
+func rollbackManagedOAuthAfterFailure(home string, activeRunCount func() (int, error), restart func() error,
+	wait func(string) error, activationErr error) error {
+	active, err := activeRunCount()
+	if err != nil {
+		return errors.Join(activationErr, fmt.Errorf("OAuth config remains at %s because work state could not be verified; no second restart was attempted: %w",
+			managedOAuthConfigPath(home), err))
+	}
+	if active < 0 {
+		return errors.Join(activationErr, fmt.Errorf("OAuth config remains at %s because work state is invalid; no second restart was attempted",
+			managedOAuthConfigPath(home)))
+	}
+	if active > 0 {
+		return errors.Join(activationErr, fmt.Errorf("OAuth config remains at %s while the graceful restart drains %d active agent run(s); do not retry setup, and verify the managed runtime after work completes",
+			managedOAuthConfigPath(home), active))
+	}
+	return errors.Join(activationErr, wrapRollbackError(home, rollbackManagedOAuthConfig(home, restart, wait)))
 }
 
 func rollbackManagedOAuthConfig(home string, restart func() error, wait func(string) error) error {
