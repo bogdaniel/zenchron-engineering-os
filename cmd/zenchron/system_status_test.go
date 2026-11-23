@@ -16,6 +16,7 @@ import (
 )
 
 func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	revision := strings.Repeat("a", 40)
 	t.Setenv("ZENCHRON_RELEASE_REVISION", revision)
 	updateFile := filepath.Join(t.TempDir(), "update.json")
@@ -35,6 +36,8 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 		"with-cost":    {ID: "with-cost", Usage: &workerapi.Usage{InputTokens: 120, OutputTokens: 30, CostUSD: &cost}},
 		"without-cost": {ID: "without-cost", Usage: &workerapi.Usage{InputTokens: 80, OutputTokens: 10}},
 		"unknown":      {ID: "unknown"},
+		"active":       {ID: "active", Status: "running", LeaseUntil: time.Now().Add(time.Minute)},
+		"publishing":   {ID: "publishing", Publishing: true},
 	}}
 	graphs := &workGraphStore{runs: runs, graphs: map[string]*workGraph{
 		"graph": {ID: "graph", ObjectiveID: "objective", ObjectiveTitle: "Ship the dashboard",
@@ -63,6 +66,7 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 		status.Workers.Providers[0] != (systemStatusProvider{ID: workerapi.ProviderClaude, ReportedWorkers: 1}) ||
 		status.Workers.Providers[1] != (systemStatusProvider{ID: workerapi.ProviderCodex, ReadyWorkers: 1, ReportedWorkers: 1}) ||
 		status.Work.ActiveGraphs != 2 ||
+		status.Work.ActiveAgentRuns == nil || *status.Work.ActiveAgentRuns != 2 ||
 		status.Work.BlockedGraphs != 1 || status.Work.ActiveGraph == nil ||
 		status.Work.ActiveGraph.GraphID != "active-newer" || status.Work.ActiveGraph.ObjectiveID != "objective-new" ||
 		status.Work.ActiveGraph.ObjectiveTitle != "Current objective" ||
@@ -72,7 +76,7 @@ func TestLocalSystemStatusSummarizesRecordedWorkAndUpdate(t *testing.T) {
 		status.Work.QueuedUnits != 1 || status.Work.RunningUnits != 1 || status.Work.WaitingUnits != 1 ||
 		status.Work.FailedUnits != 1 || status.Work.OpenDecisions != 1 || status.UpdateState != "active" ||
 		status.UpdateRevision != revision || status.UpdateProgress != "Release is active" ||
-		status.Usage == nil || status.Usage.Runs != 3 || status.Usage.RunsWithUsage != 2 ||
+		status.Usage == nil || status.Usage.Runs != 5 || status.Usage.RunsWithUsage != 2 ||
 		status.Usage.InputTokens == nil || *status.Usage.InputTokens != 200 ||
 		status.Usage.OutputTokens == nil || *status.Usage.OutputTokens != 40 ||
 		status.Usage.RunsWithCost != 1 || status.Usage.CostUSD == nil || *status.Usage.CostUSD != cost {

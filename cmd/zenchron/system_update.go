@@ -63,22 +63,29 @@ func activeSystemRunCount(w http.ResponseWriter, r *http.Request, runs *agentRun
 		http.Error(w, "run status is available only to the local supervisor", http.StatusForbidden)
 		return
 	}
-	runs.mu.Lock()
-	if runs.recoverExpiredLocked(time.Now().UTC()) {
-		if err := runs.persistLocked(); err != nil {
-			runs.mu.Unlock()
-			http.Error(w, "could not persist expired agent run lease", http.StatusInternalServerError)
-			return
+	active, err := runs.countActiveRuns()
+	if err != nil {
+		http.Error(w, "could not persist expired agent run lease", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"active_runs": active})
+}
+
+func (store *agentRunStore) countActiveRuns() (int, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.recoverExpiredLocked(time.Now().UTC()) {
+		if err := store.persistLocked(); err != nil {
+			return 0, err
 		}
 	}
 	active := 0
-	for _, run := range runs.items {
+	for _, run := range store.items {
 		if run.Status == "running" || run.Publishing {
 			active++
 		}
 	}
-	runs.mu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]int{"active_runs": active})
+	return active, nil
 }
 
 func activeSystemWorkerCompatibility(w http.ResponseWriter, r *http.Request, registry *workerRegistry) {

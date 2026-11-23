@@ -25,6 +25,8 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var startFailure: String?
     private var launchAtLoginError: String?
     private var pairingError: String?
+    private weak var pairingCredentialField: NSTextField?
+    private weak var pairingStatusLabel: NSTextField?
     private var refreshGeneration: UInt64 = 0
     private var startAttempt: UUID?
 
@@ -301,17 +303,75 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func pairWithDashboard() {
+        pairingError = nil
+        Task { await beginDashboardPairing() }
+    }
+
+    private func beginDashboardPairing() async {
+        var request = URLRequest(url: CompanionStatusClient.authSessionEndpoint, timeoutInterval: 3)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let response = response as? HTTPURLResponse else {
+                pairingError = "Could not check Dashboard sign-in state"
+                refreshMenu()
+                return
+            }
+            switch dashboardPairingAvailability(statusCode: response.statusCode, sessionData: data) {
+            case .localWorkspace:
+                openDashboardSettings()
+                pairingError = "Dashboard pairing is unavailable in Local workspace; configure optional GitHub sign-in in Settings"
+                refreshMenu()
+                return
+            case .unknown:
+                openDashboardSettings()
+                pairingError = "Could not check whether Dashboard pairing is available; review sign-in status in Settings"
+                refreshMenu()
+                return
+            case .signInRequired, .available:
+                showDashboardPairingDialog()
+            }
+        } catch {
+            openDashboardSettings()
+            pairingError = "Could not check Dashboard sign-in state · \(error.localizedDescription)"
+            refreshMenu()
+        }
+    }
+
+    private func openDashboardSettings() {
         var components = URLComponents(url: SystemStatus.canonicalDashboardURL, resolvingAgainstBaseURL: false)!
         components.fragment = "settings"
         NSWorkspace.shared.open(components.url!)
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
-        input.placeholderString = "Paste the one-time credential from Settings"
+    }
+
+    private func showDashboardPairingDialog() {
+        openDashboardSettings()
+        let input = NSTextField(frame: NSRect(x: 0, y: 26, width: 330, height: 24))
+        input.placeholderString = "One-time pairing credential"
+        input.setAccessibilityLabel("One-time pairing credential")
+        let pasteButton = NSButton(title: "Paste from Clipboard", target: self,
+            action: #selector(pastePairingCredentialFromClipboard(_:)))
+        pasteButton.frame = NSRect(x: 340, y: 26, width: 130, height: 24)
+        let statusLabel = NSTextField(labelWithString: "")
+        statusLabel.frame = NSRect(x: 0, y: 0, width: 470, height: 18)
+        let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 470, height: 50))
+        accessory.addSubview(input)
+        accessory.addSubview(pasteButton)
+        accessory.addSubview(statusLabel)
+        pairingCredentialField = input
+        pairingStatusLabel = statusLabel
+        defer {
+            pairingCredentialField = nil
+            pairingStatusLabel = nil
+        }
         let alert = NSAlert()
         alert.messageText = "Pair Zenchron Menu Bar"
-        alert.informativeText = "Create a menu-bar grant in Dashboard Settings, then paste it here. The credential is stored in this Mac’s Keychain."
-        alert.accessoryView = input
+        alert.informativeText = "Create a one-time grant in Dashboard Settings, copy it, then click Paste from Clipboard below. You can also click the field and press ⌘V. Pair stores the credential in this Mac’s Keychain."
+        alert.accessoryView = accessory
         alert.addButton(withTitle: "Pair")
         alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = input
+        NSApp.activate(ignoringOtherApps: true)
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         do {
             try persistStatusGrant(input.stringValue) { try StatusCredentialStore.save($0) }
@@ -324,6 +384,16 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             pairingError = "Could not save pairing credential · \(error.localizedDescription)"
         }
         refreshMenu()
+    }
+
+    @objc private func pastePairingCredentialFromClipboard(_ sender: NSButton) {
+        guard let credential = NSPasteboard.general.string(forType: .string),
+              !credential.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            pairingStatusLabel?.stringValue = "Clipboard is empty or does not contain text."
+            return
+        }
+        pairingCredentialField?.stringValue = credential
+        pairingStatusLabel?.stringValue = "Credential pasted. Click Pair to save it in Keychain."
     }
 
     private func linkItem(title: String, url: URL) -> NSMenuItem {

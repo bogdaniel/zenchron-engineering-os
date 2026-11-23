@@ -13,6 +13,9 @@ flowchart LR
   LaunchAgent[Mode 0600 managed LaunchAgent plist] -->|Local status credential| Companion
   LaunchAgent -->|Credential fallback for older supervisor environments| API
   Companion -->|Local credential without OAuth or Keychain grant with OAuth · loopback only| API
+  Companion -->|GET /api/v1/auth/session before pairing| API
+  API -->|Local workspace state when OAuth is not configured| Companion
+  Companion -->|Open Settings and explain local status needs no grant| Browser
   API -->|Typed health, dashboard, work, recorded usage and update projection| Companion
   API -->|Validate scoped grant, expiry, loopback and current admin policy| Auth[Existing session and access policy]
   Dashboard[Dashboard Settings] -->|POST /api/v1/system/status/credentials| Grants[(Hashed, expiring grant store)]
@@ -29,6 +32,9 @@ flowchart LR
   Companion -->|Open selected human decision| Browser
   Browser -->|GitHub sign in| OAuth[OAuth state bound to dashboard destination]
   OAuth -->|Validated same-origin return| Browser
+  Browser -->|Show managed OAuth setup instructions in Local workspace| User
+  User -->|Run zenchron-engineering auth setup in Terminal| CLI[Managed CLI setup]
+  CLI -->|Store private OAuth config and restart existing LaunchAgent| LaunchAgent
   Companion -->|Start Zenchron| CLI[Canonical CLI start command]
   CLI -->|Kickstart and verify active release on /healthz and dashboard HTML| API
   CLI -->|Open only after both checks pass| Browser
@@ -93,9 +99,17 @@ flowchart LR
   attempt when macOS reports `.notFound`; registration failures remain visible. It never starts or stops the
   engineering services. Repeated install/update opens resolve to the same app bundle ID; the process lock keeps one
   visible icon.
-- **Pair with Dashboard…** opens a dialog that directs the operator to Dashboard Settings. In Local preview, the
-  grant-generation page is unavailable because that mode has no authenticated organization session; the app keeps
-  the pairing dialog and does not bypass dashboard authorization.
+- **Pair with Dashboard…** checks the dashboard auth session first. In Local workspace mode it opens Settings and
+  explains that managed local status does not need a grant and that optional GitHub sign-in must be configured before
+  Dashboard pairing; it does not show the unusable credential dialog. When OAuth is enabled but no browser session
+  exists, it opens Settings and directs the operator to sign in before creating a grant. Dashboard grant creation still
+  requires the existing authenticated session and admin checks. The pairing dialog includes an explicit clipboard
+  paste button as well as the standard ⌘V shortcut. Dashboard uses the System Update panel heading and action layout,
+  presents existing grants as separated rows, and keeps a one-time credential and copy action together in a compact,
+  wrapping card.
+- Live Settings clearly identifies Local workspace mode, links the operator to `zenchron-engineering auth setup`, and
+  shows the exact loopback callback URL. The grant management panel appears only after GitHub sign-in; the Local
+  workspace remains usable without it.
 - macOS release builds run `package-app.sh`, include every bundle file in the release digest manifest, verify those
   files, and install the new bundle before the active release pointer advances. The existing managed supervisor
   remains the only updater; a running companion reconnects to its stable loopback API, and the supervisor opens the

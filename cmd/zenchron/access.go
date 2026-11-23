@@ -55,7 +55,11 @@ type accessPolicy struct {
 }
 
 func loadAccessPolicy() (*accessPolicy, error) {
-	path := strings.TrimSpace(os.Getenv("ZENCHRON_ACCESS_FILE"))
+	return loadAccessPolicyAt(os.Getenv("ZENCHRON_ACCESS_FILE"))
+}
+
+func loadAccessPolicyAt(value string) (*accessPolicy, error) {
+	path := strings.TrimSpace(value)
 	if path == "" {
 		return nil, nil
 	}

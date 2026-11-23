@@ -179,7 +179,10 @@ func (runtime *managedRuntime) stopAfterChildExit(name string, childErr error) e
 
 func (runtime *managedRuntime) startRelease(ctx context.Context, commit string) error {
 	release := filepath.Join(runtime.home, "releases", commit)
-	base := os.Environ()
+	base, err := managedOAuthEnvironment(runtime.home, os.Environ())
+	if err != nil {
+		return err
+	}
 	apiEnv := withEnvironment(base, map[string]string{
 		"ZENCHRON_LISTEN_ADDR": "127.0.0.1:8080", "ZENCHRON_DATA_DIR": runtime.data,
 		"ZENCHRON_DASHBOARD_DIR":    filepath.Join(release, "dashboard"),
@@ -190,7 +193,6 @@ func (runtime *managedRuntime) startRelease(ctx context.Context, commit string) 
 	if runtime.status.State == "activating" && runtime.status.LatestRevision == commit {
 		apiEnv = withEnvironment(apiEnv, map[string]string{"ZENCHRON_STARTUP_QUIESCED": "true"})
 	}
-	var err error
 	runtime.api, err = startManagedChild(filepath.Join(release, "bin", "zenchron"), []string{"serve"}, runtime.home, apiEnv)
 	if err != nil {
 		return err

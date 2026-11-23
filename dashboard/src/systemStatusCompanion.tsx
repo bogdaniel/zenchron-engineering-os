@@ -15,6 +15,7 @@ export function SystemStatusCompanionPanel() {
   const client = useQueryClient();
   const [credential, setCredential] = useState('');
   const [copyError, setCopyError] = useState('');
+  const [copyStatus, setCopyStatus] = useState('');
   const grants = useQuery({ queryKey: ['menu-status-grants'],
     queryFn: () => request<{ grants: StatusGrant[] }>('/api/v1/system/status/credentials') });
   const pair = useMutation({ mutationFn: () => request<{ credential: string }>('/api/v1/system/status/credentials', { method: 'POST' }),
@@ -22,24 +23,65 @@ export function SystemStatusCompanionPanel() {
   const revoke = useMutation({ mutationFn: (id: string) => request<void>(`/api/v1/system/status/credentials/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     onSuccess: async () => { setCredential(''); await client.invalidateQueries({ queryKey: ['menu-status-grants'] }); } });
 
-  return <PanelCard className="system-update-panel" withBorder>
-    <h2>Menu Bar Companion</h2>
-    <p>Pair this Mac to show local status. Under an access policy, only an administrator can create a grant.</p>
-    {grants.data?.grants.map((grant) => <Group key={grant.id} justify="space-between" wrap="nowrap">
-      <Text size="sm">{grant.user} · expires {new Date(grant.expires_at).toLocaleDateString()}</Text>
-      <Button size="xs" variant="default" onClick={() => revoke.mutate(grant.id)} loading={revoke.isPending}>Revoke</Button>
-    </Group>)}
-    {credential && <Stack gap="xs" role="status">
-      <Text size="sm">Copy this credential, then choose Pair with Dashboard in the menu-bar app. It is shown only once.</Text>
-      <Code>{credential}</Code>
-      <Button size="xs" variant="default" onClick={() => {
-        void navigator.clipboard.writeText(credential).then(() => setCopyError(''), () => setCopyError('Clipboard access failed; select and copy the credential above.'));
-      }}>Copy credential</Button>
-      {copyError && <Text c="red" role="alert">{copyError}</Text>}
-    </Stack>}
+  async function copyCredential() {
+    setCopyError('');
+    setCopyStatus('');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API is unavailable');
+      await navigator.clipboard.writeText(credential);
+    } catch {
+      const fallback = document.createElement('textarea');
+      fallback.value = credential;
+      fallback.style.position = 'fixed';
+      fallback.style.opacity = '0';
+      let copied = false;
+      try {
+        document.body.append(fallback);
+        fallback.select();
+        copied = document.execCommand('copy');
+      } catch {
+        setCopyError('Clipboard access failed; select the credential and press ⌘C.');
+        return;
+      } finally {
+        fallback.remove();
+      }
+      if (!copied) {
+        setCopyError('Clipboard access failed; select the credential and press ⌘C.');
+        return;
+      }
+    }
+    setCopyStatus('Credential copied. Paste it into the menu-bar pairing window.');
+  }
+
+  return <PanelCard className="system-update-panel system-companion-panel" withBorder>
+    <div className="system-update-heading"><div><h2>Menu Bar Companion</h2>
+      <p>Pair this Mac to show local status. Under an access policy, only an administrator can create a grant.</p>
+    </div></div>
+    {grants.data?.grants.length ? <Stack className="system-companion-grants" gap="xs">
+      {grants.data.grants.map((grant) => (
+        <Group className="system-companion-grant" key={grant.id} justify="space-between" wrap="nowrap">
+          <Text size="sm">{grant.user} · expires {new Date(grant.expires_at).toLocaleDateString()}</Text>
+          <Button size="xs" variant="default" onClick={() => revoke.mutate(grant.id)} loading={revoke.isPending}>
+            Revoke
+          </Button>
+        </Group>
+      ))}
+    </Stack> : grants.data && <Text className="system-companion-empty" size="sm">No Macs are paired.</Text>}
+    {credential && <div className="system-companion-credential-card" role="status">
+      <div><Text size="sm">One-time pairing credential</Text>
+        <Code className="system-companion-credential">{credential}</Code>
+        <Text size="xs">Copy it, then choose Pair with Dashboard… in Zenchron Menu Bar and paste it.</Text>
+      </div>
+      <Button size="xs" variant="default" onClick={() => void copyCredential()}>Copy for Menu Bar</Button>
+      {copyStatus && <Text className="system-companion-copy-status" role="status">{copyStatus}</Text>}
+      {copyError && <Text className="system-companion-copy-error" c="red" role="alert">{copyError}</Text>}
+    </div>}
     {grants.error instanceof Error && <Text c="red" role="alert">{grants.error.message}</Text>}
     {pair.error instanceof Error && <Text c="red" role="alert">{pair.error.message}</Text>}
     {revoke.error instanceof Error && <Text c="red" role="alert">{revoke.error.message}</Text>}
-    <Button variant="default" onClick={() => pair.mutate()} loading={pair.isPending} disabled={pair.isPending}>Pair this Mac</Button>
+    <div className="system-companion-actions">
+      <Button variant="default" style={{ width: 'fit-content' }} onClick={() => pair.mutate()} loading={pair.isPending}
+        disabled={pair.isPending}>Pair this Mac</Button>
+    </div>
   </PanelCard>;
 }
