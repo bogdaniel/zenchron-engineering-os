@@ -11,9 +11,10 @@ function graph(id: string, unit: string, question: string, created: string, stat
     id, objective_id: objectiveID, objective_title: 'Ship usage export', plan_revision: 1, revision: 1,
     status, project_name: 'platform', base_branch: 'main', max_parallel: 1,
     created_at: created, updated_at: created,
-    units: [{ key: unit, kind: 'produce', title: unit, instructions: '', acceptance: [], depends_on: [],
-      capabilities: [], agent_id: 'a'.repeat(32), state: 'blocked', run_ids: [] }],
-    messages: [{ id: `decision-${unit}`, type: 'decision_request', from: unit, body: question, notes: [], created_at: created }],
+    units: [{ key: unit, kind: 'produce', title: `Produce ${unit}`, instructions: '', acceptance: [], depends_on: [],
+      capabilities: [], agent_id: 'a'.repeat(32), state: 'blocked', reason: 'Waiting for a person to choose.', run_ids: [] }],
+    messages: [{ id: `decision-${unit}`, type: 'decision_request', from: unit, run_id: `run-${unit}`,
+      body: question, notes: ['allow', 'decline'], created_at: created }],
   };
 }
 
@@ -41,7 +42,12 @@ for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: '
     await expect(queue).toContainText('2 waiting');
     await expect(queue.getByRole('link')).toHaveCount(2);
     await expect(queue).not.toContainText('api-cancelled');
-    const exactAction = queue.getByRole('link', { name: 'Ship usage export Decision requested by api-old' });
+    const exactAction = queue.getByRole('link').filter({ hasText: 'Decision decision-api-old' });
+    await expect(exactAction).toContainText('Plan revision 1 · produce: Produce api-old');
+    await expect(exactAction).toContainText('Decision decision-api-old · Should this export include archived records?');
+    await expect(exactAction).toContainText('Waiting reason: Waiting for a person to choose.');
+    await expect(exactAction).toContainText('Options: allow · decline');
+    await expect(exactAction).toContainText('Run run-api-old');
     await expect(exactAction).toHaveAttribute('href', new RegExp(`graph_id=${oldGraphID}.*decision=decision-api-old`));
     await page.screenshot({ path: `test-results/action-required-${viewport.name}.png`, fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -73,6 +79,21 @@ test('Action Required omits an empty queue and reports an unavailable queue hone
   await page.reload();
   await expect(queue).toContainText('WorkGraph actions unavailable (503)');
   await expect(queue.getByRole('button', { name: 'Retry' })).toBeVisible();
+});
+
+test('Action Required leaves absent decision details unknown', async ({ page }) => {
+  const partial = graph(currentGraphID, 'api-partial', 'Which serialization should ship?', '2026-11-02T00:00:00Z');
+  partial.units[0].reason = '';
+  partial.messages[0].body = '';
+  partial.messages[0].notes = [];
+  partial.messages[0].run_id = '';
+  await useLiveSession(page, [partial]);
+  await page.goto('/?mode=live#overview');
+  const action = page.getByRole('region', { name: 'Action Required' }).getByRole('link');
+  await expect(action).toContainText('Subject not recorded');
+  await expect(action).toContainText('Waiting reason: Not recorded');
+  await expect(action).toContainText('Options not recorded');
+  await expect(action).toContainText('Run not recorded');
 });
 
 test('Action Required deep links stay selected until their action is complete', async ({ page }) => {
