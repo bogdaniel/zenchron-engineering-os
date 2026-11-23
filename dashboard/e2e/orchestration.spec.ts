@@ -129,7 +129,8 @@ for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     await mockOrchestration(page, { graphs: [graph], plans: [plan] });
     await page.route(`**/api/v1/work-graphs/${graphID}/report`, (route) => route.fulfill(json({
-      graph_id: graphID, objective_id: objectiveID, objective_title: objective.title, plan_revision: 1,
+      graph_id: graphID, graph_revision: 12, objective_id: objectiveID,
+      objective_title: objective.title, plan_revision: 1,
       status: 'completed', approved_plan: { revision: 1, status: 'approved', hash: 'h', summary: 'One producer, one review.' },
       units: [], handoffs: [], decisions: [], outstanding_steps: [],
       measurements: { unit_count: 0, run_count: 0, attempt_count: 0, failed_attempts: 0, review_rounds: 0, findings: 0,
@@ -140,7 +141,7 @@ for (const viewport of viewports) {
       pull_request_external_state: { number: 23, state: 'open', draft: true, merged: false,
         head_sha: 'd'.repeat(40), candidate_matches_head: false, observed_at: now,
         candidate_checks: { head_sha: 'c'.repeat(40), observed_at: now,
-          runs: [{ name: 'go', status: 'completed', conclusion: 'success' }] } },
+          runs: [{ id: 101, name: 'go', status: 'completed', conclusion: 'success' }] } },
     })));
     await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
     await page.getByRole('tab', { name: 'Plan', exact: true }).click();
@@ -149,7 +150,8 @@ for (const viewport of viewports) {
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('pull request #23 open as a draft');
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('differs from the integrated candidate');
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('observed');
-    await expect(report.getByLabel('GitHub checks for integrated candidate')).toContainText('go · completed · success');
+    await expect(report.getByLabel('GitHub checks for integrated candidate')).toContainText('Check #101 · go · completed · success');
+    await expect(report).toContainText(`WorkGraph ${graphID} · revision 12`);
     await expect(report).toContainText([
       'Unknown evidence: independent policy-backed assurance', 'publication authority',
     ].join(', '));

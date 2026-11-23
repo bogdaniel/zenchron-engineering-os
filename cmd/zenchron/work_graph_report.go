@@ -18,6 +18,7 @@ const supervisionMinutes = "supervision_minutes"
 // deliveryReport says what one WorkGraph's run actually did, from durable records only.
 type deliveryReport struct {
 	GraphID         string               `json:"graph_id"`
+	GraphRevision   int                  `json:"graph_revision"`
 	ObjectiveID     string               `json:"objective_id"`
 	ObjectiveTitle  string               `json:"objective_title"`
 	PlanRevision    int                  `json:"plan_revision"`
@@ -54,6 +55,7 @@ type reportCandidateChecks struct {
 }
 
 type reportCheckRun struct {
+	ID         int64  `json:"id"`
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion,omitempty"`
@@ -129,7 +131,7 @@ func (report *deliveryReport) observePullRequest(ctx context.Context, repository
 		runs := make([]reportCheckRun, 0, len(checks))
 		valid := true
 		for _, check := range checks {
-			if check.HeadSHA != unit.Candidate || strings.TrimSpace(check.Name) == "" {
+			if check.ID <= 0 || check.HeadSHA != unit.Candidate || strings.TrimSpace(check.Name) == "" {
 				valid = false
 				break
 			}
@@ -141,7 +143,7 @@ func (report *deliveryReport) observePullRequest(ctx context.Context, repository
 			if !valid {
 				break
 			}
-			runs = append(runs, reportCheckRun{Name: check.Name, Status: check.Status, Conclusion: check.Conclusion})
+			runs = append(runs, reportCheckRun{ID: check.ID, Name: check.Name, Status: check.Status, Conclusion: check.Conclusion})
 		}
 		if !valid {
 			break
@@ -197,33 +199,36 @@ type reportUnit struct {
 }
 
 type reportExecution struct {
-	RunID           string `json:"run_id"`
-	Status          string `json:"status"`
-	ProfileID       string `json:"profile_id,omitempty"`
-	ProfileName     string `json:"profile_name,omitempty"`
-	ProfileVersion  int    `json:"profile_version,omitempty"`
-	PersonaID       string `json:"persona_id,omitempty"`
-	PersonaName     string `json:"persona_name,omitempty"`
-	PersonaVersion  int    `json:"persona_version,omitempty"`
-	Provider        string `json:"provider,omitempty"`
-	ProviderVersion string `json:"provider_version,omitempty"`
-	Verification    string `json:"verification,omitempty"`
-	Attempts        int    `json:"attempts"`
-	CandidateCommit string `json:"candidate_commit,omitempty"`
-	CandidateTree   string `json:"candidate_tree_sha,omitempty"`
-	ReviewVerdict   string `json:"review_verdict,omitempty"`
-	Publication     string `json:"publication,omitempty"`
-	PullRequestURL  string `json:"pull_request_url,omitempty"`
-	FailureRecorded bool   `json:"failure_recorded,omitempty"`
+	RunID           string    `json:"run_id"`
+	ResultAttempt   int       `json:"result_attempt"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	Status          string    `json:"status"`
+	ProfileID       string    `json:"profile_id,omitempty"`
+	ProfileName     string    `json:"profile_name,omitempty"`
+	ProfileVersion  int       `json:"profile_version,omitempty"`
+	PersonaID       string    `json:"persona_id,omitempty"`
+	PersonaName     string    `json:"persona_name,omitempty"`
+	PersonaVersion  int       `json:"persona_version,omitempty"`
+	Provider        string    `json:"provider,omitempty"`
+	ProviderVersion string    `json:"provider_version,omitempty"`
+	Verification    string    `json:"verification,omitempty"`
+	Attempts        int       `json:"attempts"`
+	CandidateCommit string    `json:"candidate_commit,omitempty"`
+	CandidateTree   string    `json:"candidate_tree_sha,omitempty"`
+	ReviewVerdict   string    `json:"review_verdict,omitempty"`
+	Publication     string    `json:"publication,omitempty"`
+	PullRequestURL  string    `json:"pull_request_url,omitempty"`
+	FailureRecorded bool      `json:"failure_recorded,omitempty"`
 }
 
 type reportHandoff struct {
-	From    string   `json:"from"`
-	RunID   string   `json:"run_id,omitempty"`
-	Attempt int      `json:"attempt,omitempty"`
-	Commit  string   `json:"commit,omitempty"`
-	Summary string   `json:"summary"`
-	Notes   []string `json:"notes"`
+	MessageID string   `json:"message_id"`
+	From      string   `json:"from"`
+	RunID     string   `json:"run_id,omitempty"`
+	Attempt   int      `json:"attempt,omitempty"`
+	Commit    string   `json:"commit,omitempty"`
+	Summary   string   `json:"summary"`
+	Notes     []string `json:"notes"`
 }
 
 type reportDecision struct {
@@ -268,8 +273,9 @@ type deliveryMeasurements struct {
 // buildDeliveryReport computes the report of a graph from the graph and its stored runs. A run id
 // whose run is no longer stored still counts as a run but contributes nothing else.
 func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *objectivePlan) deliveryReport {
-	report := deliveryReport{GraphID: graph.ID, ObjectiveID: graph.ObjectiveID, ObjectiveTitle: graph.ObjectiveTitle,
-		PlanRevision: graph.PlanRevision, WorkflowID: graph.WorkflowID, WorkflowVersion: graph.WorkflowVersion,
+	report := deliveryReport{GraphID: graph.ID, GraphRevision: graph.Revision, ObjectiveID: graph.ObjectiveID,
+		ObjectiveTitle: graph.ObjectiveTitle,
+		PlanRevision:   graph.PlanRevision, WorkflowID: graph.WorkflowID, WorkflowVersion: graph.WorkflowVersion,
 		WorkflowMode: graph.WorkflowMode,
 		Status:       graph.Status, Units: make([]reportUnit, 0, len(graph.Units)), Handoffs: []reportHandoff{},
 		Decisions: []reportDecision{}, Outstanding: []reportOutstanding{},
@@ -351,7 +357,8 @@ func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecut
 		if !exists {
 			continue
 		}
-		execution := reportExecution{RunID: id, Status: run.Status, Attempts: run.Attempts,
+		execution := reportExecution{RunID: id, ResultAttempt: run.ResultAttempt, UpdatedAt: run.UpdatedAt,
+			Status: run.Status, Attempts: run.Attempts,
 			CandidateCommit: run.CommitSHA, CandidateTree: run.CommitTreeSHA, Provider: run.Provider, ProviderVersion: run.ProviderVersion,
 			Verification: run.Verification, Publication: run.Publication, PullRequestURL: run.PullRequestURL,
 			FailureRecorded: run.Error != ""}
@@ -376,7 +383,7 @@ func summarizeMessages(messages []graphMessage) ([]reportHandoff, []reportDecisi
 	for _, message := range messages {
 		switch message.Type {
 		case messageHandoff:
-			handoffs = append(handoffs, reportHandoff{From: message.From, RunID: message.RunID,
+			handoffs = append(handoffs, reportHandoff{MessageID: message.ID, From: message.From, RunID: message.RunID,
 				Attempt: message.Attempt, Commit: message.Commit, Summary: message.Body, Notes: append([]string{}, message.Notes...)})
 		case messageDecisionRequest:
 			decisionIndex[message.ID] = len(decisions)
