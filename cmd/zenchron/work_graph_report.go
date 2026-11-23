@@ -200,7 +200,7 @@ type reportUnit struct {
 
 type reportExecution struct {
 	RunID           string    `json:"run_id"`
-	ResultAttempt   int       `json:"result_attempt"`
+	ResultAttempt   int       `json:"result_attempt,omitzero"`
 	UpdatedAt       time.Time `json:"updated_at"`
 	Status          string    `json:"status"`
 	ProfileID       string    `json:"profile_id,omitempty"`

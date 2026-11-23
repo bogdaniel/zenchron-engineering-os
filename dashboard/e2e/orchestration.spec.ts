@@ -164,6 +164,31 @@ for (const viewport of viewports) {
   });
 }
 
+test('delivery report shows an unknown result attempt while a run is active', async ({ page }) => {
+  await mockOrchestration(page, { graphs: [graph], plans: [plan] });
+  await page.route(`**/api/v1/work-graphs/${graphID}/report`, (route) => route.fulfill(json({
+    graph_id: graphID, graph_revision: 3, objective_id: objectiveID, objective_title: objective.title,
+    plan_revision: 1, status: 'active',
+    approved_plan: { revision: 1, status: 'approved', hash: 'h', summary: 'One producer, one review.' },
+    units: [{ key: 'api', kind: 'produce', agent_name: 'Engineer', state: 'running', run_ids: ['run-active'],
+      attempts: 1, providers: ['codex-cli'], executions: [{ run_id: 'run-active', updated_at: now,
+        status: 'running', attempts: 1 }] }],
+    handoffs: [], decisions: [], outstanding_steps: [{ key: 'api', state: 'running' }],
+    measurements: { unit_count: 1, run_count: 1, attempt_count: 1, failed_attempts: 0, review_rounds: 0, findings: 0,
+      remediation_passes: 0, decisions_requested: 0, decisions_resolved: 0, human_actions: 1,
+      human_actions_complete: false, max_concurrency: 1, runs_with_usage: 0, runs_with_cost: 0,
+      unknown: ['input_tokens', 'output_tokens', 'cost_usd', 'supervision_minutes', 'unrecorded_human_actions'] },
+    unknown_evidence: ['policy_backed_assurance', 'publication_authority'],
+  })));
+  await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
+  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  const report = page.getByRole('region', { name: 'Objective delivery report' });
+  await report.getByRole('button', { name: 'View delivery report' }).click();
+  const execution = report.locator('.objective-delivery-run');
+  await expect(execution).toContainText('result attempt unknown');
+  await expect(execution).not.toContainText('result attempt 0');
+});
+
 const noHorizontalScroll = (page: Page) => page.evaluate(() =>
   document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 

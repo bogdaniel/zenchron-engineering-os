@@ -125,6 +125,27 @@ func TestWorkGraphReportRequiresExplicitGitHubPRState(t *testing.T) {
 	}
 }
 
+func TestWorkGraphReportOmitsUnacceptedResultAttempt(t *testing.T) {
+	for _, status := range []string{"queued", "running"} {
+		t.Run(status, func(t *testing.T) {
+			harness := newGraphHarness(t)
+			started := harness.start(harness.twoProducerPlan())
+			if status == "running" {
+				harness.claimUnit("api")
+			}
+
+			report, body := harness.deliveryReport(started.ID)
+			executions := reportedUnit(t, report, "api").Executions
+			if len(executions) != 1 || executions[0].Status != status || executions[0].ResultAttempt != 0 {
+				t.Fatalf("execution = %#v, want a %s run without an accepted result", executions, status)
+			}
+			if strings.Contains(body, `"result_attempt"`) {
+				t.Fatalf("report claims an unaccepted result attempt: %s", body)
+			}
+		})
+	}
+}
+
 func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	harness := newGraphHarness(t)
 	started := harness.start(harness.reviewedPlan())
