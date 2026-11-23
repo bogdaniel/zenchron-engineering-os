@@ -203,6 +203,47 @@ func TestUnitIsNotReportedBlockedWhileItsPullRequestIsBeingCreated(t *testing.T)
 	}
 }
 
+func TestGraphCancellationIsRejectedDuringAuthorizedPullRequestRetry(t *testing.T) {
+	harness := newGraphHarness(t)
+	harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID),
+		unitJSON("integrate", unitIntegrate, "", "api"), unitJSON("check", unitReview, harness.reviewer.ID, "integrate")))
+	harness.handOff(harness.claimUnit("api"), commit(1), "api")
+	integration := harness.claimUnit("integrate")
+	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Result: `{"integration":{}}`})
+	harness.verdict(harness.claimUnit("check"), commit(4), `{"review":{"verdict":"accept"}}`)
+	graphID := harness.graph().ID
+	harness.authorizePublication(integration.ID, commit(4))
+	publication := harness.claimUnit("integrate")
+	harness.mu.Lock()
+	harness.failPullCreate = true
+	harness.mu.Unlock()
+	harness.report(publication, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
+		BranchPushed: true, Result: `{"integration":{}}`})
+	if run, _ := harness.store.get(integration.ID); run.Publication != publicationPullRequestFailed || run.Publishing {
+		t.Fatalf("failed initial publication = %#v", run)
+	}
+	harness.mu.Lock()
+	harness.failPullCreate = false
+	harness.mu.Unlock()
+
+	var cancelStatus int
+	harness.duringPullCreate = func() {
+		cancelStatus = harness.call(http.MethodPost, "/api/v1/work-graphs/"+graphID+"/cancel", "").Code
+	}
+	response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+integration.ID+"/publish",
+		fmt.Sprintf(`{"candidate_sha":%q}`, commit(4)))
+	var retried agentRun
+	if err := json.NewDecoder(response.Body).Decode(&retried); err != nil || response.Code != http.StatusOK || retried.PullRequestURL == "" {
+		t.Fatalf("authorized PR retry = HTTP %d, run %#v, decode error %v", response.Code, retried, err)
+	}
+	if cancelStatus != http.StatusConflict {
+		t.Fatalf("cancellation during PR creation returned HTTP %d, want %d", cancelStatus, http.StatusConflict)
+	}
+	if graph := harness.graph(); graph.Status == graphCancelled {
+		t.Fatalf("work graph was cancelled while its authorized PR was being created: %#v", graph)
+	}
+}
+
 func TestPublicationPersistenceFailureReleasesUpdateBarrier(t *testing.T) {
 	harness := newGraphHarness(t)
 	harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID),

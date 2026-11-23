@@ -575,13 +575,29 @@ func (store *agentRunStore) get(runID string) (agentRun, bool) {
 func (store *agentRunStore) unitRuns(graphID string) map[string]agentRun {
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	return unitRunsForGraph(store.items, graphID)
+}
+
+func unitRunsForGraph(items map[string]agentRun, graphID string) map[string]agentRun {
 	runs := map[string]agentRun{}
-	for id, item := range store.items {
+	for id, item := range items {
 		if item.GraphID == graphID {
 			runs[id] = item
 		}
 	}
 	return runs
+}
+
+// graphPublicationInProgress reports an external PR operation that graph cancellation cannot undo.
+func (store *agentRunStore) graphPublicationInProgress(graphID string) bool {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	for _, item := range store.items {
+		if item.GraphID == graphID && (item.Publishing || item.PullRequestURL != "") {
+			return true
+		}
+	}
+	return false
 }
 
 // readDiff returns the stored diff of a run's latest attempt that captured one.

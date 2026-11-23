@@ -485,13 +485,15 @@ func (store *workGraphStore) changeAfterCommit(
 		http.Error(w, "could not persist work graph", http.StatusInternalServerError)
 		return
 	}
-	store.mu.Unlock()
+	// Persist run cancellation before result acceptance can observe the cancelled graph.
 	if afterCommit != nil {
 		if status, message := afterCommit(updated.ID); status != 0 {
+			store.mu.Unlock()
 			http.Error(w, message, status)
 			return
 		}
 	}
+	store.mu.Unlock()
 	store.reconcileAll()
 	store.writeGraph(w, http.StatusOK, updated.ID)
 }
@@ -501,6 +503,9 @@ func (store *workGraphStore) cancelGraph(w http.ResponseWriter, r *http.Request)
 	store.changeAfterCommit(w, r, func(graph *workGraph) (int, string) {
 		if graph.Status == graphCompleted || graph.Status == graphCancelled {
 			return http.StatusConflict, "the work graph has already finished"
+		}
+		if store.runs.graphPublicationInProgress(graph.ID) {
+			return http.StatusConflict, "a pull request for this work graph is being created or already exists"
 		}
 		graph.Status = graphCancelled
 		return 0, ""

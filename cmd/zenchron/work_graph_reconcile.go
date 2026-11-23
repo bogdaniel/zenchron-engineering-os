@@ -260,6 +260,16 @@ func (store *workGraphStore) publicationBinding(run agentRun, candidate string) 
 	runs := store.runs.unitRuns(run.GraphID)
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	return store.publicationBindingLocked(run, candidate, runs)
+}
+
+// publicationBindingLocked requires the graph lock; callers that also lock runs take them graph first.
+func (store *workGraphStore) publicationBindingLocked(
+	run agentRun, candidate string, runs map[string]agentRun,
+) (int, int, string, bool) {
+	if run.GraphID == "" || run.UnitKey == "" || run.CommitSHA != candidate {
+		return 0, 0, "", false
+	}
 	graph := store.graphs[run.GraphID]
 	if graph == nil || graph.Status == graphCancelled {
 		return 0, 0, "", false

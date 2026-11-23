@@ -43,7 +43,14 @@ func (store *agentRunStore) finish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	access := accessFor(r)
-	item, status, message := store.update(runID, func(item *agentRun) (int, string) {
+	store.mu.Lock()
+	before, exists := store.items[runID]
+	store.mu.Unlock()
+	if !exists {
+		http.NotFound(w, r)
+		return
+	}
+	update := func(item *agentRun) (int, string) {
 		// A result from a worker whose grant for the repository was removed is not accepted or published.
 		if item.WorkerID == workerID && !access.allows(item.Repository) {
 			return http.StatusForbidden, "this worker is no longer approved for the run's repository"
@@ -52,7 +59,17 @@ func (store *agentRunStore) finish(w http.ResponseWriter, r *http.Request) {
 			return http.StatusConflict, workerapi.AgentRunResultAlreadyAccepted
 		}
 		return store.applyResult(item, workerID, input)
-	})
+	}
+	var item agentRun
+	var status int
+	var message string
+	if before.GraphID != "" && store.graphs != nil {
+		store.graphs.mu.Lock()
+		item, status, message = store.update(runID, update)
+		store.graphs.mu.Unlock()
+	} else {
+		item, status, message = store.update(runID, update)
+	}
 	if status != 0 {
 		http.Error(w, message, status)
 		return
@@ -208,11 +225,7 @@ func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	graphRevision, planRevision, planHash, graphReady := 0, 0, "", before.GraphID == ""
-	if before.GraphID != "" && store.graphs != nil {
-		graphRevision, planRevision, planHash, graphReady = store.graphs.publicationBinding(before, input.CandidateSHA)
-	}
-	item, status, message := store.update(runID, func(item *agentRun) (int, string) {
+	update := func(item *agentRun) (int, string) {
 		switch {
 		case !access.allows(item.Repository):
 			return http.StatusForbidden, "you may not publish changes from this repository"
@@ -225,12 +238,18 @@ func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 		case item.Publishing:
 			return http.StatusConflict, "pull request publication is already in progress"
 		}
+		graphRevision, planRevision, planHash, graphReady := 0, 0, "", item.GraphID == ""
+		if item.GraphID != "" && store.graphs != nil {
+			runs := unitRunsForGraph(store.items, item.GraphID)
+			graphRevision, planRevision, planHash, graphReady =
+				store.graphs.publicationBindingLocked(*item, input.CandidateSHA, runs)
+		}
 		if !graphReady {
 			return http.StatusConflict, "the WorkGraph candidate has not passed its current independent reviews"
 		}
 		preauthorized := item.publicationAuthorized(input.CandidateSHA)
 		if item.GraphID != "" {
-			preauthorized = graphReady && item.publicationAuthorizedFor(input.CandidateSHA, item.GraphID, planRevision, planHash)
+			preauthorized = item.publicationAuthorizedFor(input.CandidateSHA, item.GraphID, planRevision, planHash)
 		}
 		if !preauthorized {
 			actor := access.user
@@ -256,7 +275,17 @@ func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 			item.requeue()
 		}
 		return 0, ""
-	})
+	}
+	var item agentRun
+	var status int
+	var message string
+	if before.GraphID != "" && store.graphs != nil {
+		store.graphs.mu.Lock()
+		item, status, message = store.update(runID, update)
+		store.graphs.mu.Unlock()
+	} else {
+		item, status, message = store.update(runID, update)
+	}
 	if status != 0 {
 		http.Error(w, message, status)
 		return
