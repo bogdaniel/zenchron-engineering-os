@@ -29,5 +29,6 @@ flowchart LR
 
 `cd dashboard && npm run test:e2e -- e2e/action-required.spec.ts e2e/workspace.spec.ts` checks the exact graph and
 decision context and deep link at desktop and phone sizes, focused resolution UI, cancelled-graph filtering, empty and
-error states, and Product Workspace links. `go test ./cmd/zenchron -run 'TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions' -count=1`
+error states, and Product Workspace links. `cd dashboard && npm run test:e2e -- e2e/orchestration.spec.ts --grep 'an objective plan approved in the dashboard runs through decision'`
+checks the same queue against the real control plane and worker. `go test ./cmd/zenchron -run 'TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions' -count=1`
 checks the typed graph status in the product projection.
