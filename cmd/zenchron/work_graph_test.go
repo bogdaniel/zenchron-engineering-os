@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -327,7 +328,21 @@ func TestReviewedCandidateWaitsForExactHumanPublicationAuthorization(t *testing.
 	if actions = harness.actionRequired(); len(actions) != 1 || actions[0].Subject != commit(4) {
 		t.Fatalf("publication action after restart = %#v", actions)
 	}
-	authorized := harness.authorizePublication(integration.ID, commit(4))
+	const duplicateAuthorizations = 16
+	start := make(chan struct{})
+	var requests sync.WaitGroup
+	for range duplicateAuthorizations {
+		requests.Add(1)
+		go func() {
+			defer requests.Done()
+			<-start
+			harness.call(http.MethodPost, "/api/v1/agent-runs/"+integration.ID+"/publish",
+				`{"candidate_sha":"`+commit(4)+`"}`)
+		}()
+	}
+	close(start)
+	requests.Wait()
+	authorized, _ := harness.store.get(integration.ID)
 	if len(authorized.PublicationAuthorizations) != 1 || authorized.PublicationAuthorizations[0].By != localOperator ||
 		authorized.PublicationAuthorizations[0].CommitSHA != commit(4) ||
 		authorized.PublicationAuthorizations[0].GraphID != graph.ID ||
