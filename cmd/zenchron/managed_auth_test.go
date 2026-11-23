@@ -309,7 +309,9 @@ func TestManagedOAuthSetupRechecksActiveRunsBeforeWritingConfig(t *testing.T) {
 				t.Fatal("final active-run check happened before OAuth prompts")
 			}
 			return preflightErr
-		}, func() (int, error) { return 1, nil })
+		}, func() (int, error) { return 1, nil },
+		func() error { t.Fatal("active setup must not restart the managed service"); return nil },
+		func(string) error { return nil }, func(string) error { return nil })
 	if err == nil || !strings.Contains(err.Error(), preflightErr.Error()) {
 		t.Fatalf("setup error = %v, want final active-run deferral", err)
 	}

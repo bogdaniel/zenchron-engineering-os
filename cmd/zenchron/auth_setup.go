@@ -68,7 +68,8 @@ func runAuthCommand(args []string) error {
 	defer terminal.Close()
 	activeRunCount := func() (int, error) { return managedOAuthActiveRunCount(statusToken, client) }
 	return setupManagedOAuth(home, terminal, terminal, readTerminalSecret,
-		func() error { return managedOAuthSetupPreflight(home, statusToken, client) }, activeRunCount)
+		func() error { return managedOAuthSetupPreflight(home, statusToken, client) }, activeRunCount,
+		restartManagedForOAuth, waitForConfiguredOAuth, waitForLocalWorkspace)
 }
 
 func managedOAuthSetupPreflight(home, statusToken string, client *http.Client) error {
@@ -124,7 +125,8 @@ func managedOAuthActiveRunCount(statusToken string, client *http.Client) (int, e
 }
 
 func setupManagedOAuth(home string, input io.Reader, output io.Writer, readSecret func(io.Writer) (string, error),
-	verifyIdle func() error, activeRunCount func() (int, error)) error {
+	verifyIdle func() error, activeRunCount func() (int, error), restart func() error,
+	waitConfigured, waitLocal func(string) error) error {
 	if _, err := os.Stat(managedOAuthConfigPath(home)); err == nil {
 		return errors.New("GitHub sign-in is already configured; existing credentials were left unchanged")
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -140,13 +142,13 @@ func setupManagedOAuth(home string, input io.Reader, output io.Writer, readSecre
 	if err := writeManagedOAuthConfig(home, config); err != nil {
 		return err
 	}
-	if err := restartManagedForOAuth(); err != nil {
-		return rollbackManagedOAuthAfterFailure(home, activeRunCount, restartManagedForOAuth,
-			waitForLocalWorkspace, fmt.Errorf("managed GitHub sign-in was not activated: %w", err))
+	if err := restart(); err != nil {
+		return rollbackManagedOAuthAfterFailure(home, activeRunCount, restart, waitLocal,
+			fmt.Errorf("managed GitHub sign-in was not activated: %w", err))
 	}
-	if err := waitForConfiguredOAuth(home); err != nil {
-		return rollbackManagedOAuthAfterFailure(home, activeRunCount, restartManagedForOAuth,
-			waitForLocalWorkspace, fmt.Errorf("managed runtime did not activate GitHub sign-in: %w", err))
+	if err := waitConfigured(home); err != nil {
+		return rollbackManagedOAuthAfterFailure(home, activeRunCount, restart, waitLocal,
+			fmt.Errorf("managed runtime did not activate GitHub sign-in: %w", err))
 	}
 	if _, err := fmt.Fprintf(output, "GitHub sign-in is configured for %s. The managed runtime restarted; local workspace data and updater credentials were left unchanged.\n",
 		managedOAuthCallback); err != nil {
