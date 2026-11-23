@@ -212,10 +212,6 @@ func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 	if before.GraphID != "" && store.graphs != nil {
 		graphRevision, planRevision, planHash, graphReady = store.graphs.publicationBinding(before, input.CandidateSHA)
 	}
-	preauthorized := before.publicationAuthorized(input.CandidateSHA)
-	if before.GraphID != "" {
-		preauthorized = graphReady && before.publicationAuthorizedFor(input.CandidateSHA, before.GraphID, planRevision, planHash)
-	}
 	item, status, message := store.update(runID, func(item *agentRun) (int, string) {
 		switch {
 		case !access.allows(item.Repository):
@@ -231,6 +227,10 @@ func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 		}
 		if !graphReady {
 			return http.StatusConflict, "the WorkGraph candidate has not passed its current independent reviews"
+		}
+		preauthorized := item.publicationAuthorized(input.CandidateSHA)
+		if item.GraphID != "" {
+			preauthorized = graphReady && item.publicationAuthorizedFor(input.CandidateSHA, item.GraphID, planRevision, planHash)
 		}
 		if !preauthorized {
 			actor := access.user
