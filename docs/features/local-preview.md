@@ -35,9 +35,13 @@ status. LaunchAgent may restart the supervisor, but it reads that marker and exi
 blocked state and pointer remain unchanged until operator recovery. Incompatible state or protocol versions stay
 blocked before service shutdown.
 
-The local `status` command and Settings / System Update page read the same persisted status record. The dashboard
-reconnects to update progress, keeps Mock isolated from the API, and automatically reloads only after it observes a new
-running revision.
+The local `status` command and Settings / System Update page read the same persisted status record. `active_runs` in
+that record is the last count observed during an updater drain, not a live idle check. The live count endpoint requires
+the managed supervisor's process-local token; there is no supported operator command to obtain that token. The
+supervisor uses the endpoint internally to close admission and drain active or publishing runs before an update or
+graceful shutdown. Do not force-stop the service if graceful shutdown cannot complete. The dashboard reconnects to
+update progress, keeps Mock isolated from the API, and automatically reloads only after it observes a new running
+revision.
 
 ## Feature diagram
 
@@ -138,18 +142,29 @@ To configure an existing installation safely:
 1. Save the App's private key to a regular file outside the repository in a user-owned directory with mode `0600`;
    keep the directory private. Record the App ID, the installation ID for the repository, and that file's path. Never
    copy PEM contents into the LaunchAgent, a shell command, logs, or a PR.
-2. Check `zenchron-engineering doctor` and `zenchron-engineering status`. Wait until `active_runs` is zero before
-   restarting the service. Keep a recovery copy of the existing LaunchAgent plist in a private location.
+2. Check `zenchron-engineering doctor` and `zenchron-engineering status` to confirm the canonical installation and
+   current updater state. Do not use the persisted `active_runs` field to infer current idleness; the live count is
+   supervisor-only. Keep a recovery copy of the existing LaunchAgent plist in a private location.
 3. In the existing `~/Library/LaunchAgents/com.bogdaniel.zenchron-engineering-os.plist`, add or update only the three
    App environment strings under `EnvironmentVariables`. Keep every other entry, the owner, and mode `0600`; store
    only the private-key path, never the key. Validate the edited plist with `plutil -lint` and replace the original
    atomically.
-4. With no active run, gracefully unload and bootstrap that same plist in the current GUI domain. This restarts the
-   existing single LaunchAgent and reuses its active release and `ZENCHRON_DATA_DIR`; do not run a second service or
-   create a new data directory.
-5. Run `zenchron-engineering doctor` and `zenchron-engineering status`, then inspect Settings / System Update. The
-   updater should report its trusted revision or a precise permission/required-check error. A GitHub OAuth browser
-   session alone is not evidence that updater authentication works.
+4. Gracefully unload the existing plist in the current GUI domain, wait for its process to exit, then bootstrap that
+   same plist. The supervisor closes admission and drains active/publishing runs before stopping; if it does not exit,
+   do not force-kill it or start another instance. This reuses the active release and `ZENCHRON_DATA_DIR`.
+
+   ```sh
+   launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.bogdaniel.zenchron-engineering-os.plist"
+   launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.bogdaniel.zenchron-engineering-os.plist"
+   ```
+
+   Run `bootstrap` only after `bootout` succeeds and the existing job has exited.
+5. Request a fresh updater check from the local machine with
+   `curl -i -X POST -H 'Origin: http://127.0.0.1:8080' http://127.0.0.1:8080/api/v1/system/update/check`. The
+   endpoint returns `202 Accepted` when it signals the existing supervisor; it does not include the check result.
+   Re-read `zenchron-engineering status` and inspect Settings / System Update for the trusted revision or precise
+   permission/required-check error. A GitHub OAuth browser session alone is not evidence that updater authentication
+   works.
 
 The updater's App read permissions are insufficient for creating PRs. PR creation requires Pull requests: write on the
 control-plane App, while pushing the exact reviewed branch still uses the worker's local Git credential. A successful
