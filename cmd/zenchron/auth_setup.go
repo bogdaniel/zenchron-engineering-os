@@ -44,7 +44,9 @@ func runAuthCommand(args []string) error {
 			fmt.Println("GitHub sign-in is already configured; no credentials or files were changed.")
 			return nil
 		}
-		return errors.New("GitHub OAuth credentials are saved but the managed runtime has not confirmed them; wait for active work to drain or start the existing managed service if it is stopped, then verify /auth/github")
+		return errors.New("GitHub OAuth credentials are saved but the managed runtime has not confirmed them; " +
+			"wait for active work to drain or start the existing managed service if it is stopped, " +
+			"then verify /auth/github")
 	}
 	if configured, err := managedOAuthAlreadyConfigured(home); err != nil {
 		return err
@@ -85,7 +87,8 @@ func managedOAuthSetupPreflight(home, statusToken string, client *http.Client) e
 		return fmt.Errorf("could not verify active agent runs: %w", err)
 	}
 	if active > 0 {
-		return fmt.Errorf("OAuth setup is deferred until active work finishes (%d active agent run(s)); credentials were not saved and the managed service was not restarted",
+		return fmt.Errorf("OAuth setup is deferred until active work finishes (%d active agent run(s)); "+
+			"credentials were not saved and the managed service was not restarted",
 			active)
 	}
 	return nil
@@ -156,15 +159,19 @@ func rollbackManagedOAuthAfterFailure(home string, activeRunCount func() (int, e
 	wait func(string) error, activationErr error) error {
 	active, err := activeRunCount()
 	if err != nil {
-		return errors.Join(activationErr, fmt.Errorf("OAuth config remains at %s because work state could not be verified; no second restart was attempted: %w",
+		return errors.Join(activationErr, fmt.Errorf("OAuth config remains at %s because work state could not be verified; "+
+			"no second restart was attempted: %w",
 			managedOAuthConfigPath(home), err))
 	}
 	if active < 0 {
-		return errors.Join(activationErr, fmt.Errorf("OAuth config remains at %s because work state is invalid; no second restart was attempted",
+		return errors.Join(activationErr, fmt.Errorf("OAuth config remains at %s because work state is invalid; "+
+			"no second restart was attempted",
 			managedOAuthConfigPath(home)))
 	}
 	if active > 0 {
-		return errors.Join(activationErr, fmt.Errorf("OAuth config remains at %s while the graceful restart drains %d active agent run(s); do not retry setup, and verify the managed runtime after work completes",
+		return errors.Join(activationErr, fmt.Errorf("OAuth config remains at %s while the graceful restart drains "+
+			"%d active agent run(s); "+
+			"do not retry setup, and verify the managed runtime after work completes",
 			managedOAuthConfigPath(home), active))
 	}
 	return errors.Join(activationErr, wrapRollbackError(home, rollbackManagedOAuthConfig(home, restart, wait)))
