@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,31 @@ func TestAuthenticationSeparatesDashboardAndWorkerRequests(t *testing.T) {
 		if response.Code != test.status {
 			t.Errorf("%s %s with %q returned %d, want %d", test.method, test.path, test.authorization, response.Code, test.status)
 		}
+	}
+}
+
+func TestAuthSessionReportsGitHubWriteCredentialConfiguration(t *testing.T) {
+	t.Setenv("ZENCHRON_GITHUB_TOKEN", "")
+	t.Setenv("ZENCHRON_GITHUB_APP_ID", "")
+	t.Setenv("ZENCHRON_GITHUB_INSTALLATION_ID", "")
+	t.Setenv("ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", "")
+	server := authHandler(newMux(), nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	request.Host = "127.0.0.1"
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	var session map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &session); err != nil || response.Code != http.StatusOK ||
+		session["github_write_configured"] != false {
+		t.Fatalf("unconfigured session = %#v, body %s, error %v, HTTP %d", session, response.Body.String(), err, response.Code)
+	}
+
+	t.Setenv("ZENCHRON_GITHUB_TOKEN", "configured-token")
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if err := json.Unmarshal(response.Body.Bytes(), &session); err != nil || response.Code != http.StatusOK ||
+		session["github_write_configured"] != true {
+		t.Fatalf("configured session = %#v, body %s, error %v, HTTP %d", session, response.Body.String(), err, response.Code)
 	}
 }
 
@@ -82,6 +108,117 @@ func TestAuthenticatedAPIMutationsRejectCrossOriginRequests(t *testing.T) {
 	}
 }
 
+func TestUnauthenticatedRequestsRejectForwardedAndNonLoopbackHosts(t *testing.T) {
+	passed := 0
+	server := authHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		passed++
+		w.WriteHeader(http.StatusNoContent)
+	}), nil)
+	for _, test := range []struct {
+		name, host, header, value string
+		status                    int
+	}{
+		{name: "local request", host: "127.0.0.1:8080", status: http.StatusNoContent},
+		{name: "non-loopback host", host: "tunnel.example", status: http.StatusForbidden},
+		{name: "forwarded", host: "127.0.0.1:8080", header: "Forwarded", value: "for=203.0.113.1", status: http.StatusForbidden},
+		{name: "forwarded for", host: "127.0.0.1:8080", header: "X-Forwarded-For", value: "203.0.113.1", status: http.StatusForbidden},
+		{name: "cloudflare client", host: "127.0.0.1:8080", header: "CF-Connecting-IP", value: "203.0.113.1", status: http.StatusForbidden},
+		{name: "webhook route defers to signature validation", host: "tunnel.example", header: "X-Forwarded-For", value: "203.0.113.1",
+			status: http.StatusNoContent},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			method, path := http.MethodGet, "/api/v1/test"
+			if test.name == "webhook route defers to signature validation" {
+				method, path = http.MethodPost, gitHubWebhookPath
+			}
+			request := httptest.NewRequest(method, path, nil)
+			request.Host = test.host
+			if test.header != "" {
+				request.Header.Set(test.header, test.value)
+			}
+			response := httptest.NewRecorder()
+			server.ServeHTTP(response, request)
+			if response.Code != test.status {
+				t.Errorf("request returned HTTP %d, want %d", response.Code, test.status)
+			}
+		})
+	}
+	if passed != 2 {
+		t.Fatalf("allowed requests passed through %d times, want 2", passed)
+	}
+}
+
+func TestLoopbackAPIMutationsRequireSameOriginAndLoopbackHost(t *testing.T) {
+	t.Setenv("ZENCHRON_MANAGED_SUPERVISOR_TOKEN", "")
+	passed := 0
+	server := authHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		passed++
+		w.WriteHeader(http.StatusNoContent)
+	}), nil)
+	for _, test := range []struct {
+		method, path, host, origin string
+		status                     int
+	}{
+		{method: http.MethodGet, path: "/api/v1/test", host: "attacker.example:8080", status: http.StatusForbidden},
+		{method: http.MethodPost, path: "/api/v1/test", host: "127.0.0.1:8080", origin: "http://attacker.example:8080", status: http.StatusForbidden},
+		{method: http.MethodPost, path: "/api/v1/test", host: "127.0.0.1:8080", status: http.StatusForbidden},
+		{method: http.MethodPost, path: "/api/v1/test", host: "127.0.0.1:8080", origin: "http://127.0.0.1:8080", status: http.StatusNoContent},
+		{method: http.MethodPost, path: "/api/v1/test", host: "localhost", origin: "http://localhost", status: http.StatusNoContent},
+		{method: http.MethodPut, path: "/api/v1/workers/0123456789abcdef0123456789abcdef/heartbeat",
+			host: "127.0.0.1:8080", status: http.StatusForbidden},
+		{method: http.MethodPut, path: "/api/v1/workers/0123456789abcdef0123456789abcdef/heartbeat",
+			host: "127.0.0.1:8080", origin: "http://127.0.0.1:8080", status: http.StatusNoContent},
+	} {
+		request := httptest.NewRequest(test.method, test.path, nil)
+		request.Host = test.host
+		if test.origin != "" {
+			request.Header.Set("Origin", test.origin)
+		}
+		response := httptest.NewRecorder()
+		server.ServeHTTP(response, request)
+		if response.Code != test.status {
+			t.Errorf("%s %s with Host %q and Origin %q returned HTTP %d, want %d",
+				test.method, test.path, test.host, test.origin, response.Code, test.status)
+		}
+	}
+	if passed != 3 {
+		t.Fatalf("allowed requests passed through %d times, want 3", passed)
+	}
+}
+
+func TestAuthenticatedLoopbackAcceptsRewrittenProxyOrigin(t *testing.T) {
+	config := testAuthConfig()
+	config.publicURL, config.https = mustURL("http://127.0.0.1:4173"), false
+	session, err := signSession(authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passed := 0
+	server := authHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		passed++
+		w.WriteHeader(http.StatusNoContent)
+	}), config)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/test", nil)
+	request.Host = "127.0.0.1:8080"
+	request.Header.Set("Origin", "http://127.0.0.1:8080")
+	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || passed != 1 {
+		t.Fatalf("proxied local mutation returned HTTP %d and passed through %d times", response.Code, passed)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/test", nil)
+	request.Host = "127.0.0.1:8080"
+	request.Header.Set("Origin", "http://attacker.example")
+	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden || passed != 1 {
+		t.Fatalf("hostile proxied mutation returned HTTP %d and passed through %d times", response.Code, passed)
+	}
+}
+
 func TestAuthenticatedGitHubLoginIsAvailableWithoutRepositoryPolicy(t *testing.T) {
 	config := testAuthConfig()
 	user := authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}
@@ -111,6 +248,78 @@ func TestRequestOriginAcceptsImplicitHTTPSPort(t *testing.T) {
 	config.publicURL = mustURL("https://zenchron.example:443")
 	if !validRequestOrigin("https://zenchron.example", config) {
 		t.Fatal("same-origin request without the explicit default HTTPS port was rejected")
+	}
+}
+
+func TestLogoutRevokesCopiedSession(t *testing.T) {
+	config := testAuthConfig()
+	statePath := filepath.Join(t.TempDir(), "auth-sessions.json")
+	revocations, err := loadSessionRevocations(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.sessionRevocations = revocations
+	user := authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	session, err := signSession(user, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := authHandler(http.NotFoundHandler(), config)
+	logout := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	logout.Header.Set("Origin", config.publicURL.String())
+	logout.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, logout)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("logout returned HTTP %d", response.Code)
+	}
+
+	config.sessionRevocations, err = loadSessionRevocations(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	replay.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, replay)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("copied session remained valid after logout: HTTP %d", response.Code)
+	}
+
+	issuedAt := time.Now().UnixNano()
+	replacement, err := signSession(authUser{Login: "Engineer", IssuedAt: issuedAt,
+		ExpiresAt: time.Unix(0, issuedAt).Add(time.Hour).Unix()}, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay = httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	replay.AddCookie(&http.Cookie{Name: authSessionCookie, Value: replacement})
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, replay)
+	if response.Code != http.StatusOK {
+		t.Fatalf("new session after logout returned HTTP %d", response.Code)
+	}
+}
+
+func TestLogoutDoesNotClearCookieWhenRevocationCannotPersist(t *testing.T) {
+	config := testAuthConfig()
+	revocations, err := loadSessionRevocations(filepath.Join(t.TempDir(), "missing", "auth-sessions.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.sessionRevocations = revocations
+	user := authUser{Login: "Engineer", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	session, err := signSession(user, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logout := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	logout.Header.Set("Origin", config.publicURL.String())
+	logout.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response := httptest.NewRecorder()
+	authHandler(http.NotFoundHandler(), config).ServeHTTP(response, logout)
+	if response.Code != http.StatusInternalServerError || len(response.Result().Cookies()) != 0 {
+		t.Fatalf("failed revocation returned HTTP %d and cookies %#v", response.Code, response.Result().Cookies())
 	}
 }
 
@@ -199,6 +408,13 @@ func TestGitHubOAuthCreatesAllowlistedSession(t *testing.T) {
 	server.ServeHTTP(response, logout)
 	if response.Code != http.StatusNoContent || response.Result().Cookies()[0].MaxAge >= 0 {
 		t.Fatalf("logout response = HTTP %d, cookies %#v", response.Code, response.Result().Cookies())
+	}
+	replay := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	replay.AddCookie(sessionCookie)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, replay)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("copied session remained valid after logout: HTTP %d", response.Code)
 	}
 	logout.Header.Set("Origin", "https://attacker.example")
 	response = httptest.NewRecorder()
@@ -419,7 +635,8 @@ func TestReadSessionRejectsTamperingAndExpiry(t *testing.T) {
 func testAuthConfig() *authConfig {
 	return &authConfig{clientID: "client-id", clientSecret: "client-secret", sessionKey: []byte(strings.Repeat("s", 32)),
 		workerToken: testWorkerToken, allowedUsers: []string{"engineer"}, publicURL: mustURL("https://zenchron.example"), https: true,
-		githubURL: "https://github.com", githubAPIURL: "https://api.github.com"}
+		githubURL: "https://github.com", githubAPIURL: "https://api.github.com",
+		sessionRevocations: &sessionRevocations{revokedBefore: make(map[string]int64)}}
 }
 
 const testWorkerToken = "worker-secret-for-auth-tests-1234567890"

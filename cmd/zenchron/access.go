@@ -191,7 +191,8 @@ func accessFor(r *http.Request) requestAccess {
 }
 
 func (access requestAccess) allows(repository string) bool {
-	return !access.enforced || access.admin || (repository != "" && slices.Contains(access.repositories, repository))
+	return !access.enforced || access.admin || (repository != "" && slices.ContainsFunc(access.repositories,
+		func(granted string) bool { return sameRepository(granted, repository) }))
 }
 
 // owns reports whether the caller may change a definition created by createdBy: its creator or an

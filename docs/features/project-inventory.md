@@ -14,7 +14,7 @@ flowchart LR
     API -->|5 second refresh| Query[TanStack Query]
     Query --> Validate[Zod project schema]
     Validate --> Grid[AG Grid repository inventory]
-    Grid -->|Select row| Detail[Worker and checkout details]
+    Grid -->|Select row or press Enter / Space| Detail[Worker and checkout details]
     Inventory -->|GET /api/v1/agent-runs, 3 second refresh| Runs[Zod agent run schema]
     Runs -->|runs of the selected checkout| Branches[Agent run branches list]
 ```
@@ -23,6 +23,7 @@ flowchart LR
 
 - The page lists checkouts and current branch names discovered by connected local workers and refreshes through the existing five-second projects query.
 - Search matches repository and worker names; selecting a row shows its worker heartbeat and opaque identities.
+- A focused inventory row opens its checkout details with Enter or Space, as well as a pointer click.
 - The worker reads the current branch from bounded `.git/HEAD` metadata; it does not execute Git commands during each heartbeat.
 - The worker sends checkout names, branch names, opaque IDs, and the `origin` host/repository path with URL credentials and query strings removed. Local filesystem paths remain on the worker machine and are not returned by the API.
 - The detail panel lists the selected checkout's agent runs as "Agent run branches": the newest four, each with its
@@ -35,3 +36,4 @@ flowchart LR
 ## Verification
 
 `go test ./cmd/zenchron -run 'TestWorkerHeartbeat|TestValidGitRemote'` verifies API validation and listing. `go test ./cmd/zenchron-worker -run 'TestRepositoryLocator|TestGitRemoteScrubsCredentials'` verifies URL forms and credential/path scrubbing. `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Projects page shows'` verifies the locator reaches the live dashboard without credentials; `--grep 'agent run branches'` verifies the run branch list at 1672×941 and 390×844.
+`cd dashboard && npm run test:e2e -- e2e/keyboard-selection.spec.ts` verifies Enter and Space selection in the Projects grid.

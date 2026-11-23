@@ -83,6 +83,7 @@ export type SystemSource = {
 export interface SystemFacts {
   apiOnline: boolean;
   githubLogin: boolean;
+  githubWriteConfigured?: boolean;
   workerCount: number;
   onlineWorkerCount: number;
   projectCount: number;
@@ -104,7 +105,8 @@ function notIntegrated(name: string, detail: string, color: string, category: st
 }
 
 function liveProviders(facts: SystemFacts): SystemProvider[] {
-  const { apiOnline, githubLogin, workerCount, onlineWorkerCount, projectCount, gitHubProjectCount, cliReadyWorkers = {} } = facts;
+  const { apiOnline, githubLogin, githubWriteConfigured, workerCount, onlineWorkerCount, projectCount,
+    gitHubProjectCount, cliReadyWorkers = {} } = facts;
   const readyCLIs = Object.entries(cliReadyWorkers).filter(([, count]) => count > 0);
   const cliDetail = readyCLIs.length
     ? ` Coding CLIs ready: ${readyCLIs.map(([id, count]) => `${id} on ${count}`).join(', ')}.`
@@ -125,10 +127,17 @@ function liveProviders(facts: SystemFacts): SystemProvider[] {
       status: onlineWorkerCount ? 'Connected' : unavailable, healthy: onlineWorkerCount > 0 },
     { name: 'GitHub', detail: 'Code, PRs, issues', color: 'github', category: 'SCM', icon: <IconBrandGithub />,
       link: gitHubProjectCount
-        ? `${gitHubProjectCount} GitHub ${gitHubProjectCount === 1 ? 'repository' : 'repositories'} detected. PR comments and `
-          + 'request-changes use the control-plane token and are submitted as its owner. Merge actions are not available.'
+        ? githubWriteConfigured === true
+          ? `${gitHubProjectCount} GitHub ${gitHubProjectCount === 1 ? 'repository' : 'repositories'} detected. Reviews, issue comments, `
+            + 'issue updates, and merge use the configured control-plane credential; GitHub enforces its permissions.'
+          : githubWriteConfigured === false
+            ? `${gitHubProjectCount} GitHub ${gitHubProjectCount === 1 ? 'repository' : 'repositories'} detected. Sync is read-only; `
+              + 'reviews, comments, issue updates, and merge need a configured control-plane credential.'
+            : `${gitHubProjectCount} GitHub ${gitHubProjectCount === 1 ? 'repository' : 'repositories'} detected. `
+              + 'Control-plane write capability is unavailable.'
         : `${projectCount} local checkout${projectCount === 1 ? '' : 's'} visible; connect a github.com origin to sync issues and pull requests.`,
-      status: gitHubProjectCount ? 'Read-only sync' : 'No GitHub repo', healthy: gitHubProjectCount > 0 },
+      status: !gitHubProjectCount ? 'No GitHub repo' : githubWriteConfigured === true ? 'Credential configured'
+        : githubWriteConfigured === false ? 'Read-only sync' : 'Write status unavailable', healthy: gitHubProjectCount > 0 },
     codingCLI('OpenAI', 'Codex CLI', 'openai', <IconBrandOpenai />, 'codex-cli'),
     codingCLI('Anthropic', 'Claude Code CLI', 'anthropic', <span>AI</span>, 'claude-code'),
     { name: 'Storage / Evidence', detail: 'Artifacts, logs, evidence', color: 'storage', category: 'Storage', icon: <IconDatabase />,

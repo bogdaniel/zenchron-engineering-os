@@ -17,7 +17,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatalf("create first control plane: %v", err)
 	}
 	response := httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
 		`{"title":"Persist this goal","owner":"Platform"}`,
 	)))
 	var createdObjective objective
@@ -25,14 +25,14 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatalf("create objective = %#v, decode error = %v, HTTP %d", createdObjective, err, response.Code)
 	}
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPatch, "/api/v1/objectives/"+createdObjective.ID,
+	server.ServeHTTP(response, jsonRequest(http.MethodPatch, "/api/v1/objectives/"+createdObjective.ID,
 		strings.NewReader(`{"title":"Persist edited goal","description":"Updated plan","owner":"Review team","due_date":"2027-01-20"}`)))
 	var editedObjective objective
 	if err := json.NewDecoder(response.Body).Decode(&editedObjective); err != nil || response.Code != http.StatusOK {
 		t.Fatalf("update objective = %#v, decode error = %v, HTTP %d", editedObjective, err, response.Code)
 	}
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/agents", strings.NewReader(
 		`{"name":"Persisted reviewer","provider":"custom","model":"review-v1","tools":["git.read"]}`,
 	)))
 	var createdAgent agentProfile
@@ -40,7 +40,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatalf("create agent profile = %#v, decode error = %v, HTTP %d", createdAgent, err, response.Code)
 	}
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/products", strings.NewReader(
 		`{"name":"Persisted product","repository_ids":["`+testProjectID+`"],"default_workflow_id":"pr-review-release"}`,
 	)))
 	var createdProduct product
@@ -51,7 +51,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatalf("created product configuration revision = %d, want 1", createdProduct.ConfigurationRevision)
 	}
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/v1/products/"+createdProduct.ID, strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPut, "/api/v1/products/"+createdProduct.ID, strings.NewReader(
 		`{"name":"Persisted product","description":"revision two","repository_ids":["`+testProjectID+
 			`"],"default_workflow_id":"pr-review-release"}`)))
 	var updatedProduct product
@@ -60,7 +60,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatalf("update product revision = %#v, decode error = %v, HTTP %d", updatedProduct, err, response.Code)
 	}
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
+	server.ServeHTTP(response, jsonRequest(http.MethodPost, "/api/v1/objectives", strings.NewReader(
 		`{"title":"Persisted linked objective","product_id":"`+createdProduct.ID+`"}`,
 	)))
 	var linkedObjective objective
@@ -70,7 +70,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 	response = httptest.NewRecorder()
 	workerHeartbeat := `{"name":"persisted-worker","projects":[{"id":"` + testProjectID +
 		`","name":"persisted-project","branch":"main"}]}`
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut,
+	server.ServeHTTP(response, jsonRequest(http.MethodPut,
 		"/api/v1/workers/"+testWorkerID+"/heartbeat", strings.NewReader(workerHeartbeat)))
 	if response.Code != http.StatusOK {
 		t.Fatalf("register worker returned HTTP %d: %s", response.Code, response.Body.String())
@@ -95,7 +95,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		}
 	}
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workflows", nil))
+	server.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/workflows", nil))
 	var workflows []workflow
 	if err := json.NewDecoder(response.Body).Decode(&workflows); err != nil ||
 		response.Code != http.StatusOK || len(workflows) == 0 {
@@ -114,7 +114,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatal(err)
 	}
 	response = httptest.NewRecorder()
-	server.ServeHTTP(response, httptest.NewRequest(http.MethodPut,
+	server.ServeHTTP(response, jsonRequest(http.MethodPut,
 		"/api/v1/workflows/"+wantWorkflow.ID, strings.NewReader(string(body))))
 	if response.Code != http.StatusOK {
 		t.Fatalf("update workflow returned HTTP %d: %s", response.Code, response.Body.String())
@@ -125,7 +125,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatalf("restart control plane: %v", err)
 	}
 	response = httptest.NewRecorder()
-	restarted.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/objectives", nil))
+	restarted.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/objectives", nil))
 	var objectives []objective
 	if err := json.NewDecoder(response.Body).Decode(&objectives); err != nil || response.Code != http.StatusOK ||
 		len(objectives) != 2 || objectives[1].ID != createdObjective.ID || objectives[0].ID != linkedObjective.ID ||
@@ -134,7 +134,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatalf("restored objectives = %#v, decode error = %v, HTTP %d", objectives, err, response.Code)
 	}
 	response = httptest.NewRecorder()
-	restarted.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workflows", nil))
+	restarted.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/workflows", nil))
 	var restoredWorkflows []workflow
 	if err := json.NewDecoder(response.Body).Decode(&restoredWorkflows); err != nil || response.Code != http.StatusOK ||
 		len(restoredWorkflows) == 0 || restoredWorkflows[0].Description != wantWorkflow.Description ||
@@ -142,14 +142,14 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatalf("restored workflows = %#v, decode error = %v, HTTP %d", restoredWorkflows, err, response.Code)
 	}
 	response = httptest.NewRecorder()
-	restarted.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/agents", nil))
+	restarted.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/agents", nil))
 	var agents []agentProfile
 	if err := json.NewDecoder(response.Body).Decode(&agents); err != nil || response.Code != http.StatusOK ||
 		len(agents) != 1 || agents[0].ID != createdAgent.ID || agents[0].Name != createdAgent.Name {
 		t.Fatalf("restored agent profiles = %#v, decode error = %v, HTTP %d", agents, err, response.Code)
 	}
 	response = httptest.NewRecorder()
-	restarted.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/products", nil))
+	restarted.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/products", nil))
 	var products []product
 	if err := json.NewDecoder(response.Body).Decode(&products); err != nil || response.Code != http.StatusOK ||
 		len(products) != 1 || products[0].ID != createdProduct.ID ||
@@ -158,7 +158,7 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatalf("restored products = %#v, decode error = %v, HTTP %d", products, err, response.Code)
 	}
 	response = httptest.NewRecorder()
-	restarted.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/objectives", nil))
+	restarted.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/objectives", nil))
 	var restoredObjectives []objective
 	if err := json.NewDecoder(response.Body).Decode(&restoredObjectives); err != nil || response.Code != http.StatusOK ||
 		len(restoredObjectives) != 2 || restoredObjectives[0].ID != linkedObjective.ID ||
@@ -168,12 +168,12 @@ func TestPersistentMuxRestoresObjectivesAndWorkflows(t *testing.T) {
 		t.Fatalf("restored objectives = %#v, decode error = %v, HTTP %d", restoredObjectives, err, response.Code)
 	}
 	response = httptest.NewRecorder()
-	restarted.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/worktrees", nil))
+	restarted.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/worktrees", nil))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("removed worktree request API returned HTTP %d", response.Code)
 	}
 	response = httptest.NewRecorder()
-	restarted.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/workers", nil))
+	restarted.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/workers", nil))
 	var workers []workerStatus
 	if err := json.NewDecoder(response.Body).Decode(&workers); err != nil || len(workers) != 0 {
 		t.Fatalf("workers should remain transient after restart, got %#v: %v", workers, err)

@@ -134,9 +134,20 @@ test('Live personas persist through create, edit, duplicate, disable, and profil
   const editor = page.getByRole('dialog', { name: 'Create persona' });
   await editor.getByLabel('Persona name').fill(personaName);
   await editor.getByLabel('Role').fill('Implement reliable CSV exports');
+  const responsibilities = editor.getByLabel('Responsibilities (one per line)');
+  await responsibilities.fill('Validate CSV syntax');
+  await responsibilities.press('Enter');
+  await expect(responsibilities).toHaveValue('Validate CSV syntax\n');
+  await responsibilities.pressSequentially('Preserve header compatibility');
+  await expect(responsibilities).toHaveValue('Validate CSV syntax\nPreserve header compatibility');
   await editor.getByLabel('Instructions').fill('Keep exports compatible.');
   await editor.getByRole('button', { name: 'Create persona' }).click();
   await expect(editor).toHaveCount(0);
+  const savedResponsibilities = await page.evaluate(async (name) => {
+    const personas = await fetch('/api/v1/personas').then((response) => response.json());
+    return personas.find((persona: { name: string }) => persona.name === name)?.responsibilities;
+  }, personaName);
+  expect(savedResponsibilities).toEqual(['Validate CSV syntax', 'Preserve header compatibility']);
 
   await page.getByRole('button', { name: 'Create Agent' }).click();
   const createProfile = page.getByRole('dialog', { name: 'Create agent profile' });
@@ -330,7 +341,7 @@ test('Agents local preview filters and sorts profiles without API writes', async
   await expect(rows.first()).toContainText('Test Generator');
   await page.getByRole('textbox', { name: 'Search agents' }).fill('no matching agent');
   await expect(rows).toHaveCount(0);
-  await expect(page.locator('.agents-detail-empty')).toBeVisible();
+  await expect(page.locator('.agents-detail-heading h3')).toHaveText('Code Reviewer');
   await page.getByRole('textbox', { name: 'Search agents' }).fill('planner');
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText('Planner');
@@ -499,6 +510,9 @@ test('agent profiles can be saved and disabled from the dashboard', async ({ pag
   await detail.getByRole('tab', { name: 'Prompts' }).click();
   const systemPrompt = detail.locator('.agent-prompt-editor').first();
   await expect(systemPrompt.locator('.monaco-editor')).toBeVisible();
+  const promptLabelID = await systemPrompt.locator('.monaco-editor').getAttribute('aria-labelledby');
+  expect(promptLabelID).toBeTruthy();
+  await expect(page.locator(`[id="${promptLabelID}"]`)).toHaveText('System prompt');
   await systemPrompt.locator('.monaco-editor').click();
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.insertText('Review safely and cite changed files.');

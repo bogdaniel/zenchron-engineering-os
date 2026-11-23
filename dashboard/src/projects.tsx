@@ -112,6 +112,11 @@ export function ProjectsPage({ items, isLoading, isError, sampleData = false }: 
               pagination
               paginationPageSize={8}
               onRowClicked={({ data }) => { if (data) setSelectedID(data.id); }}
+              onCellKeyDown={({ data, event }) => {
+                if (!data || !(event instanceof KeyboardEvent) || (event.key !== 'Enter' && event.key !== ' ')) return;
+                event.preventDefault();
+                setSelectedID(data.id);
+              }}
               overlayNoRowsTemplate={
                 `<span class="ag-overlay-no-rows-center">${sampleData
                   ? 'Repository inventory has no sample data. Switch to Live to see worker checkouts.' : 'No local Git checkouts discovered.'}</span>`

@@ -117,8 +117,7 @@ func localRequestOrigin(r *http.Request) bool {
 	if err != nil || origin.Host != r.Host || origin.User != nil || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" {
 		return false
 	}
-	host, _, err := net.SplitHostPort(origin.Host)
-	if err != nil || !isLoopbackHost(host) {
+	if !isLoopbackHost(origin.Hostname()) {
 		return false
 	}
 	if r.TLS != nil {
