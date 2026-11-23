@@ -46,11 +46,13 @@ type cliProvider struct {
 	// machine. Nil means the provider sandboxes every command and is ready only when that is proven.
 	commandSandbox func() bool
 
-	path    string
-	version string
-	ready   bool
+	path        string
+	version     string
+	readinessMu sync.RWMutex
+	ready       bool
 	// reason says why an installed provider is not ready.
-	reason string
+	reason          string
+	sandboxVerified bool
 }
 
 // cliEvent is one provider output line normalized to what the run lifecycle understands.
@@ -87,7 +89,8 @@ type executionResult struct {
 }
 
 func (provider *cliProvider) detect(ctx context.Context) {
-	provider.path, provider.version, provider.ready, provider.reason = "", "", false, ""
+	provider.path, provider.version = "", ""
+	provider.setReadiness(false, provider.confinement == nil, "")
 	path, err := exec.LookPath(provider.binary)
 	if err != nil {
 		return
@@ -99,17 +102,17 @@ func (provider *cliProvider) detect(ctx context.Context) {
 	}
 	output, err := provider.probe(ctx, provider.readyArgs)
 	if !provider.isReady(output, err) {
-		provider.reason = "not signed in"
+		provider.setReadiness(false, provider.confinement == nil, authReadinessReason(err))
 		return
 	}
 	if provider.confinement != nil {
 		if err := provider.confinement(ctx, provider.path); err != nil {
 			log.Printf("%s is not ready: %v", provider.id, err)
-			provider.reason = "sandbox self-test failed"
+			provider.setReadiness(false, false, "sandbox self-test failed")
 			return
 		}
 	}
-	provider.ready = true
+	provider.setReadiness(true, true, "")
 }
 
 func (provider *cliProvider) probe(ctx context.Context, args []string) ([]byte, error) {
@@ -120,9 +123,71 @@ func (provider *cliProvider) probe(ctx context.Context, args []string) ([]byte, 
 	return command.CombinedOutput()
 }
 
-func (provider *cliProvider) status() workerapi.ProviderStatus {
-	return workerapi.ProviderStatus{ID: provider.id, Version: provider.version, Ready: provider.ready,
-		Reason: provider.reason, SandboxedCommands: provider.ready && provider.sandboxesCommands()}
+func (provider *cliProvider) refreshReadiness(ctx context.Context) {
+	if provider.path == "" {
+		return
+	}
+	provider.readinessMu.RLock()
+	sandboxFailed := !provider.sandboxVerified && provider.reason == "sandbox self-test failed"
+	provider.readinessMu.RUnlock()
+	if sandboxFailed {
+		return
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, workerHeartbeatInterval)
+	defer cancel()
+	output, err := provider.probe(probeCtx, provider.readyArgs)
+	if !provider.isReady(output, err) {
+		provider.readinessMu.Lock()
+		provider.ready = false
+		provider.reason = authReadinessReason(err)
+		provider.readinessMu.Unlock()
+		return
+	}
+	provider.readinessMu.RLock()
+	sandboxVerified, reason := provider.sandboxVerified, provider.reason
+	provider.readinessMu.RUnlock()
+	if !sandboxVerified && reason != "sandbox self-test failed" && provider.confinement != nil {
+		if err := provider.confinement(probeCtx, provider.path); err != nil {
+			log.Printf("%s is not ready: %v", provider.id, err)
+			provider.setReadiness(false, false, "sandbox self-test failed")
+			return
+		}
+		sandboxVerified = true
+	}
+	if !sandboxVerified {
+		return
+	}
+	provider.readinessMu.Lock()
+	provider.ready, provider.sandboxVerified, provider.reason = true, sandboxVerified, ""
+	provider.readinessMu.Unlock()
+}
+
+func authReadinessReason(err error) string {
+	if err != nil {
+		return "auth status unavailable"
+	}
+	return "not signed in"
+}
+
+func (provider *cliProvider) setReadiness(ready, sandboxVerified bool, reason string) {
+	provider.readinessMu.Lock()
+	provider.ready, provider.sandboxVerified, provider.reason = ready, sandboxVerified, reason
+	provider.readinessMu.Unlock()
+}
+
+func (provider *cliProvider) readyForRuns() bool {
+	provider.readinessMu.RLock()
+	defer provider.readinessMu.RUnlock()
+	return provider.ready
+}
+
+func (provider *cliProvider) status(ctx context.Context) workerapi.ProviderStatus {
+	provider.refreshReadiness(ctx)
+	provider.readinessMu.RLock()
+	ready, reason := provider.ready, provider.reason
+	provider.readinessMu.RUnlock()
+	return workerapi.ProviderStatus{ID: provider.id, Version: provider.version, Ready: ready,
+		Reason: reason, SandboxedCommands: ready && provider.sandboxesCommands()}
 }
 
 func (provider *cliProvider) sandboxesCommands() bool {

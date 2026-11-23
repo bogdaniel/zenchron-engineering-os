@@ -57,8 +57,45 @@ func TestProviderIsNotReadyWhenItsSandboxSelfTestFails(t *testing.T) {
 	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
 	provider := newCLIProviders()[workerapi.ProviderCodex]
 	provider.detect(context.Background())
-	if status := provider.status(); status.Ready || status.SandboxedCommands || status.Reason != "sandbox self-test failed" {
+	if status := provider.status(context.Background()); status.Ready || status.SandboxedCommands || status.Reason != "sandbox self-test failed" {
 		t.Fatalf("status of a signed-in provider with a failing sandbox = %#v", status)
+	}
+}
+
+func TestProviderStatusRefreshesAuthenticationUnderWorkerEnvironment(t *testing.T) {
+	binDir, configDir := t.TempDir(), t.TempDir()
+	readyFile := filepath.Join(configDir, "readiness.json")
+	if err := os.WriteFile(readyFile, []byte(`{"loggedIn":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "claude"), []byte(
+		"#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo fake-claude; exit 0; fi\ncat \"$XDG_CONFIG_HOME/readiness.json\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+	provider := newCLIProviders()[workerapi.ProviderClaude]
+	provider.detect(context.Background())
+	if status := provider.status(context.Background()); !status.Ready {
+		t.Fatalf("signed-in provider status = %#v", status)
+	}
+	if err := os.WriteFile(readyFile, []byte(`{"loggedIn":false}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if status := provider.status(context.Background()); status.Ready || status.Reason != "not signed in" {
+		t.Fatalf("signed-out provider status = %#v", status)
+	}
+	if err := os.Remove(readyFile); err != nil {
+		t.Fatal(err)
+	}
+	if status := provider.status(context.Background()); status.Ready || status.Reason != "auth status unavailable" {
+		t.Fatalf("unavailable authentication status = %#v", status)
+	}
+	if err := os.WriteFile(readyFile, []byte(`{"loggedIn":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if status := provider.status(context.Background()); !status.Ready {
+		t.Fatalf("re-authenticated provider status = %#v", status)
 	}
 }
 

@@ -9,7 +9,7 @@ const viewports = [{ name: 'desktop', width: 1672, height: 941 }, { name: 'mobil
 
 const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
-async function mockWorkspace(page: Page, options: { providerReady: boolean; issuesStatus?: number }) {
+async function mockWorkspace(page: Page, options: { providerReady: boolean; providerReason?: string; issuesStatus?: number }) {
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'E2E' })));
   await page.route('**/api/v1/agents', (route) => route.fulfill(json([{
     id: profileID, name: 'Codex engineer', description: 'Resolves GitHub issues.', provider: 'codex-cli', model: 'default',
@@ -17,7 +17,7 @@ async function mockWorkspace(page: Page, options: { providerReady: boolean; issu
   }])));
   await page.route('**/api/v1/workers', (route) => route.fulfill(json([{
     id: workerID, name: 'dev-laptop', status: 'online', last_seen: now,
-    providers: [{ id: 'codex-cli', version: 'codex-cli 0.167.0', ready: options.providerReady }],
+    providers: [{ id: 'codex-cli', version: 'codex-cli 0.167.0', ready: options.providerReady, reason: options.providerReason }],
   }])));
   await page.route('**/api/v1/projects', (route) => route.fulfill(json([{
     id: projectID, name: 'platform', branch: 'main', git_remote: 'github.com/acme/platform', worker_id: workerID,
@@ -94,6 +94,21 @@ test('queue dialog blocks a CLI profile whose worker has not signed in and repor
   await dialog.getByLabel('Task prompt').fill('Tidy the worker README.');
   await expect(dialog.getByRole('button', { name: 'Queue run', exact: true })).toBeDisabled();
   expect(queued).toBe(false);
+});
+
+test('queue dialog explains when worker-process authentication cannot be confirmed', async ({ page }) => {
+  await mockWorkspace(page, { providerReady: false, providerReason: 'auth status unavailable' });
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    await page.goto('/#agents');
+    await page.getByRole('button', { name: 'Run Agent' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
+    await expect(dialog.locator('.agents-queue-note')).toHaveText(
+      'dev-laptop could not confirm codex-cli authentication under the worker process environment; check the CLI auth state and process environment.');
+    await expect(dialog.getByRole('button', { name: 'Queue run', exact: true })).toBeDisabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+  }
 });
 
 test('Settings reports which coding CLIs are ready on online workers', async ({ page }) => {

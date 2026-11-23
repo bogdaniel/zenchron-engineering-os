@@ -126,7 +126,7 @@ func run() error {
 			}
 			var providers []workerapi.ProviderStatus
 			if providersReady {
-				providers = runner.providerStatuses()
+				providers = runner.providerStatuses(ctx)
 			}
 			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects), Providers: providers,
 				ProtocolVersion: workerapi.ProtocolVersion, ReleaseRevision: os.Getenv("ZENCHRON_RELEASE_REVISION")}
