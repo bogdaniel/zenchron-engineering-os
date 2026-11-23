@@ -135,6 +135,7 @@ for (const viewport of viewports) {
       units: [{ key: 'final-review', kind: 'review', agent_name: 'Independent reviewer', state: 'completed',
         run_ids: ['review-run'], attempts: 1, providers: [],
         executions: [{ run_id: 'review-run', result_attempt: 1, updated_at: now, status: 'succeeded', attempts: 1,
+          profile_name: 'Independent reviewer', profile_version: 2, provider: 'claude-code',
           base_commit_sha: 'c'.repeat(40), review_verdict: 'accept' }] }], handoffs: [], decisions: [], outstanding_steps: [],
       measurements: { unit_count: 0, run_count: 0, attempt_count: 0, failed_attempts: 0, review_rounds: 0, findings: 0,
         remediation_passes: 0, decisions_requested: 0, decisions_resolved: 0, human_actions: 0,
@@ -154,6 +155,7 @@ for (const viewport of viewports) {
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('differs from the integrated candidate');
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('observed');
     await expect(report.getByLabel('GitHub checks for integrated candidate')).toContainText('Check #101 · go · completed · success');
+    await expect(report).toContainText('Model: unknown');
     await expect(report).toContainText(`WorkGraph ${graphID} · revision 12`);
     await expect(report).toContainText(`Reviewed candidate: ${'c'.repeat(40)}`);
     await expect(report).toContainText([
@@ -588,6 +590,7 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(report.getByRole('link', { name: 'Agent profile', exact: true }).first())
     .toHaveAttribute('href', `/?profile=${created.writerID}&mode=live#agents`);
   await expect(report).toContainText('E2E CSV specialist v1');
+  await expect(report).toContainText('Model: default');
   await expect(report).toContainText('codex-cli');
   await expect(report).toContainText('Worker-reported verification: not_configured');
   await expect(report).toContainText([

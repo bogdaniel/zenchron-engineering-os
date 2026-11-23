@@ -219,6 +219,7 @@ type reportExecution struct {
 	ProfileID       string    `json:"profile_id,omitempty"`
 	ProfileName     string    `json:"profile_name,omitempty"`
 	ProfileVersion  int       `json:"profile_version,omitempty"`
+	Model           string    `json:"model,omitempty"`
 	PersonaID       string    `json:"persona_id,omitempty"`
 	PersonaName     string    `json:"persona_name,omitempty"`
 	PersonaVersion  int       `json:"persona_version,omitempty"`
@@ -422,6 +423,7 @@ func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecut
 			FailureRecorded: run.Error != ""}
 		if run.Profile != nil {
 			execution.ProfileID, execution.ProfileName, execution.ProfileVersion = run.Profile.ID, run.Profile.Name, run.Profile.Version
+			execution.Model = run.Profile.Model
 			if persona := run.Profile.PersonaSnapshot; persona != nil {
 				execution.PersonaID, execution.PersonaName, execution.PersonaVersion = persona.ID, persona.Name, persona.Version
 			}

@@ -8,7 +8,8 @@ import './objective-delivery-report.css';
 const executionSchema = z.object({
   run_id: z.string(), result_attempt: z.number().optional(), updated_at: z.string().optional(), status: z.string(),
   profile_id: z.string().optional(), profile_name: z.string().optional(),
-  profile_version: z.number().optional(), persona_id: z.string().optional(), persona_name: z.string().optional(),
+  profile_version: z.number().optional(), model: z.string().optional(),
+  persona_id: z.string().optional(), persona_name: z.string().optional(),
   persona_version: z.number().optional(), provider: z.string().optional(), provider_version: z.string().optional(),
   attempts: z.number(), candidate_commit: z.string().optional(), base_commit_sha: z.string().optional(),
   candidate_tree_sha: z.string().optional(), review_verdict: z.string().optional(),
@@ -127,7 +128,9 @@ function ReportDetails({ report }: { report: Report }) {
           {' · record updated '}{run.updated_at ? new Date(run.updated_at).toLocaleString() : 'unknown'}
           {' · '}{run.status} · {run.attempts} attempt{run.attempts === 1 ? '' : 's'}
         </span>
-        <span>{run.profile_name ? `${run.profile_name} v${run.profile_version ?? 'unknown'}` : 'Zenchron integration'}
+        <span>{run.profile_name
+          ? `${run.profile_name} v${run.profile_version ?? 'unknown'} · Model: ${run.model || 'unknown'}`
+          : 'Zenchron integration'}
           {run.persona_name && ` · ${run.persona_name} v${run.persona_version ?? 'unknown'}`}
           {run.provider && ` · ${run.provider}${run.provider_version ? ` ${run.provider_version}` : ''}`}</span>
         {unit.kind === 'review' && <span>Reviewed candidate: {run.base_commit_sha ? <code>{run.base_commit_sha}</code> : 'unknown'}</span>}

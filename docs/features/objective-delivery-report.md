@@ -44,10 +44,11 @@ flowchart LR
   run's provider and, when recorded, a space and its provider version.
 - `approved_plan` records the approved revision, content hash, summary, approver, and approval time. Workflow identity
   and version come from the compiled plan and graph. Each execution reports the recorded profile and persona IDs,
-  names and versions, provider, candidate commit and its Git tree SHA when reported, worker-reported verification,
-  review verdict, publication state, PR link, attempts, and failures. Tree evidence is considered known only when the
-  successful integration run's tree accompanies the selected candidate commit. Reviewer runs expose the exact base
-  commit they inspected. Each run also names its accepted result attempt and last persisted update time; handoffs carry
+  names and versions, model from the frozen profile snapshot, provider, candidate commit and its Git tree SHA when
+  reported, worker-reported verification, review verdict, publication state, PR link, attempts, and failures. Tree
+  evidence is considered known only when the successful integration run's tree accompanies the selected candidate
+  commit. Reviewer runs expose the exact base commit they inspected. Each run also names its accepted result attempt and
+  last persisted update time; handoffs carry
   their immutable message ids, and GitHub checks carry their check-run ids. Verification belongs to that run; it
   is not an independent assurance record. `unknown_evidence` includes `policy_backed_assurance` because the current
   WorkGraph has no authoritative policy-backed assurance record bound to a candidate. `publication_authority` is
