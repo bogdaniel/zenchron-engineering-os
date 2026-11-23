@@ -59,12 +59,47 @@ func (client gitHubClient) get(ctx context.Context, path string, query url.Value
 	return json.Unmarshal(body, target)
 }
 
-func (client gitHubClient) issueComments(ctx context.Context, owner, repository string, number int) ([]gitHubIssueComment, error) {
-	comments := make([]gitHubIssueComment, 0)
+func (client gitHubClient) issueComments(
+	ctx context.Context, owner, repository string, number, total int,
+) ([]gitHubIssueComment, bool, error) {
+	const perPage = 100
+	// ponytail: read at most two adjacent comment pages to retain the newest 100; the
+	// issue's comment count selects the final page, with one forward probe if that page is full.
 	path := "/repos/" + owner + "/" + repository + "/issues/" + strconv.Itoa(number) + "/comments"
-	// Decode before returning: Go does not fix when a plain operand is read relative to a call beside it.
-	err := client.get(ctx, path, url.Values{"per_page": {"50"}}, &comments)
-	return comments, err
+	page := max(1, (max(0, total)-1)/perPage+1)
+	readPage := func(number int) ([]gitHubIssueComment, error) {
+		var result []gitHubIssueComment
+		query := url.Values{"per_page": {strconv.Itoa(perPage)}, "page": {strconv.Itoa(number)}}
+		if err := client.get(ctx, path, query, &result); err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
+	comments, err := readPage(page)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(comments) == perPage {
+		next, err := readPage(page + 1)
+		if err != nil {
+			return nil, false, err
+		}
+		if len(next) > 0 {
+			comments, page = next, page+1
+		}
+	}
+	if page > 1 && len(comments) < perPage {
+		previous, err := readPage(page - 1)
+		if err != nil {
+			return nil, false, err
+		}
+		needed := perPage - len(comments)
+		if len(previous) > needed {
+			previous = previous[len(previous)-needed:]
+		}
+		comments = append(previous, comments...)
+	}
+	return comments, page > 1 || total > len(comments), nil
 }
 
 func (client gitHubClient) pullRequestReviews(ctx context.Context, owner, repository string, number int) ([]gitHubReview, error) {

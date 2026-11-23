@@ -33,6 +33,14 @@ type auditRecord struct {
 	After  any       `json:"after,omitempty"`
 }
 
+type auditLogFile interface {
+	Stat() (os.FileInfo, error)
+	Write([]byte) (int, error)
+	Sync() error
+	Truncate(int64) error
+	Close() error
+}
+
 type userView struct {
 	Login        string   `json:"login"`
 	Admin        bool     `json:"admin"`
@@ -152,7 +160,7 @@ func (policy *accessPolicy) change(w http.ResponseWriter, actor, action, target 
 	}
 	record := auditRecord{Time: time.Now().UTC(), Actor: actor, Action: action, Target: target, Before: before, After: after}
 	if err := policy.appendAudit(record); err != nil {
-		if restoreErr := os.WriteFile(policy.path, previous, 0o600); restoreErr != nil {
+		if restoreErr := writeStateFile(policy.path, json.RawMessage(previous)); restoreErr != nil {
 			log.Printf("access policy change %s could not be audited (%v) or undone (%v)", action, err, restoreErr)
 		}
 		fail(fmt.Errorf("append audit record: %w", err))
@@ -170,15 +178,42 @@ func (policy *accessPolicy) appendAudit(record auditRecord) error {
 	if err != nil {
 		return err
 	}
-	if _, err := file.Write(append(line, '\n')); err != nil {
-		file.Close()
-		return err
+	return appendAuditEntry(file, policy.auditPath, append(line, '\n'))
+}
+
+func appendAuditEntry(file auditLogFile, path string, entry []byte) error {
+	info, err := file.Stat()
+	if err != nil {
+		return errors.Join(err, file.Close())
+	}
+	if written, writeErr := file.Write(entry); writeErr != nil || written != len(entry) {
+		if writeErr == nil {
+			writeErr = io.ErrShortWrite
+		}
+		return errors.Join(writeErr, truncateAudit(file, info.Size()))
 	}
 	if err := file.Sync(); err != nil {
-		file.Close()
+		return errors.Join(err, truncateAudit(file, info.Size()))
+	}
+	if err := file.Close(); err != nil {
+		return errors.Join(err, truncateAuditPath(path, info.Size()))
+	}
+	return nil
+}
+
+func truncateAudit(file auditLogFile, size int64) error {
+	truncateErr := file.Truncate(size)
+	syncErr := file.Sync()
+	closeErr := file.Close()
+	return errors.Join(truncateErr, syncErr, closeErr)
+}
+
+func truncateAuditPath(path string, size int64) error {
+	file, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
 		return err
 	}
-	return file.Close()
+	return truncateAudit(file, size)
 }
 
 // showAudit returns the newest records first.
@@ -193,6 +228,8 @@ func (policy *accessPolicy) showAudit(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = parsed
 	}
+	policy.mu.Lock()
+	defer policy.mu.Unlock()
 	records := []auditRecord{}
 	file, err := os.Open(policy.auditPath)
 	if errors.Is(err, os.ErrNotExist) {

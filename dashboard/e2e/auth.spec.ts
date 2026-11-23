@@ -106,3 +106,38 @@ test('local settings creates and revokes a one-time menu companion grant', async
   await page.getByRole('button', { name: 'Revoke' }).click();
   await expect(page.getByText(/expires/i)).toHaveCount(0);
 });
+
+test('reports failed sign-out and keeps the session available to retry', async ({ page }) => {
+  let logoutRequests = 0;
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/v1/auth/session') {
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ authenticated: true, local: false, login: 'Engineer' }) });
+    }
+    if (path === '/api/v1/auth/logout') {
+      logoutRequests += 1;
+      if (logoutRequests === 1) return route.fulfill({ status: 503, body: 'session revocation unavailable' });
+      return route.abort('failed');
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+
+  await page.goto('/');
+  const signOut = page.getByRole('button', { name: 'Sign out' });
+  await expect(signOut).toBeVisible();
+  await signOut.click();
+  const error = page.getByRole('alert').filter({ hasText: 'Sign-out could not be confirmed.' });
+  await expect(error).toHaveText('Sign-out could not be confirmed. Please try again.');
+  await expect(signOut).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(error).toBeVisible();
+  await expect(signOut).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  await signOut.click();
+  await expect(error).toHaveText('Sign-out could not be confirmed. Please try again.');
+  await expect(signOut).toBeVisible();
+  expect(logoutRequests).toBe(2);
+});

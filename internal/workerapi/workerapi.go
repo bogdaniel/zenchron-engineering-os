@@ -110,6 +110,20 @@ type Heartbeat struct {
 	ReleaseRevision string           `json:"release_revision,omitempty"`
 }
 
+const (
+	SkippedProjectRepositoryNotGranted = "repository_not_granted"
+	SkippedProjectRegisteredElsewhere  = "project_id_registered_by_another_worker"
+)
+
+type SkippedProject struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+type HeartbeatReply struct {
+	SkippedProjects []SkippedProject `json:"skipped_projects,omitempty"`
+}
+
 type AgentProfile struct {
 	Provider     string        `json:"provider"`
 	Model        string        `json:"model"`

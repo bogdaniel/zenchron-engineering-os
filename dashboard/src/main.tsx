@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MantineProvider, Menu, SegmentedControl, TextInput } from '@mantine/core';
+import { MantineProvider, Menu, SegmentedControl, Text, TextInput } from '@mantine/core';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
@@ -73,7 +73,8 @@ function dashboardOAuthReturnPath(location: URL): string {
 
 const queryClient = new QueryClient();
 const healthResponse = z.object({ status: z.literal('ok') });
-const authResponse = z.object({ authenticated: z.boolean(), local: z.boolean(), login: z.string(), avatar_url: z.string().optional() });
+const authResponse = z.object({ authenticated: z.boolean(), local: z.boolean(), login: z.string(),
+  avatar_url: z.string().optional(), github_write_configured: z.boolean().optional() });
 const workersResponse = z.array(
   z.object({
     id: z.string(),
@@ -101,6 +102,7 @@ function App() {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const loginRoute = activePage === 'login';
   const signInReturnTo = loginRoute ? undefined : dashboardOAuthReturnPath(new URL(window.location.href));
@@ -158,6 +160,20 @@ function App() {
   const goToPage = (href: string) => {
     const page = href.slice(1);
     if (!pageIDs.includes(page)) return;
+    const oneShotParams: Record<string, string[]> = {
+      objectives: ['create', 'product_id', 'objective', 'tab', 'workflow', 'project', 'graph_id', 'decision'],
+      agents: ['profile'],
+      reviews: ['run'],
+      workflows: ['workflow'],
+    };
+    const currentURL = new URL(window.location.href);
+    let changed = false;
+    for (const key of oneShotParams[activePage] ?? []) {
+      if (!currentURL.searchParams.has(key)) continue;
+      currentURL.searchParams.delete(key);
+      changed = true;
+    }
+    if (changed) window.history.replaceState(window.history.state, '', currentURL);
     window.history.pushState({}, '', href);
     setActivePage(page);
     setSearchTerm('');
@@ -272,8 +288,14 @@ function App() {
                 <Menu.Dropdown><Menu.Label>Notifications</Menu.Label><Menu.Item disabled>No new notifications.</Menu.Item></Menu.Dropdown>
               </Menu>
               {!previewPage && auth.data?.authenticated && auth.data.local === false && <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => {
-                await fetch('/api/v1/auth/logout', { method: 'POST' });
-                await auth.refetch();
+                setLogoutError(null);
+                try {
+                  const response = await fetch('/api/v1/auth/logout', { method: 'POST' });
+                  if (!response.ok) throw new Error(`Sign-out failed: ${response.status}`);
+                  await auth.refetch();
+                } catch {
+                  setLogoutError('Sign-out could not be confirmed. Please try again.');
+                }
               }}><IconLogout size={17} /></button>}
               <Menu position="bottom-end" withinPortal>
                 <Menu.Target><button className="workspace-button" type="button" aria-label="Choose workspace">
@@ -295,6 +317,8 @@ function App() {
               </Menu>
             </div>
           </header>
+
+          {logoutError && !previewPage && <Text c="red.4" role="alert" mt="xs">{logoutError}</Text>}
 
           {activePage === 'overview' && <nav className="overview-mobile-tabs" aria-label="Overview shortcuts">
             <a href="#overview" aria-current="page" onClick={(event) => navigatePage(event, '#overview')}>Overview</a>
@@ -338,6 +362,7 @@ function App() {
               canManageUpdates={localDevelopment}
               apiOnline={health.isSuccess}
               githubLogin={auth.data?.local === false}
+              githubWriteConfigured={auth.data?.github_write_configured}
               workerCount={workers.data?.length ?? 0}
               onlineWorkerCount={onlineWorkers.length}
               projectCount={projects.data?.length ?? 0}

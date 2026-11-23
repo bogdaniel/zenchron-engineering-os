@@ -12,6 +12,7 @@ import (
 )
 
 var errGitHubUnprocessableEntity = errors.New("GitHub returned HTTP 422")
+var errGitHubResponseTooLarge = errors.New("GitHub response exceeded the size limit")
 
 func (client gitHubClient) authConfigured() bool {
 	return client.token != "" || client.appAuth != nil && client.appAuth.configured()
@@ -79,7 +80,7 @@ func (client gitHubClient) requestBytesWithToken(
 		return nil, err
 	}
 	if len(responseBody) > maxGitHubResponseSize {
-		return nil, fmt.Errorf("GitHub response exceeded the size limit")
+		return nil, errGitHubResponseTooLarge
 	}
 	return responseBody, nil
 }

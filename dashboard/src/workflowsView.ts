@@ -127,6 +127,7 @@ const liveUnavailable: NonNullable<WorkflowSectionsData['unavailable']> = {
 
 function describeLiveWorkflow(workflow: Workflow): WorkflowView {
   const status = workflowStatusLabels[workflow.status];
+  const hasArrangedPositions = workflow.nodes.some(({ position }) => position.x !== 0 || position.y !== 0);
   const counts = `${workflow.nodes.length} components · ${workflow.edges.length} connections`;
   const approvals = workflow.nodes.filter((node) => node.type === 'human-approval');
   const saved = new Date(workflow.updated_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -146,6 +147,9 @@ function describeLiveWorkflow(workflow: Workflow): WorkflowView {
     },
     sectionBadges: [`v${workflow.version}`, `${workflow.nodes.length} Nodes`, 'Execution via Objectives'],
     sectionNote: 'SAVED DEFINITION · EXECUTION VIA OBJECTIVE WORKGRAPH',
+    ...(hasArrangedPositions ? {
+      positions: Object.fromEntries(workflow.nodes.map(({ id, position }) => [id, position])),
+    } : {}),
     sections: {
       unavailable: liveUnavailable,
       runs: { metrics: Array.from({ length: 4 }, () => ['Unavailable', '']), rows: [], footer: 'No runs recorded' },

@@ -112,6 +112,7 @@ func run() error {
 	}()
 	ticker := time.NewTicker(workerHeartbeatInterval)
 	defer ticker.Stop()
+	var previousSkipped []workerapi.SkippedProject
 	for {
 		projects, err := discoverServedProjects(projectsRoot, workerID, config)
 		if err != nil {
@@ -129,11 +130,15 @@ func run() error {
 			}
 			heartbeat := workerapi.Heartbeat{Name: name, Projects: wireProjects(projects), Providers: providers,
 				ProtocolVersion: workerapi.ProtocolVersion, ReleaseRevision: os.Getenv("ZENCHRON_RELEASE_REVISION")}
-			if err := sendHeartbeat(ctx, runner.client, baseURL, workerID, heartbeat); err != nil {
+			skipped, err := sendHeartbeat(ctx, runner.client, baseURL, workerID, heartbeat)
+			if err != nil {
 				log.Printf("worker heartbeat failed: %v", err)
-			} else if providersReady {
-				if err := runner.dispatch(ctx, projects); err != nil {
-					log.Printf("worker command failed: %v", err)
+			} else {
+				previousSkipped = reportSkippedProjects(log.Writer(), previousSkipped, skipped, projects)
+				if providersReady {
+					if err := runner.dispatch(ctx, projects); err != nil {
+						log.Printf("worker command failed: %v", err)
+					}
 				}
 			}
 		}
@@ -231,9 +236,15 @@ type workerAuthTransport struct {
 }
 
 func (transport workerAuthTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if transport.token == "" && !isLoopbackWorkerHost(request.URL.Hostname()) {
+		return http.DefaultTransport.RoundTrip(request)
+	}
+	request = request.Clone(request.Context())
 	if transport.token != "" {
-		request = request.Clone(request.Context())
 		request.Header.Set("Authorization", "Bearer "+transport.token)
+	}
+	if isLoopbackWorkerHost(request.URL.Hostname()) {
+		request.Header.Set("Origin", request.URL.Scheme+"://"+request.URL.Host)
 	}
 	return http.DefaultTransport.RoundTrip(request)
 }
@@ -245,26 +256,71 @@ func newWorkerHTTPClient(token string) *http.Client {
 
 func sendHeartbeat(
 	ctx context.Context, client *http.Client, baseURL *url.URL, id string, heartbeat workerapi.Heartbeat,
-) error {
+) ([]workerapi.SkippedProject, error) {
 	endpoint := *baseURL
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/api/v1/workers/" + id + "/heartbeat"
 	body, err := json.Marshal(heartbeat)
 	if err != nil {
-		return fmt.Errorf("encode heartbeat: %w", err)
+		return nil, fmt.Errorf("encode heartbeat: %w", err)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint.String(), bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create heartbeat request: %w", err)
+		return nil, fmt.Errorf("create heartbeat request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
-		return fmt.Errorf("send heartbeat: %w", err)
+		return nil, fmt.Errorf("send heartbeat: %w", err)
 	}
 	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("heartbeat returned HTTP %d", response.StatusCode)
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		return nil, fmt.Errorf("heartbeat returned HTTP %d", response.StatusCode)
 	}
-	return nil
+	var reply workerapi.HeartbeatReply
+	if err := json.NewDecoder(io.LimitReader(response.Body, workerapi.MaxJSONRequestBodySize)).Decode(&reply); err != nil {
+		return nil, fmt.Errorf("decode heartbeat response: %w", err)
+	}
+	return reply.SkippedProjects, nil
+}
+
+func reportSkippedProjects(
+	out io.Writer, previous, skipped []workerapi.SkippedProject, projects []discoveredProject,
+) []workerapi.SkippedProject {
+	names := make(map[string]string, len(projects))
+	for _, project := range projects {
+		names[project.ID] = project.Name
+	}
+	current := make([]workerapi.SkippedProject, 0, len(skipped))
+	seen := make(map[string]struct{}, len(skipped))
+	for _, project := range skipped {
+		if _, ok := names[project.ID]; !ok {
+			continue
+		}
+		if _, duplicate := seen[project.ID]; duplicate {
+			continue
+		}
+		if project.Reason != workerapi.SkippedProjectRepositoryNotGranted &&
+			project.Reason != workerapi.SkippedProjectRegisteredElsewhere {
+			continue
+		}
+		seen[project.ID] = struct{}{}
+		current = append(current, project)
+	}
+	slices.SortFunc(current, func(a, b workerapi.SkippedProject) int {
+		if a.ID < b.ID {
+			return -1
+		}
+		if a.ID > b.ID {
+			return 1
+		}
+		return 0
+	})
+	if slices.Equal(previous, current) {
+		return previous
+	}
+	for _, project := range current {
+		_, _ = fmt.Fprintf(out, "project %q skipped: %s\n", names[project.ID], project.Reason)
+	}
+	return current
 }

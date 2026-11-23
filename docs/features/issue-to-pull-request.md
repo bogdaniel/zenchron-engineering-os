@@ -28,21 +28,36 @@ sequenceDiagram
   API->>Store: Lease attempt N to the assigned worker
   API-->>Worker: Prompt with issue text, profile, branch, base branch
   Worker->>Tree: git worktree add + git worktree lock
+  opt Retry after a branch was published
+    Worker->>Remote: Fetch the published run branch
+    Worker->>Tree: Preserve a divergent local tip on a recovery branch
+    Worker->>Tree: Reset the run branch to the published tip
+  end
   Worker->>CLI: Start in worktree, prompt on stdin, own process group
   loop every 2 seconds
     CLI-->>Worker: JSON event lines
     Worker->>API: POST .../agent-runs/{run}/progress (redacted events)
+    Note over Worker: Keep the in-flight batch intact; overflow drops oldest unsent events
     API->>Store: Renew lease, append events
     API-->>Worker: cancel_requested
   end
+  Worker->>Tree: Collect bounded diff with worker-safe Git environment
   Worker->>Tree: git add + commit on the run branch
   Worker->>Tree: Run configured verification commands
-  Worker->>Remote: git push refs/heads/zenchron/agent-run/{run}
+  Worker->>Remote: git push {verified commit SHA}:refs/heads/zenchron/agent-run/{run}
   Worker->>API: PUT .../agent-runs/{run} (result, commits, verification, usage)
   API->>GH: Find or create pull request "Closes #issue"
   API->>Store: Persist publication and pull-request identity
   User->>UI: Reviews > Local branches > Evidence, Code changes
   UI->>API: GET /api/v1/agent-runs, .../events, .../diff, .../pull-request
+  User->>UI: Retry publication or import change requests
+  alt Retry publication
+    UI->>API: POST .../publish
+    API-->>UI: 2xx; show success without parsing a body
+  else Import change requests
+    UI->>API: POST .../sync-reviews
+    API-->>UI: {imported}; validate response and refresh runs
+  end
   User->>UI: Request changes
   UI->>API: POST .../request-changes
   API->>Store: Requeue the same run and branch with the feedback
@@ -84,8 +99,9 @@ that exits successfully is therefore not reported as delivered work unless verif
   profile's provider as installed and signed in.
 - A run can be started only from an issue written by a repository owner, member, or collaborator; an issue from
   anyone else is refused, because its text becomes the agent's task. The title, body, labels, and comments from owners,
-  members, and collaborators are snapshotted when the run is created. Comments from anyone else are not sent to the
-  agent.
+  members, and collaborators are snapshotted when the run is created. Comment reads include the newest 100 comments;
+  the context marks when older comments or other content were omitted to fit its limit. Comments from anyone else are
+  not sent to the agent.
 - Each run has its own branch `zenchron/agent-run/<run id>` and its own worktree. The worker refuses any other branch
   name, so two runs never share files and a run cannot push to another branch.
 - The provider process gets the prompt on stdin. Codex runs under a permission profile built by the worker: the
@@ -104,16 +120,26 @@ that exits successfully is therefore not reported as delivered work unless verif
   Codex starts as their own session. A new attempt first stops whatever an earlier attempt left and fails instead of
   running beside it, so two attempts never write the same worktree.
 - Claude Code hooks are disabled for every run, and the worker's own Git commands run with Git hooks disabled, because
-  a hook can be a script in the worktree that would run outside the sandbox. Provider and verification processes
+  a hook can be a script in the worktree that would run outside the sandbox. After the provider exits, Git staging,
+  diff, and commit commands use the provider environment allowlist, disable filesystem-monitor hooks, and exclude
+  nested repository status from collected diffs. Provider and verification processes
   inherit only a fixed list of variables (path, home, locale, temporary directory, proxy and certificate settings,
   CLI configuration directories) plus the operator's per-repository `environment`; tokens in the developer's shell
   and provider API keys never reach them, so a subscription sign-in is never replaced by API billing.
 - The profile's model is passed to the CLI; the model name `default` leaves the choice to the CLI's own configuration.
 - Events and the final message are redacted for known credential formats, the worker token, and local absolute paths,
-  and bounded: 1,000 bytes per event, 300 stored events per run, 20,000 bytes of final output.
+  and bounded: 1,000 bytes per event, 300 stored events per run, 20,000 bytes of final output. The worker buffers at
+  most 200 progress events; while a batch is being sent, overflow drops only the oldest events waiting behind it, so
+  a failed report can retry its intact batch.
 - A successful execution with changes is committed, then verified. A failed verification keeps the commit on the local
   branch, marks the run `failed`, and publishes nothing. Without configured commands verification is `not_configured`
-  and publication proceeds; the pull request states that.
+  and publication proceeds; the pull request states that. After verification, the worker pushes the exact commit SHA
+  it verified, even if a verification command moves the local branch.
+- Before a later attempt on a pull-request run, the worker fetches the published run branch. If verification left a
+  divergent local commit, it preserves that commit on a local recovery branch before resetting the run branch to the
+  published tip. A dirty worktree fails closed, so recovery never discards uncommitted changes. Reconciliation acquires
+  the Git worktree lock first, bounds remote operations by the Git-stage deadline, and can use the owner's SSH agent
+  without exposing provider API keys or worker bearer credentials.
 - The pull request is created with the control plane's GitHub credential, titled after the issue, and ends with
   `Closes #<issue>`. Creation reuses an open pull request for the same branch. If GitHub fails after the push,
   `POST /api/v1/agent-runs/{id}/publish` retries without creating a duplicate.
@@ -121,6 +147,8 @@ that exits successfully is therefore not reported as delivered work unless verif
   from GitHub with `sync-reviews`, queues another attempt on the
   same branch and worktree; the new commit lands on the same pull request. A run has at most three attempts. When
   several change requests are imported at once, all are kept and the newest queues the attempt.
+- Evidence actions validate the `sync-reviews` response before showing the imported count. Publication retry is a
+  success on any 2xx response and does not depend on a response body.
 - The worker retries delivering a result up to four times after a connection or server error, so a finished run is
   not repeated because one request failed. It stops an attempt when the control plane answers a progress report with
   conflict, unauthorized, forbidden, or not found, and never pushes from an attempt that lost its lease.
@@ -245,8 +273,9 @@ Automated, deterministic:
   provider failure, inactivity versus a long-running tool, wall-clock limit, cancellation with partial diff, lost
   lease, unauthorized branch, option-like model names, redaction, and cleanup safety.
 - `go test ./cmd/zenchron -run 'TestIssueRun|TestPullRequest|TestProgress|TestStaleAttempt|TestRunWaits|TestResult|TestVerificationFailure' -count=1`
-  covers the issue snapshot and untrusted-comment filtering, identity linking, idempotent publication, lease renewal
-  and fencing, provider gating, result validation, and review import against a fake GitHub API.
+  covers the issue snapshot, latest-comment pagination and truncation, untrusted-comment filtering, identity linking,
+  idempotent publication, lease renewal and fencing, provider gating, result validation, and review import against a
+  fake GitHub API.
 - `cd dashboard && npm run test:e2e:agent-runtime` runs the real control plane and worker binaries end to end
   through the fake Codex CLI in `dashboard/e2e/fake-cli` (see [Agent run queue](agent-run-queue.md)).
 
