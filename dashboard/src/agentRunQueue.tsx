@@ -42,6 +42,10 @@ export function runReadiness(provider: string | undefined, worker: RunWorker | u
     return { ready: false, label: `${provider} not ready`,
       note: `${worker?.name} has ${provider} signed in, but its sandbox did not confine a test command on that machine, so agents cannot run there.` };
   }
+  if (status?.reason === 'sandbox verification pending') {
+    return { ready: false, label: `${provider} not ready`,
+      note: `${worker?.name} has ${provider} signed in, but its sandbox check is incomplete; the worker will retry before allowing runs.` };
+  }
   if (status?.reason === 'not signed in') {
     return { ready: false, label: `${provider} not ready`,
       note: `${worker?.name} has ${provider} installed but reports it is not signed in under the worker process environment.` };

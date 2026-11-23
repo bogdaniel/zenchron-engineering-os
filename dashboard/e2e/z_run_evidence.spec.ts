@@ -111,6 +111,16 @@ test('queue dialog explains when worker-process authentication cannot be confirm
   }
 });
 
+test('queue dialog explains an incomplete worker sandbox check', async ({ page }) => {
+  await mockWorkspace(page, { providerReady: false, providerReason: 'sandbox verification pending' });
+  await page.goto('/#agents');
+  await page.getByRole('button', { name: 'Run Agent' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
+  await expect(dialog.locator('.agents-queue-note')).toHaveText(
+    'dev-laptop has codex-cli signed in, but its sandbox check is incomplete; the worker will retry before allowing runs.');
+  await expect(dialog.getByRole('button', { name: 'Queue run', exact: true })).toBeDisabled();
+});
+
 test('Settings reports which coding CLIs are ready on online workers', async ({ page }) => {
   await mockWorkspace(page, { providerReady: true });
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([])));
