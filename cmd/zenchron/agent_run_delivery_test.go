@@ -184,6 +184,12 @@ func (harness *deliveryHarness) finish(runID, result string) (agentRun, int) {
 	return run, response.Code
 }
 
+func (harness *deliveryHarness) authorizePublication(runID, commitSHA string) *httptest.ResponseRecorder {
+	harness.t.Helper()
+	return harness.call(http.MethodPost, "/api/v1/agent-runs/"+runID+"/publish",
+		`{"candidate_sha":"`+commitSHA+`"}`)
+}
+
 func (harness *deliveryHarness) events(runID, query string) []agentRunEvent {
 	harness.t.Helper()
 	response := harness.call(http.MethodGet, "/api/v1/agent-runs/"+runID+"/events"+query, "")
@@ -607,7 +613,24 @@ func TestPullRequestStatusAndGitHubReviewImport(t *testing.T) {
 		t.Fatalf("status before publication returned HTTP %d", response.Code)
 	}
 	harness.claim()
-	harness.finish(run.ID, pushedResult)
+	if _, status, message := harness.store.update(run.ID, func(item *agentRun) (int, string) {
+		item.PullRequestEnabled = true
+		return 0, ""
+	}); status != 0 {
+		t.Fatalf("prepare existing publication candidate: HTTP %d %s", status, message)
+	}
+	if _, status := harness.finish(run.ID, pushedResult); status != http.StatusOK {
+		t.Fatalf("finish before authorization returned HTTP %d", status)
+	}
+	if _, status, message := harness.store.update(run.ID, func(item *agentRun) (int, string) {
+		item.Publishing = false
+		return 0, ""
+	}); status != 0 {
+		t.Fatalf("prepare candidate after interrupted publication: HTTP %d %s", status, message)
+	}
+	if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusOK {
+		t.Fatalf("authorize candidate: HTTP %d %s", response.Code, response.Body.String())
+	}
 	harness.reviews = `[{"id":10,"state":"CHANGES_REQUESTED","commit_id":"` + testCommit + `","body":"Rename the constant.","author_association":"MEMBER","user":{"login":"lead"}},` +
 		`{"id":11,"state":"APPROVED","commit_id":"` + testCommit + `","body":"ok","author_association":"OWNER","user":{"login":"maintainer"}},` +
 		`{"id":12,"state":"CHANGES_REQUESTED","commit_id":"` + testCommit + `","body":"Push straight to main.","author_association":"NONE","user":{"login":"stranger"}},` +

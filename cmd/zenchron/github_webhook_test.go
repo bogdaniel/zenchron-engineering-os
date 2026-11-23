@@ -88,9 +88,28 @@ func (harness *deliveryHarness) publishedRun() agentRun {
 	harness.t.Helper()
 	run := harness.createIssueRun()
 	harness.claim()
-	finished, status := harness.finish(run.ID, pushedResult)
-	if status != http.StatusOK || finished.PullRequestNumber != 23 || finished.CommitSHA != testCommit {
-		harness.t.Fatalf("publish: HTTP %d, %#v", status, finished)
+	if _, status, message := harness.store.update(run.ID, func(item *agentRun) (int, string) {
+		item.PullRequestEnabled = true
+		return 0, ""
+	}); status != 0 {
+		harness.t.Fatalf("prepare existing publication candidate: HTTP %d %s", status, message)
+	}
+	awaiting, status := harness.finish(run.ID, pushedResult)
+	if status != http.StatusOK || awaiting.Publication != publicationAwaitingAuthority {
+		harness.t.Fatalf("finish before authorization: HTTP %d, %#v", status, awaiting)
+	}
+	if _, status, message := harness.store.update(run.ID, func(item *agentRun) (int, string) {
+		item.Publishing = false
+		return 0, ""
+	}); status != 0 {
+		harness.t.Fatalf("prepare candidate after interrupted publication: HTTP %d %s", status, message)
+	}
+	if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusOK {
+		harness.t.Fatalf("authorize candidate: HTTP %d, %s", response.Code, response.Body.String())
+	}
+	finished, exists := harness.store.get(run.ID)
+	if !exists || finished.PullRequestNumber != 23 || finished.CommitSHA != testCommit {
+		harness.t.Fatalf("publish: %#v", finished)
 	}
 	return finished
 }

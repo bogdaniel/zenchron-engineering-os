@@ -314,6 +314,7 @@ test('Reviews evidence imports GitHub change requests and retries a failed pull 
   let run: Record<string, unknown> = { ...evidenceRun, publication: 'pull_request_failed', pull_request_number: undefined,
     pull_request_url: undefined, pull_request_error: 'The branch was pushed, but GitHub could not create the pull request.' };
   const calls: string[] = [];
+  let publicationBody: unknown;
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([run])));
   await page.route(`**/api/v1/agent-runs/${runID}/diff`, (route) => route.fulfill(json({ run_id: runID, diff: '', truncated: false })));
   await page.route(`**/api/v1/agent-runs/${runID}/events`, (route) => route.fulfill(json([])));
@@ -321,6 +322,7 @@ test('Reviews evidence imports GitHub change requests and retries a failed pull 
     number: 23, url: evidenceRun.pull_request_url, state: 'open', merged: false, head_sha: 'a'.repeat(40), checks: [], reviews: [] })));
   await page.route(`**/api/v1/agent-runs/${runID}/publish`, (route) => {
     calls.push('publish');
+    publicationBody = route.request().postDataJSON();
     run = { ...evidenceRun };
     return route.fulfill({ status: 204, body: '' });
   });
@@ -336,10 +338,11 @@ test('Reviews evidence imports GitHub change requests and retries a failed pull 
   const summary = page.getByLabel('Run evidence summary');
   await expect(summary).toContainText('Branch pushed; pull request not created');
   await expect(page.getByRole('button', { name: 'Import change requests from GitHub' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Retry pull request' }).click();
-  await expect(page.locator('.run-evidence-actions').getByRole('status')).toHaveText('Pull request published.');
+  await page.getByRole('button', { name: 'Retry authorized pull request' }).click();
+  await expect(page.locator('.run-evidence-actions').getByRole('status')).toHaveText('Pull request created.');
   await expect(summary).toContainText('Pull request published', { timeout: 10_000 });
-  await expect(page.getByRole('button', { name: 'Retry pull request' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Retry authorized pull request' })).toHaveCount(0);
+  expect(publicationBody).toEqual({ candidate_sha: 'a'.repeat(40) });
   await page.getByRole('button', { name: 'Import change requests from GitHub' }).click();
   await expect(page.locator('.run-evidence-actions').getByRole('alert')).toHaveText('agent run review history is full');
   importStatus = 200;
