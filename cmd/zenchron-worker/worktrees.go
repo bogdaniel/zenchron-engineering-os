@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -119,6 +120,7 @@ func lockWorktree(repository, worktree string) (unlock func()) {
 // cleanupWorktrees removes run worktrees that Git considers safe to remove: not locked by a running or
 // crashed attempt and without modified or untracked files. Run branches and their commits are kept.
 func cleanupWorktrees(ctx context.Context, root string, projects []discoveredProject) (removed, kept []string, err error) {
+	var cleanupErr error
 	for _, project := range projects {
 		entries, readErr := os.ReadDir(filepath.Join(root, project.ID))
 		if errors.Is(readErr, os.ErrNotExist) {
@@ -133,12 +135,54 @@ func cleanupWorktrees(ctx context.Context, root string, projects []discoveredPro
 			}
 			label := project.Name + "/" + entry.Name()
 			path := filepath.Join(root, project.ID, entry.Name())
+			ownerPath := path + ".owner"
+			ownerLock, lockErr := os.OpenFile(ownerPath, os.O_RDWR|os.O_CREATE, 0o600)
+			if lockErr != nil {
+				kept = append(kept, label)
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("open ownership lock for %s: %w", label, lockErr))
+				continue
+			}
+			if lockErr = syscall.Flock(int(ownerLock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); lockErr != nil {
+				closeErr := ownerLock.Close()
+				if errors.Is(lockErr, syscall.EWOULDBLOCK) || errors.Is(lockErr, syscall.EAGAIN) {
+					kept = append(kept, label)
+					if closeErr != nil {
+						cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close ownership lock for %s: %w", label, closeErr))
+					}
+					continue
+				}
+				kept = append(kept, label)
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("lock ownership file for %s: %w", label, lockErr))
+				if closeErr != nil {
+					cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close ownership lock for %s: %w", label, closeErr))
+				}
+				continue
+			}
 			if _, removeErr := gitOutput(ctx, "-C", project.Path, "worktree", "remove", path); removeErr != nil {
 				kept = append(kept, label)
+				if closeErr := ownerLock.Close(); closeErr != nil {
+					cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close ownership lock for %s: %w", label, closeErr))
+				}
 				continue
 			}
 			removed = append(removed, label)
+			if removeErr := removeWorktreeOwnershipFiles(path); removeErr != nil {
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove ownership files for %s: %w", label, removeErr))
+			}
+			if closeErr := ownerLock.Close(); closeErr != nil {
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close ownership lock for %s: %w", label, closeErr))
+			}
 		}
 	}
-	return removed, kept, nil
+	return removed, kept, cleanupErr
+}
+
+func removeWorktreeOwnershipFiles(worktree string) error {
+	var err error
+	for _, path := range []string{worktree + ".owner.processes", worktree + ".owner"} {
+		if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			err = errors.Join(err, fmt.Errorf("remove %s: %w", path, removeErr))
+		}
+	}
+	return err
 }

@@ -1,16 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -674,7 +678,13 @@ func TestCleanupWorktreesKeepsLockedAndModifiedWorktrees(t *testing.T) {
 		if err := prepareWorktree(context.Background(), root, projects[0], id, workerapi.AgentRunBranch(id), "main"); err != nil {
 			t.Fatal(err)
 		}
-		return filepath.Join(root, agentRunTestID, id)
+		worktree := filepath.Join(root, agentRunTestID, id)
+		for _, suffix := range []string{".owner", ".owner.processes"} {
+			if err := os.WriteFile(worktree+suffix, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return worktree
 	}
 	dirty := prepare("11111111111111111111111111111111")
 	if err := os.WriteFile(filepath.Join(dirty, "uncommitted.txt"), []byte("keep me\n"), 0o600); err != nil {
@@ -690,12 +700,115 @@ func TestCleanupWorktreesKeepsLockedAndModifiedWorktrees(t *testing.T) {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("cleanup removed protected worktree %s: %v", path, err)
 		}
+		for _, suffix := range []string{".owner", ".owner.processes"} {
+			if _, err := os.Stat(path + suffix); err != nil {
+				t.Fatalf("cleanup changed protected ownership file %s%s: %v", path, suffix, err)
+			}
+		}
 	}
 	if _, err := os.Stat(harness.worktree); !os.IsNotExist(err) {
 		t.Fatalf("finished clean worktree still exists: %v", err)
 	}
+	for _, suffix := range []string{".owner", ".owner.processes"} {
+		if _, err := os.Stat(harness.worktree + suffix); !os.IsNotExist(err) {
+			t.Fatalf("cleanup left ownership file %s%s: %v", harness.worktree, suffix, err)
+		}
+	}
 	if commit := runGit(t, harness.repository, "rev-parse", harness.command.Branch); len(strings.TrimSpace(commit)) != 40 {
 		t.Fatalf("cleanup lost the run branch: %q", commit)
+	}
+}
+
+func TestCleanupWorktreesKeepsLiveOwnerLock(t *testing.T) {
+	harness := newRunHarness(t, fakeChangeScript, nil)
+	if err := harness.process(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCleanupWorktreeOwnerLockHelper$")
+	command.Env = append(os.Environ(), "ZENCHRON_TEST_OWNER_LOCK="+harness.worktree+".owner")
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdin, err := command.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = stdin.Close()
+		if command.ProcessState == nil {
+			_ = command.Wait()
+		}
+	})
+	ready := bufio.NewScanner(stdout)
+	if !ready.Scan() || ready.Text() != "locked" {
+		t.Fatalf("owner lock helper output = %q, error = %v", ready.Text(), ready.Err())
+	}
+	root := filepath.Dir(filepath.Dir(harness.worktree))
+	projects := []discoveredProject{{ID: agentRunTestID, Name: "repository", Path: harness.repository}}
+	removed, kept, err := cleanupWorktrees(context.Background(), root, projects)
+	if err != nil || len(removed) != 0 || len(kept) != 1 {
+		t.Fatalf("cleanup with live owner = removed %v, kept %v, error %v", removed, kept, err)
+	}
+	_ = stdin.Close()
+	if err := command.Wait(); err != nil {
+		t.Fatalf("owner lock helper: %v", err)
+	}
+	for _, suffix := range []string{".owner", ".owner.processes"} {
+		if _, err := os.Stat(harness.worktree + suffix); err != nil {
+			t.Fatalf("cleanup removed live ownership file %s%s: %v", harness.worktree, suffix, err)
+		}
+	}
+}
+
+func TestCleanupWorktreeOwnerLockHelper(t *testing.T) {
+	lockPath := os.Getenv("ZENCHRON_TEST_OWNER_LOCK")
+	if lockPath == "" {
+		return
+	}
+	file, err := os.OpenFile(lockPath, os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintln(os.Stdout, "locked")
+	_, err = io.Copy(io.Discard, os.Stdin)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCleanupWorktreesReportsOwnershipFileRemovalFailure(t *testing.T) {
+	harness := newRunHarness(t, fakeChangeScript, nil)
+	if err := harness.process(); err != nil {
+		t.Fatal(err)
+	}
+	processesPath := harness.worktree + ".owner.processes"
+	if err := os.Remove(processesPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(processesPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(processesPath, "keep"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Dir(filepath.Dir(harness.worktree))
+	projects := []discoveredProject{{ID: agentRunTestID, Name: "repository", Path: harness.repository}}
+	removed, kept, err := cleanupWorktrees(context.Background(), root, projects)
+	if err == nil || !strings.Contains(err.Error(), "remove ownership files") {
+		t.Fatalf("cleanup error = %v, want ownership file removal failure", err)
+	}
+	if len(removed) != 1 || len(kept) != 0 {
+		t.Fatalf("cleanup = removed %v, kept %v, want removed worktree and no kept worktree", removed, kept)
 	}
 }
 

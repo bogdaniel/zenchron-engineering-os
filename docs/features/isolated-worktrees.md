@@ -20,6 +20,7 @@ sequenceDiagram
     participant W as Local worker (agentRunner)
     participant R as Local Git checkout
     participant T as Run worktree
+    participant K as Worker cleanup command
     D->>C: POST /api/v1/agent-runs (agent, project, prompt or issue)
     C->>C: Persist queued run with branch zenchron/agent-run/<run id>
     W->>C: POST /api/v1/workers/{id}/agent-runs/claim
@@ -33,7 +34,9 @@ sequenceDiagram
     W->>C: PUT /api/v1/workers/{id}/agent-runs/{run id} (result, attempt)
     D->>C: GET /api/v1/agent-runs
     C-->>D: Runs with branch, agent name, status; no local path
-    Note over W,R: zenchron-worker cleanup-worktrees removes clean, unlocked run worktrees
+    K->>T: Try exclusive .owner lock without waiting
+    K->>R: git worktree remove, only when owner and Git locks permit
+    K->>T: Remove .owner and .owner.processes after removal
 ```
 
 ## Behavior
@@ -54,9 +57,11 @@ sequenceDiagram
   next to it.
 - **Locking.** While an attempt executes, the worktree is locked with `git worktree lock`. A worker that crashes
   leaves the lock in place.
-- **Cleanup.** `zenchron-worker cleanup-worktrees` removes worktrees under the root that Git considers safe to
-  remove: not locked and without modified or untracked files. It reports the ones it kept. Run branches and their
-  commits are never removed.
+- **Cleanup.** `zenchron-worker cleanup-worktrees` first takes each worktree's `.owner` lock without waiting, so a
+  live attempt keeps its worktree and ownership files. Git then decides whether the unlocked worktree is clean and
+  removable; locked or modified worktrees and their ownership files stay. After successful removal, cleanup removes
+  `.owner` and `.owner.processes` and reports any sidecar-removal errors. Run branches and their commits are never
+  removed.
 - **Dashboard.** Projects shows, for the selected checkout, the branches of its agent runs with the agent name and
   run status, read from `GET /api/v1/agent-runs`. It has no control that creates a worktree. With an access policy,
   runs are visible only for repositories the user is granted.
@@ -65,8 +70,9 @@ sequenceDiagram
 
 - `go test ./cmd/zenchron-worker -run 'TestPrepareWorktree' -count=1` covers real Git worktree creation, reuse on a
   repeated call and after cleanup, invalid-branch rejection, and the source checkout staying on its branch.
-- `go test ./cmd/zenchron-worker -run 'TestCleanupWorktreesKeepsLockedAndModifiedWorktrees|TestStaleLease' -count=1`
-  covers cleanup refusing locked and modified worktrees while keeping the run branch.
+- `go test ./cmd/zenchron-worker -run 'TestCleanupWorktrees|TestStaleLease' -count=1` covers cleanup refusing live,
+  Git-locked, and modified worktrees, removing ownership files on success, reporting sidecar failures, and keeping
+  the run branch.
 - `go test ./cmd/zenchron -run 'TestRunLeaseRecoversAfterRestartAndFailsWhenAttemptsAreUsedUp|TestStaleAttemptCannotFinishOrReportAfterRunIsReclaimed|TestPersistentMuxRestoresObjectivesAndWorkflows' -count=1`
   covers the single lease implementation (restart recovery, stale-attempt rejection, attempt limit) and that a
   leftover `worktrees.json` is ignored and the removed route answers 404.
