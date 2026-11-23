@@ -262,6 +262,22 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	if !reflect.DeepEqual(replayed, original) {
 		t.Fatalf("report after restart = %#v, before restart %#v", replayed, original)
 	}
+	harness.store.mu.Lock()
+	delete(harness.store.items, api.ID)
+	persistErr := harness.store.persistLocked()
+	harness.store.mu.Unlock()
+	if persistErr != nil {
+		t.Fatalf("persist missing run record: %v", persistErr)
+	}
+	harness.restart()
+	restarted, body := harness.deliveryReport(started.ID)
+	apiAfterRestart := reportedUnit(t, restarted, "api")
+	if restarted.Status != graphCompleted || !slices.Contains(restarted.UnknownEvidence, "missing_run_records") ||
+		apiAfterRestart.Attempts != 0 || !slices.Equal(apiAfterRestart.RunIDs, []string{api.ID}) ||
+		!slices.Contains(restarted.Measurements.Unknown, "attempt_count_for_some_runs") ||
+		!slices.Contains(restarted.Measurements.Unknown, "remediation_passes_for_some_runs") {
+		t.Fatalf("report after restarting with a lost run record = %s", body)
+	}
 
 	// Reading the report changed nothing about the graph.
 	if after := harness.graph(); after.Revision != before.Revision || !after.UpdatedAt.Equal(before.UpdatedAt) {
