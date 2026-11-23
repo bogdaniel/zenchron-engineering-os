@@ -125,8 +125,10 @@ Dashboard GitHub sign-in, coding-CLI sign-in, worker Git push credentials, and t
 separate credentials. Signing into the dashboard or Claude/Codex does not authenticate the updater. The LaunchAgent
 uses `ZENCHRON_GITHUB_APP_ID`, `ZENCHRON_GITHUB_INSTALLATION_ID`, and
 `ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH`; `ZENCHRON_GITHUB_TOKEN` is an optional personal-token fallback. The installer
-copies these environment values into the LaunchAgent only when it creates the service. Running `install` while that
-service is already loaded preserves its current environment, so it does not configure a missing App.
+uses `ZENCHRON_GITHUB_TOKEN` ahead of the App token for source fetches; remove it from the LaunchAgent when fetches
+should use the configured App. The installer copies these environment values into the LaunchAgent only when it creates
+the service. Running `install` while that service is already loaded preserves its current environment, so it does not
+configure a missing App.
 
 For an updater-only GitHub App, install it on the repository Zenchron updates and grant **Contents: read**,
 **Pull requests: read**, **Administration: read**, **Commit statuses: read**, and **Checks: read**. GitHub's required
