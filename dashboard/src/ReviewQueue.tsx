@@ -113,6 +113,11 @@ export function ReviewQueue({ source, section, items, searching, search, onSearc
       {local ? <AgGridReact<AgentRun>
         rowData={runs} columnDefs={columns} theme={reviewTheme} getRowId={({ data }) => data.id}
         onRowClicked={({ data }) => data && onSelectRun(data.id)}
+        onCellKeyDown={({ data, event }) => {
+          if (!data || !(event instanceof KeyboardEvent) || (event.key !== 'Enter' && event.key !== ' ')) return;
+          event.preventDefault();
+          onSelectRun(data.id);
+        }}
         overlayNoRowsTemplate={source.runs.failed ? 'Agent runs could not be loaded.' : 'Agent runs and local branch diffs will appear here.'}
       /> : listing.loading ? <div className="reviews-queue-empty">Loading GitHub items…</div>
         : listing.failed ? <div className="reviews-queue-empty" role="alert">GitHub data unavailable. Check the connection and try again.</div>

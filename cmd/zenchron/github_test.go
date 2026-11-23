@@ -130,7 +130,11 @@ func TestGitHubIssuesAndPullRequestsUseRemoteAndKeepDistinct(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(`{"number":12,"title":"Improve review","state":"open","html_url":"https://github.com/acme/platform/pull/12","draft":false,"head":{"ref":"feature/review","sha":"` + testPullRequestHead + `"},"base":{"ref":"main"}}`))
 		case "/repos/acme/platform/pulls/13":
-			w.Write([]byte(strings.Repeat("x", maxGitHubResponseSize+1)))
+			if r.Header.Get("Accept") == "application/vnd.github.diff" {
+				_, _ = w.Write([]byte(strings.Repeat("x", maxGitHubResponseSize+1)))
+				break
+			}
+			_, _ = w.Write([]byte(`{"number":13,"state":"open","head":{"sha":"` + testPullRequestHead + `"}}`))
 		case "/repos/acme/platform/issues":
 			w.Write([]byte(`[{"number":13,"title":"Document setup","state":"open","html_url":"https://github.com/acme/platform/issues/13","labels":[{"name":"docs"}]},{"number":12,"title":"Improve review","state":"open","pull_request":{"url":"https://api.github.com/repos/acme/platform/pulls/12"}}]`))
 		case "/repos/acme/platform/issues/13/comments":
@@ -236,7 +240,7 @@ func TestGitHubIssuesAndPullRequestsUseRemoteAndKeepDistinct(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != http.StatusBadGateway {
+	if response.StatusCode != http.StatusUnprocessableEntity {
 		response.Body.Close()
 		t.Fatalf("oversized pull request diff returned HTTP %d", response.StatusCode)
 	}

@@ -24,7 +24,7 @@ flowchart LR
   ChecksAPI -->|Checks bound to the integrated SHA| Compute
   Compute --> Response[JSON response]
   Response --> ReportUI[ObjectiveDeliveryReport.tsx]
-  ReportUI -->|Export JSON| Download[Typed report download]
+  ReportUI -->|Export JSON; revoke blob URL after download dispatch| Download[Typed report download]
   Compute -.->|no writes| ReadOnly[Stores unchanged]
 ```
 
@@ -80,6 +80,7 @@ flowchart LR
 - The dashboard labels WorkGraph execution status separately from the recorded pull-request link and observed GitHub
   state. A completed graph without a PR link is not presented as published; it shows the integrate unit's recorded
   reason and says execution completion does not establish publication. Publication authority remains unknown.
+- Export JSON defers blob URL revocation by one second so browsers can start the download.
 
 ## Verification
 

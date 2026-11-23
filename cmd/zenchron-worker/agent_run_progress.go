@@ -70,6 +70,8 @@ type progressReporter struct {
 
 	mu        sync.Mutex
 	pending   []workerapi.AgentRunEvent
+	flushing  bool
+	inFlight  int
 	cancelled bool
 	leaseLost bool
 }
@@ -80,11 +82,19 @@ func (reporter *progressReporter) emit(kind, message string) {
 		return
 	}
 	reporter.mu.Lock()
-	defer reporter.mu.Unlock()
-	reporter.pending = append(reporter.pending, workerapi.AgentRunEvent{Kind: kind, Message: message})
-	if len(reporter.pending) > maxPendingEvents {
-		reporter.pending = reporter.pending[len(reporter.pending)-maxPendingEvents:]
+	if len(reporter.pending) == maxPendingEvents {
+		if reporter.inFlight == 0 {
+			reporter.pending = reporter.pending[1:]
+		} else if reporter.inFlight < len(reporter.pending) {
+			copy(reporter.pending[reporter.inFlight:], reporter.pending[reporter.inFlight+1:])
+			reporter.pending = reporter.pending[:len(reporter.pending)-1]
+		} else {
+			reporter.mu.Unlock()
+			return
+		}
 	}
+	reporter.pending = append(reporter.pending, workerapi.AgentRunEvent{Kind: kind, Message: message})
+	reporter.mu.Unlock()
 }
 
 // start reports until stop is called. It cancels the attempt when the control plane requests
@@ -125,15 +135,23 @@ func (reporter *progressReporter) state() (cancelled, leaseLost bool) {
 // flush sends pending events and reports whether the attempt must stop.
 func (reporter *progressReporter) flush(ctx context.Context) bool {
 	reporter.mu.Lock()
+	if reporter.flushing {
+		reporter.mu.Unlock()
+		return false
+	}
 	batch := reporter.pending
 	if len(batch) > workerapi.MaxProgressEvents {
 		batch = batch[:workerapi.MaxProgressEvents]
 	}
 	sent := len(batch)
+	reporter.flushing = true
+	reporter.inFlight = sent
 	reporter.mu.Unlock()
 	reply, status, err := reporter.send(ctx, batch)
 	reporter.mu.Lock()
 	defer reporter.mu.Unlock()
+	reporter.flushing = false
+	reporter.inFlight = 0
 	switch {
 	case err != nil:
 		if ctx.Err() == nil {
