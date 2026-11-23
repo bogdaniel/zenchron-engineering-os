@@ -279,10 +279,16 @@ func (store *workGraphStore) publicationBindingLocked(
 		return 0, 0, "", false
 	}
 	current, exists := graph.current(unit, runs)
-	if !exists || current.ID != run.ID || !graph.producersSettled(runs) || graph.integrationDue(unit) || !graph.reviewed(unit, runs) {
+	if !exists || current.ID != run.ID || !graph.producersSettled(runs) || graph.integrationDue(unit) || !graph.publicationReviewed(unit) {
 		return 0, 0, "", false
 	}
 	return graph.Revision, graph.PlanRevision, graph.PlanHash, true
+}
+
+func (graph *workGraph) publicationReviewed(unit *workUnit) bool {
+	return !slices.ContainsFunc(graph.reviewersOf(unit.Key), func(reviewer *workUnit) bool {
+		return reviewer.Verdict != "accept" || reviewer.Seen < unit.HandoffAt
+	})
 }
 
 // publicationReady requires the stored authorization to match this candidate's approved plan contract.

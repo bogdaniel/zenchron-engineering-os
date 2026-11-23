@@ -331,8 +331,11 @@ func (runner *agentRunner) publishCandidate(
 	if _, leaseLost := reporter.state(); leaseLost || ctx.Err() != nil {
 		return result
 	}
-	dirty, statusErr = gitOutput(gitCtx, "-C", workspace.path, "status", "--porcelain")
-	if statusErr != nil || dirty != "" || gitCommand(gitCtx, "-C", workspace.path, "diff", "--quiet", command.PublishCommit).Run() != nil {
+	checkCtx, cancelCheck := context.WithTimeout(ctx, runner.limits.gitStage)
+	defer cancelCheck()
+	dirty, statusErr = gitOutput(checkCtx, "-C", workspace.path, "status", "--porcelain")
+	diffErr := gitCommand(checkCtx, "-C", workspace.path, "diff", "--quiet", command.PublishCommit).Run()
+	if statusErr != nil || dirty != "" || diffErr != nil {
 		return failed(result, workerapi.TerminationWorkerError,
 			"Could not confirm the worktree still matches the human-authorized candidate after verification.")
 	}
