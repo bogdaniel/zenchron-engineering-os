@@ -45,6 +45,7 @@ running revision.
 sequenceDiagram
     participant I as Local installer
     participant C as Doctor command
+    participant O as Local operator
     participant GH as Trusted GitHub main
     participant S as Managed supervisor
     participant R as Versioned release store
@@ -61,6 +62,7 @@ sequenceDiagram
     I->>R: Build and verify the initial trusted release
     I->>I: Retire recognized legacy shadows and install stable launcher
     I->>S: Install one stable command and one managed LaunchAgent
+    O->>S: Configure the App ID, installation ID and private-key path
     GH->>S: New merged main revision
     S->>GH: Verify signature, required checks and merged PR
     S->>R: Fetch exact commit/tree and build isolated artifacts
@@ -112,6 +114,46 @@ existing GitHub App configuration; credentials are stored in the per-user Launch
 to the worker or dashboard. The GitHub App needs repository metadata, contents, administration, commit statuses, and
 check runs read access to verify branch protection and required checks. Keep the private key at an owner-only path
 outside the repository.
+
+### Configure the GitHub App on an existing installation
+
+Dashboard GitHub sign-in, coding-CLI sign-in, worker Git push credentials, and the control-plane/updater GitHub App are
+separate credentials. Signing into the dashboard or Claude/Codex does not authenticate the updater. The LaunchAgent
+uses `ZENCHRON_GITHUB_APP_ID`, `ZENCHRON_GITHUB_INSTALLATION_ID`, and
+`ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH`; `ZENCHRON_GITHUB_TOKEN` is an optional personal-token fallback. The installer
+copies these environment values into the LaunchAgent only when it creates the service. Running `install` while that
+service is already loaded preserves its current environment, so it does not configure a missing App.
+
+For an updater-only GitHub App, install it on the repository Zenchron updates and grant **Contents: read**,
+**Pull requests: read**, **Administration: read**, **Commit statuses: read**, and **Checks: read**. GitHub's required
+repository **Metadata: read** permission is automatic. Administration read permits protected-branch and repository
+ruleset inspection. Contents read permits fetching source, Pull requests read verifies that the exact `main` commit came
+from a merged PR, and Commit statuses / Checks read observe required checks. If the control plane will create PRs, also
+grant **Pull requests: write**. Other integrations may need Issues or Actions permissions; grant those only for the
+features being enabled. The workstation worker still needs its own Git credential that can push the candidate branch;
+the GitHub App token is never passed to that worker.
+
+To configure an existing installation safely:
+
+1. Save the App's private key to a regular file outside the repository in a user-owned directory with mode `0600`;
+   keep the directory private. Record the App ID, the installation ID for the repository, and that file's path. Never
+   copy PEM contents into the LaunchAgent, a shell command, logs, or a PR.
+2. Check `zenchron-engineering doctor` and `zenchron-engineering status`. Wait until `active_runs` is zero before
+   restarting the service. Keep a recovery copy of the existing LaunchAgent plist in a private location.
+3. In the existing `~/Library/LaunchAgents/com.bogdaniel.zenchron-engineering-os.plist`, add or update only the three
+   App environment strings under `EnvironmentVariables`. Keep every other entry, the owner, and mode `0600`; store
+   only the private-key path, never the key. Validate the edited plist with `plutil -lint` and replace the original
+   atomically.
+4. With no active run, gracefully unload and bootstrap that same plist in the current GUI domain. This restarts the
+   existing single LaunchAgent and reuses its active release and `ZENCHRON_DATA_DIR`; do not run a second service or
+   create a new data directory.
+5. Run `zenchron-engineering doctor` and `zenchron-engineering status`, then inspect Settings / System Update. The
+   updater should report its trusted revision or a precise permission/required-check error. A GitHub OAuth browser
+   session alone is not evidence that updater authentication works.
+
+The updater's App read permissions are insufficient for creating PRs. PR creation requires Pull requests: write on the
+control-plane App, while pushing the exact reviewed branch still uses the worker's local Git credential. A successful
+update check proves source verification, not that either publication credential is authorized.
 
 The installation requires no root privileges, containers or external server. This implementation currently uses
 macOS LaunchAgents. By default it reuses the existing `<UserConfigDir>/zenchron` durable state directory and keeps
