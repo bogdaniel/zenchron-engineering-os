@@ -378,6 +378,8 @@ panel. The other dashboard rows in the table above were driven by a script actin
 - A webhook delivery from GitHub itself to a deployed control plane, and a change request submitted by a second
   GitHub account, have not been exercised; see the note under the 2026-11-14 table.
 - A successful execution with a GitHub repository remains `awaiting_authorization` until a person authorizes its exact
-  candidate. The recorded authorization is bound to the run, candidate, graph revision, and approved plan revision/hash.
+  candidate. The record captures the run, candidate, WorkGraph revision at authorization, and approved plan revision/hash.
+  Before each publish-only pass, the control plane rechecks the current candidate, producer inputs, and accepted reviews;
+  it does not require the whole graph revision to remain unchanged as publication status advances.
 - Usage is whatever the CLI reports. Codex reports tokens without cost; Claude Code reports a cost figure even under
   a subscription. No budget is enforced beyond the time limits and the three-attempt cap.
