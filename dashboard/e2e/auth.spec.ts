@@ -16,6 +16,24 @@ test('shows GitHub sign-in and keeps dashboard data gated without a session', as
   expect(dashboardRequests).toBe(0);
 });
 
+test('keeps the selected Live dashboard destination through sign-in', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) =>
+    route.fulfill({ status: 401, body: 'authentication required' }));
+  await page.goto('/?mode=live&objective=objective-1&tab=plan&graph_id=graph-2&token=private#objectives');
+  const signIn = page.getByRole('link', { name: 'Continue with GitHub' });
+  await expect(signIn).toHaveAttribute('href',
+    '/auth/github?return=%2F%3Fmode%3Dlive%26objective%3Dobjective-1%26tab%3Dplan%26graph_id%3Dgraph-2%23objectives');
+});
+
+test('drops an oversized selection but keeps the valid page and mode through sign-in', async ({ page }) => {
+  await page.route('**/api/v1/auth/session', (route) =>
+    route.fulfill({ status: 401, body: 'authentication required' }));
+  const oversizedTab = 'a'.repeat(257);
+  await page.goto(`/?mode=live&tab=${oversizedTab}#agents`);
+  await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toHaveAttribute('href',
+    '/auth/github?return=%2F%3Fmode%3Dlive%23agents');
+});
+
 test('keeps the dashboard shell visible until a failed session check can be retried', async ({ page }) => {
   let sessionChecks = 0;
   let protectedRequests = 0;
@@ -53,6 +71,40 @@ test('local dashboard has a direct sign-in screen and explains when OAuth is unc
   await expect(page.getByRole('heading', { name: 'Zenchron Engineering' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeDisabled();
   await expect(page.getByText('GitHub sign-in is not configured in this local preview.')).toBeVisible();
+});
+
+test('local settings creates and revokes a one-time menu companion grant', async ({ page, baseURL }) => {
+  const grants: { id: string; user: string; created_at: string; expires_at: string }[] = [];
+  await page.route('**/api/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/api/v1/auth/session') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        authenticated: true, local: false, login: 'admin', admin: true,
+      }) });
+    }
+    if (url.pathname === '/api/v1/system/status/credentials' && request.method() === 'GET') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ grants }) });
+    }
+    if (url.pathname === '/api/v1/system/status/credentials' && request.method() === 'POST') {
+      grants.push({ id: 'device-1', user: 'Local workspace', created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 86400000).toISOString() });
+      return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ credential: 'one-time-status-grant' }) });
+    }
+    if (url.pathname === '/api/v1/system/status/credentials/device-1' && request.method() === 'DELETE') {
+      grants.splice(0, grants.length);
+      return route.fulfill({ status: 204, body: '' });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  const local = new URL(baseURL!);
+  local.hostname = '127.0.0.1';
+  await page.goto(`${local.origin}/?mode=live#settings`);
+  await page.getByRole('button', { name: 'Pair this Mac' }).click();
+  await expect(page.getByText('one-time-status-grant')).toBeVisible();
+  await expect(page.getByText(/shown only once/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Revoke' }).click();
+  await expect(page.getByText(/expires/i)).toHaveCount(0);
 });
 
 test('reports failed sign-out and keeps the session available to retry', async ({ page }) => {

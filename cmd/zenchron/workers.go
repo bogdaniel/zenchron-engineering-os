@@ -137,6 +137,9 @@ func newMuxWithStores(
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "revision": os.Getenv("ZENCHRON_RELEASE_REVISION")})
 	})
+	mux.HandleFunc("GET /api/v1/system/status", func(w http.ResponseWriter, r *http.Request) {
+		writeLocalSystemStatus(w, r, registry, runs.graphs)
+	})
 	mux.HandleFunc("GET /api/v1/system/update", systemUpdateStatus)
 	mux.HandleFunc("GET /api/v1/system/update/active-runs", func(w http.ResponseWriter, r *http.Request) {
 		activeSystemRunCount(w, r, runs)
@@ -224,7 +227,7 @@ func registerDashboard(mux *http.ServeMux, directory string) {
 				return
 			}
 			path = filepath.Join(directory, "index.html")
-			if _, err := os.Stat(path); err != nil {
+			if !dashboardIndexAvailable(directory) {
 				http.Error(w, "dashboard assets are unavailable", http.StatusServiceUnavailable)
 				return
 			}
@@ -235,6 +238,14 @@ func registerDashboard(mux *http.ServeMux, directory string) {
 		w.Header().Set("Content-Security-Policy", dashboardContentSecurityPolicy)
 		http.ServeFile(w, r, path)
 	})
+}
+
+func dashboardIndexAvailable(directory string) bool {
+	if strings.TrimSpace(directory) == "" {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(directory, "index.html"))
+	return err == nil && info.Mode().IsRegular()
 }
 
 // Mantine emits inline style elements and style attributes for global classes and component values.

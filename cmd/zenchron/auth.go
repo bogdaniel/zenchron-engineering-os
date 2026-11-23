@@ -26,6 +26,7 @@ type authConfig struct {
 	sessionKey         []byte
 	workerToken        string
 	access             *accessPolicy
+	statusGrants       *systemStatusGrantStore
 	allowedUsers       []string
 	publicURL          *url.URL
 	https              bool
@@ -182,12 +183,44 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 			return
 		}
 		if config != nil && strings.HasPrefix(r.URL.Path, "/api/v1/") {
+			if r.URL.Path == "/api/v1/system/status" && r.Method == http.MethodGet && config.statusGrants != nil {
+				if token := r.Header.Get("X-Zenchron-Status-Grant"); token != "" {
+					if !isLoopbackRequest(r) {
+						http.Error(w, "menu status is available only to the local operator", http.StatusForbidden)
+						return
+					}
+					var policy *accessFile
+					if config.access != nil {
+						var err error
+						policy, err = config.access.current()
+						if err != nil {
+							http.Error(w, "access policy is unavailable", http.StatusServiceUnavailable)
+							return
+						}
+					}
+					user, ok := config.statusGrants.authenticate(token, policy, config.access != nil, config.allowedUsers)
+					if !ok {
+						http.Error(w, "menu status credential is expired or revoked", http.StatusUnauthorized)
+						return
+					}
+					next.ServeHTTP(w, withSystemStatusGrant(r, user))
+					return
+				}
+			}
 			access, status, message := config.authorize(r)
 			if status != 0 {
 				http.Error(w, message, status)
 				return
 			}
+			if r.URL.Path == "/api/v1/system/status" && access.enforced && !access.admin {
+				http.Error(w, "administrator access required", http.StatusForbidden)
+				return
+			}
 			r = withRequestAccess(r, access)
+			if strings.HasPrefix(r.URL.Path, "/api/v1/system/status/credentials") && config.statusGrants != nil {
+				config.statusGrants.serve(w, r, access)
+				return
+			}
 			if strings.HasPrefix(r.URL.Path, "/api/v1/admin/") && config.access != nil {
 				config.access.serveAdmin(w, r)
 				return
@@ -356,8 +389,15 @@ func startGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authConfig
 		http.Error(w, "could not start sign-in", http.StatusInternalServerError)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: state, Path: "/auth/github", HttpOnly: true, Secure: config.https,
-		SameSite: http.SameSiteLaxMode, MaxAge: 600})
+	returnTo := r.URL.Query().Get("return")
+	if !isDashboardReturnPath(returnTo) {
+		returnTo = "/"
+	}
+	stateCookie := encodeOAuthStateCookie(state, returnTo, config.sessionKey)
+	http.SetCookie(w, &http.Cookie{
+		Name: oauthStateCookie, Value: stateCookie, Path: "/auth/github", HttpOnly: true,
+		Secure: config.https, SameSite: http.SameSiteLaxMode, MaxAge: 600,
+	})
 	query := url.Values{"client_id": {config.clientID}, "redirect_uri": {config.publicURL.String() + "/auth/github/callback"}, "state": {state}, "scope": {"read:user"}}
 	http.Redirect(w, r, config.githubURL+"/login/oauth/authorize?"+query.Encode(), http.StatusFound)
 }
@@ -368,7 +408,11 @@ func completeGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authCon
 		return
 	}
 	stateCookie, err := r.Cookie(oauthStateCookie)
-	if err != nil || r.URL.Query().Get("state") == "" || !secureEqual(r.URL.Query().Get("state"), stateCookie.Value) {
+	returnTo, stateValid := "", false
+	if err == nil {
+		returnTo, stateValid = decodeOAuthStateCookie(stateCookie.Value, r.URL.Query().Get("state"), config.sessionKey)
+	}
+	if !stateValid {
 		http.Error(w, "invalid sign-in state", http.StatusBadRequest)
 		return
 	}
@@ -398,7 +442,7 @@ func completeGitHubOAuth(w http.ResponseWriter, r *http.Request, config *authCon
 		SameSite: http.SameSiteLaxMode, MaxAge: 8 * 60 * 60})
 	http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: "", Path: "/auth/github", HttpOnly: true, Secure: config.https,
 		SameSite: http.SameSiteLaxMode, MaxAge: -1})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, returnTo, http.StatusSeeOther)
 }
 
 func fetchGitHubUser(r *http.Request, config *authConfig, code string) (authUser, error) {

@@ -80,6 +80,9 @@ func runControlPlane() error {
 	if err != nil {
 		return err
 	}
+	if auth != nil {
+		auth.statusGrants = newSystemStatusGrantStore(dataDir)
+	}
 	lock, err := acquireControlPlaneLock(dataDir)
 	if err != nil {
 		return err

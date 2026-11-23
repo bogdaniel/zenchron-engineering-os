@@ -195,7 +195,7 @@ func (runtime *managedRuntime) startRelease(ctx context.Context, commit string) 
 	if err != nil {
 		return err
 	}
-	if err := waitManagedHealth(ctx, runtime.api, commit); err != nil {
+	if err := waitManagedHealth(ctx, runtime.client, runtime.api, func() (string, error) { return commit, nil }); err != nil {
 		runtime.api.stop(5 * time.Second)
 		return err
 	}
@@ -361,6 +361,12 @@ func (runtime *managedRuntime) restorePreviousRelease(startErr error) error {
 	if err := updater.SetActiveRelease(runtime.home, previous); err != nil {
 		return fmt.Errorf("candidate startup failed (%v) and rollback pointer failed: %w", startErr, err)
 	}
+	if err := installManagedMenuBarApp(runtime.home, previous); err != nil {
+		return runtime.blockActivationRecovery(errors.Join(startErr, fmt.Errorf("restore previous menu-bar companion: %w", err)))
+	}
+	if err := launchManagedMenuBarApp(); err != nil {
+		return runtime.blockActivationRecovery(errors.Join(startErr, fmt.Errorf("relaunch previous menu-bar companion: %w", err)))
+	}
 	runtime.status.State, runtime.status.LastFailure = "failed", time.Now().UTC()
 	runtime.status.LastFailedRevision = runtime.status.LatestRevision
 	runtime.status.BlockReason = boundedUpdateReason("New release failed its live health check: " + startErr.Error())
@@ -405,6 +411,12 @@ func (runtime *managedRuntime) activateRelease(ctx context.Context, commit strin
 	}
 	if err := managedChildrenAlive(runtime.api, runtime.worker); err != nil {
 		return err
+	}
+	if err := installManagedMenuBarApp(runtime.home, commit); err != nil {
+		return fmt.Errorf("install menu-bar companion for activated release: %w", err)
+	}
+	if err := launchManagedMenuBarApp(); err != nil {
+		return fmt.Errorf("start menu-bar companion for activated release: %w", err)
 	}
 	if err := updater.SetActiveRelease(runtime.home, commit); err != nil {
 		return err

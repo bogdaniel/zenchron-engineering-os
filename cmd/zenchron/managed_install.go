@@ -73,7 +73,10 @@ func installManaged() error {
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return fmt.Errorf("create managed installation: %w", err)
 	}
-	if _, err := updater.ActiveRelease(home); err == nil {
+	if active, err := updater.ActiveRelease(home); err == nil {
+		if err := installManagedMenuBarApp(home, active); err != nil {
+			return err
+		}
 		entrypoint, err := installStableEntrypoint(home)
 		if err != nil {
 			return err
@@ -82,6 +85,9 @@ func installManaged() error {
 			return err
 		}
 		if err := ensureManagedAgent(home, entrypoint); err != nil {
+			return err
+		}
+		if err := launchManagedMenuBarApp(); err != nil {
 			return err
 		}
 		fmt.Printf("Zenchron is already installed at http://127.0.0.1:8080/?mode=live\nCommand: %s\n", entrypoint)
@@ -146,6 +152,9 @@ func installManaged() error {
 	if err := updater.SetActiveRelease(home, candidate.Commit); err != nil {
 		return err
 	}
+	if err := installManagedMenuBarApp(home, candidate.Commit); err != nil {
+		return err
+	}
 	entrypoint, err := installStableEntrypoint(home)
 	if err != nil {
 		return err
@@ -163,6 +172,9 @@ func installManaged() error {
 	if err := installLaunchAgent(home, entrypoint); err != nil {
 		return err
 	}
+	if err := launchManagedMenuBarApp(); err != nil {
+		return err
+	}
 	fmt.Printf("Zenchron managed installation is starting at http://127.0.0.1:8080/?mode=live\nCommand: %s\n", entrypoint)
 	return nil
 }
@@ -173,6 +185,33 @@ func ensureManagedAgent(home, entrypoint string) error {
 		return fmt.Errorf("resolve current user: %w", err)
 	}
 	if _, err := exec.Command("launchctl", "print", "gui/"+current.Uid+"/"+managedLaunchAgentLabel).CombinedOutput(); err == nil {
+		// The status endpoint reads this plist value live, so repairing it does not restart active work.
+		plist, err := managedLaunchAgentPlistPath()
+		if err != nil {
+			return err
+		}
+		contents, err := os.ReadFile(plist)
+		if err != nil {
+			return fmt.Errorf("read managed LaunchAgent: %w", err)
+		}
+		token, found, err := launchAgentStatusCredential(contents)
+		if err != nil {
+			return fmt.Errorf("read local status credential from managed LaunchAgent: %w", err)
+		}
+		if found && token != "" {
+			return nil
+		}
+		token, err = randomToken(32)
+		if err != nil {
+			return fmt.Errorf("generate local status credential: %w", err)
+		}
+		contents, err = withLaunchAgentStatusCredential(contents, token)
+		if err != nil {
+			return fmt.Errorf("repair managed LaunchAgent status credential: %w", err)
+		}
+		if err := writeInstallFile(plist, contents, 0o600); err != nil {
+			return fmt.Errorf("persist local status credential: %w", err)
+		}
 		return nil
 	}
 	return installLaunchAgent(home, entrypoint)
@@ -486,6 +525,11 @@ func launchEnvironment() (map[string]string, error) {
 		return nil, err
 	}
 	environment["ZENCHRON_DATA_DIR"] = data
+	statusToken, err := randomToken(32)
+	if err != nil {
+		return nil, fmt.Errorf("generate local status credential: %w", err)
+	}
+	environment["ZENCHRON_LOCAL_STATUS_TOKEN"] = statusToken
 	return environment, nil
 }
 
@@ -679,6 +723,13 @@ func startManaged() error {
 	if runtime.GOOS != "darwin" {
 		return errors.New("the managed local installation currently requires macOS LaunchAgents")
 	}
+	home, err := managedHome()
+	if err != nil {
+		return err
+	}
+	if _, err := updater.ActiveRelease(home); err != nil {
+		return fmt.Errorf("managed installation has no active release: %w", err)
+	}
 	current, err := user.Current()
 	if err != nil {
 		return fmt.Errorf("resolve current user: %w", err)
@@ -688,8 +739,15 @@ func startManaged() error {
 		return fmt.Errorf("managed installation is not loaded; run zenchron-engineering install first: %w: %s", err,
 			strings.TrimSpace(string(output)))
 	}
-	if output, err := exec.Command("open", "http://127.0.0.1:8080/?mode=live").CombinedOutput(); err != nil {
-		return fmt.Errorf("managed runtime started, but could not open the dashboard: %w: %s", err, strings.TrimSpace(string(output)))
-	}
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), updateHealthTimeout)
+	defer cancel()
+	client := &http.Client{Timeout: time.Second}
+	return openVerifiedManagedDashboard(ctx, client, func() (string, error) { return updater.ActiveRelease(home) }, func() error {
+		output, err := exec.Command("open", "http://127.0.0.1:8080/?mode=live").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("managed runtime is ready, but could not open the dashboard: %w: %s", err,
+				strings.TrimSpace(string(output)))
+		}
+		return nil
+	})
 }
