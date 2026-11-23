@@ -113,12 +113,17 @@ test('queue dialog explains when worker-process authentication cannot be confirm
 
 test('queue dialog explains an incomplete worker sandbox check', async ({ page }) => {
   await mockWorkspace(page, { providerReady: false, providerReason: 'sandbox verification pending' });
-  await page.goto('/#agents');
-  await page.getByRole('button', { name: 'Run Agent' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
-  await expect(dialog.locator('.agents-queue-note')).toHaveText(
-    'dev-laptop has codex-cli signed in, but its sandbox check is incomplete; the worker will retry before allowing runs.');
-  await expect(dialog.getByRole('button', { name: 'Queue run', exact: true })).toBeDisabled();
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    await page.goto('/#agents');
+    await page.getByRole('button', { name: 'Run Agent' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Queue agent run' });
+    await expect(dialog.locator('.agents-queue-note')).toHaveText(
+      'dev-laptop has codex-cli signed in, but its sandbox check is incomplete; the worker will retry before allowing runs.');
+    await expect(dialog.getByRole('button', { name: 'Queue run', exact: true })).toBeDisabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+  }
 });
 
 test('Settings reports which coding CLIs are ready on online workers', async ({ page }) => {
