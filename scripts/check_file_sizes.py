@@ -3,11 +3,15 @@
 
 import subprocess
 import sys
+from itertools import islice
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SUFFIXES = {".go", ".py", ".js", ".jsx", ".ts", ".tsx", ".css", ".html", ".yml", ".yaml"}
-EXCLUDED_PARTS = {".git", "node_modules", "dist", "vendor", "coverage", "playwright-report", "test-results"}
+DEPENDENCY_DIRS = {".git", "node_modules", "vendor"}
+GENERATED_DIRS = {"dist", "coverage", "playwright-report", "test-results"}
+# ponytail: scan 20 header lines; extend if a supported generator emits its marker later.
+GENERATED_HEADER_LINES = 20
 
 
 def git_paths() -> list[Path]:
@@ -38,13 +42,74 @@ def exceptions(paths: list[Path]) -> set[str]:
     return entries
 
 
+def has_generated_header(path: Path) -> bool:
+    suffix = path.suffix
+    hash_comment = suffix in {".py", ".yaml", ".yml"}
+    slash_comment = suffix in {".go", ".js", ".jsx", ".ts", ".tsx"}
+    block_comment = suffix in {".go", ".js", ".jsx", ".ts", ".tsx", ".css"}
+    html_comment = suffix == ".html"
+    lines: list[str] = []
+    block_end = ""
+    with path.open(encoding="utf-8", errors="replace") as source:
+        for line in islice(source, GENERATED_HEADER_LINES):
+            comment = line.lstrip()
+            if not comment.strip():
+                continue
+            if block_end:
+                end = comment.find(block_end)
+                if end < 0:
+                    lines.append(comment.casefold())
+                    continue
+                lines.append(comment[:end].casefold())
+                if comment[end + len(block_end) :].strip():
+                    return False
+                block_end = ""
+                continue
+            if (hash_comment and comment.startswith("#")) or (slash_comment and comment.startswith("//")):
+                lines.append(comment.casefold())
+                continue
+            if block_comment and comment.startswith("/*"):
+                body = comment[2:]
+                end = body.find("*/")
+                if end < 0:
+                    lines.append(body.casefold())
+                    block_end = "*/"
+                else:
+                    lines.append(body[:end].casefold())
+                    if body[end + 2 :].strip():
+                        return False
+                continue
+            if html_comment and comment.startswith("<!--"):
+                body = comment[4:]
+                end = body.find("-->")
+                if end < 0:
+                    lines.append(body.casefold())
+                    block_end = "-->"
+                else:
+                    lines.append(body[:end].casefold())
+                    if body[end + 3 :].strip():
+                        return False
+                continue
+            break
+    header = " ".join(lines)
+    return not block_end and "generated" in header and "do not edit" in header
+
+def should_check(path: Path) -> bool:
+    relative = path.relative_to(ROOT)
+    if path.is_symlink() or path.suffix not in SOURCE_SUFFIXES or not path.is_file():
+        return False
+    if any(part in DEPENDENCY_DIRS for part in relative.parts) or relative.parts[0] in GENERATED_DIRS:
+        return False
+    return not has_generated_header(path)
+
+
 def main() -> int:
     failed = False
     paths = git_paths()
     allowed = exceptions(paths)
     seen: set[str] = set()
     for path in sorted(paths):
-        if path.suffix not in SOURCE_SUFFIXES or EXCLUDED_PARTS.intersection(path.parts) or not path.is_file():
+        if not should_check(path):
             continue
         lines = len(path.read_bytes().splitlines())
         relative = path.relative_to(ROOT)
