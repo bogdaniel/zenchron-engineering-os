@@ -273,7 +273,9 @@ func TestPublishOnlyRunPushesAuthorizedCandidateEvenWhenVerificationMovesWorktre
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
 	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
 	var headAtPush string
+	var pushCalls int
 	harness.runner.push = func(ctx context.Context, worktree, _, branch, commitSHA string) error {
+		pushCalls++
 		head, err := gitOutput(ctx, "-C", worktree, "rev-parse", "HEAD")
 		if err != nil {
 			return err
@@ -288,17 +290,39 @@ func TestPublishOnlyRunPushesAuthorizedCandidateEvenWhenVerificationMovesWorktre
 	if candidate.Status != "succeeded" || candidate.BranchPushed || candidate.CommitSHA == "" {
 		t.Fatalf("candidate result = %#v", candidate)
 	}
+	runGit(t, harness.worktree, "reset", "--hard", candidate.CommitSHA)
+	if head := strings.TrimSpace(runGit(t, harness.worktree, "rev-parse", "HEAD")); head != candidate.CommitSHA {
+		t.Fatalf("candidate checkout HEAD = %s, want authorized candidate %s", head, candidate.CommitSHA)
+	}
+	if err := os.WriteFile(filepath.Join(harness.worktree, "unreviewed.txt"), []byte("unreviewed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	harness.queue = []workerapi.AgentRunCommand{{
 		ID: harness.command.ID, ProjectID: harness.command.ProjectID, Branch: harness.command.Branch,
 		BaseBranch: harness.command.BaseBranch, Attempts: 2, PublishPullRequest: true, PublishOnly: true,
 		PublishCommit: candidate.CommitSHA,
 	}}
 	if err := harness.process(); err != nil {
-		t.Fatalf("publish authorized candidate: %v", err)
+		t.Fatalf("reject dirty candidate checkout: %v", err)
 	}
-	result := harness.results[1]
+	dirtyResult := harness.results[1]
+	if dirtyResult.Status != "failed" || dirtyResult.BranchPushed || pushCalls != 0 {
+		t.Fatalf("dirty candidate checkout was published: %#v after %d pushes", dirtyResult, pushCalls)
+	}
+	if err := os.Remove(filepath.Join(harness.worktree, "unreviewed.txt")); err != nil {
+		t.Fatal(err)
+	}
+	harness.queue = []workerapi.AgentRunCommand{{
+		ID: harness.command.ID, ProjectID: harness.command.ProjectID, Branch: harness.command.Branch,
+		BaseBranch: harness.command.BaseBranch, Attempts: 3, PublishPullRequest: true, PublishOnly: true,
+		PublishCommit: candidate.CommitSHA,
+	}}
+	if err := harness.process(); err != nil {
+		t.Fatalf("publish clean authorized candidate: %v", err)
+	}
+	result := harness.results[2]
 	remoteCommit := strings.TrimSpace(runGit(t, bare, "rev-parse", "refs/heads/"+harness.command.Branch))
-	if result.Status != "succeeded" || !result.BranchPushed || headAtPush == candidate.CommitSHA ||
+	if result.Status != "succeeded" || !result.BranchPushed || pushCalls != 1 || headAtPush == candidate.CommitSHA ||
 		remoteCommit != candidate.CommitSHA || result.CommitSHA != candidate.CommitSHA {
 		t.Fatalf("publication did not push only the authorized commit: %#v; remote %q; pushed head %q",
 			result, remoteCommit, headAtPush)

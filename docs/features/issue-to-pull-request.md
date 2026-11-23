@@ -142,17 +142,19 @@ that exits successfully is therefore not reported as delivered work unless verif
   a failed report can retry its intact batch.
 - A successful execution with changes is committed and verified, then remains a candidate until a person authorizes
   that exact commit. A failed verification keeps the commit on the local branch and publishes nothing. The publish-only
-  pass rechecks the candidate SHA and configured verification before pushing it. Without configured commands
-  verification is `not_configured`; the person sees that recorded state before authorizing publication.
+  pass requires a clean worktree, checks out and rechecks the exact candidate SHA, and runs configured verification
+  before pushing it. Without configured commands verification is `not_configured`; the person sees that recorded state
+  before authorizing publication.
 - Before a later attempt on a pull-request run, the worker fetches the published run branch. If verification left a
   divergent local commit, it preserves that commit on a local recovery branch before resetting the run branch to the
   published tip. A dirty worktree fails closed, so recovery never discards uncommitted changes. Reconciliation acquires
   the Git worktree lock first, bounds remote operations by the Git-stage deadline, and can use the owner's SSH agent
   without exposing provider API keys or worker bearer credentials.
 - The control plane creates the pull request with its GitHub credential only after a person authorized and the worker
-  pushed the exact candidate. It is titled after the issue and ends with `Closes #<issue>`. Creation reuses an open pull
-  request for the same branch. If GitHub fails after the push, `POST /api/v1/agent-runs/{id}/publish` retries without
-  creating a duplicate.
+  pushed the exact candidate. It is titled after the issue and ends with `Closes #<issue>`. Creation reuses an existing
+  pull request for the same branch and base, including closed pull requests, so an uncertain GitHub response does not
+  create a duplicate. If GitHub fails after the push, `POST /api/v1/agent-runs/{id}/publish` retries without creating a
+  duplicate or reopening a closed pull request.
 - A change request from the dashboard, one delivered by a [GitHub webhook](github-webhooks.md), or one imported
   from GitHub with `sync-reviews`, queues another attempt on the
   same branch and worktree; the new commit lands on the same pull request. A run has at most three attempts. When

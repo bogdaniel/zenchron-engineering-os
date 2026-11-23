@@ -197,7 +197,7 @@ func (client gitHubClient) updateIssueState(ctx context.Context, owner, reposito
 
 func (client gitHubClient) createPullRequest(ctx context.Context, owner, repository, head, base, title, body string) (gitHubPullRequest, error) {
 	query := make(url.Values)
-	query.Set("state", "open")
+	query.Set("state", "all")
 	query.Set("head", owner+":"+head)
 	query.Set("base", base)
 	query.Set("per_page", "100")
@@ -209,10 +209,20 @@ func (client gitHubClient) createPullRequest(ctx context.Context, owner, reposit
 	if err := json.Unmarshal(response, &existing); err != nil {
 		return gitHubPullRequest{}, err
 	}
-	for _, pull := range existing {
+	var closed *gitHubPullRequest
+	for index := range existing {
+		pull := &existing[index]
 		if pull.Head.Ref == head && pull.Base.Ref == base {
-			return pull, nil
+			if pull.State == "open" {
+				return *pull, nil
+			}
+			if closed == nil {
+				closed = pull
+			}
 		}
+	}
+	if closed != nil {
+		return *closed, nil
 	}
 	payload, err := json.Marshal(struct {
 		Title string `json:"title"`

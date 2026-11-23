@@ -304,10 +304,17 @@ func (runner *agentRunner) publishCandidate(
 	if err != nil {
 		return failed(result, workerapi.TerminationWorkerError, "Could not read the human-authorized candidate checkout.")
 	}
+	dirty, statusErr := gitOutput(gitCtx, "-C", workspace.path, "status", "--porcelain")
+	if statusErr != nil || dirty != "" {
+		return failed(result, workerapi.TerminationWorkerError, "The worktree is not clean for the exact human-authorized candidate.")
+	}
 	if strings.TrimSpace(head) != command.PublishCommit {
-		dirty, statusErr := gitOutput(gitCtx, "-C", workspace.path, "status", "--porcelain")
-		if statusErr != nil || dirty != "" || gitCommand(gitCtx, "-C", workspace.path, "checkout", "--detach", command.PublishCommit).Run() != nil {
+		if gitCommand(gitCtx, "-C", workspace.path, "checkout", "--detach", command.PublishCommit).Run() != nil {
 			return failed(result, workerapi.TerminationWorkerError, "The worktree cannot safely check out the exact human-authorized candidate.")
+		}
+		head, err = gitOutput(gitCtx, "-C", workspace.path, "rev-parse", "HEAD")
+		if err != nil || strings.TrimSpace(head) != command.PublishCommit {
+			return failed(result, workerapi.TerminationWorkerError, "The worktree does not match the exact human-authorized candidate.")
 		}
 	}
 	result.CommitSHA = command.PublishCommit
@@ -323,6 +330,11 @@ func (runner *agentRunner) publishCandidate(
 	}
 	if _, leaseLost := reporter.state(); leaseLost || ctx.Err() != nil {
 		return result
+	}
+	dirty, statusErr = gitOutput(gitCtx, "-C", workspace.path, "status", "--porcelain")
+	if statusErr != nil || dirty != "" || gitCommand(gitCtx, "-C", workspace.path, "diff", "--quiet", command.PublishCommit).Run() != nil {
+		return failed(result, workerapi.TerminationWorkerError,
+			"Could not confirm the worktree still matches the human-authorized candidate after verification.")
 	}
 	push := runner.push
 	if push == nil {

@@ -143,8 +143,8 @@ provider. Agent run requests and their prompts are stored locally with the rest 
 
 The branch name is visible in run history. When the
 control plane has GitHub App authentication or the `ZENCHRON_GITHUB_TOKEN` fallback and the project has a supported GitHub.com origin, successful non-empty runs
-push only their `zenchron/agent-run/<id>` branch using the worker's local Git credentials, then create or reuse an open
-pull request under the configured token owner. The pull-request link appears in Reviews. A push failure leaves the local
+push only their `zenchron/agent-run/<id>` branch using the worker's local Git credentials, then create or reuse an
+existing pull request for the same branch and base under the configured token owner. The pull-request link appears in Reviews. A push failure leaves the local
 branch and diff reviewable and records a bounded status message. Automatic publication is skipped without the token or
 a GitHub.com origin. Comments and request-changes submitted from the dashboard on a Zenchron PR are attached to its run;
 request-changes queues that same branch when the worker can accept another code pass. Change requests made directly on

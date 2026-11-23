@@ -87,11 +87,7 @@ func (store *workGraphStore) publishCommit(run agentRun) string {
 	if store == nil || run.GraphID == "" || len(run.Merge) == 0 {
 		return ""
 	}
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	graph := store.graphs[run.GraphID]
-	if graph == nil || graph.unit(run.UnitKey) == nil || graph.unit(run.UnitKey).Candidate != run.CommitSHA ||
-		!graph.publicationAuthorized(run, run.CommitSHA) {
+	if !store.publicationReady(run, run.CommitSHA) {
 		return ""
 	}
 	return run.CommitSHA

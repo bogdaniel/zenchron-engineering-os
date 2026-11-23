@@ -205,7 +205,7 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 }
 
 // publish retries pull-request creation for a run whose branch is already on GitHub. Creation reuses an
-// open pull request for the same branch, so repeating it never produces a duplicate.
+// existing pull request for the same branch and base, so an uncertain response cannot create a duplicate.
 func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 	runID := strings.ToLower(r.PathValue("id"))
 	if !validHexID(runID) {

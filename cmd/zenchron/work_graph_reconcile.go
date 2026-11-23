@@ -279,7 +279,7 @@ func (store *workGraphStore) publicationBindingLocked(
 		return 0, 0, "", false
 	}
 	current, exists := graph.current(unit, runs)
-	if !exists || current.ID != run.ID || !graph.producersSettled(runs) || !graph.reviewed(unit, runs) {
+	if !exists || current.ID != run.ID || !graph.producersSettled(runs) || graph.integrationDue(unit) || !graph.reviewed(unit, runs) {
 		return 0, 0, "", false
 	}
 	return graph.Revision, graph.PlanRevision, graph.PlanHash, true
