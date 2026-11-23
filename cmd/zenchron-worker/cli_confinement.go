@@ -55,6 +55,8 @@ func confidentialRoots(worktreeRoot string, projects []discoveredProject) []stri
 
 const confinementCanary = "zenchron-confinement-canary"
 
+var errConfinementViolation = errors.New("sandbox confinement violation")
+
 // verifyCodexConfinement runs one shell command under Codex's own sandbox with the same filesystem
 // profile a run gets, and fails unless the sandbox let it write inside the workspace, refused a write
 // outside it, and refused to read a denied file next to it. It needs no model call. Passing arguments
@@ -85,10 +87,10 @@ func verifyCodexConfinement(ctx context.Context, binary string) error {
 		return fmt.Errorf("codex sandbox self-test: the sandboxed command could not write inside the workspace: %w", err)
 	}
 	if bytes.Contains(output, []byte(confinementCanary)) {
-		return errors.New("codex sandbox self-test: the sandbox let a command read a denied file")
+		return fmt.Errorf("%w: codex sandbox self-test let a command read a denied file", errConfinementViolation)
 	}
 	if _, err := os.Stat(outside); !errors.Is(err, os.ErrNotExist) {
-		return errors.New("codex sandbox self-test: the sandbox let a command write outside the workspace")
+		return fmt.Errorf("%w: codex sandbox self-test let a command write outside the workspace", errConfinementViolation)
 	}
 	return nil
 }

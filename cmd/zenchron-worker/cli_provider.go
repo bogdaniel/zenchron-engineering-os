@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
@@ -102,11 +103,19 @@ func (provider *cliProvider) detect(ctx context.Context) {
 	}
 	output, err := provider.probe(ctx, provider.readyArgs)
 	if !provider.isReady(output, err) {
-		provider.setReadiness(false, provider.confinement == nil, authReadinessReason(err))
+		provider.setReadiness(false, provider.confinement == nil, authReadinessReason(provider.id, output, err))
 		return
 	}
 	if provider.confinement != nil {
-		if err := provider.confinement(ctx, provider.path); err != nil {
+		confinementCtx, cancel := context.WithTimeout(ctx, workerHeartbeatInterval)
+		err := provider.confinement(confinementCtx, provider.path)
+		unfinished := confinementCtx.Err() != nil
+		cancel()
+		if unfinished || (err != nil && !errors.Is(err, errConfinementViolation)) {
+			provider.setReadiness(false, false, "sandbox verification pending")
+			return
+		}
+		if err != nil {
 			log.Printf("%s is not ready: %v", provider.id, err)
 			provider.setReadiness(false, false, "sandbox self-test failed")
 			return
@@ -120,7 +129,13 @@ func (provider *cliProvider) probe(ctx context.Context, args []string) ([]byte, 
 	defer cancel()
 	command := exec.CommandContext(probeCtx, provider.path, args...)
 	command.Env = providerEnvironment(os.Environ())
-	return command.CombinedOutput()
+	ownProcessGroup(command)
+	command.WaitDelay = workerHeartbeatInterval
+	output, err := command.CombinedOutput()
+	if command.Process != nil {
+		_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+	}
+	return output, err
 }
 
 func (provider *cliProvider) refreshReadiness(ctx context.Context) {
@@ -139,7 +154,7 @@ func (provider *cliProvider) refreshReadiness(ctx context.Context) {
 	if !provider.isReady(output, err) {
 		provider.readinessMu.Lock()
 		provider.ready = false
-		provider.reason = authReadinessReason(err)
+		provider.reason = authReadinessReason(provider.id, output, err)
 		provider.readinessMu.Unlock()
 		return
 	}
@@ -147,9 +162,21 @@ func (provider *cliProvider) refreshReadiness(ctx context.Context) {
 	sandboxVerified, reason := provider.sandboxVerified, provider.reason
 	provider.readinessMu.RUnlock()
 	if !sandboxVerified && reason != "sandbox self-test failed" && provider.confinement != nil {
-		if err := provider.confinement(probeCtx, provider.path); err != nil {
+		confinementCtx, cancel := context.WithTimeout(ctx, workerHeartbeatInterval)
+		err := provider.confinement(confinementCtx, provider.path)
+		unfinished := confinementCtx.Err() != nil
+		cancel()
+		if unfinished {
+			provider.setReadiness(false, false, "sandbox verification pending")
+			return
+		}
+		if errors.Is(err, errConfinementViolation) {
 			log.Printf("%s is not ready: %v", provider.id, err)
 			provider.setReadiness(false, false, "sandbox self-test failed")
+			return
+		}
+		if err != nil {
+			provider.setReadiness(false, false, "sandbox verification pending")
 			return
 		}
 		sandboxVerified = true
@@ -162,8 +189,13 @@ func (provider *cliProvider) refreshReadiness(ctx context.Context) {
 	provider.readinessMu.Unlock()
 }
 
-func authReadinessReason(err error) string {
+func authReadinessReason(providerID string, output []byte, err error) string {
 	if err != nil {
+		var exitError *exec.ExitError
+		if providerID == workerapi.ProviderCodex && errors.As(err, &exitError) && exitError.ExitCode() == 1 &&
+			strings.Contains(strings.ToLower(string(output)), "not logged in") {
+			return "not signed in"
+		}
 		return "auth status unavailable"
 	}
 	return "not signed in"

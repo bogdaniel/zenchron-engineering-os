@@ -16,7 +16,8 @@ flowchart LR
     UI -->|proxy API requests| API[Go control plane<br/>127.0.0.1:8080]
     Worker[Go local worker] -->|scan local root<br/>PUT names, branch, IDs + sanitized origin locator + coding CLI status| API
     Worker -->|bounded auth probe in worker process environment| CLIs[Installed Codex / Claude CLIs]
-    CLIs -->|readiness and reason only| Worker
+    CLIs -->|probe output and exit status| Worker
+    Worker -->|derived provider status and reason only| API
     Worker -->|absolute paths stay local| LocalRepos[Git checkouts]
     API --> Registry[(In-memory worker registry)]
 ```
@@ -62,7 +63,7 @@ Open <http://127.0.0.1:4173>. The dashboard dev server rebuilds the React app on
 - `GET /api/v1/projects` returns each discovered checkout, its worker, and online/offline status. A worker is online when its last heartbeat is within 15 seconds.
 - `GET /api/v1/workers/healthz` returns `200` while any worker is online and `503` otherwise; it is used by the focused browser check.
 
-The worker sends an immediate heartbeat and repeats every five seconds. Once CLI discovery completes, each heartbeat rechecks installed provider authentication using the worker process's filtered environment; each probe is bounded by the heartbeat interval. It reports whether the provider is ready and why not, without sending auth output or credentials. Worker and project IDs are stable opaque hashes derived from machine/user identity and local checkout path; local paths and remote credentials are excluded from heartbeat JSON. A sanitized origin host/repository locator is sent so the control plane can map supported GitHub.com checkouts to issue and pull-request queries, plus top-level pull-request review submission. CLI sign-ins and credentials stay local. `ZENCHRON_PROJECTS_ROOT` selects a scan root (default `.`). A Git root is included directly; otherwise only immediate child folders are scanned. The registry is in memory, so restarting the control plane clears the list; a running worker registers again on its next heartbeat.
+The worker sends an immediate heartbeat and repeats every five seconds. Once CLI discovery completes, each heartbeat rechecks installed provider authentication using the worker process's filtered environment; each probe and Codex sandbox self-test has a separate heartbeat-length budget. Incomplete sandbox checks remain pending for the next heartbeat. A confirmed confinement escape is latched until the worker restarts, and provider auth probes stop while that failure is latched. The worker reports derived readiness and a sanitized reason, never auth output or credentials. Worker and project IDs are stable opaque hashes derived from machine/user identity and local checkout path; local paths and remote credentials are excluded from heartbeat JSON. A sanitized origin host/repository locator is sent so the control plane can map supported GitHub.com checkouts to issue and pull-request queries, plus top-level pull-request review submission. CLI sign-ins and credentials stay local. `ZENCHRON_PROJECTS_ROOT` selects a scan root (default `.`). A Git root is included directly; otherwise only immediate child folders are scanned. The registry is in memory, so restarting the control plane clears the list; a running worker registers again on its next heartbeat.
 
 ## Security and scope
 

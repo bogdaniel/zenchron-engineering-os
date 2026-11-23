@@ -3,13 +3,17 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
@@ -49,16 +53,121 @@ func TestConfinementSelfTestRejectsASandboxThatDoesNotConfine(t *testing.T) {
 	}
 }
 
-func TestProviderIsNotReadyWhenItsSandboxSelfTestFails(t *testing.T) {
+func TestProviderRetriesIncompleteSandboxSelfTest(t *testing.T) {
 	directory := t.TempDir()
 	if err := os.WriteFile(filepath.Join(directory, "codex"), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
 	provider := newCLIProviders()[workerapi.ProviderCodex]
+	attempts := 0
+	provider.confinement = func(context.Context, string) error {
+		attempts++
+		if attempts == 1 {
+			return errors.New("sandbox command did not finish")
+		}
+		return nil
+	}
 	provider.detect(context.Background())
-	if status := provider.status(context.Background()); status.Ready || status.SandboxedCommands || status.Reason != "sandbox self-test failed" {
-		t.Fatalf("status of a signed-in provider with a failing sandbox = %#v", status)
+	if status := provider.status(context.Background()); !status.Ready || attempts != 2 {
+		t.Fatalf("status after incomplete then successful sandbox checks = %#v, attempts %d", status, attempts)
+	}
+}
+
+func TestSlowAuthProbeLeavesASeparateSandboxBudget(t *testing.T) {
+	provider := &cliProvider{id: workerapi.ProviderCodex, path: filepath.Join(t.TempDir(), "codex"),
+		isReady: func(_ []byte, err error) bool { return err == nil }}
+	if err := os.WriteFile(provider.path, []byte("#!/bin/sh\nsleep 2\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	provider.setReadiness(false, false, "sandbox verification pending")
+	var remaining time.Duration
+	provider.confinement = func(ctx context.Context, _ string) error {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal("sandbox check has no independent deadline")
+		}
+		remaining = time.Until(deadline)
+		return nil
+	}
+	if status := provider.status(context.Background()); !status.Ready || remaining < 4*time.Second {
+		t.Fatalf("status after slow auth probe = %#v, sandbox budget left %s", status, remaining)
+	}
+}
+
+func TestProviderLatchesRealSandboxEscape(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "codex"), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	provider := newCLIProviders()[workerapi.ProviderCodex]
+	attempts := 0
+	provider.confinement = func(context.Context, string) error {
+		attempts++
+		return fmt.Errorf("%w: denied path was readable", errConfinementViolation)
+	}
+	provider.detect(context.Background())
+	if status := provider.status(context.Background()); status.Ready || status.SandboxedCommands ||
+		status.Reason != "sandbox self-test failed" || attempts != 1 {
+		t.Fatalf("status after a real sandbox escape = %#v, attempts %d", status, attempts)
+	}
+}
+
+func TestCodexSignedOutStatusUsesItsExitAndOutput(t *testing.T) {
+	directory := t.TempDir()
+	script := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo fake-codex; exit 0; fi\necho 'Not logged in'\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(directory, "codex"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	provider := newCLIProviders()[workerapi.ProviderCodex]
+	provider.detect(context.Background())
+	if status := provider.status(context.Background()); status.Ready || status.Reason != "not signed in" {
+		t.Fatalf("Codex sign-out status = %#v", status)
+	}
+}
+
+func TestProviderProbeStopsDescendantsWhenCancelled(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "child.pid")
+	script := "#!/bin/sh\nsleep 30 &\necho $! > " + pidFile + "\nwait\n"
+	provider := &cliProvider{id: workerapi.ProviderClaude}
+	provider.path = filepath.Join(t.TempDir(), "probe")
+	if err := os.WriteFile(provider.path, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	finished := make(chan error, 1)
+	go func() {
+		_, err := provider.probe(ctx, nil)
+		finished <- err
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	var childPID int
+	for time.Now().Before(deadline) {
+		if content, err := os.ReadFile(pidFile); err == nil {
+			if _, err := fmt.Sscanf(string(content), "%d", &childPID); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if childPID == 0 {
+		cancel()
+		t.Fatal("probe child did not start")
+	}
+	cancel()
+	select {
+	case err := <-finished:
+		if err == nil {
+			t.Fatal("cancelled probe succeeded")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancelled probe waited on a descendant's inherited output pipes")
+	}
+	if err := syscall.Kill(childPID, 0); !errors.Is(err, syscall.ESRCH) {
+		t.Fatalf("probe descendant %d is still running: %v", childPID, err)
 	}
 }
 
