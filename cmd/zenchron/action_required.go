@@ -33,19 +33,11 @@ type actionRequiredItem struct {
 func (store *workGraphStore) actionRequired(w http.ResponseWriter, r *http.Request) {
 	store.reconcileAll()
 	access := accessFor(r)
-	visibleObjectives := make(map[string]objective)
-	store.objectives.mu.RLock()
-	for id, item := range store.objectives.items {
-		if store.objectives.visible(access, item) {
-			visibleObjectives[id] = item
-		}
-	}
-	store.objectives.mu.RUnlock()
-
 	items := make([]actionRequiredItem, 0)
 	store.mu.Lock()
 	for objectiveID, plans := range store.plans {
-		item, visible := visibleObjectives[objectiveID]
+		item, exists := store.objectives.get(objectiveID)
+		visible := exists && store.objectives.visible(access, item)
 		if !visible || len(plans) == 0 {
 			continue
 		}
