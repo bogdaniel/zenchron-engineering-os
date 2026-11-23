@@ -56,26 +56,43 @@ def has_generated_header(path: Path) -> bool:
             if not comment.strip():
                 continue
             if block_end:
-                lines.append(comment.casefold())
-                if block_end in comment:
-                    block_end = ""
+                end = comment.find(block_end)
+                if end < 0:
+                    lines.append(comment.casefold())
+                    continue
+                lines.append(comment[:end].casefold())
+                if comment[end + len(block_end) :].strip():
+                    return False
+                block_end = ""
                 continue
             if (hash_comment and comment.startswith("#")) or (slash_comment and comment.startswith("//")):
                 lines.append(comment.casefold())
                 continue
             if block_comment and comment.startswith("/*"):
-                lines.append(comment.casefold())
-                if "*/" not in comment:
+                body = comment[2:]
+                end = body.find("*/")
+                if end < 0:
+                    lines.append(body.casefold())
                     block_end = "*/"
+                else:
+                    lines.append(body[:end].casefold())
+                    if body[end + 2 :].strip():
+                        return False
                 continue
             if html_comment and comment.startswith("<!--"):
-                lines.append(comment.casefold())
-                if "-->" not in comment:
+                body = comment[4:]
+                end = body.find("-->")
+                if end < 0:
+                    lines.append(body.casefold())
                     block_end = "-->"
+                else:
+                    lines.append(body[:end].casefold())
+                    if body[end + 3 :].strip():
+                        return False
                 continue
             break
     header = " ".join(lines)
-    return "generated" in header and "do not edit" in header
+    return not block_end and "generated" in header and "do not edit" in header
 
 def should_check(path: Path) -> bool:
     relative = path.relative_to(ROOT)
