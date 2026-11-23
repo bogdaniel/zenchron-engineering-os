@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -116,16 +117,65 @@ func lockWorktree(repository, worktree string) (unlock func()) {
 	}
 }
 
+// ponytail: one lifecycle lock per project serializes setup and cleanup; shard by run if project contention grows.
+func lockWorktreeLifecycle(ctx context.Context, root, projectID string) (*os.File, error) {
+	if !validID(projectID) {
+		return nil, errors.New("invalid worktree project id")
+	}
+	projectRoot := filepath.Join(root, projectID)
+	if err := os.MkdirAll(projectRoot, 0o700); err != nil {
+		return nil, fmt.Errorf("create worktree project directory: %w", err)
+	}
+	lock, err := os.OpenFile(filepath.Join(projectRoot, ".lifecycle.lock"), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open worktree lifecycle lock: %w", err)
+	}
+	ticker := time.NewTicker(ownerPollInterval)
+	defer ticker.Stop()
+	for {
+		if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
+			return lock, nil
+		} else if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
+			return nil, errors.Join(fmt.Errorf("lock worktree lifecycle: %w", err), lock.Close())
+		}
+		select {
+		case <-ctx.Done():
+			return nil, errors.Join(ctx.Err(), lock.Close())
+		case <-ticker.C:
+		}
+	}
+}
+
 // cleanupWorktrees removes run worktrees that Git considers safe to remove: not locked by a running or
 // crashed attempt and without modified or untracked files. Run branches and their commits are kept.
 func cleanupWorktrees(ctx context.Context, root string, projects []discoveredProject) (removed, kept []string, err error) {
+	var cleanupErr error
 	for _, project := range projects {
-		entries, readErr := os.ReadDir(filepath.Join(root, project.ID))
+		projectRoot := filepath.Join(root, project.ID)
+		if _, statErr := os.Stat(projectRoot); errors.Is(statErr, os.ErrNotExist) {
+			continue
+		} else if statErr != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("inspect worktrees for %s: %w", project.Name, statErr))
+			continue
+		}
+		lifecycleLock, lockErr := lockWorktreeLifecycle(ctx, root, project.ID)
+		if lockErr != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("lock worktrees for %s: %w", project.Name, lockErr))
+			continue
+		}
+		entries, readErr := os.ReadDir(projectRoot)
 		if errors.Is(readErr, os.ErrNotExist) {
+			if closeErr := lifecycleLock.Close(); closeErr != nil {
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close worktree lifecycle lock for %s: %w", project.Name, closeErr))
+			}
 			continue
 		}
 		if readErr != nil {
-			return removed, kept, fmt.Errorf("read worktrees for %s: %w", project.Name, readErr)
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("read worktrees for %s: %w", project.Name, readErr))
+			if closeErr := lifecycleLock.Close(); closeErr != nil {
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close worktree lifecycle lock for %s: %w", project.Name, closeErr))
+			}
+			continue
 		}
 		for _, entry := range entries {
 			if !entry.IsDir() || !validID(entry.Name()) {
@@ -133,12 +183,57 @@ func cleanupWorktrees(ctx context.Context, root string, projects []discoveredPro
 			}
 			label := project.Name + "/" + entry.Name()
 			path := filepath.Join(root, project.ID, entry.Name())
+			ownerPath := path + ".owner"
+			ownerLock, lockErr := os.OpenFile(ownerPath, os.O_RDWR|os.O_CREATE, 0o600)
+			if lockErr != nil {
+				kept = append(kept, label)
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("open ownership lock for %s: %w", label, lockErr))
+				continue
+			}
+			if lockErr = syscall.Flock(int(ownerLock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); lockErr != nil {
+				closeErr := ownerLock.Close()
+				if errors.Is(lockErr, syscall.EWOULDBLOCK) || errors.Is(lockErr, syscall.EAGAIN) {
+					kept = append(kept, label)
+					if closeErr != nil {
+						cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close ownership lock for %s: %w", label, closeErr))
+					}
+					continue
+				}
+				kept = append(kept, label)
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("lock ownership file for %s: %w", label, lockErr))
+				if closeErr != nil {
+					cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close ownership lock for %s: %w", label, closeErr))
+				}
+				continue
+			}
 			if _, removeErr := gitOutput(ctx, "-C", project.Path, "worktree", "remove", path); removeErr != nil {
 				kept = append(kept, label)
+				if closeErr := ownerLock.Close(); closeErr != nil {
+					cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close ownership lock for %s: %w", label, closeErr))
+				}
 				continue
 			}
 			removed = append(removed, label)
+			if removeErr := removeWorktreeOwnershipFiles(path); removeErr != nil {
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("remove ownership files for %s: %w", label, removeErr))
+			}
+			if closeErr := ownerLock.Close(); closeErr != nil {
+				cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close ownership lock for %s: %w", label, closeErr))
+			}
+		}
+		if closeErr := lifecycleLock.Close(); closeErr != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close worktree lifecycle lock for %s: %w", project.Name, closeErr))
 		}
 	}
-	return removed, kept, nil
+	return removed, kept, cleanupErr
+}
+
+func removeWorktreeOwnershipFiles(worktree string) error {
+	var err error
+	for _, path := range []string{worktree + ".owner.processes", worktree + ".owner"} {
+		if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			err = errors.Join(err, fmt.Errorf("remove %s: %w", path, removeErr))
+		}
+	}
+	return err
 }
