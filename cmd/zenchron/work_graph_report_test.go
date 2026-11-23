@@ -56,12 +56,14 @@ func TestWorkGraphReportRequiresExplicitGitHubPRState(t *testing.T) {
 		{name: "invalid merged timestamp", body: `{` + valid + `,"draft":false,"merged_at":false}`},
 		{name: "explicit false and null", body: `{` + valid + `,"draft":false,"merged_at":null}`, want: true, wantChecks: true, wantRuns: 1},
 		{name: "mismatched candidate check head", body: `{` + valid + `,"draft":false,"merged_at":null}`,
-			checksBody: `{"check_runs":[{"name":"go","status":"completed","head_sha":"` + commit(7) + `"}]}`, want: true},
+			checksBody: `{"check_runs":[{"id":1,"name":"go","status":"completed","head_sha":"` + commit(7) + `"}]}`, want: true},
+		{name: "missing check run id", body: `{` + valid + `,"draft":false,"merged_at":null}`,
+			checksBody: `{"check_runs":[{"name":"go","status":"completed","head_sha":"` + commit(4) + `"}]}`, want: true},
 		{name: "waiting and completed candidate checks", body: `{` + valid + `,"draft":false,"merged_at":null}`,
-			checksBody: `{"check_runs":[{"name":"waiting","status":"waiting","head_sha":"` + commit(4) + `"},` +
-				`{"name":"go","status":"completed","head_sha":"` + commit(4) + `"}]}`, want: true, wantChecks: true, wantRuns: 2},
+			checksBody: `{"check_runs":[{"id":1,"name":"waiting","status":"waiting","head_sha":"` + commit(4) + `"},` +
+				`{"id":2,"name":"go","status":"completed","head_sha":"` + commit(4) + `"}]}`, want: true, wantChecks: true, wantRuns: 2},
 		{name: "unknown candidate check status", body: `{` + valid + `,"draft":false,"merged_at":null}`,
-			checksBody: `{"check_runs":[{"name":"go","status":"unknown","head_sha":"` + commit(4) + `"}]}`, want: true},
+			checksBody: `{"check_runs":[{"id":1,"name":"go","status":"unknown","head_sha":"` + commit(4) + `"}]}`, want: true},
 		{name: "missing candidate check array", body: `{` + valid + `,"draft":false,"merged_at":null}`,
 			checksBody: `{}`, want: true},
 		{name: "null candidate check array", body: `{` + valid + `,"draft":false,"merged_at":null}`,
@@ -88,7 +90,7 @@ func TestWorkGraphReportRequiresExplicitGitHubPRState(t *testing.T) {
 								status = http.StatusOK
 							}
 							if responseBody == "" {
-								responseBody = `{"check_runs":[{"name":"go","status":"completed","conclusion":"success","head_sha":"` + commit(4) + `"}]}`
+								responseBody = `{"check_runs":[{"id":1,"name":"go","status":"completed","conclusion":"success","head_sha":"` + commit(4) + `"}]}`
 							}
 						} else if request.URL.Path != "/repos/acme/platform/pulls/23" {
 							t.Fatalf("request path = %s", request.URL.Path)
@@ -109,11 +111,36 @@ func TestWorkGraphReportRequiresExplicitGitHubPRState(t *testing.T) {
 			if test.wantChecks && len(report.PullRequest.CandidateChecks.Runs) != test.wantRuns {
 				t.Fatalf("candidate check runs = %#v, want %d", report.PullRequest.CandidateChecks.Runs, test.wantRuns)
 			}
+			if test.wantChecks && len(report.PullRequest.CandidateChecks.Runs) > 0 &&
+				report.PullRequest.CandidateChecks.Runs[0].ID <= 0 {
+				t.Fatalf("candidate check run has no source id: %#v", report.PullRequest.CandidateChecks.Runs[0])
+			}
 			if !test.wantChecks && !slices.Contains(report.UnknownEvidence, "candidate_checks") {
 				t.Fatalf("unavailable candidate checks were not marked unknown: %v", report.UnknownEvidence)
 			}
 			if !test.want && !slices.Contains(report.UnknownEvidence, "pull_request_external_state") {
 				t.Fatalf("missing or invalid state removed unknown evidence: %v", report.UnknownEvidence)
+			}
+		})
+	}
+}
+
+func TestWorkGraphReportOmitsUnacceptedResultAttempt(t *testing.T) {
+	for _, status := range []string{"queued", "running"} {
+		t.Run(status, func(t *testing.T) {
+			harness := newGraphHarness(t)
+			started := harness.start(harness.twoProducerPlan())
+			if status == "running" {
+				harness.claimUnit("api")
+			}
+
+			report, body := harness.deliveryReport(started.ID)
+			executions := reportedUnit(t, report, "api").Executions
+			if len(executions) != 1 || executions[0].Status != status || executions[0].ResultAttempt != 0 {
+				t.Fatalf("execution = %#v, want a %s run without an accepted result", executions, status)
+			}
+			if strings.Contains(body, `"result_attempt"`) {
+				t.Fatalf("report claims an unaccepted result attempt: %s", body)
 			}
 		})
 	}
@@ -148,7 +175,8 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 
 	before := harness.graph()
 	report, body := harness.deliveryReport(started.ID)
-	if report.GraphID != started.ID || report.ObjectiveID != harness.objectiveID || report.ObjectiveTitle != "Ship usage export" ||
+	if report.GraphID != started.ID || report.GraphRevision != before.Revision || report.ObjectiveID != harness.objectiveID ||
+		report.ObjectiveTitle != "Ship usage export" ||
 		report.PlanRevision != 1 || report.Status != graphCompleted || before.Status != graphCompleted ||
 		report.PullRequestURL != "https://github.com/acme/platform/pull/23" || report.ApprovedPlan.Revision != 1 ||
 		report.ApprovedPlan.Status != planApproved || report.ApprovedPlan.ApprovedBy == "" {
@@ -180,16 +208,18 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	}
 	if len(apiUnit.Executions) != 1 || apiUnit.Executions[0].ProfileID != harness.profile.ID ||
 		apiUnit.Executions[0].ProfileVersion != harness.profile.Version || apiUnit.Executions[0].CandidateCommit != commit(3) ||
-		len(report.Handoffs) == 0 || len(report.Outstanding) != 0 {
+		apiUnit.Executions[0].ResultAttempt != 2 || apiUnit.Executions[0].UpdatedAt.IsZero() ||
+		len(report.Handoffs) == 0 || report.Handoffs[0].MessageID == "" || len(report.Outstanding) != 0 {
 		t.Fatalf("execution provenance, handoffs, or outstanding steps = report unit %#v, handoffs %#v, outstanding %#v",
 			apiUnit, report.Handoffs, report.Outstanding)
 	}
 	if !slices.Equal(uiUnit.Providers, []string{workerapi.ProviderCodex + " 1.2.3"}) || review.Verdict != "accept" ||
 		len(uiUnit.Executions) != 1 || uiUnit.Executions[0].Verification != workerapi.VerificationPassed ||
-		len(review.RunIDs) != 2 || review.Attempts != 2 || !slices.Equal(review.Providers, []string{workerapi.ProviderCodex}) {
+		len(review.RunIDs) != 2 || review.Attempts != 2 || !slices.Equal(review.Providers, []string{workerapi.ProviderCodex}) ||
+		len(review.Executions) != 2 || review.Executions[0].BaseCommit != commit(1) || review.Executions[1].BaseCommit != commit(3) {
 		t.Fatalf("ui unit = %#v, review unit = %#v", uiUnit, review)
 	}
-	if !slices.Equal(report.UnknownEvidence, []string{"publication_authority"}) {
+	if !slices.Equal(report.UnknownEvidence, []string{"policy_backed_assurance", "publication_authority"}) {
 		t.Fatalf("unrecorded evidence = %v", report.UnknownEvidence)
 	}
 	if report.PullRequest == nil || report.PullRequest.State != "open" || !report.PullRequest.Draft || report.PullRequest.Merged ||
@@ -278,6 +308,9 @@ func TestWorkGraphReportOmitsWhatWasNotRecorded(t *testing.T) {
 	report, body := harness.deliveryReport(started.ID)
 	if report.Status != before.Status || report.Status == graphCompleted || report.PullRequestURL != "" {
 		t.Fatalf("report of an unfinished graph = %s", body)
+	}
+	if !slices.Contains(report.UnknownEvidence, "policy_backed_assurance") {
+		t.Fatalf("report implied policy-backed assurance without a recorded authority: %v", report.UnknownEvidence)
 	}
 	for _, omitted := range []string{"wall_clock_seconds", "input_tokens", "output_tokens", "cost_usd", "pull_request_url",
 		supervisionMinutes, "candidate", "verdict"} {

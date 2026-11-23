@@ -129,17 +129,22 @@ for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     await mockOrchestration(page, { graphs: [graph], plans: [plan] });
     await page.route(`**/api/v1/work-graphs/${graphID}/report`, (route) => route.fulfill(json({
-      graph_id: graphID, objective_id: objectiveID, objective_title: objective.title, plan_revision: 1,
+      graph_id: graphID, graph_revision: 12, objective_id: objectiveID,
+      objective_title: objective.title, plan_revision: 1,
       status: 'completed', approved_plan: { revision: 1, status: 'approved', hash: 'h', summary: 'One producer, one review.' },
-      units: [], handoffs: [], decisions: [], outstanding_steps: [],
+      units: [{ key: 'final-review', kind: 'review', agent_name: 'Independent reviewer', state: 'completed',
+        run_ids: ['review-run'], attempts: 1, providers: [],
+        executions: [{ run_id: 'review-run', result_attempt: 1, updated_at: now, status: 'succeeded', attempts: 1,
+          base_commit_sha: 'c'.repeat(40), review_verdict: 'accept' }] }], handoffs: [], decisions: [], outstanding_steps: [],
       measurements: { unit_count: 0, run_count: 0, attempt_count: 0, failed_attempts: 0, review_rounds: 0, findings: 0,
         remediation_passes: 0, decisions_requested: 0, decisions_resolved: 0, human_actions: 0,
         human_actions_complete: false, max_concurrency: 0, runs_with_usage: 0, runs_with_cost: 0, unknown: [] },
-      unknown_evidence: ['publication_authority'], pull_request_url: 'https://github.com/acme/platform/pull/23',
+      unknown_evidence: ['policy_backed_assurance', 'publication_authority'],
+      pull_request_url: 'https://github.com/acme/platform/pull/23',
       pull_request_external_state: { number: 23, state: 'open', draft: true, merged: false,
         head_sha: 'd'.repeat(40), candidate_matches_head: false, observed_at: now,
         candidate_checks: { head_sha: 'c'.repeat(40), observed_at: now,
-          runs: [{ name: 'go', status: 'completed', conclusion: 'success' }] } },
+          runs: [{ id: 101, name: 'go', status: 'completed', conclusion: 'success' }] } },
     })));
     await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
     await page.getByRole('tab', { name: 'Plan', exact: true }).click();
@@ -148,12 +153,41 @@ for (const viewport of viewports) {
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('pull request #23 open as a draft');
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('differs from the integrated candidate');
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('observed');
-    await expect(report.getByLabel('GitHub checks for integrated candidate')).toContainText('go · completed · success');
-    await expect(report).toContainText('Unknown evidence: publication authority');
+    await expect(report.getByLabel('GitHub checks for integrated candidate')).toContainText('Check #101 · go · completed · success');
+    await expect(report).toContainText(`WorkGraph ${graphID} · revision 12`);
+    await expect(report).toContainText(`Reviewed candidate: ${'c'.repeat(40)}`);
+    await expect(report).toContainText([
+      'Unknown evidence: independent policy-backed assurance', 'publication authority',
+    ].join(', '));
     expect(await noHorizontalScroll(page)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`delivery-report-${viewport.name}.png`), fullPage: true });
   });
 }
+
+test('delivery report shows an unknown result attempt while a run is active', async ({ page }) => {
+  await mockOrchestration(page, { graphs: [graph], plans: [plan] });
+  await page.route(`**/api/v1/work-graphs/${graphID}/report`, (route) => route.fulfill(json({
+    graph_id: graphID, graph_revision: 3, objective_id: objectiveID, objective_title: objective.title,
+    plan_revision: 1, status: 'active',
+    approved_plan: { revision: 1, status: 'approved', hash: 'h', summary: 'One producer, one review.' },
+    units: [{ key: 'api', kind: 'produce', agent_name: 'Engineer', state: 'running', run_ids: ['run-active'],
+      attempts: 1, providers: ['codex-cli'], executions: [{ run_id: 'run-active', updated_at: now,
+        status: 'running', attempts: 1 }] }],
+    handoffs: [], decisions: [], outstanding_steps: [{ key: 'api', state: 'running' }],
+    measurements: { unit_count: 1, run_count: 1, attempt_count: 1, failed_attempts: 0, review_rounds: 0, findings: 0,
+      remediation_passes: 0, decisions_requested: 0, decisions_resolved: 0, human_actions: 1,
+      human_actions_complete: false, max_concurrency: 1, runs_with_usage: 0, runs_with_cost: 0,
+      unknown: ['input_tokens', 'output_tokens', 'cost_usd', 'supervision_minutes', 'unrecorded_human_actions'] },
+    unknown_evidence: ['policy_backed_assurance', 'publication_authority'],
+  })));
+  await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
+  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  const report = page.getByRole('region', { name: 'Objective delivery report' });
+  await report.getByRole('button', { name: 'View delivery report' }).click();
+  const execution = report.locator('.objective-delivery-run');
+  await expect(execution).toContainText('result attempt unknown');
+  await expect(execution).not.toContainText('result attempt 0');
+});
 
 const noHorizontalScroll = (page: Page) => page.evaluate(() =>
   document.documentElement.scrollWidth <= document.documentElement.clientWidth);
@@ -504,7 +538,10 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(report).toContainText('E2E CSV specialist v1');
   await expect(report).toContainText('codex-cli');
   await expect(report).toContainText('Worker-reported verification: not_configured');
-  await expect(report).toContainText('Unknown evidence: GitHub checks for the integrated candidate, publication authority, current pull request state');
+  await expect(report).toContainText([
+    'Unknown evidence: GitHub checks for the integrated candidate', 'independent policy-backed assurance',
+    'publication authority', 'current pull request state',
+  ].join(', '));
   await expect(report.locator('.objective-delivery-run').filter({ hasText: /Tree/ }).first()).toBeVisible();
   await expect(report.locator('a[href$="#reviews"]').first()).toHaveAttribute('href', /^\/\?run=.+&mode=live#reviews$/);
   await expect(report).toContainText('CSV');
