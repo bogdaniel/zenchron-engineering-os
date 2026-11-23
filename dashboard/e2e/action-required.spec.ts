@@ -94,13 +94,18 @@ test('Action Required omits an empty queue and reports an unavailable queue hone
   await expect(queue.getByRole('button', { name: 'Retry' })).toBeVisible();
 });
 
-test('Mock Overview never requests the Live Action Required projection', async ({ page }) => {
+test('Mock Overview never requests the Live Action Required projection', async ({ page }, testInfo) => {
   let requests = 0;
   await page.route('**/api/v1/action-required', (route) => {
     requests += 1;
     return route.fulfill(json([]));
   });
-  await page.goto('/?mode=mock#overview');
+  const preview = new URL(testInfo.project.use.baseURL ?? 'http://127.0.0.1:4173');
+  preview.hostname = '127.0.0.1';
+  preview.pathname = '/';
+  preview.searchParams.set('mode', 'mock');
+  preview.hash = 'overview';
+  await page.goto(preview.toString());
   await expect(page.getByRole('region', { name: 'Action Required' })).toHaveCount(0);
   expect(requests).toBe(0);
 });
