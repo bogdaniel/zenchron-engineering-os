@@ -44,12 +44,22 @@ type agentRunner struct {
 }
 
 func (runner *agentRunner) providerStatuses(ctx context.Context) []workerapi.ProviderStatus {
-	statuses := make([]workerapi.ProviderStatus, 0, len(runner.providers))
+	providers := make([]*cliProvider, 0, len(runner.providers))
 	for _, provider := range runner.providers {
 		if provider.path != "" {
-			statuses = append(statuses, provider.status(ctx))
+			providers = append(providers, provider)
 		}
 	}
+	statuses := make([]workerapi.ProviderStatus, len(providers))
+	var checks sync.WaitGroup
+	for i, provider := range providers {
+		checks.Add(1)
+		go func(index int, provider *cliProvider) {
+			defer checks.Done()
+			statuses[index] = provider.status(ctx)
+		}(i, provider)
+	}
+	checks.Wait()
 	slices.SortFunc(statuses, func(a, b workerapi.ProviderStatus) int { return strings.Compare(a.ID, b.ID) })
 	return statuses
 }

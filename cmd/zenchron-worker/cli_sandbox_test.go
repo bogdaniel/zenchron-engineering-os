@@ -52,6 +52,51 @@ func TestConfinementSelfTestRejectsASandboxThatDoesNotConfine(t *testing.T) {
 	}
 }
 
+func TestRunnerChecksProviderReadinessConcurrently(t *testing.T) {
+	directory := t.TempDir()
+	startedPath := filepath.Join(directory, "started")
+	releasePath := filepath.Join(directory, "release")
+	providers := map[string]*cliProvider{}
+	for _, id := range []string{workerapi.ProviderCodex, workerapi.ProviderClaude} {
+		path := filepath.Join(directory, id)
+		script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' '%s' >> '%s'\nwhile [ ! -e '%s' ]; do sleep 0.01; done\nprintf '{\"loggedIn\":true}\n'\n", id, startedPath, releasePath)
+		if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		provider := &cliProvider{id: id, path: path,
+			isReady: func(output []byte, err error) bool { return err == nil && strings.Contains(string(output), "loggedIn") }}
+		provider.setReadiness(true, true, "")
+		providers[id] = provider
+	}
+	defer os.WriteFile(releasePath, nil, 0o600)
+	runner := &agentRunner{providers: providers}
+	done := make(chan []workerapi.ProviderStatus, 1)
+	go func() { done <- runner.providerStatuses(context.Background()) }()
+
+	deadline := time.Now().Add(3 * time.Second)
+	bothStarted := false
+	for time.Now().Before(deadline) {
+		started, _ := os.ReadFile(startedPath)
+		if strings.Contains(string(started), workerapi.ProviderCodex) &&
+			strings.Contains(string(started), workerapi.ProviderClaude) {
+			bothStarted = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := os.WriteFile(releasePath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case statuses := <-done:
+		if !bothStarted || len(statuses) != 2 || !statuses[0].Ready || !statuses[1].Ready {
+			t.Fatalf("provider readiness was not checked concurrently and successfully: started=%t statuses=%#v", bothStarted, statuses)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("provider readiness checks did not finish after release")
+	}
+}
+
 func TestProviderRetriesIncompleteSandboxSelfTest(t *testing.T) {
 	directory := t.TempDir()
 	if err := os.WriteFile(filepath.Join(directory, "codex"), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
