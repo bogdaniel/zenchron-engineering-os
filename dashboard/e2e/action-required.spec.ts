@@ -18,10 +18,23 @@ function graph(id: string, unit: string, question: string, created: string, stat
   };
 }
 
-async function useLiveSession(page: Page, graphs: unknown[]) {
+function decisionAction(unit: string, question: string, graphID: string) {
+  return { id: `decision-${unit}`, kind: 'work_graph_decision', objective_id: objectiveID,
+    objective_title: 'Ship usage export', plan_revision: 1, graph_id: graphID, unit_key: unit,
+    stage: 'produce', unit_title: `Produce ${unit}`, run_id: `run-${unit}`, subject: question,
+    reason: 'Waiting for a person to choose.', options: ['allow', 'decline'] };
+}
+
+async function useLiveSession(page: Page, graphs: unknown[], actions?: unknown[]) {
   await page.route('**/api/v1/**', (route) => route.fulfill(json([])));
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
   await page.route('**/api/v1/work-graphs', (route) => route.fulfill(json(graphs)));
+  await page.route('**/api/v1/action-required', (route) => route.fulfill(json(actions ?? graphs.flatMap((item) => {
+    const current = item as { id: string; status: string; units: { key: string; }[]; messages: { body: string; from: string; type: string; }[] };
+    if (current.status === 'cancelled') return [];
+    return current.messages.filter((message) => message.type === 'decision_request')
+      .map((message) => decisionAction(message.from, message.body, current.id));
+  }))));
   await page.route('**/api/v1/objectives', (route) => route.fulfill(json([{
     id: objectiveID, title: 'Ship usage export', description: '', owner: 'Alex', product: '', product_id: '',
     status: 'in_progress', progress: 50, due_date: '', created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-02T00:00:00Z',
@@ -30,7 +43,7 @@ async function useLiveSession(page: Page, graphs: unknown[]) {
 }
 
 for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: 'mobile', width: 390, height: 844 }]) {
-  test(`Action Required opens the exact WorkGraph decision (${viewport.name})`, async ({ page }) => {
+  test(`Action Required opens the exact WorkGraph decision (${viewport.name})`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     await useLiveSession(page, [
       graph(currentGraphID, 'api-current', 'Which serialization should ship?', '2026-11-02T00:00:00Z'),
@@ -49,7 +62,7 @@ for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: '
     await expect(exactAction).toContainText('Options: allow · decline');
     await expect(exactAction).toContainText('Run run-api-old');
     await expect(exactAction).toHaveAttribute('href', new RegExp(`graph_id=${oldGraphID}.*decision=decision-api-old`));
-    await page.screenshot({ path: `test-results/action-required-${viewport.name}.png`, fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath(`action-required-${viewport.name}.png`), fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await exactAction.click();
     const decision = page.getByRole('form', { name: 'Decision for api-old' });
@@ -65,20 +78,31 @@ test('Action Required omits an empty queue and reports an unavailable queue hone
   const initialLoad = new Promise<void>((resolve) => { releaseInitialLoad = resolve; });
   let unavailable = false;
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
-  await page.route('**/api/v1/work-graphs', async (route) => {
+  await page.route('**/api/v1/action-required', async (route) => {
     if (unavailable) return route.fulfill({ status: 503, body: 'temporarily unavailable' });
     await initialLoad;
     return route.fulfill(json([]));
   });
   await page.goto('/?mode=live#overview');
   const queue = page.getByRole('region', { name: 'Action Required' });
-  await expect(queue).toContainText('Checking for human decisions…');
+  await expect(queue).toContainText('Checking for human actions…');
   releaseInitialLoad();
   await expect(queue).toHaveCount(0);
   unavailable = true;
   await page.reload();
-  await expect(queue).toContainText('WorkGraph actions unavailable (503)');
+  await expect(queue).toContainText('Human actions unavailable (503)');
   await expect(queue.getByRole('button', { name: 'Retry' })).toBeVisible();
+});
+
+test('Mock Overview never requests the Live Action Required projection', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/api/v1/action-required', (route) => {
+    requests += 1;
+    return route.fulfill(json([]));
+  });
+  await page.goto('/?mode=mock#overview');
+  await expect(page.getByRole('region', { name: 'Action Required' })).toHaveCount(0);
+  expect(requests).toBe(0);
 });
 
 test('Action Required leaves absent decision details unknown', async ({ page }) => {
@@ -87,14 +111,45 @@ test('Action Required leaves absent decision details unknown', async ({ page }) 
   partial.messages[0].body = '';
   partial.messages[0].notes = [];
   partial.messages[0].run_id = '';
-  await useLiveSession(page, [partial]);
+  const action = decisionAction('api-partial', '', currentGraphID);
+  action.reason = '';
+  action.options = [];
+  action.run_id = '';
+  await useLiveSession(page, [partial], [action]);
   await page.goto('/?mode=live#overview');
-  const action = page.getByRole('region', { name: 'Action Required' }).getByRole('link');
-  await expect(action).toContainText('Subject not recorded');
-  await expect(action).toContainText('Waiting reason: Not recorded');
-  await expect(action).toContainText('Options not recorded');
-  await expect(action).toContainText('Run not recorded');
+  const actionLink = page.getByRole('region', { name: 'Action Required' }).getByRole('link');
+  await expect(actionLink).toContainText('Subject not recorded');
+  await expect(actionLink).toContainText('Waiting reason: Not recorded');
+  await expect(actionLink).toContainText('Options not recorded');
+  await expect(actionLink).toContainText('Run not recorded');
 });
+
+for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: 'mobile', width: 390, height: 844 }]) {
+  test(`Action Required links to the current proposed plan (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const plan = { objective_id: objectiveID, revision: 3, status: 'proposed', project_id: 'repository',
+      summary: 'Prepare and review the usage export', max_parallel: 1, units: [], problems: [], created_at: '2026-11-03T00:00:00Z' };
+    const planAction = { id: `plan:${objectiveID}:3`, kind: 'plan_approval', objective_id: objectiveID,
+      objective_title: 'Ship usage export', plan_revision: 3, stage: 'Plan approval', unit_title: '', run_id: '',
+      subject: plan.summary, reason: 'This proposed revision needs approval before work can start.', options: [] };
+    await useLiveSession(page, [], [planAction]);
+    await page.route(`**/api/v1/objectives/${objectiveID}/plans`, (route) => route.fulfill(json([plan])));
+    await page.goto('/?mode=live#overview');
+    const queue = page.getByRole('region', { name: 'Action Required' });
+    const action = queue.getByRole('link');
+    await expect(queue).toContainText('1 waiting');
+    await expect(action).toContainText('Plan revision 3 · Plan approval');
+    await expect(action).toContainText('Plan subject · Prepare and review the usage export');
+    await expect(action).toContainText('Available action: review the plan and approve it in Objective Workspace');
+    await expect(action).toContainText('WorkUnit not started · Run not started');
+    await expect(action).toHaveAttribute('href', new RegExp(`objective=${objectiveID}.*tab=plan`));
+    await page.screenshot({ path: testInfo.outputPath(`action-required-plan-${viewport.name}.png`), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await action.click();
+    await expect(page.getByRole('button', { name: 'Approve plan and start' })).toBeVisible();
+    await expect(page.getByText(plan.summary)).toBeVisible();
+  });
+}
 
 test('Action Required deep links stay selected until their action is complete', async ({ page }) => {
   await useLiveSession(page, [graph(cancelledGraphID, 'api-cancelled', 'Old graph decision', '2026-11-02T00:00:00Z', 'cancelled')]);

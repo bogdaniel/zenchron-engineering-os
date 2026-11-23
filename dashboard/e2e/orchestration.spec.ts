@@ -505,6 +505,14 @@ test('an objective plan approved in the dashboard runs through decision, review,
   const readiness = panel.getByRole('status', { name: 'CLI readiness for revision 1' });
   await expect(readiness).toContainText('codex-cli not ready');
   await expect(readiness).toContainText('runs wait until ready');
+  await page.goto('/?mode=live#overview');
+  const pendingPlan = page.getByRole('region', { name: 'Action Required' }).getByRole('link');
+  await expect(pendingPlan).toContainText('Plan revision 1 · Plan approval');
+  await expect(pendingPlan).toContainText('Plan subject');
+  await expect(pendingPlan).toContainText('WorkUnit not started · Run not started');
+  await expect(pendingPlan).toHaveAttribute('href', new RegExp(`objective=${created.objectiveID}.*tab=plan`));
+  await pendingPlan.click();
+  await expect(page.getByRole('button', { name: 'Approve plan and start' })).toBeVisible();
   await panel.getByRole('button', { name: 'Approve plan and start' }).click();
   const units = panel.getByRole('list', { name: 'Work units' });
   await expect(units.getByRole('listitem')).toHaveCount(4);
