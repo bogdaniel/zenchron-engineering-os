@@ -39,9 +39,10 @@ The local `status` command and Settings / System Update page read the same persi
 that record is the last count observed during an updater drain, not a live idle check. The live count endpoint requires
 the managed supervisor's process-local token; there is no supported operator command to obtain that token. The
 supervisor uses the endpoint internally to close admission and drain active or publishing runs before an update or
-graceful shutdown. Do not force-stop the service if graceful shutdown cannot complete. The dashboard reconnects to
-update progress, keeps Mock isolated from the API, and automatically reloads only after it observes a new running
-revision.
+graceful shutdown. Do not force-stop the service if graceful shutdown cannot complete. If the live status API is
+unavailable, `zenchron-engineering status` reports that and falls back to the persisted status file; after requesting
+a check, confirm `last_attempt` advanced before treating that file as the result. The dashboard reconnects to update
+progress, keeps Mock isolated from the API, and automatically reloads only after it observes a new running revision.
 
 ## Feature diagram
 
