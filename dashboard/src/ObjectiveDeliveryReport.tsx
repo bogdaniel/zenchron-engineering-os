@@ -44,6 +44,7 @@ type Report = z.infer<typeof reportSchema>;
 const unknownEvidenceLabels: Record<string, string> = {
   candidate_tree_sha: 'candidate tree SHA',
   candidate_checks: 'GitHub checks for the integrated candidate',
+  policy_backed_assurance: 'independent policy-backed assurance',
   publication_authority: 'publication authority',
   pull_request_external_state: 'current pull request state',
 };

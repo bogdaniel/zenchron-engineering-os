@@ -135,7 +135,8 @@ for (const viewport of viewports) {
       measurements: { unit_count: 0, run_count: 0, attempt_count: 0, failed_attempts: 0, review_rounds: 0, findings: 0,
         remediation_passes: 0, decisions_requested: 0, decisions_resolved: 0, human_actions: 0,
         human_actions_complete: false, max_concurrency: 0, runs_with_usage: 0, runs_with_cost: 0, unknown: [] },
-      unknown_evidence: ['publication_authority'], pull_request_url: 'https://github.com/acme/platform/pull/23',
+      unknown_evidence: ['policy_backed_assurance', 'publication_authority'],
+      pull_request_url: 'https://github.com/acme/platform/pull/23',
       pull_request_external_state: { number: 23, state: 'open', draft: true, merged: false,
         head_sha: 'd'.repeat(40), candidate_matches_head: false, observed_at: now,
         candidate_checks: { head_sha: 'c'.repeat(40), observed_at: now,
@@ -149,7 +150,9 @@ for (const viewport of viewports) {
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('differs from the integrated candidate');
     await expect(report.getByLabel('Observed GitHub pull request state')).toContainText('observed');
     await expect(report.getByLabel('GitHub checks for integrated candidate')).toContainText('go · completed · success');
-    await expect(report).toContainText('Unknown evidence: publication authority');
+    await expect(report).toContainText([
+      'Unknown evidence: independent policy-backed assurance', 'publication authority',
+    ].join(', '));
     expect(await noHorizontalScroll(page)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`delivery-report-${viewport.name}.png`), fullPage: true });
   });
@@ -504,7 +507,10 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(report).toContainText('E2E CSV specialist v1');
   await expect(report).toContainText('codex-cli');
   await expect(report).toContainText('Worker-reported verification: not_configured');
-  await expect(report).toContainText('Unknown evidence: GitHub checks for the integrated candidate, publication authority, current pull request state');
+  await expect(report).toContainText([
+    'Unknown evidence: GitHub checks for the integrated candidate', 'independent policy-backed assurance',
+    'publication authority', 'current pull request state',
+  ].join(', '));
   await expect(report.locator('.objective-delivery-run').filter({ hasText: /Tree/ }).first()).toBeVisible();
   await expect(report.locator('a[href$="#reviews"]').first()).toHaveAttribute('href', /^\/\?run=.+&mode=live#reviews$/);
   await expect(report).toContainText('CSV');

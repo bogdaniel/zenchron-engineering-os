@@ -44,7 +44,8 @@ flowchart LR
   names and versions, provider, candidate commit and its Git tree SHA when reported, worker-reported verification,
   review verdict, publication state, PR link, attempts, and failures. Tree evidence is considered known only when the
   successful integration run's tree accompanies the selected candidate commit. Verification belongs to that run; it
-  is not an independent assurance record.
+  is not an independent assurance record. `unknown_evidence` includes `policy_backed_assurance` because the current
+  WorkGraph has no authoritative policy-backed assurance record bound to a candidate.
   Handoffs, decisions and unresolved steps are shown from immutable WorkGraph messages and state.
 - `unknown_evidence` names evidence the available sources cannot establish. Candidate tree SHA remains unknown until a
   successful integration run records it for the selected candidate. Publication authority remains unknown. Current PR

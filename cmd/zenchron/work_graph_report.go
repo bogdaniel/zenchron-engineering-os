@@ -273,7 +273,8 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 		WorkflowMode: graph.WorkflowMode,
 		Status:       graph.Status, Units: make([]reportUnit, 0, len(graph.Units)), Handoffs: []reportHandoff{},
 		Decisions: []reportDecision{}, Outstanding: []reportOutstanding{},
-		UnknownEvidence: []string{"candidate_tree_sha", "candidate_checks", "publication_authority", "pull_request_external_state"}}
+		UnknownEvidence: []string{"candidate_tree_sha", "candidate_checks", "policy_backed_assurance", "publication_authority",
+			"pull_request_external_state"}}
 	if plan != nil {
 		report.ApprovedPlan = reportPlan{Revision: plan.Revision, Status: plan.Status, Hash: plan.Hash, Summary: plan.Summary,
 			ApprovedBy: plan.ApprovedBy, ApprovedAt: plan.ApprovedAt}

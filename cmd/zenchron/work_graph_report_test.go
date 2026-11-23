@@ -189,7 +189,7 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 		len(review.RunIDs) != 2 || review.Attempts != 2 || !slices.Equal(review.Providers, []string{workerapi.ProviderCodex}) {
 		t.Fatalf("ui unit = %#v, review unit = %#v", uiUnit, review)
 	}
-	if !slices.Equal(report.UnknownEvidence, []string{"publication_authority"}) {
+	if !slices.Equal(report.UnknownEvidence, []string{"policy_backed_assurance", "publication_authority"}) {
 		t.Fatalf("unrecorded evidence = %v", report.UnknownEvidence)
 	}
 	if report.PullRequest == nil || report.PullRequest.State != "open" || !report.PullRequest.Draft || report.PullRequest.Merged ||
@@ -278,6 +278,9 @@ func TestWorkGraphReportOmitsWhatWasNotRecorded(t *testing.T) {
 	report, body := harness.deliveryReport(started.ID)
 	if report.Status != before.Status || report.Status == graphCompleted || report.PullRequestURL != "" {
 		t.Fatalf("report of an unfinished graph = %s", body)
+	}
+	if !slices.Contains(report.UnknownEvidence, "policy_backed_assurance") {
+		t.Fatalf("report implied policy-backed assurance without a recorded authority: %v", report.UnknownEvidence)
 	}
 	for _, omitted := range []string{"wall_clock_seconds", "input_tokens", "output_tokens", "cost_usd", "pull_request_url",
 		supervisionMinutes, "candidate", "verdict"} {
