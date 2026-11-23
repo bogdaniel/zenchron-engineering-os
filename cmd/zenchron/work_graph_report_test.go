@@ -169,7 +169,9 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
 		Verification: workerapi.VerificationPassed, Result: string(merged)})
 	harness.verdict(harness.claimUnit("review-all"), commit(4), `{"review":{"verdict":"accept"}}`)
-	harness.report(harness.claimUnit("integrate"), workerapi.AgentRunResult{CommitSHA: commit(4), CommitTreeSHA: commit(5), BaseCommit: commit(9),
+	harness.authorizePublication(integration.ID, commit(4))
+	publication := harness.claimUnit("integrate")
+	harness.report(publication, workerapi.AgentRunResult{CommitSHA: commit(4), CommitTreeSHA: commit(5), BaseCommit: commit(9),
 		Output: "Merged.", Verification: workerapi.VerificationPassed, BranchPushed: true, Result: string(merged)})
 	harness.pullHead = commit(4)
 
@@ -186,8 +188,8 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	counts := []int{measured.UnitCount, measured.RunCount, measured.AttemptCount, measured.FailedAttempts, measured.ReviewRounds,
 		measured.Findings, measured.RemediationPasses, measured.DecisionsRequested, measured.DecisionsResolved,
 		measured.HumanActions, measured.MaxConcurrency}
-	// 5 units; 6 runs (the blocked review is followed by a second review run); 8 attempts (api 2, integrate 2).
-	if want := []int{5, 6, 8, 0, 3, 1, 1, 0, 0, 1, 2}; !slices.Equal(counts, want) {
+	// 5 units; 6 runs; 8 attempts; one explicit publication authorization in addition to plan approval.
+	if want := []int{5, 6, 8, 0, 3, 1, 1, 0, 0, 2, 2}; !slices.Equal(counts, want) {
 		t.Fatalf("measurements = %v, want %v: %s", counts, want, body)
 	}
 	if measured.WallClockSeconds == nil || *measured.WallClockSeconds <= 0 ||
@@ -219,7 +221,9 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 		len(review.Executions) != 2 || review.Executions[0].BaseCommit != commit(1) || review.Executions[1].BaseCommit != commit(3) {
 		t.Fatalf("ui unit = %#v, review unit = %#v", uiUnit, review)
 	}
-	if !slices.Equal(report.UnknownEvidence, []string{"policy_backed_assurance", "publication_authority"}) {
+	if !slices.Equal(report.UnknownEvidence, []string{"policy_backed_assurance"}) || report.PublicationAuthority == nil ||
+		report.PublicationAuthority.By != localOperator || report.PublicationAuthority.CommitSHA != commit(4) ||
+		report.PublicationAuthority.SourceRunID != integration.ID {
 		t.Fatalf("unrecorded evidence = %v", report.UnknownEvidence)
 	}
 	if report.PullRequest == nil || report.PullRequest.State != "open" || !report.PullRequest.Draft || report.PullRequest.Merged ||

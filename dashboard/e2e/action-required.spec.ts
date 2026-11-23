@@ -12,7 +12,8 @@ function graph(id: string, unit: string, question: string, created: string, stat
     status, project_name: 'platform', base_branch: 'main', max_parallel: 1,
     created_at: created, updated_at: created,
     units: [{ key: unit, kind: 'produce', title: `Produce ${unit}`, instructions: '', acceptance: [], depends_on: [],
-      capabilities: [], agent_id: 'a'.repeat(32), state: 'blocked', reason: 'Waiting for a person to choose.', run_ids: [] }],
+      capabilities: [], agent_id: 'a'.repeat(32), state: 'blocked', reason: 'Waiting for a person to choose.',
+      run_ids: [] as string[], candidate: '', publication_authorization_required: false }],
     messages: [{ id: `decision-${unit}`, type: 'decision_request', from: unit, run_id: `run-${unit}`,
       body: question, notes: ['allow', 'decline'], created_at: created }],
   };
@@ -23,6 +24,14 @@ function decisionAction(unit: string, question: string, graphID: string) {
     objective_title: 'Ship usage export', plan_revision: 1, graph_id: graphID, unit_key: unit,
     stage: 'produce', unit_title: `Produce ${unit}`, run_id: `run-${unit}`, subject: question,
     reason: 'Waiting for a person to choose.', options: ['allow', 'decline'] };
+}
+
+function publicationAction(graphID: string, candidate: string) {
+  return { id: `publication:${graphID}:${candidate}`, kind: 'publication_authorization', objective_id: objectiveID,
+    objective_title: 'Ship usage export', plan_revision: 2, graph_id: graphID, unit_key: 'integrate',
+    stage: 'Publication authorization', unit_title: 'Integrate candidate', run_id: 'run-integrate', subject: candidate,
+    reason: 'The current candidate passed its assigned independent review; a person must authorize PR creation.',
+    options: ['Authorize pull request creation'] };
 }
 
 async function useLiveSession(page: Page, graphs: unknown[], actions?: unknown[]) {
@@ -70,6 +79,38 @@ for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: '
     await expect(decision.getByText('Should this export include archived records?')).toBeVisible();
     await expect(page.getByText('Which serialization should ship?')).toHaveCount(0);
     await expect(page.getByRole('textbox', { name: 'Decision for api-old' })).toBeFocused();
+  });
+}
+
+for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: 'mobile', width: 390, height: 844 }]) {
+  test(`Action Required opens exact reviewed-candidate authorization (${viewport.name})`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    const current = graph(currentGraphID, 'integrate', '', '2026-11-02T00:00:00Z', 'active');
+    current.units = [{ ...current.units[0], kind: 'integrate', title: 'Integrate candidate', state: 'waiting',
+      reason: 'A person must authorize pull request creation for this reviewed candidate.', run_ids: ['run-integrate'],
+      candidate: 'd'.repeat(40), publication_authorization_required: true }];
+    current.messages = [];
+    await useLiveSession(page, [current], [publicationAction(currentGraphID, 'd'.repeat(40))]);
+    await page.goto('/?mode=live#overview');
+    const action = page.getByRole('region', { name: 'Action Required' }).getByRole('link');
+    await expect(action).toContainText('Publication authorization');
+    await expect(action).toContainText('d'.repeat(40));
+    await expect(action).toContainText('authorize PR creation for this exact candidate');
+    await expect(action).toHaveAttribute('href', new RegExp(`graph_id=${currentGraphID}.*publication_graph=${currentGraphID}`));
+    await action.click();
+    await expect(page).toHaveURL(new RegExp(`#objectives$`));
+    await expect(page.getByRole('region', { name: 'Work graph for Ship usage export' })).toBeVisible();
+    const authorize = page.getByRole('button', { name: `Authorize PR creation for ${'d'.repeat(7)}` });
+    await expect(authorize).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath(`publication-authorization-${viewport.name}.png`), fullPage: true });
+    let authorizationBody: unknown;
+    await page.route('**/api/v1/agent-runs/run-integrate/publish', (route) => {
+      authorizationBody = route.request().postDataJSON();
+      return route.fulfill({ status: 202 });
+    });
+    await authorize.click();
+    await expect.poll(() => authorizationBody).toEqual({ candidate_sha: 'd'.repeat(40) });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }
 

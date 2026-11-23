@@ -230,6 +230,7 @@ func (graph *workGraph) frontier(runs map[string]agentRun, publishable bool) []u
 		// A reviewed candidate is published by another pass of its run; a push that failed is tried again,
 		// for as long as the run has attempts.
 		case publishable && unit.Candidate != "" && graph.reviewed(unit, runs) &&
+			graph.publicationAuthorized(run, unit.Candidate) &&
 			(!run.PullRequestEnabled || run.Publication == publicationPushFailed):
 			actions = append(actions, unitAction{unit.Key, actionPublish})
 		}
@@ -242,6 +243,49 @@ func (graph *workGraph) reviewed(unit *workUnit, runs map[string]agentRun) bool 
 	return !slices.ContainsFunc(graph.reviewersOf(unit.Key), func(reviewer *workUnit) bool {
 		return !graph.settled(reviewer, runs)
 	})
+}
+
+func (graph *workGraph) publicationAuthorized(run agentRun, candidate string) bool {
+	return slices.ContainsFunc(run.PublicationAuthorizations, func(authorization publicationAuthorization) bool {
+		return authorization.CommitSHA == candidate && authorization.GraphID == graph.ID &&
+			authorization.PlanRevision == graph.PlanRevision && authorization.PlanHash == graph.PlanHash
+	})
+}
+
+// publicationBinding returns the plan contract for a current, independently reviewed candidate.
+func (store *workGraphStore) publicationBinding(run agentRun, candidate string) (int, int, string, bool) {
+	if run.GraphID == "" || run.UnitKey == "" || run.CommitSHA != candidate || store.runs == nil {
+		return 0, 0, "", false
+	}
+	runs := store.runs.unitRuns(run.GraphID)
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	graph := store.graphs[run.GraphID]
+	if graph == nil || graph.Status == graphCancelled {
+		return 0, 0, "", false
+	}
+	unit := graph.unit(run.UnitKey)
+	if unit == nil || unit.Kind != unitIntegrate || unit.Candidate != candidate || len(graph.reviewersOf(unit.Key)) == 0 {
+		return 0, 0, "", false
+	}
+	current, exists := graph.current(unit, runs)
+	if !exists || current.ID != run.ID || !graph.producersSettled(runs) || !graph.reviewed(unit, runs) {
+		return 0, 0, "", false
+	}
+	return graph.Revision, graph.PlanRevision, graph.PlanHash, true
+}
+
+// publicationReady requires the stored authorization to match this candidate's approved plan contract.
+func (store *workGraphStore) publicationReady(run agentRun, candidate string) bool {
+	_, planRevision, planHash, ready := store.publicationBinding(run, candidate)
+	if !ready {
+		return false
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	graph := store.graphs[run.GraphID]
+	return graph != nil && graph.PlanRevision == planRevision && graph.PlanHash == planHash &&
+		graph.publicationAuthorized(run, candidate)
 }
 
 // perform executes one frontier action through the run store and reports whether a run became active.
@@ -320,7 +364,6 @@ func (store *workGraphStore) newUnitRun(graph *workGraph, unit *workUnit, runs m
 		// The pull request is named after the objective. A reviewed candidate is published only after
 		// its review, by a second pass of this run.
 		item.Prompt = truncateUTF8(graph.ObjectiveTitle, 5000)
-		item.PullRequestEnabled = store.runs.publishable(graph.Repository) && len(graph.reviewersOf(unit.Key)) == 0
 	default:
 		var exists bool
 		if graph.PlanRevision > 0 && graph.PlanRevision <= len(store.plans[graph.ObjectiveID]) {
@@ -385,6 +428,10 @@ func (graph *workGraph) project(runs map[string]agentRun, publishable bool) {
 func (graph *workGraph) unitState(unit *workUnit, runs map[string]agentRun, publishable bool) (string, string) {
 	run, started := graph.current(unit, runs)
 	_, undecided := graph.openDecision(unit.Key)
+	unit.PublicationAuthorizationRequired = unit.Kind == unitIntegrate && started && publishable &&
+		unit.Candidate != "" && graph.producersSettled(runs) && !graph.integrationDue(unit) &&
+		len(graph.reviewersOf(unit.Key)) > 0 && graph.reviewed(unit, runs) &&
+		!graph.publicationAuthorized(run, unit.Candidate) && run.PullRequestURL == ""
 	switch {
 	case unit.Failure != "":
 		return unitFailed, unit.Failure
@@ -423,8 +470,10 @@ func (graph *workGraph) integrationState(unit *workUnit, run agentRun, runs map[
 		return unitWaiting, "Creating the pull request."
 	case run.PullRequestEnabled:
 		return unitBlocked, cmp.Or(run.PullRequestError, "The pull request was not created.")
+	case publishable && len(graph.reviewersOf(unit.Key)) == 0:
+		return unitCompleted, "No independent reviewer is assigned; publication is unavailable."
 	case publishable:
-		return unitWaiting, "Waiting to publish the reviewed candidate."
+		return unitWaiting, "A person must authorize pull request creation for this reviewed candidate."
 	}
 	return unitCompleted, "GitHub publication is not configured; the integrated candidate is on a local branch."
 }

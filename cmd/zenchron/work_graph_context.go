@@ -90,10 +90,11 @@ func (store *workGraphStore) publishCommit(run agentRun) string {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	graph := store.graphs[run.GraphID]
-	if graph == nil || graph.unit(run.UnitKey) == nil {
+	if graph == nil || graph.unit(run.UnitKey) == nil || graph.unit(run.UnitKey).Candidate != run.CommitSHA ||
+		!graph.publicationAuthorized(run, run.CommitSHA) {
 		return ""
 	}
-	return graph.unit(run.UnitKey).Candidate
+	return run.CommitSHA
 }
 
 // inbox renders the admitted messages a unit must act on: the latest handoff of each unit it depends

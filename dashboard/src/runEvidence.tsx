@@ -10,6 +10,8 @@ export const runEvidenceFields = {
   issue_url: z.string().optional(), base_commit: z.string().optional(), provider: z.string().optional(),
   provider_version: z.string().optional(), termination_reason: z.string().optional(),
   verification: z.string().optional(), publication: z.string().optional(),
+  publication_authorizations: z.array(z.object({ commit_sha: z.string(), by: z.string(), at: z.string(), attempt: z.number() }))
+    .optional(),
   usage: z.object({ input_tokens: z.number(), output_tokens: z.number(), cost_usd: z.number().optional() }).optional(),
   attempt_log: z.array(z.object({
     attempt: z.number(), worker_id: z.string(), started_at: z.string(), finished_at: z.string().optional(),
@@ -26,6 +28,7 @@ export const runEvidenceFields = {
 };
 const evidenceRunSchema = z.object({
   id: z.string(), status: z.string(), worker_name: z.string(), branch: z.string(), commit_sha: z.string().optional(),
+  graph_id: z.string().optional(),
   pull_request_number: z.number().optional(), pull_request_url: z.string().optional(), ...runEvidenceFields,
 });
 type EvidenceRun = z.infer<typeof evidenceRunSchema>;
@@ -85,6 +88,7 @@ async function loadJSON<T>(path: string, schema: z.ZodType<T>, label: string) {
 const labels: Record<string, string> = {
   passed: 'Passed', failed: 'Failed', not_configured: 'Not configured on the worker', published: 'Pull request published',
   push_failed: 'Branch push failed', pull_request_failed: 'Branch pushed; pull request not created',
+  awaiting_authorization: 'Awaiting human publication authorization',
   no_changes: 'No changes to publish', completed: 'Completed', provider_exit: 'Provider reported a failure',
   wall_clock_timeout: 'Wall-clock limit reached', inactivity_timeout: 'Inactivity limit reached',
   tool_timeout: 'Tool-activity limit reached', cancelled: 'Cancelled', lease_lost: 'Worker lease lost',
@@ -135,27 +139,41 @@ export function RunEvidence({ run }: { run: EvidenceRun }) {
   if (pullRequest.data?.review_stage) facts.push(['Human review', reviewStageLabels[pullRequest.data.review_stage]]);
   if (pullRequest.data?.merge_blocked_by_review) facts.push(['Merge status', 'Blocked by an outstanding change request']);
   if (run.pull_request_number !== undefined) facts.push(['Review and CI', outstanding(checks, reviews)]);
+  const publicationAuthorization = run.publication_authorizations?.find((item) => item.commit_sha === run.commit_sha);
+  if (publicationAuthorization) facts.push(['Publication authorized',
+    `${publicationAuthorization.by} · ${new Date(publicationAuthorization.at).toLocaleString()} · ${shortCommit(publicationAuthorization.commit_sha)}`]);
   const queryClient = useQueryClient();
   const followUp = useMutation({
     mutationFn: async (action: 'sync-reviews' | 'publish') => {
-      const response = await fetch(`/api/v1/agent-runs/${run.id}/${action}`, { method: 'POST' });
+      const response = await fetch(`/api/v1/agent-runs/${run.id}/${action}`, action === 'publish'
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ candidate_sha: run.commit_sha }) } : { method: 'POST' });
       if (!response.ok) throw new Error((await response.text()).trim() || `Request failed (${response.status})`);
-      if (action === 'publish') return 'Pull request published.';
+      if (action === 'publish') return response.status === 202
+        ? 'Authorization recorded; the worker will prepare the exact candidate.' : 'Pull request created.';
       const result = syncReviewsResultSchema.parse(await response.json());
       return result.imported ? `Imported ${result.imported} change request${result.imported === 1 ? '' : 's'} from GitHub.`
         : 'No new change requests on GitHub.';
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent-runs'] }),
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['agent-runs'] }),
+      queryClient.invalidateQueries({ queryKey: ['work-graphs'] }),
+      queryClient.invalidateQueries({ queryKey: ['action-required'] }),
+      queryClient.invalidateQueries({ queryKey: ['work-graph-report'] }),
+    ]),
   });
   const attempts = run.attempt_log ?? [];
   return <div className="run-evidence">
     <dl className="run-evidence-facts" aria-label="Run evidence summary">
       {facts.map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}
     </dl>
-    {!active && (run.pull_request_number !== undefined || run.publication === 'pull_request_failed') && (
+    {!active && (run.pull_request_number !== undefined || run.publication === 'pull_request_failed'
+      || run.publication === 'awaiting_authorization') && (
       <div className="run-evidence-actions">
-        {run.publication === 'pull_request_failed' && <Button size="compact-xs" variant="default"
-          loading={followUp.isPending} onClick={() => followUp.mutate('publish')}>Retry pull request</Button>}
+        {(run.publication === 'pull_request_failed' || run.publication === 'awaiting_authorization') && <Button size="compact-xs" variant="default"
+          disabled={!run.commit_sha} loading={followUp.isPending} onClick={() => followUp.mutate('publish')}>
+          {run.publication === 'awaiting_authorization' ? `Authorize PR creation for ${shortCommit(run.commit_sha)}`
+            : 'Retry authorized pull request'}</Button>}
         {run.pull_request_number !== undefined && <Button size="compact-xs" variant="default"
           loading={followUp.isPending} onClick={() => followUp.mutate('sync-reviews')}>Import change requests from GitHub</Button>}
         {followUp.isError && <span role="alert">{followUp.error.message}</span>}

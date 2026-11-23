@@ -26,11 +26,14 @@ const sampleGraph: WorkGraph = {
   revision: 9, status: 'blocked', project_name: 'Nova Platform', base_branch: 'main', max_parallel: 2,
   created_at: at, updated_at: at,
   units: [
-    { ...sampleUnits[0], agent_name: 'Test Generator', state: 'completed', run_ids: ['sample-run-1'], candidate: '3f9a1c27d0' },
+    { ...sampleUnits[0], agent_name: 'Test Generator', state: 'completed', run_ids: ['sample-run-1'], candidate: '3f9a1c27d0',
+      publication_authorization_required: false },
     { ...sampleUnits[1], agent_name: 'Release Manager', state: 'blocked', reason: 'Waiting for a decision from a person.',
-      run_ids: ['sample-run-2'] },
-    { ...sampleUnits[2], agent_name: 'Code Reviewer', state: 'completed', run_ids: ['sample-run-3', 'sample-run-4'], verdict: 'accept' },
-    { ...sampleUnits[3], state: 'waiting', reason: 'Waiting for every produced candidate to be admitted.', run_ids: [] },
+      run_ids: ['sample-run-2'], publication_authorization_required: false },
+    { ...sampleUnits[2], agent_name: 'Code Reviewer', state: 'completed', run_ids: ['sample-run-3', 'sample-run-4'],
+      verdict: 'accept', publication_authorization_required: false },
+    { ...sampleUnits[3], state: 'waiting', reason: 'Waiting for every produced candidate to be admitted.', run_ids: [],
+      publication_authorization_required: false },
   ],
   messages: [
     message(1, { type: 'handoff', from: 'api', commit: '81c0de4', body: 'Added the usage endpoint with a table test.' }),

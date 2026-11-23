@@ -32,42 +32,45 @@ const (
 	publicationPushFailed        = "push_failed"
 	publicationPullRequestFailed = "pull_request_failed"
 	publicationNoChanges         = "no_changes"
+	publicationAwaitingAuthority = "awaiting_authorization"
 )
 
 // ponytail: 64 MiB run-state ceiling; externalize large run fields before increasing run or field limits.
 
 type agentRun struct {
-	ID                 string            `json:"id"`
-	AgentID            string            `json:"agent_id"`
-	AgentName          string            `json:"agent_name"`
-	ProjectID          string            `json:"project_id"`
-	ProjectName        string            `json:"project_name"`
-	Branch             string            `json:"branch"`
-	BaseBranch         string            `json:"base_branch,omitempty"`
-	CommitSHA          string            `json:"commit_sha,omitempty"`
-	CommitTreeSHA      string            `json:"commit_tree_sha,omitempty"`
-	DiffAttempt        int               `json:"diff_attempt,omitempty"`
-	DiffAvailable      bool              `json:"diff_available,omitempty"`
-	DiffTruncated      bool              `json:"diff_truncated,omitempty"`
-	CanRequestChanges  bool              `json:"can_request_changes,omitempty"`
-	PullRequestEnabled bool              `json:"pull_request_enabled,omitempty"`
-	PullRequestURL     string            `json:"pull_request_url,omitempty"`
-	PullRequestNumber  int               `json:"pull_request_number,omitempty"`
-	PullRequestError   string            `json:"pull_request_error,omitempty"`
-	Repository         string            `json:"repository,omitempty"`
-	IssueNumber        int               `json:"issue_number,omitempty"`
-	IssueTitle         string            `json:"issue_title,omitempty"`
-	IssueURL           string            `json:"issue_url,omitempty"`
-	IssueContext       string            `json:"issue_context,omitempty"`
-	BaseCommit         string            `json:"base_commit,omitempty"`
-	Provider           string            `json:"provider,omitempty"`
-	ProviderVersion    string            `json:"provider_version,omitempty"`
-	TerminationReason  string            `json:"termination_reason,omitempty"`
-	Verification       string            `json:"verification,omitempty"`
-	Publication        string            `json:"publication,omitempty"`
-	Usage              *workerapi.Usage  `json:"usage,omitempty"`
-	AttemptLog         []agentRunAttempt `json:"attempt_log,omitempty"`
-	ImportedReviewID   int64             `json:"imported_review_id,omitempty"`
+	ID                        string                     `json:"id"`
+	AgentID                   string                     `json:"agent_id"`
+	AgentName                 string                     `json:"agent_name"`
+	ProjectID                 string                     `json:"project_id"`
+	ProjectName               string                     `json:"project_name"`
+	Branch                    string                     `json:"branch"`
+	BaseBranch                string                     `json:"base_branch,omitempty"`
+	CommitSHA                 string                     `json:"commit_sha,omitempty"`
+	CommitTreeSHA             string                     `json:"commit_tree_sha,omitempty"`
+	DiffAttempt               int                        `json:"diff_attempt,omitempty"`
+	DiffAvailable             bool                       `json:"diff_available,omitempty"`
+	DiffTruncated             bool                       `json:"diff_truncated,omitempty"`
+	CanRequestChanges         bool                       `json:"can_request_changes,omitempty"`
+	PullRequestEnabled        bool                       `json:"pull_request_enabled,omitempty"`
+	PullRequestURL            string                     `json:"pull_request_url,omitempty"`
+	PullRequestNumber         int                        `json:"pull_request_number,omitempty"`
+	PullRequestError          string                     `json:"pull_request_error,omitempty"`
+	BranchPushed              bool                       `json:"branch_pushed,omitempty"`
+	PublicationAuthorizations []publicationAuthorization `json:"publication_authorizations,omitempty"`
+	Repository                string                     `json:"repository,omitempty"`
+	IssueNumber               int                        `json:"issue_number,omitempty"`
+	IssueTitle                string                     `json:"issue_title,omitempty"`
+	IssueURL                  string                     `json:"issue_url,omitempty"`
+	IssueContext              string                     `json:"issue_context,omitempty"`
+	BaseCommit                string                     `json:"base_commit,omitempty"`
+	Provider                  string                     `json:"provider,omitempty"`
+	ProviderVersion           string                     `json:"provider_version,omitempty"`
+	TerminationReason         string                     `json:"termination_reason,omitempty"`
+	Verification              string                     `json:"verification,omitempty"`
+	Publication               string                     `json:"publication,omitempty"`
+	Usage                     *workerapi.Usage           `json:"usage,omitempty"`
+	AttemptLog                []agentRunAttempt          `json:"attempt_log,omitempty"`
+	ImportedReviewID          int64                      `json:"imported_review_id,omitempty"`
 	// CreatedBy is the GitHub login that started the run under an access policy.
 	CreatedBy string `json:"created_by,omitempty"`
 	// Checks and GitHubReviews are what GitHub webhooks reported for the published commit and pull request.
@@ -148,6 +151,7 @@ func (store *agentRunStore) update(runID string, change func(item *agentRun) (in
 	}
 	item := previous
 	item.AttemptLog = slices.Clone(previous.AttemptLog)
+	item.PublicationAuthorizations = slices.Clone(previous.PublicationAuthorizations)
 	if status, message := change(&item); status != 0 {
 		return agentRun{}, status, message
 	}
@@ -238,6 +242,7 @@ func validStoredAgentRun(item agentRun) bool {
 		workerapi.ValidTerminationReason(item.TerminationReason) && workerapi.ValidVerification(item.Verification) &&
 		len(item.AttemptLog) <= maxAgentRunAttempts && validPublication(item.Publication) &&
 		validRunObservations(item.Checks, item.GitHubReviews) && len(item.CreatedBy) <= 100 &&
+		validPublicationAuthorizations(item.PublicationAuthorizations, item.Attempts) &&
 		len(item.Provider) <= 100 && len(item.ProviderVersion) <= 100 && item.DiffAttempt >= 0 && item.DiffAttempt <= item.Attempts &&
 		(item.GraphID == "" || validHexID(item.GraphID)) && len(item.UnitKey) <= maxUnitKeySize &&
 		len(item.Result) <= workerapi.MaxResultSize && item.ResultAttempt >= 0 && item.ResultAttempt <= item.Attempts &&
@@ -252,7 +257,8 @@ func validMergeInputs(inputs []workerapi.MergeInput) bool {
 
 func validPublication(publication string) bool {
 	switch publication {
-	case "", publicationPublished, publicationPushFailed, publicationPullRequestFailed, publicationNoChanges:
+	case "", publicationPublished, publicationPushFailed, publicationPullRequestFailed, publicationNoChanges,
+		publicationAwaitingAuthority:
 		return true
 	default:
 		return false
@@ -359,8 +365,7 @@ func (store *agentRunStore) create(w http.ResponseWriter, r *http.Request) {
 	item := agentRun{AgentID: profile.ID, AgentName: profile.Name, ProjectID: project.ID,
 		ProjectName: project.Name, Repository: project.GitRemote,
 		BaseBranch: project.Branch, WorkerID: project.WorkerID, WorkerName: project.WorkerName, Prompt: input.Prompt,
-		Provider: profile.Provider, Profile: &profile, CreatedBy: accessFor(r).user,
-		PullRequestEnabled: store.publishable(project.GitRemote)}
+		Provider: profile.Provider, Profile: &profile, CreatedBy: accessFor(r).user}
 	if input.IssueNumber > 0 {
 		if status, message := store.attachIssue(r.Context(), &item, input.IssueNumber); status != 0 {
 			http.Error(w, message, status)
@@ -449,7 +454,8 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 		ID: selected.ID, ProjectID: selected.ProjectID, Branch: selected.Branch, BaseBranch: selected.BaseBranch,
 		Prompt: agentRunPrompt(selected) + store.graphs.runContext(selected), Attempts: selected.Attempts,
 		PublishPullRequest: selected.PullRequestEnabled, Merge: selected.Merge,
-		PublishCommit: store.graphs.publishCommit(selected),
+		PublishCommit: store.publicationCommit(selected),
+		PublishOnly:   selected.PullRequestEnabled && selected.publicationAuthorized(selected.CommitSHA),
 		Profile: workerapi.AgentProfile{Provider: profile.Provider, Model: profile.Model,
 			SystemPrompt: profile.SystemPrompt, GoalPrompt: profile.GoalPrompt, Tools: profile.Tools,
 			Persona: func() *workerapi.AgentPersona {
@@ -462,6 +468,19 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 					Behavior: persona.Behavior, ReviewSpecialization: persona.ReviewSpecialization, Version: persona.Version}
 			}()},
 	})
+}
+
+func (store *agentRunStore) publicationCommit(run agentRun) string {
+	if !run.PullRequestEnabled || !run.publicationAuthorized(run.CommitSHA) {
+		return ""
+	}
+	if run.GraphID == "" {
+		return run.CommitSHA
+	}
+	if store.graphs == nil {
+		return ""
+	}
+	return store.graphs.publishCommit(run)
 }
 
 // lease hands the worker its oldest queued run, or a run with an empty id when nothing is queued for it.

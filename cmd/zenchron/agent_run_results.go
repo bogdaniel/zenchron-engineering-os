@@ -58,7 +58,8 @@ func (store *agentRunStore) finish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	store.appendEvents(runID, item.Attempts, workerapi.AgentRunEvent{Kind: "status", Message: "Attempt finished: " + item.Status})
-	if item.Status == "succeeded" && item.PullRequestEnabled {
+	if item.Status == "succeeded" && item.PullRequestEnabled && item.publicationAuthorized(item.CommitSHA) &&
+		(item.GraphID == "" || store.graphs != nil && store.graphs.publicationReady(item, item.CommitSHA)) {
 		if item, status, message = store.publishResult(r.Context(), runID, input.BranchPushed, input.BranchPushFailed); status != 0 {
 			http.Error(w, message, status)
 			return
@@ -96,6 +97,10 @@ func (store *agentRunStore) applyResult(item *agentRun, workerID string, input w
 	}
 	if input.CommitSHA != "" {
 		item.CommitSHA, item.CommitTreeSHA = input.CommitSHA, input.CommitTreeSHA
+	}
+	item.BranchPushed = input.BranchPushed
+	if input.Status == "succeeded" && item.CommitSHA != "" && store.publishable(item.Repository) {
+		item.Publication = publicationAwaitingAuthority
 	}
 	if input.BaseCommit != "" {
 		item.BaseCommit = input.BaseCommit
@@ -162,7 +167,7 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 				store.items[runID] = current
 			}
 			store.mu.Unlock()
-			if released {
+			if released && store.graphs != nil {
 				store.graphs.reconcileAll()
 			}
 			return agentRun{}, status, "pull request state could not be persisted"
@@ -185,29 +190,90 @@ func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "agent run id is invalid", http.StatusBadRequest)
 		return
 	}
+	var input struct {
+		CandidateSHA string `json:"candidate_sha"`
+	}
+	if !decodeJSONBody(w, r, &input) {
+		return
+	}
+	if !fullGitSHA(input.CandidateSHA) {
+		http.Error(w, "candidate_sha must be a full commit SHA", http.StatusBadRequest)
+		return
+	}
+	access := accessFor(r)
 	store.mu.Lock()
-	item, exists := store.items[runID]
+	before, exists := store.items[runID]
+	store.mu.Unlock()
 	if !exists {
-		store.mu.Unlock()
 		http.NotFound(w, r)
 		return
 	}
-	if item.Status != "succeeded" || item.Publication != publicationPullRequestFailed {
-		store.mu.Unlock()
-		http.Error(w, "only a pushed run without a pull request can be published again", http.StatusConflict)
+	graphRevision, planRevision, planHash, graphReady := 0, 0, "", before.GraphID == ""
+	if before.GraphID != "" && store.graphs != nil {
+		graphRevision, planRevision, planHash, graphReady = store.graphs.publicationBinding(before, input.CandidateSHA)
+	}
+	preauthorized := before.publicationAuthorized(input.CandidateSHA)
+	if before.GraphID != "" {
+		preauthorized = graphReady && before.publicationAuthorizedFor(input.CandidateSHA, before.GraphID, planRevision, planHash)
+	}
+	item, status, message := store.update(runID, func(item *agentRun) (int, string) {
+		switch {
+		case !access.allows(item.Repository):
+			return http.StatusForbidden, "you may not publish changes from this repository"
+		case item.Status != "succeeded" || item.CommitSHA != input.CandidateSHA:
+			return http.StatusConflict, "the candidate changed or the run has not completed"
+		case item.PullRequestURL != "":
+			return http.StatusConflict, "this run already has a pull request"
+		case !store.publishable(item.Repository):
+			return http.StatusConflict, "GitHub publication is not configured for this repository"
+		case item.Publishing:
+			return http.StatusConflict, "pull request publication is already in progress"
+		}
+		if !graphReady {
+			return http.StatusConflict, "the WorkGraph candidate has not passed its current independent reviews"
+		}
+		if !preauthorized {
+			actor := access.user
+			if !access.enforced {
+				actor = localOperator
+			}
+			if actor == "" {
+				return http.StatusForbidden, "a signed-in person is required to authorize publication"
+			}
+			item.PublicationAuthorizations = append(item.PublicationAuthorizations, publicationAuthorization{
+				CommitSHA: input.CandidateSHA, GraphID: item.GraphID, GraphRevision: graphRevision,
+				PlanRevision: planRevision, PlanHash: planHash, By: actor, At: time.Now().UTC(), Attempt: item.Attempts})
+		}
+		if item.BranchPushed {
+			item.Publishing = true
+			return 0, ""
+		}
+		if item.GraphID == "" && item.Attempts >= maxAgentRunAttempts {
+			return http.StatusConflict, "the run has used all of its attempts"
+		}
+		if item.GraphID == "" {
+			item.PullRequestEnabled = true
+			item.requeue()
+		}
+		return 0, ""
+	})
+	if status != 0 {
+		http.Error(w, message, status)
 		return
 	}
-	// The initial finish request and manual retries share one publication marker. Reserve it
-	// before calling GitHub so a second request cannot clear another publication's update barrier.
-	if item.Publishing {
-		store.mu.Unlock()
-		http.Error(w, "pull request publication is already in progress", http.StatusConflict)
+	store.appendEvents(runID, item.Attempts, workerapi.AgentRunEvent{Kind: "status",
+		Message: "A person authorized pull request creation for candidate " + input.CandidateSHA})
+	if !item.BranchPushed {
+		if store.graphs != nil {
+			store.graphs.reconcileAll()
+			if current, exists := store.get(runID); exists {
+				item = current
+			}
+		}
+		writeJSON(w, http.StatusAccepted, publicAgentRun(item))
 		return
 	}
-	item.Publishing = true // Process-local only: durable recovery uses publicationPullRequestFailed.
-	store.items[runID] = item
-	store.mu.Unlock()
-	item, status, message := store.publishResult(r.Context(), runID, true, false)
+	item, status, message = store.publishResult(r.Context(), runID, true, false)
 	if status != 0 {
 		http.Error(w, message, status)
 		return

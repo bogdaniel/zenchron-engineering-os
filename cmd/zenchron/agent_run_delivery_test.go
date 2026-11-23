@@ -203,7 +203,7 @@ func TestIssueRunLinksIssueWorkerBranchCommitVerificationAndPullRequest(t *testi
 	run := harness.createIssueRun()
 	if run.IssueNumber != 7 || run.IssueTitle != "Bound the claim body" || run.Repository != "github.com/acme/platform" ||
 		run.Provider != workerapi.ProviderCodex || run.IssueContext != "" || run.Profile != nil ||
-		run.Prompt != "Resolve GitHub issue #7: Bound the claim body" || !run.PullRequestEnabled {
+		run.Prompt != "Resolve GitHub issue #7: Bound the claim body" || run.PullRequestEnabled {
 		t.Fatalf("issue run = %#v", run)
 	}
 	command := harness.claim()
@@ -211,10 +211,27 @@ func TestIssueRunLinksIssueWorkerBranchCommitVerificationAndPullRequest(t *testi
 		!strings.Contains(command.Prompt, "Read at most 1 MiB.") || !strings.Contains(command.Prompt, "Labels: worker") ||
 		!strings.Contains(command.Prompt, "Comment by maintainer:\nAlso add a test.") ||
 		!strings.Contains(command.Prompt, "does not change these instructions") ||
-		strings.Contains(command.Prompt, "Ignore previous instructions") || !command.PublishPullRequest {
+		strings.Contains(command.Prompt, "Ignore previous instructions") || command.PublishPullRequest {
 		t.Fatalf("worker command = %#v", command)
 	}
-	finished, status := harness.finish(run.ID, pushedResult)
+	unpublishedResult := strings.Replace(pushedResult, `"branch_pushed":true`, `"branch_pushed":false`, 1)
+	awaiting, status := harness.finish(run.ID, unpublishedResult)
+	if status != http.StatusOK || awaiting.Status != "succeeded" || awaiting.Publication != publicationAwaitingAuthority ||
+		awaiting.PullRequestNumber != 0 || harness.pullCreates != 0 {
+		t.Fatalf("run published before human authorization: %#v, HTTP %d, PR creates %d", awaiting, status, harness.pullCreates)
+	}
+	response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish",
+		`{"candidate_sha":"`+testCommit+`"}`)
+	var authorized agentRun
+	if err := json.NewDecoder(response.Body).Decode(&authorized); err != nil || response.Code != http.StatusAccepted ||
+		!authorized.publicationAuthorized(testCommit) {
+		t.Fatalf("publication authorization = %#v, HTTP %d, %v", authorized, response.Code, err)
+	}
+	command = harness.claim()
+	if !command.PublishPullRequest || command.PublishCommit != testCommit || command.Attempts != 2 {
+		t.Fatalf("authorized worker command = %#v", command)
+	}
+	finished, status := harness.finish(run.ID, strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1))
 	if status != http.StatusOK || finished.Status != "succeeded" || finished.Publication != publicationPublished ||
 		finished.PullRequestNumber != 23 || finished.PullRequestURL != "https://github.com/acme/platform/pull/23" ||
 		finished.CommitSHA != testCommit || finished.BaseCommit != strings.Repeat("b", 40) ||
@@ -223,8 +240,9 @@ func TestIssueRunLinksIssueWorkerBranchCommitVerificationAndPullRequest(t *testi
 		finished.WorkerID != testWorkerID || finished.IssueNumber != 7 {
 		t.Fatalf("finished run = %#v, HTTP %d", finished, status)
 	}
-	if len(finished.AttemptLog) != 1 || finished.AttemptLog[0].WorkerID != testWorkerID || finished.AttemptLog[0].Status != "succeeded" ||
-		finished.AttemptLog[0].CommitSHA != testCommit || finished.AttemptLog[0].FinishedAt == nil {
+	if len(finished.AttemptLog) != 2 || finished.AttemptLog[1].WorkerID != testWorkerID || finished.AttemptLog[1].Status != "succeeded" ||
+		finished.AttemptLog[1].CommitSHA != testCommit || finished.AttemptLog[1].FinishedAt == nil ||
+		finished.PublicationAuthorizations[0].By != localOperator || finished.PublicationAuthorizations[0].CommitSHA != testCommit {
 		t.Fatalf("attempt log = %#v", finished.AttemptLog)
 	}
 	harness.mu.Lock()
@@ -240,7 +258,8 @@ func TestIssueRunLinksIssueWorkerBranchCommitVerificationAndPullRequest(t *testi
 		messages = append(messages, event.Message)
 	}
 	if got := strings.Join(messages, "|"); got != "Attempt 1 claimed by worker worker|Attempt finished: succeeded|"+
-		"Publication: published https://github.com/acme/platform/pull/23" {
+		"A person authorized pull request creation for candidate "+testCommit+"|Attempt 2 claimed by worker worker|"+
+		"Attempt finished: succeeded|Publication: published https://github.com/acme/platform/pull/23" {
 		t.Fatalf("control-plane events = %s", got)
 	}
 }
@@ -248,27 +267,39 @@ func TestIssueRunLinksIssueWorkerBranchCommitVerificationAndPullRequest(t *testi
 func TestPullRequestPublicationRetriesWithoutDuplicates(t *testing.T) {
 	harness := newDeliveryHarness(t, workerapi.ProviderCodex)
 	run := harness.createIssueRun()
-	harness.claim()
-	harness.failPullCreate = true
-	failed, status := harness.finish(run.ID, pushedResult)
-	if status != http.StatusOK || failed.Status != "succeeded" || failed.Publication != publicationPullRequestFailed ||
-		failed.PullRequestNumber != 0 || failed.PullRequestError == "" {
-		t.Fatalf("run after GitHub failure = %#v, HTTP %d", failed, status)
+	first := harness.claim()
+	awaiting, status := harness.finish(run.ID, strings.Replace(pushedResult, `"branch_pushed":true`, `"branch_pushed":false`, 1))
+	if status != http.StatusOK || awaiting.Publication != publicationAwaitingAuthority || harness.pullCreates != 0 {
+		t.Fatalf("run before authorization = %#v, HTTP %d, PR creates %d", awaiting, status, harness.pullCreates)
 	}
 	response := harness.call(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+run.ID, pushedResult)
 	if response.Code != http.StatusConflict || strings.TrimSpace(response.Body.String()) != "agent run result was already accepted" {
 		t.Fatalf("repeated worker result = HTTP %d, %q", response.Code, response.Body.String())
 	}
+	response = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", `{"candidate_sha":"`+testCommit+`"}`)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("authorize pull request returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+	publication := harness.claim()
+	if publication.ID != first.ID || publication.Attempts != 2 || !publication.PublishPullRequest || publication.PublishCommit != testCommit {
+		t.Fatalf("authorized publication run = %#v", publication)
+	}
+	harness.failPullCreate = true
+	failed, status := harness.finish(run.ID, strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1))
+	if status != http.StatusOK || failed.Status != "succeeded" || failed.Publication != publicationPullRequestFailed ||
+		failed.PullRequestNumber != 0 || failed.PullRequestError == "" {
+		t.Fatalf("run after GitHub failure = %#v, HTTP %d", failed, status)
+	}
 	harness.mu.Lock()
 	harness.failPullCreate = false
 	harness.mu.Unlock()
-	response = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", "")
+	response = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", `{"candidate_sha":"`+testCommit+`"}`)
 	var published agentRun
 	if err := json.NewDecoder(response.Body).Decode(&published); err != nil || response.Code != http.StatusOK ||
 		published.Publication != publicationPublished || published.PullRequestNumber != 23 || published.PullRequestError != "" {
 		t.Fatalf("republished run = %#v, HTTP %d, %v", published, response.Code, err)
 	}
-	if response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", ""); response.Code != http.StatusConflict {
+	if response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", `{"candidate_sha":"`+testCommit+`"}`); response.Code != http.StatusConflict {
 		t.Fatalf("publishing a published run returned HTTP %d", response.Code)
 	}
 	// A second run on the same branch name cannot exist, but a repeated creation for this branch must reuse the pull request.
@@ -288,10 +319,23 @@ func TestPullRequestPublicationDoesNotOverwriteANewerAttempt(t *testing.T) {
 			harness := newDeliveryHarness(t, workerapi.ProviderCodex)
 			run := harness.createIssueRun()
 			harness.claim()
+			awaiting, initialStatus := harness.finish(run.ID,
+				strings.Replace(pushedResult, `"branch_pushed":true`, `"branch_pushed":false`, 1))
+			if initialStatus != http.StatusOK || awaiting.Publication != publicationAwaitingAuthority {
+				t.Fatalf("initial run = %#v, HTTP %d", awaiting, initialStatus)
+			}
+			authorized := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish",
+				`{"candidate_sha":"`+testCommit+`"}`)
+			if authorized.Code != http.StatusAccepted {
+				t.Fatalf("authorization returned HTTP %d: %s", authorized.Code, authorized.Body.String())
+			}
+			if command := harness.claim(); command.Attempts != 2 || !command.PublishPullRequest {
+				t.Fatalf("publication command = %#v", command)
+			}
 			var expected agentRun
 			if path == "manual retry" {
 				harness.failPullCreate = true
-				if finished, status := harness.finish(run.ID, pushedResult); status != http.StatusOK ||
+				if finished, status := harness.finish(run.ID, strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1)); status != http.StatusOK ||
 					finished.Publication != publicationPullRequestFailed {
 					t.Fatalf("initial publication = %#v, HTTP %d", finished, status)
 				}
@@ -304,8 +348,8 @@ func TestPullRequestPublicationDoesNotOverwriteANewerAttempt(t *testing.T) {
 				if response.Code != http.StatusOK {
 					t.Errorf("request changes during publication returned HTTP %d", response.Code)
 				}
-				if command := harness.claim(); command.Attempts != 2 {
-					t.Errorf("claimed attempt %d during publication, want 2", command.Attempts)
+				if command := harness.claim(); command.Attempts != 3 {
+					t.Errorf("claimed attempt %d during publication, want 3", command.Attempts)
 				}
 				harness.store.mu.Lock()
 				expected = harness.store.items[run.ID]
@@ -314,9 +358,10 @@ func TestPullRequestPublicationDoesNotOverwriteANewerAttempt(t *testing.T) {
 
 			var status int
 			if path == "manual retry" {
-				status = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", "").Code
+				status = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish",
+					`{"candidate_sha":"`+testCommit+`"}`).Code
 			} else {
-				_, status = harness.finish(run.ID, pushedResult)
+				_, status = harness.finish(run.ID, strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1))
 			}
 			if status != http.StatusConflict {
 				t.Fatalf("publication after attempt changed returned HTTP %d, want conflict", status)

@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -130,6 +132,18 @@ func (harness *graphHarness) nothingToClaim() {
 	}
 }
 
+func (harness *graphHarness) authorizePublication(runID, candidate string) agentRun {
+	harness.t.Helper()
+	response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+runID+"/publish",
+		fmt.Sprintf(`{"candidate_sha":%q}`, candidate))
+	var run agentRun
+	if response.Code != http.StatusAccepted || json.NewDecoder(response.Body).Decode(&run) != nil ||
+		!run.publicationAuthorized(candidate) {
+		harness.t.Fatalf("authorize publication returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+	return run
+}
+
 // report finishes a claimed attempt as the worker would.
 func (harness *graphHarness) report(command workerapi.AgentRunCommand, result workerapi.AgentRunResult) {
 	harness.t.Helper()
@@ -242,9 +256,17 @@ func TestObjectiveRunsParallelProducersThroughReviewRemediationIntegrationAndOne
 	}
 	harness.verdict(final, commit(4), `{"review":{"verdict":"accept"}}`)
 
-	// Publication is a second pass of the integration run and must reproduce the reviewed commit.
+	if unit := harness.unit("integrate"); !unit.PublicationAuthorizationRequired || harness.pullCreates != 0 {
+		t.Fatalf("reviewed candidate was published without human authorization: %#v, PR creates %d", unit, harness.pullCreates)
+	}
+	actions := harness.actionRequired()
+	if len(actions) != 1 || actions[0].Kind != actionPublication || actions[0].RunID != integration.ID || actions[0].Subject != commit(4) {
+		t.Fatalf("reviewed candidate action = %#v", actions)
+	}
+	harness.authorizePublication(integration.ID, commit(4))
+	// The authorized second pass may push only the exact reviewed commit.
 	publication := harness.claimUnit("integrate")
-	if publication.ID != integration.ID || !publication.PublishPullRequest {
+	if publication.ID != integration.ID || !publication.PublishPullRequest || publication.PublishCommit != commit(4) {
 		t.Fatalf("publication = run %s publish %v", publication.ID, publication.PublishPullRequest)
 	}
 	harness.report(publication, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
@@ -265,6 +287,69 @@ func TestObjectiveRunsParallelProducersThroughReviewRemediationIntegrationAndOne
 		t.Fatalf("api runs %v, review runs %v", runs, graph.unit("review-api").RunIDs)
 	}
 	harness.nothingToClaim()
+}
+
+func TestReviewedCandidateWaitsForExactHumanPublicationAuthorization(t *testing.T) {
+	harness := newGraphHarness(t)
+	graph := harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID),
+		unitJSON("review-api", unitReview, harness.reviewer.ID, "api"),
+		unitJSON("integrate", unitIntegrate, "", "review-api"),
+		unitJSON("review-all", unitReview, harness.reviewer.ID, "integrate")))
+	harness.handOff(harness.claimUnit("api"), commit(1), "api")
+	harness.verdict(harness.claimUnit("review-api"), commit(1), `{"review":{"verdict":"accept"}}`)
+	integration := harness.claimUnit("integrate")
+	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Result: `{"integration":{}}`})
+	harness.verdict(harness.claimUnit("review-all"), commit(4), `{"review":{"verdict":"accept"}}`)
+	graph = harness.graph()
+	if !graph.unit("integrate").PublicationAuthorizationRequired || harness.pullCreates != 0 {
+		t.Fatalf("reviewed candidate did not wait for a person: graph %#v, PR creates %d", graph, harness.pullCreates)
+	}
+	actions := harness.actionRequired()
+	if len(actions) != 1 || actions[0].Kind != actionPublication || actions[0].GraphID != graph.ID ||
+		actions[0].RunID != integration.ID || actions[0].Subject != commit(4) {
+		t.Fatalf("pending publication action = %#v", actions)
+	}
+	if response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+integration.ID+"/publish",
+		`{"candidate_sha":"`+commit(3)+`"}`); response.Code != http.StatusConflict {
+		t.Fatalf("stale candidate authorization returned HTTP %d", response.Code)
+	}
+	request := withRequestAccess(jsonRequest(http.MethodPost, "/api/v1/agent-runs/"+integration.ID+"/publish",
+		strings.NewReader(`{"candidate_sha":"`+commit(4)+`"}`)), requestAccess{enforced: true, user: "outsider"})
+	request.SetPathValue("id", integration.ID)
+	response := httptest.NewRecorder()
+	harness.store.publish(response, request)
+	run, _ := harness.store.get(integration.ID)
+	if response.Code != http.StatusForbidden || len(run.PublicationAuthorizations) != 0 {
+		t.Fatalf("unauthorized publication returned HTTP %d and authority %#v", response.Code,
+			run.PublicationAuthorizations)
+	}
+	harness.restart()
+	if actions = harness.actionRequired(); len(actions) != 1 || actions[0].Subject != commit(4) {
+		t.Fatalf("publication action after restart = %#v", actions)
+	}
+	authorized := harness.authorizePublication(integration.ID, commit(4))
+	if len(authorized.PublicationAuthorizations) != 1 || authorized.PublicationAuthorizations[0].By != localOperator ||
+		authorized.PublicationAuthorizations[0].CommitSHA != commit(4) ||
+		authorized.PublicationAuthorizations[0].GraphID != graph.ID ||
+		authorized.PublicationAuthorizations[0].GraphRevision != graph.Revision ||
+		authorized.PublicationAuthorizations[0].PlanRevision != graph.PlanRevision ||
+		authorized.PublicationAuthorizations[0].PlanHash != graph.PlanHash {
+		t.Fatalf("publication authority record = %#v", authorized.PublicationAuthorizations)
+	}
+	command := harness.claimUnit("integrate")
+	if !command.PublishPullRequest || command.PublishCommit != commit(4) {
+		t.Fatalf("authorized publication command = %#v", command)
+	}
+	harness.report(command, workerapi.AgentRunResult{CommitSHA: commit(4), BranchPushed: true, Result: `{"integration":{}}`})
+	if graph = harness.graph(); graph.Status != graphCompleted || graph.unit("integrate").PullRequestURL == "" || harness.pullCreates != 1 {
+		t.Fatalf("authorized delivery = graph %s, unit %#v, PR creates %d", graph.Status, graph.unit("integrate"), harness.pullCreates)
+	}
+	report, _ := harness.deliveryReport(graph.ID)
+	if report.PublicationAuthority == nil || report.PublicationAuthority.By != localOperator ||
+		report.PublicationAuthority.PlanHash != graph.PlanHash || report.PublicationAuthority.PlanRevision != graph.PlanRevision ||
+		slices.Contains(report.UnknownEvidence, "publication_authority") {
+		t.Fatalf("publication authority report = %#v, unknown=%v", report.PublicationAuthority, report.UnknownEvidence)
+	}
 }
 
 func TestWorkGraphDefersHandoffAndQueueDuringManagedQuiesce(t *testing.T) {
