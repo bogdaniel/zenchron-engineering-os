@@ -20,6 +20,8 @@ flowchart LR
   Plan -->|"POST .../plans/{revision}/approve"| Plans
   Plan -->|"POST /api/v1/work-graphs/{id}/cancel<br/>.../units/{key}/retry<br/>.../decisions/{message}"| Plans
   Views -->|"GET /api/v1/work-graphs"| Plans
+  Views -->|"GET /api/v1/work-graphs/{id}/report"| DeliveryReport[ObjectiveDeliveryReport<br/>recorded provenance + unknown evidence]
+  DeliveryReport -->|"Export JSON"| ReportDownload[Report projection]
   Plans -->|workflow mode compiled| Compiler[workflow_compile.go]
   Plans -->|workflow mode guidance, version-pinned prompt| Planner[read-only planner run]
   Compiler --> Validate[orchestration_plan.go<br/>problems]
@@ -121,6 +123,16 @@ flowchart LR
 - A run's context is rebuilt when it is claimed: the objective, the unit's acceptance criteria, the latest handoff of
   each dependency, requests addressed to the unit, findings and decisions since its own latest handoff, and for a
   review the candidate commit and its diff (up to 60 KiB).
+
+### Delivery report
+
+- `GET /api/v1/work-graphs/{id}/report` projects the approved plan revision, graph units, stored run attempts,
+  handoffs, decisions, candidate identity, publication authorization, and observed GitHub PR/check state. It does not
+  change graph state. JSON export downloads this report projection.
+- A graph may retain a run ID whose durable run record is missing. The report keeps the reference and explicitly marks
+  missing run details and the attempt, failed-attempt, concurrency, and producer-remediation totals that are incomplete.
+- Worker-derived run output is redacted before it is recorded. Unavailable policy assurance, human supervision, partial
+  provider usage, or GitHub observations remain unknown rather than inferred from successful execution or green checks.
 
 ### Review and remediation
 

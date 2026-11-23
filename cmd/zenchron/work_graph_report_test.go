@@ -344,7 +344,7 @@ func TestWorkGraphReportOmitsWhatWasNotRecorded(t *testing.T) {
 		t.Fatalf("graph moved from revision %d to %d", before.Revision, after.Revision)
 	}
 
-	// A run id whose run is no longer stored is still a run of the unit, and adds nothing else.
+	// A lost run stays counted by its graph reference while its attempt-derived details are marked unknown.
 	harness.store.mu.Lock()
 	delete(harness.store.items, ui.ID)
 	harness.store.mu.Unlock()
@@ -353,6 +353,15 @@ func TestWorkGraphReportOmitsWhatWasNotRecorded(t *testing.T) {
 	if lost := reportedUnit(t, report, "ui"); measured.RunCount != 2 || measured.AttemptCount != 1 || measured.FailedAttempts != 0 ||
 		measured.MaxConcurrency != 1 || lost.Attempts != 0 || len(lost.Providers) != 0 || !slices.Equal(lost.RunIDs, []string{ui.ID}) {
 		t.Fatalf("report after a run was lost = %s", body)
+	}
+	if !slices.Contains(report.UnknownEvidence, "missing_run_records") {
+		t.Fatalf("missing run record is not identified as unknown evidence: %v", report.UnknownEvidence)
+	}
+	for _, missing := range []string{"attempt_count_for_some_runs", "failed_attempts_for_some_runs",
+		"max_concurrency_for_some_runs", "remediation_passes_for_some_runs"} {
+		if !slices.Contains(measured.Unknown, missing) {
+			t.Fatalf("missing run record did not mark %q unknown: %v", missing, measured.Unknown)
+		}
 	}
 }
 

@@ -164,6 +164,39 @@ for (const viewport of viewports) {
   });
 }
 
+for (const viewport of viewports) {
+  test(`delivery report identifies missing run records and partial measurements (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await mockOrchestration(page, { graphs: [graph], plans: [plan] });
+    await page.route(`**/api/v1/work-graphs/${graphID}/report`, (route) => route.fulfill(json({
+      graph_id: graphID, graph_revision: 4, objective_id: objectiveID, objective_title: objective.title,
+      plan_revision: 1, status: 'failed',
+      approved_plan: { revision: 1, status: 'approved', hash: 'h', summary: 'One producer, one review.' },
+      units: [{ key: 'api', kind: 'produce', agent_name: 'Engineer', state: 'failed', run_ids: ['lost-run'],
+        attempts: 0, providers: [], executions: [] }],
+      handoffs: [], decisions: [], outstanding_steps: [{ key: 'api', state: 'failed' }],
+      measurements: { unit_count: 1, run_count: 1, attempt_count: 0, failed_attempts: 0, review_rounds: 0, findings: 0,
+        remediation_passes: 0, decisions_requested: 0, decisions_resolved: 0, human_actions: 1,
+        human_actions_complete: false, max_concurrency: 0, runs_with_usage: 0, runs_with_cost: 0,
+        unknown: ['attempt_count_for_some_runs', 'failed_attempts_for_some_runs', 'max_concurrency_for_some_runs',
+          'remediation_passes_for_some_runs', 'input_tokens', 'output_tokens', 'cost_usd', 'supervision_minutes',
+          'unrecorded_human_actions'] },
+      unknown_evidence: ['missing_run_records', 'policy_backed_assurance', 'publication_authority'],
+    })));
+    await page.goto(`/?mode=live&objective=${objectiveID}#objectives`);
+    await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+    const report = page.getByRole('region', { name: 'Objective delivery report' });
+    await report.getByRole('button', { name: 'View delivery report' }).click();
+    await expect(report).toContainText('Run lost-run details unavailable: its durable record is missing.');
+    await expect(report).toContainText('Unknown evidence: details for one or more referenced runs');
+    await expect(report).toContainText('attempt totals for some runs');
+    await expect(report).toContainText('remediation totals for some runs');
+    await expect(report).toContainText('1 / 1 / 0 (incomplete)');
+    await expect(report).toContainText('0 (incomplete) / 0 (incomplete)');
+    expect(await noHorizontalScroll(page)).toBe(true);
+  });
+}
+
 test('delivery report shows an unknown result attempt while a run is active', async ({ page }) => {
   await mockOrchestration(page, { graphs: [graph], plans: [plan] });
   await page.route(`**/api/v1/work-graphs/${graphID}/report`, (route) => route.fulfill(json({

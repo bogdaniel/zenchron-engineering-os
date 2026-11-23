@@ -284,8 +284,8 @@ type deliveryMeasurements struct {
 	Unknown              []string `json:"unknown"`
 }
 
-// buildDeliveryReport computes the report of a graph from the graph and its stored runs. A run id
-// whose run is no longer stored still counts as a run but contributes nothing else.
+// buildDeliveryReport computes the report from durable graph and run records. Missing run records retain their graph
+// references and mark the details and derived measurements they would have supplied as unknown.
 func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *objectivePlan) deliveryReport {
 	report := deliveryReport{GraphID: graph.ID, GraphRevision: graph.Revision, ObjectiveID: graph.ObjectiveID,
 		ObjectiveTitle: graph.ObjectiveTitle,
@@ -302,7 +302,17 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	measured := &report.Measurements
 	measured.UnitCount = len(graph.Units)
 	var attempts []agentRunAttempt
+	missingRunRecords, missingProduceRunRecords := false, false
 	for _, unit := range graph.Units {
+		for _, runID := range unit.RunIDs {
+			if _, exists := runs[runID]; exists {
+				continue
+			}
+			missingRunRecords = true
+			if unit.Kind == unitProduce {
+				missingProduceRunRecords = true
+			}
+		}
 		unitAttempts := unitAttemptLog(unit, runs)
 		attempts = append(attempts, unitAttempts...)
 		summary := summarizeUnit(unit, runs)
@@ -353,6 +363,9 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 		}
 	}
 	measured.MaxConcurrency = maxConcurrency(attempts)
+	if missingRunRecords {
+		report.UnknownEvidence = append(report.UnknownEvidence, "missing_run_records")
+	}
 	measured.Findings = countMessages(graph.Messages, messageFinding)
 	measured.DecisionsRequested = countMessages(graph.Messages, messageDecisionRequest)
 	measured.DecisionsResolved = countMessages(graph.Messages, messageDecisionResolution)
@@ -365,8 +378,14 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	// Plan approval, resolved graph decisions, and recorded publication authorizations are durable human actions.
 	measured.HumanActions = measured.DecisionsResolved + publicationAuthorizations + 1
 	measured.HumanActionsComplete = false
-	measured.Unknown = []string{supervisionMinutes}
-	measured.Unknown = append(measured.Unknown, "unrecorded_human_actions")
+	measured.Unknown = []string{supervisionMinutes, "unrecorded_human_actions"}
+	if missingRunRecords {
+		measured.Unknown = append(measured.Unknown, "attempt_count_for_some_runs", "failed_attempts_for_some_runs",
+			"max_concurrency_for_some_runs")
+	}
+	if missingProduceRunRecords {
+		measured.Unknown = append(measured.Unknown, "remediation_passes_for_some_runs")
+	}
 	if graph.Status == graphCompleted {
 		seconds := graph.UpdatedAt.Sub(graph.CreatedAt).Seconds()
 		measured.WallClockSeconds = &seconds

@@ -51,6 +51,13 @@ const unknownEvidenceLabels: Record<string, string> = {
   policy_backed_assurance: 'independent policy-backed assurance',
   publication_authority: 'publication authority',
   pull_request_external_state: 'current pull request state',
+  missing_run_records: 'details for one or more referenced runs',
+};
+const unknownMeasurementLabels: Record<string, string> = {
+  attempt_count_for_some_runs: 'attempt totals for some runs',
+  failed_attempts_for_some_runs: 'failed attempt totals for some runs',
+  max_concurrency_for_some_runs: 'concurrency from available attempt records',
+  remediation_passes_for_some_runs: 'remediation totals for some runs',
 };
 
 async function loadReport(graphID: string): Promise<Report> {
@@ -104,11 +111,15 @@ function ReportDetails({ report }: { report: Report }) {
     <p>{report.approved_plan.summary || 'No plan summary recorded.'}</p>
     {report.workflow_id && <p>{report.workflow_mode === 'compiled' ? 'Compiled from workflow ' : report.workflow_mode === 'guidance' ? 'Guided by workflow ' : 'Workflow execution mode unknown · workflow '}<a href={livePageHref('workflows', { workflow: report.workflow_id })}>{report.workflow_id}</a> · version {report.workflow_version ?? 'unknown'}</p>}
     <h5>Executed work units</h5>
-    <div className="objective-delivery-units">{report.units.map((unit) => <article key={unit.key}>
+    <div className="objective-delivery-units">{report.units.map((unit) => {
+      const storedRunIDs = new Set(unit.executions.map((run) => run.run_id));
+      return <article key={unit.key}>
       <div className="objective-delivery-unit-title"><b>{unit.key} · {unit.kind}</b><Badge variant="light">{unit.state}</Badge></div>
       <p>{unit.agent_name || 'Zenchron'}{unit.agent_id && <> · <a href={livePageHref('agents', { profile: unit.agent_id })}>Agent profile</a> ({unit.agent_id})</>}
         {unit.candidate && <> · candidate <code>{unit.candidate}</code></>}
         {unit.verdict && <> · verdict {unit.verdict}</>}</p>
+      {unit.run_ids.filter((runID) => !storedRunIDs.has(runID)).map((runID) =>
+        <p key={runID}>Run <code>{runID}</code> details unavailable: its durable record is missing.</p>)}
       {unit.executions.map((run) => <div className="objective-delivery-run" key={run.run_id}>
         <span>
           <a href={livePageHref('reviews', { run: run.run_id })}>Run {run.run_id}</a>
@@ -128,7 +139,8 @@ function ReportDetails({ report }: { report: Report }) {
         {run.pull_request_url && <a href={run.pull_request_url} target="_blank" rel="noreferrer">Open pull request ↗</a>}
         {run.failure_recorded && <span>Failure recorded for this run.</span>}
       </div>)}
-    </article>)}</div>
+      </article>;
+    })}</div>
     <h5>Execution and publication</h5>
     <p>WorkGraph execution: {report.status}</p>
     <p>Recorded pull request: {report.pull_request_url
@@ -179,9 +191,13 @@ function ReportDetails({ report }: { report: Report }) {
     <dl className="objective-delivery-metrics">
       <dt>WorkGraph duration</dt><dd>{metrics.wall_clock_seconds === undefined || unknown.has('wall_clock_seconds')
         ? 'Unknown' : `${metrics.wall_clock_seconds.toFixed(1)} seconds`}</dd>
-      <dt>Work units / runs / attempts</dt><dd>{metrics.unit_count} / {metrics.run_count} / {metrics.attempt_count}</dd>
-      <dt>Failed attempts / max concurrent attempts</dt><dd>{metrics.failed_attempts} / {metrics.max_concurrency}</dd>
-      <dt>Reviews / findings / remediation passes</dt><dd>{metrics.review_rounds} / {metrics.findings} / {metrics.remediation_passes}</dd>
+      <dt>Work units / runs / attempts</dt><dd>{metrics.unit_count} / {metrics.run_count} / {metrics.attempt_count}
+        {unknown.has('attempt_count_for_some_runs') ? ' (incomplete)' : ''}</dd>
+      <dt>Failed attempts / max concurrent attempts</dt><dd>{metrics.failed_attempts}
+        {unknown.has('failed_attempts_for_some_runs') ? ' (incomplete)' : ''} / {metrics.max_concurrency}
+        {unknown.has('max_concurrency_for_some_runs') ? ' (incomplete)' : ''}</dd>
+      <dt>Reviews / findings / remediation passes</dt><dd>{metrics.review_rounds} / {metrics.findings} / {metrics.remediation_passes}
+        {unknown.has('remediation_passes_for_some_runs') ? ' (incomplete)' : ''}</dd>
       <dt>Recorded human actions</dt><dd>{metrics.human_actions} recorded; complete total unknown</dd>
       <dt>Provider reported tokens</dt><dd>{metrics.input_tokens === undefined ? 'Unknown' : `${metrics.input_tokens} input / ${metrics.output_tokens ?? 'unknown'} output`}
         {` · usage on ${metrics.runs_with_usage}/${metrics.run_count} runs`}</dd>
@@ -189,7 +205,8 @@ function ReportDetails({ report }: { report: Report }) {
         {` · cost reported on ${metrics.runs_with_cost}/${metrics.run_count} runs`}</dd>
       <dt>Pull request</dt><dd>{report.pull_request_url ? <a href={report.pull_request_url} target="_blank" rel="noreferrer">{report.pull_request_url}</a> : 'Not observed'}</dd>
     </dl>
-    {unknown.size > 0 && <p className="objective-delivery-unknown">Unknown or incomplete: {Array.from(unknown).join(', ')}</p>}
+    {unknown.size > 0 && <p className="objective-delivery-unknown">Unknown or incomplete: {Array.from(unknown)
+      .map((item) => unknownMeasurementLabels[item] ?? item).join(', ')}</p>}
     {!metrics.human_actions_complete && <p className="objective-delivery-unknown">
       Human action totals are incomplete: the system records plan approval and resolved decisions, not every operator action.
     </p>}
