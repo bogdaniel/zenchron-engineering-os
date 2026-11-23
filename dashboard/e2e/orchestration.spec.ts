@@ -165,7 +165,7 @@ for (const viewport of viewports) {
 }
 
 for (const viewport of viewports) {
-  test(`delivery report identifies missing run records and partial measurements (${viewport.name})`, async ({ page }) => {
+  test(`delivery report identifies missing run records and partial measurements (${viewport.name})`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     await mockOrchestration(page, { graphs: [graph], plans: [plan] });
     await page.route(`**/api/v1/work-graphs/${graphID}/report`, (route) => route.fulfill(json({
@@ -194,6 +194,7 @@ for (const viewport of viewports) {
     await expect(report).toContainText('1 / 1 / 0 (incomplete)');
     await expect(report).toContainText('0 (incomplete) / 0 (incomplete)');
     expect(await noHorizontalScroll(page)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`delivery-report-missing-run-${viewport.name}.png`), fullPage: true });
   });
 }
 
