@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -166,8 +165,12 @@ func TestProviderProbeStopsDescendantsWhenCancelled(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("cancelled probe waited on a descendant's inherited output pipes")
 	}
-	if err := syscall.Kill(childPID, 0); !errors.Is(err, syscall.ESRCH) {
-		t.Fatalf("probe descendant %d is still running: %v", childPID, err)
+	processes, err := listProcesses()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, running := processes[childPID]; running {
+		t.Fatalf("probe descendant %d is still running", childPID)
 	}
 }
 
