@@ -135,7 +135,7 @@ For an updater-only GitHub App, install it on the repository Zenchron updates an
 **Pull requests: read**, **Administration: read**, **Commit statuses: read**, and **Checks: read**. GitHub's required
 repository **Metadata: read** permission is automatic. Administration read permits protected-branch and repository
 ruleset inspection. Contents read permits fetching source, Pull requests read verifies that the exact `main` commit came
-from a merged PR, and Commit statuses / Checks read observe required checks. If the control plane will create PRs, also
+from a merged PR, and Commit statuses / Checks read observe required checks. If you add permissions to an installed App, its installation owner must approve the changed permissions in GitHub before they take effect. If the control plane will create PRs, also
 grant **Pull requests: write**. Other integrations may need Issues or Actions permissions; grant those only for the
 features being enabled. The workstation worker still needs its own Git credential that can push the candidate branch;
 the GitHub App token is never passed to that worker.
