@@ -100,12 +100,19 @@ func (store *workGraphStore) actionRequired(w http.ResponseWriter, r *http.Reque
 			if !unit.PublicationAuthorizationRequired || len(unit.RunIDs) == 0 {
 				continue
 			}
+			canAct := access.allows(graph.Repository) && access.mayDispatchTo(graph.WorkerID)
+			blocker := ""
+			if !access.allows(graph.Repository) {
+				blocker = "Your current access does not include this repository."
+			} else if !canAct {
+				blocker = "Your current access cannot dispatch work to this graph's worker."
+			}
 			items = append(items, actionRequiredItem{ID: "publication:" + graph.ID + ":" + unit.Candidate,
 				Kind: actionPublication, ObjectiveID: graph.ObjectiveID, ObjectiveTitle: graph.ObjectiveTitle,
 				PlanRevision: graph.PlanRevision, GraphID: graph.ID, UnitKey: unit.Key, Stage: "Publication authorization",
 				UnitTitle: unit.Title, RunID: unit.RunIDs[len(unit.RunIDs)-1], Subject: unit.Candidate,
 				Reason:  "The current candidate passed its assigned independent review; a person must authorize PR creation.",
-				Options: []string{"Authorize pull request creation"}, CanAct: true})
+				Options: []string{"Authorize pull request creation"}, CanAct: canAct, ActionBlocker: blocker})
 		}
 	}
 	slices.SortFunc(items, func(a, b actionRequiredItem) int {

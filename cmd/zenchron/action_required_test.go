@@ -168,3 +168,49 @@ func (harness *graphHarness) actionRequired() []actionRequiredItem {
 	}
 	return items
 }
+
+func TestActionRequiredPublicationActionUsesWorkerAuthorization(t *testing.T) {
+	harness := newGraphHarness(t)
+	harness.start(harness.planBody(
+		unitJSON("api", unitProduce, harness.profile.ID),
+		unitJSON("review-api", unitReview, harness.reviewer.ID, "api"),
+		unitJSON("integrate", unitIntegrate, "", "review-api"),
+		unitJSON("review-all", unitReview, harness.reviewer.ID, "integrate")))
+	harness.handOff(harness.claimUnit("api"), commit(1), "API changes")
+	harness.verdict(harness.claimUnit("review-api"), commit(1), `{"review":{"verdict":"accept"}}`)
+	integration := harness.claimUnit("integrate")
+	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9),
+		Result: `{"integration":{}}`})
+	harness.verdict(harness.claimUnit("review-all"), commit(4), `{"review":{"verdict":"accept"}}`)
+	if unit := harness.unit("integrate"); !unit.PublicationAuthorizationRequired {
+		t.Fatalf("reviewed candidate is not awaiting publication authorization: %#v", unit)
+	}
+
+	config := requirePublicationAccess(t, harness.deliveryHarness, "different-user")
+	session, err := signSession(authUser{Login: "alice", ExpiresAt: time.Now().Add(time.Hour).Unix()}, config.sessionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/action-required", nil)
+	request.RemoteAddr = "203.0.113.10:41000"
+	request.AddCookie(&http.Cookie{Name: authSessionCookie, Value: session})
+	response := httptest.NewRecorder()
+	harness.server.ServeHTTP(response, request)
+	var actions []actionRequiredItem
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &actions) != nil {
+		t.Fatalf("read publication action returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+	var publication *actionRequiredItem
+	for index := range actions {
+		if actions[index].Kind == actionPublication {
+			publication = &actions[index]
+		}
+	}
+	if publication == nil || publication.CanAct || publication.ActionBlocker == "" || publication.Subject != commit(4) {
+		t.Fatalf("publication action for a reader without worker authority = %#v", publication)
+	}
+	if denied := publishAs(t, harness.server, config, "alice", integration.ID, commit(4)); denied.Code != http.StatusForbidden {
+		t.Fatalf("publication endpoint for the same user returned HTTP %d: %s", denied.Code, denied.Body.String())
+	}
+	assertPublicationWasNotQueued(t, harness.deliveryHarness, integration.ID, integration.Attempts)
+}
