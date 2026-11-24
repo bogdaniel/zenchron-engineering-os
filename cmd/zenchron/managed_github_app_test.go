@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,7 +139,57 @@ func TestSelfUpdateEnvironmentRetainsManagedGitHubAppSettings(t *testing.T) {
 	}
 	if values["ZENCHRON_GITHUB_APP_ID"] != "123456" || values["ZENCHRON_GITHUB_INSTALLATION_ID"] != "987654" ||
 		values["ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH"] != "/managed/private-key.pem" {
-		t.Fatalf("self-update environment dropped managed GitHub App settings: %#v", values)
+		unexpected := make([]string, 0, len(managedGitHubAppEnvironmentKeys))
+		for key, expected := range map[string]string{
+			"ZENCHRON_GITHUB_APP_ID": "123456", "ZENCHRON_GITHUB_INSTALLATION_ID": "987654",
+			"ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH": "/managed/private-key.pem",
+		} {
+			if values[key] != expected {
+				unexpected = append(unexpected, key)
+			}
+		}
+		t.Fatalf("self-update environment is missing or changed managed GitHub App settings: %s", strings.Join(unexpected, ", "))
+	}
+}
+
+func TestCopyManagedGitHubAppKeyRejectsOversizedAndSymlinkedSources(t *testing.T) {
+	home := t.TempDir()
+	oversized := filepath.Join(t.TempDir(), "oversized.pem")
+	if err := os.WriteFile(oversized, bytes.Repeat([]byte("x"), maxGitHubAppPrivateKeySize+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := copyManagedGitHubAppKey(home, oversized); err == nil || !strings.Contains(err.Error(), "size limit") {
+		t.Fatalf("oversized source was not rejected by the bounded read: %v", err)
+	}
+
+	target := writeManagedAppTestKey(t, t.TempDir(), 0o600)
+	link := filepath.Join(t.TempDir(), "linked.pem")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := copyManagedGitHubAppKey(home, link); err == nil {
+		t.Fatal("symlinked source key was accepted")
+	}
+}
+
+func TestConfigureGitHubAppParserDoesNotEchoArguments(t *testing.T) {
+	secretArgument := "--private-key=/sensitive/local/path.pem"
+	previousStderr := os.Stderr
+	readEnd, writeEnd, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = writeEnd
+	configureErr := configureManagedGitHubApp(t.TempDir(), []string{secretArgument, "--unknown"})
+	_ = writeEnd.Close()
+	os.Stderr = previousStderr
+	output, readErr := io.ReadAll(readEnd)
+	_ = readEnd.Close()
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if configureErr == nil || strings.Contains(configureErr.Error(), secretArgument) || strings.Contains(string(output), secretArgument) {
+		t.Fatalf("parser exposed a secret-bearing argument: err=%q output=%q", configureErr, output)
 	}
 }
 
@@ -206,18 +257,29 @@ func TestManagedGitHubAppRuntimeRefreshDecision(t *testing.T) {
 	}
 }
 
-func TestGitHubAppBootstrapDoesNotBootOutAServiceThatRacedConfiguration(t *testing.T) {
+func TestGitHubAppBootstrapUsesSavedSettingsOverShellValues(t *testing.T) {
 	userHome, managed, plist := managedGitHubAppTestSetup(t)
 	t.Setenv("HOME", userHome)
 	t.Setenv("ZENCHRON_MANAGED_HOME", managed)
 	for _, key := range managedGitHubAppEnvironmentKeys {
 		t.Setenv(key, "")
 	}
+	t.Setenv("ZENCHRON_GITHUB_APP_ID", "222222")
+	t.Setenv("ZENCHRON_GITHUB_INSTALLATION_ID", "333333")
+	t.Setenv("ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", writeManagedAppTestKey(t, t.TempDir(), 0o600))
 	commandDirectory := t.TempDir()
 	commandLog := filepath.Join(t.TempDir(), "launchctl.log")
 	t.Setenv("LAUNCHCTL_LOG", commandLog)
-	writeLaunchctlStub(t, commandDirectory, "printf '%s\\n' \"$*\" >> \"$LAUNCHCTL_LOG\"\nexit 1\n")
+	writeLaunchctlStub(t, commandDirectory, "printf '%s\\n' \"$*\" >> \"$LAUNCHCTL_LOG\"\n[ \"$1\" = bootstrap ] && exit 1\nexit 0\n")
 	t.Setenv("PATH", commandDirectory+string(os.PathListSeparator)+"/usr/bin:/bin")
+	savedKey := writeManagedAppTestKey(t, t.TempDir(), 0o600)
+	contents := renderLaunchAgent("managed-entrypoint", userHome, filepath.Join(managed, "logs"), map[string]string{
+		"PATH": "/usr/bin:/bin", "ZENCHRON_GITHUB_APP_ID": "123456",
+		"ZENCHRON_GITHUB_INSTALLATION_ID": "987654", "ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH": savedKey,
+	})
+	if err := os.WriteFile(plist, contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := bootstrapManagedGitHubAppLaunchAgent(managed, "managed-entrypoint"); err == nil {
 		t.Fatal("a bootstrap conflict was treated as a successful start")
@@ -227,7 +289,32 @@ func TestGitHubAppBootstrapDoesNotBootOutAServiceThatRacedConfiguration(t *testi
 	}
 	commands := string(mustReadFile(t, commandLog))
 	if !strings.Contains(commands, "bootstrap gui/") || strings.Contains(commands, "bootout") {
-		t.Fatalf("racing configuration stopped a loaded service: %q", commands)
+		t.Fatalf("starting a stopped LaunchAgent unexpectedly unloaded a service: %q", commands)
+	}
+	environment, err := launchAgentEnvironmentValues(mustReadFile(t, plist))
+	if err != nil || environment["ZENCHRON_GITHUB_APP_ID"] != "123456" ||
+		environment["ZENCHRON_GITHUB_INSTALLATION_ID"] != "987654" ||
+		environment["ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH"] != savedKey {
+		t.Fatalf("bootstrap replaced configured App settings with shell values: %#v, %v", environment, err)
+	}
+}
+
+func TestReloadManagedGitHubAppLaunchAgentUnloadsAndBootstrapsSavedDefinition(t *testing.T) {
+	userHome, _, _ := managedGitHubAppTestSetup(t)
+	t.Setenv("HOME", userHome)
+	commandDirectory := t.TempDir()
+	commandLog := filepath.Join(t.TempDir(), "launchctl.log")
+	t.Setenv("LAUNCHCTL_LOG", commandLog)
+	writeLaunchctlStub(t, commandDirectory, "printf '%s\\n' \"$*\" >> \"$LAUNCHCTL_LOG\"\nexit 0\n")
+	t.Setenv("PATH", commandDirectory+string(os.PathListSeparator)+"/usr/bin:/bin")
+
+	if err := reloadManagedGitHubAppLaunchAgent(); err != nil {
+		t.Fatal(err)
+	}
+	commands := strings.Split(strings.TrimSpace(string(mustReadFile(t, commandLog))), "\n")
+	if len(commands) != 2 || !strings.HasPrefix(commands[0], "bootout gui/") ||
+		!strings.HasPrefix(commands[1], "bootstrap gui/") {
+		t.Fatalf("LaunchAgent reload command sequence = %q", commands)
 	}
 }
 
