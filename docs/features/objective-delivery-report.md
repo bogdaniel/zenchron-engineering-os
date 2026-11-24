@@ -54,7 +54,7 @@ flowchart LR
   WorkGraph has no authoritative policy-backed assurance record bound to a candidate. `publication_authority` is
   recorded only when durable human authorization matches the integrated commit and approved plan revision/hash; it
   includes the graph revision, actor, time, attempt, and source run. Worker verification and green checks do not create or imply
-  either fact.
+  either fact. The Objective Workspace shows the authorization attempt beside its source run and revision binding.
   Handoffs, decisions and unresolved steps are shown from immutable WorkGraph messages and state.
 - `unknown_evidence` names evidence the available sources cannot establish. Candidate tree SHA remains unknown until a
   successful integration run records it for the selected candidate. Publication authority remains unknown until an
