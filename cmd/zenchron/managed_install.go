@@ -193,40 +193,11 @@ func ensureManagedAgent(home, entrypoint string) error {
 		if err != nil {
 			return fmt.Errorf("read managed LaunchAgent: %w", err)
 		}
-		existingApp, err := launchAgentGitHubAppEnvironment(contents)
-		if err != nil {
-			return valueFreeGitHubAppError("existing managed GitHub App settings are invalid", err)
-		}
-		requestedApp := make(map[string]string, len(managedGitHubAppEnvironmentKeys))
-		for _, key := range managedGitHubAppEnvironmentKeys {
-			requestedApp[key] = environmentValue(os.Environ(), key)
-			if requestedApp[key] == "" {
-				requestedApp[key] = existingApp[key]
-			}
-		}
-		normalizedApp, configured, err := normalizeManagedGitHubAppEnvironment(home, requestedApp)
-		if err != nil {
-			return valueFreeGitHubAppError("managed GitHub App settings could not be applied", err)
-		}
-		appConfigChanged := false
-		if configured && !sameGitHubAppEnvironment(existingApp, normalizedApp) {
-			contents, err = withLaunchAgentEnvironmentValues(contents, normalizedApp)
-			if err != nil {
-				return valueFreeGitHubAppError("managed GitHub App settings could not be applied", err)
-			}
-			if err := writeInstallFile(plist, contents, 0o600); err != nil {
-				return valueFreeGitHubAppError("managed GitHub App settings could not be persisted", err)
-			}
-			appConfigChanged = true
-		}
 		token, found, err := launchAgentStatusCredential(contents)
 		if err != nil {
 			return fmt.Errorf("read local status credential from managed LaunchAgent: %w", err)
 		}
 		if found && token != "" {
-			if appConfigChanged {
-				return restartManagedSupervisor()
-			}
 			return nil
 		}
 		token, err = randomToken(32)
@@ -239,9 +210,6 @@ func ensureManagedAgent(home, entrypoint string) error {
 		}
 		if err := writeInstallFile(plist, contents, 0o600); err != nil {
 			return fmt.Errorf("persist local status credential: %w", err)
-		}
-		if appConfigChanged {
-			return restartManagedSupervisor()
 		}
 		return nil
 	}
@@ -561,7 +529,8 @@ func launchEnvironment() (map[string]string, error) {
 			return nil, valueFreeGitHubAppError("saved managed GitHub App settings are invalid", err)
 		}
 		for _, key := range managedGitHubAppEnvironmentKeys {
-			if environment[key] == "" {
+			delete(environment, key)
+			if saved[key] != "" {
 				environment[key] = saved[key]
 			}
 		}
