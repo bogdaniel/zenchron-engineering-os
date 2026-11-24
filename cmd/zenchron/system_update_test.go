@@ -60,8 +60,9 @@ func TestLocalUpdaterStatusReportsRuntimeGitHubAuthentication(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &appStatus); err != nil || response.Code != http.StatusOK {
 		t.Fatalf("local updater status response = %d %s, decode error %v", response.Code, response.Body.String(), err)
 	}
-	if appStatus["authentication_method"] != gitHubAuthMethodApp || appStatus["app_config_fingerprint"] == "" {
-		t.Fatalf("local updater authentication evidence = %#v", appStatus)
+	fingerprint, fingerprintIsString := appStatus["app_config_fingerprint"].(string)
+	if appStatus["authentication_method"] != gitHubAuthMethodApp || !fingerprintIsString || fingerprint == "" {
+		t.Fatal("local updater response omitted its GitHub App authentication fingerprint")
 	}
 
 	t.Setenv("ZENCHRON_GITHUB_TOKEN", "personal-token-test")
