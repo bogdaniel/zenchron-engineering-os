@@ -244,8 +244,7 @@ func (item product) configurationHistoryFor(access requestAccess) ([]productConf
 	}
 	complete := len(history) == item.configurationRevision() && history[0].Revision == 1
 	result := make([]productConfigurationRevisionView, 0, len(history))
-	showAllRepositories := !access.enforced || access.admin ||
-		len(item.AccessRepositories) == 0 && access.owns(item.CreatedBy)
+	showAllRepositories := !access.enforced || access.admin
 	for _, revision := range history {
 		visibleIDs := make([]string, 0, len(revision.RepositoryIDs))
 		redacted := false
