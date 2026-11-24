@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -87,6 +88,42 @@ func TestProductConfigurationRevisionAdvancesOnlyWhenConfigurationChanges(t *tes
 	}
 	if got := update("Changed"); got != 2 {
 		t.Fatalf("unchanged config revision = %d, want 2", got)
+	}
+}
+
+func TestProductConfigurationHistoryRollsBackWhenPersistenceFails(t *testing.T) {
+	now := time.Now().UTC()
+	item := product{ID: strings.Repeat("a", 32), Name: "Current", Description: "Persisted configuration",
+		ConfigurationRevision: 2, RepositoryIDs: []string{}, CreatedAt: now, UpdatedAt: now}
+	item.ConfigurationHistory = []productConfigurationRevision{
+		{Revision: 1, Name: "Original", Description: "Initial configuration", RepositoryIDs: []string{}, ChangedAt: now},
+		item.configurationSnapshot("operator", now),
+	}
+	store := &productStore{items: map[string]product{item.ID: item}, path: t.TempDir()}
+	request := jsonRequest(http.MethodPut, "/api/v1/products/"+item.ID,
+		strings.NewReader(`{"name":"Changed","description":"Unpersistable","repository_ids":[]}`))
+	request.SetPathValue("id", item.ID)
+	response := httptest.NewRecorder()
+	store.update(response, request)
+	stored, exists := store.get(item.ID)
+	if response.Code != http.StatusInternalServerError || !exists || stored.Name != item.Name ||
+		stored.ConfigurationRevision != item.ConfigurationRevision || len(stored.ConfigurationHistory) != 2 ||
+		stored.ConfigurationHistory[1].Name != item.ConfigurationHistory[1].Name {
+		t.Fatalf("failed product update left inconsistent state: HTTP %d, %#v", response.Code, stored)
+	}
+}
+
+func TestProductConfigurationHistoryRedactsRepositoriesOutsideCurrentAccess(t *testing.T) {
+	firstID, secondID := strings.Repeat("a", 32), strings.Repeat("b", 32)
+	item := product{ID: strings.Repeat("c", 32), Name: "Scoped", ConfigurationRevision: 1,
+		RepositoryIDs: []string{firstID, secondID}, CreatedBy: "owner", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		AccessRepositories: map[string]string{firstID: "github.com/acme/project-a", secondID: "github.com/acme/project-b"}}
+	item.ConfigurationHistory = []productConfigurationRevision{item.configurationSnapshot("owner", item.UpdatedAt)}
+	history, complete := item.configurationHistoryFor(requestAccess{enforced: true, user: "reviewer",
+		repositories: []string{"github.com/acme/project-a"}})
+	if !complete || len(history) != 1 || !history[0].RepositoriesRedacted ||
+		!slices.Equal(history[0].RepositoryIDs, []string{firstID}) {
+		t.Fatalf("partial repository access returned unredacted configuration: %#v, complete %t", history, complete)
 	}
 }
 

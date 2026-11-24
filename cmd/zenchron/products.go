@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"sort"
@@ -13,20 +14,33 @@ import (
 )
 
 type product struct {
-	ID                    string    `json:"id"`
-	Name                  string    `json:"name"`
-	Description           string    `json:"description"`
-	ConfigurationRevision int       `json:"configuration_revision"`
-	DefaultWorkflowID     string    `json:"default_workflow_id,omitempty"`
-	RepositoryIDs         []string  `json:"repository_ids"`
-	CreatedAt             time.Time `json:"created_at"`
-	UpdatedAt             time.Time `json:"updated_at"`
+	ID                    string   `json:"id"`
+	Name                  string   `json:"name"`
+	Description           string   `json:"description"`
+	ConfigurationRevision int      `json:"configuration_revision"`
+	DefaultWorkflowID     string   `json:"default_workflow_id,omitempty"`
+	RepositoryIDs         []string `json:"repository_ids"`
+	// ponytail: history is bounded by maxStateFileSize; add archival only if product edits approach that limit.
+	ConfigurationHistory []productConfigurationRevision `json:"configuration_history,omitempty"`
+	CreatedAt            time.Time                      `json:"created_at"`
+	UpdatedAt            time.Time                      `json:"updated_at"`
 	// CreatedBy is the GitHub login that created the product under an access policy.
 	CreatedBy string `json:"created_by,omitempty"`
 	// AccessRepositories maps each linked project id to its repository, recorded when the project is
 	// linked under an access policy. Whoever may touch one of them may see and edit the product. They are
 	// stored because a project id resolves to a repository only while its worker is registered, and they
 	// are never returned: a viewer may lack access to some of them.
+	AccessRepositories map[string]string `json:"access_repositories,omitempty"`
+}
+
+type productConfigurationRevision struct {
+	Revision           int               `json:"revision"`
+	Name               string            `json:"name"`
+	Description        string            `json:"description"`
+	RepositoryIDs      []string          `json:"repository_ids"`
+	DefaultWorkflowID  string            `json:"default_workflow_id,omitempty"`
+	ChangedBy          string            `json:"changed_by,omitempty"`
+	ChangedAt          time.Time         `json:"changed_at"`
 	AccessRepositories map[string]string `json:"access_repositories,omitempty"`
 }
 
@@ -60,6 +74,7 @@ func (item product) visible(access requestAccess) bool {
 // public is the product as returned by the API.
 func (item product) public() product {
 	item.AccessRepositories = nil
+	item.ConfigurationHistory = nil
 	item.ConfigurationRevision = item.configurationRevision()
 	return item
 }
@@ -162,7 +177,91 @@ func validStoredProduct(item product) bool {
 		}
 		seen[repositoryID] = struct{}{}
 	}
+	previousRevision := 0
+	for _, revision := range item.ConfigurationHistory {
+		if previousRevision > 0 && revision.Revision != previousRevision+1 ||
+			revision.Revision < 1 || revision.Revision > item.configurationRevision() ||
+			strings.TrimSpace(revision.Name) == "" || len(revision.Name) > 100 || len(revision.Description) > 2000 ||
+			len(revision.ChangedBy) > 100 || revision.ChangedAt.IsZero() {
+			return false
+		}
+		if revision.DefaultWorkflowID != "" && (len(revision.DefaultWorkflowID) > 100 ||
+			strings.TrimSpace(revision.DefaultWorkflowID) != revision.DefaultWorkflowID) {
+			return false
+		}
+		if !validProductRepositoryIDs(revision.RepositoryIDs) {
+			return false
+		}
+		for id, repository := range revision.AccessRepositories {
+			if !slices.Contains(revision.RepositoryIDs, id) || !validGitRemote(repository) {
+				return false
+			}
+		}
+		previousRevision = revision.Revision
+	}
+	if len(item.ConfigurationHistory) > 0 && previousRevision != item.configurationRevision() {
+		return false
+	}
+	if len(item.ConfigurationHistory) > 0 {
+		latest := item.ConfigurationHistory[len(item.ConfigurationHistory)-1]
+		if latest.Name != item.Name || latest.Description != item.Description ||
+			latest.DefaultWorkflowID != item.DefaultWorkflowID || !slices.Equal(latest.RepositoryIDs, item.RepositoryIDs) {
+			return false
+		}
+	}
 	return true
+}
+
+func validProductRepositoryIDs(ids []string) bool {
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		decoded, err := hex.DecodeString(id)
+		if err != nil || len(decoded) != 16 || id != strings.ToLower(id) {
+			return false
+		}
+		if _, exists := seen[id]; exists {
+			return false
+		}
+		seen[id] = struct{}{}
+	}
+	return true
+}
+
+func (item product) configurationSnapshot(actor string, changedAt time.Time) productConfigurationRevision {
+	return productConfigurationRevision{Revision: item.configurationRevision(), Name: item.Name, Description: item.Description,
+		RepositoryIDs: slices.Clone(item.RepositoryIDs), DefaultWorkflowID: item.DefaultWorkflowID, ChangedBy: actor,
+		ChangedAt: changedAt, AccessRepositories: maps.Clone(item.AccessRepositories)}
+}
+
+func (item product) configurationHistoryFor(access requestAccess) ([]productConfigurationRevisionView, bool) {
+	history := slices.Clone(item.ConfigurationHistory)
+	if len(history) == 0 {
+		changedAt := item.UpdatedAt
+		if item.configurationRevision() == 1 {
+			changedAt = item.CreatedAt
+		}
+		history = []productConfigurationRevision{item.configurationSnapshot("", changedAt)}
+	}
+	complete := len(history) == item.configurationRevision() && history[0].Revision == 1
+	result := make([]productConfigurationRevisionView, 0, len(history))
+	showAllRepositories := !access.enforced || access.admin ||
+		len(item.AccessRepositories) == 0 && access.owns(item.CreatedBy)
+	for _, revision := range history {
+		visibleIDs := make([]string, 0, len(revision.RepositoryIDs))
+		redacted := false
+		for _, id := range revision.RepositoryIDs {
+			repository, known := revision.AccessRepositories[id]
+			if showAllRepositories || known && access.allows(repository) {
+				visibleIDs = append(visibleIDs, id)
+				continue
+			}
+			redacted = true
+		}
+		result = append(result, productConfigurationRevisionView{Revision: revision.Revision, Name: revision.Name,
+			Description: revision.Description, RepositoryIDs: visibleIDs, DefaultWorkflowID: revision.DefaultWorkflowID,
+			ChangedBy: revision.ChangedBy, ChangedAt: revision.ChangedAt, RepositoriesRedacted: redacted})
+	}
+	return result, complete
 }
 
 func (store *productStore) list(w http.ResponseWriter, r *http.Request) {
@@ -230,6 +329,7 @@ func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: now, UpdatedAt: now,
 		CreatedBy: access.user, AccessRepositories: accessRepositories,
 	}
+	item.ConfigurationHistory = []productConfigurationRevision{item.configurationSnapshot(access.user, now)}
 	store.mu.Lock()
 	if store.nameExists(access, item.Name, "") {
 		store.mu.Unlock()
@@ -308,11 +408,23 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 	}
 	item.AccessRepositories = accessRepositories
 	item.ConfigurationRevision = previous.configurationRevision()
-	if item.Name != previous.Name || item.Description != previous.Description ||
-		item.DefaultWorkflowID != previous.DefaultWorkflowID || !slices.Equal(item.RepositoryIDs, previous.RepositoryIDs) {
+	configurationChanged := item.Name != previous.Name || item.Description != previous.Description ||
+		item.DefaultWorkflowID != previous.DefaultWorkflowID || !slices.Equal(item.RepositoryIDs, previous.RepositoryIDs)
+	if configurationChanged {
 		item.ConfigurationRevision++
 	}
 	item.UpdatedAt = time.Now().UTC()
+	item.ConfigurationHistory = slices.Clone(previous.ConfigurationHistory)
+	if configurationChanged {
+		if len(item.ConfigurationHistory) == 0 {
+			changedAt := previous.UpdatedAt
+			if previous.configurationRevision() == 1 {
+				changedAt = previous.CreatedAt
+			}
+			item.ConfigurationHistory = append(item.ConfigurationHistory, previous.configurationSnapshot("", changedAt))
+		}
+		item.ConfigurationHistory = append(item.ConfigurationHistory, item.configurationSnapshot(access.user, item.UpdatedAt))
+	}
 	store.items[id] = item
 	if err := store.persistLocked(); err != nil {
 		store.items[id] = previous
