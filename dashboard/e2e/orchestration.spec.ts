@@ -241,6 +241,12 @@ test('proposed plan approval stays disabled while its repository worker is offli
   await page.setViewportSize(viewports[0]);
   const proposed = { ...plan, status: 'proposed', graph_id: undefined, approved_by: undefined };
   await mockOrchestration(page, { plans: [proposed] });
+  await page.route('**/api/v1/workers', (route) => route.fulfill(json([{
+    id: workerID, name: 'dev-laptop', status: 'offline', last_seen: now, providers: [],
+  }])));
+  await page.route('**/api/v1/projects', (route) => route.fulfill(json(projects.map((project) => ({
+    ...project, worker_status: 'offline',
+  })))));
   const panel = await openPlan(page);
   const approval = panel.getByRole('button', { name: 'Approve plan and start' });
   await expect(approval).toBeDisabled();
