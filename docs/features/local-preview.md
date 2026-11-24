@@ -66,7 +66,7 @@ zenchron-engineering auth github-app configure --app-id ID --installation-id ID 
 zenchron-engineering auth github-app status
 ```
 
-Keep the PEM file local; never paste its contents into a command, issue, commit, log, or chat. The configure command copies it into the existing owner-only managed directory and refuses to change settings when it cannot verify that work is idle. Check the value-free status until the managed updater reports verified.
+Keep the PEM file local; never paste its contents into a command, issue, commit, log, or chat. When the supervisor is loaded, the configure command verifies that active runs are zero before changing settings; it refuses if that count cannot be verified or is nonzero, then requests the existing supervisor's graceful restart. Check the value-free status until the managed updater reports verified.
 
 
 ## Feature diagram
