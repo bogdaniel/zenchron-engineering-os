@@ -319,7 +319,7 @@ func TestPullRequestPublicationRetriesWithoutDuplicates(t *testing.T) {
 	}
 }
 
-func TestPullRequestPublicationDoesNotOverwriteANewerAttempt(t *testing.T) {
+func TestPullRequestPublicationBlocksConcurrentRequestChanges(t *testing.T) {
 	for _, path := range []string{"worker result", "manual retry"} {
 		t.Run(path, func(t *testing.T) {
 			harness := newDeliveryHarness(t, workerapi.ProviderCodex)
@@ -330,38 +330,32 @@ func TestPullRequestPublicationDoesNotOverwriteANewerAttempt(t *testing.T) {
 			if initialStatus != http.StatusOK || awaiting.Publication != publicationAwaitingAuthority {
 				t.Fatalf("initial run = %#v, HTTP %d", awaiting, initialStatus)
 			}
-			authorized := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish",
-				`{"candidate_sha":"`+testCommit+`"}`)
-			if authorized.Code != http.StatusAccepted {
-				t.Fatalf("authorization returned HTTP %d: %s", authorized.Code, authorized.Body.String())
+			if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusAccepted {
+				t.Fatalf("authorization returned HTTP %d: %s", response.Code, response.Body.String())
 			}
 			if command := harness.claim(); command.Attempts != 2 || !command.PublishPullRequest {
 				t.Fatalf("publication command = %#v", command)
 			}
-			var expected agentRun
 			if path == "manual retry" {
 				harness.failPullCreate = true
 				if finished, status := harness.finish(run.ID, strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1)); status != http.StatusOK ||
 					finished.Publication != publicationPullRequestFailed {
 					t.Fatalf("initial publication = %#v, HTTP %d", finished, status)
 				}
-				harness.mu.Lock()
 				harness.failPullCreate = false
-				harness.mu.Unlock()
 			}
+			var changesStatus int
 			harness.duringPullCreate = func() {
-				response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/request-changes", `{"comment":"Revise the change."}`)
-				if response.Code != http.StatusOK {
-					t.Errorf("request changes during publication returned HTTP %d", response.Code)
-				}
-				if command := harness.claim(); command.Attempts != 3 {
-					t.Errorf("claimed attempt %d during publication, want 3", command.Attempts)
-				}
+				changesStatus = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/request-changes",
+					`{"comment":"Revise the change."}`).Code
 				harness.store.mu.Lock()
-				expected = harness.store.items[run.ID]
+				current := harness.store.items[run.ID]
 				harness.store.mu.Unlock()
+				if current.Status != "succeeded" || current.Attempts != 2 || !current.Publishing ||
+					len(current.ReviewComments) != 0 {
+					t.Errorf("concurrent request changed an in-flight publication: %#v", current)
+				}
 			}
-
 			var status int
 			if path == "manual retry" {
 				status = harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish",
@@ -369,16 +363,21 @@ func TestPullRequestPublicationDoesNotOverwriteANewerAttempt(t *testing.T) {
 			} else {
 				_, status = harness.finish(run.ID, strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1))
 			}
-			if status != http.StatusConflict {
-				t.Fatalf("publication after attempt changed returned HTTP %d, want conflict", status)
+			if changesStatus != http.StatusConflict || status != http.StatusOK {
+				t.Fatalf("request changes returned HTTP %d; publication returned HTTP %d", changesStatus, status)
 			}
-			harness.store.mu.Lock()
-			current := harness.store.items[run.ID]
-			harness.store.mu.Unlock()
-			if current.Status != expected.Status || current.Attempts != expected.Attempts || current.Publication != expected.Publication ||
-				current.PullRequestError != expected.PullRequestError || current.PullRequestNumber != expected.PullRequestNumber ||
-				current.Publishing != expected.Publishing {
-				t.Fatalf("late publication changed attempt 2: %#v", current)
+			current, exists := harness.store.get(run.ID)
+			if !exists || current.Status != "succeeded" || current.Attempts != 2 || current.Publishing ||
+				current.Publication != publicationPublished || current.PullRequestURL == "" || len(current.ReviewComments) != 0 {
+				t.Fatalf("publication did not persist before later review action: %#v", current)
+			}
+			if response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/request-changes",
+				`{"comment":"Revise the change."}`); response.Code != http.StatusOK {
+				t.Fatalf("request changes after publication returned HTTP %d", response.Code)
+			}
+			if current, exists = harness.store.get(run.ID); !exists || current.Status != "queued" ||
+				len(current.ReviewComments) != 1 || current.Publishing {
+				t.Fatalf("post-publication request was not accepted as a separate action: %#v", current)
 			}
 		})
 	}
