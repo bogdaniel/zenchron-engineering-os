@@ -10,6 +10,7 @@ import (
 const (
 	actionPlanApproval = "plan_approval"
 	actionDecision     = "work_graph_decision"
+	actionPublication  = "publication_authorization"
 )
 
 type actionRequiredItem struct {
@@ -93,6 +94,18 @@ func (store *workGraphStore) actionRequired(w http.ResponseWriter, r *http.Reque
 				UnitKey: message.From, Stage: stage, UnitTitle: title,
 				RunID: message.RunID, Subject: message.Body, Reason: reason,
 				Options: append([]string{}, message.Notes...), CanAct: canAct, ActionBlocker: blocker})
+		}
+		for index := range graph.Units {
+			unit := &graph.Units[index]
+			if !unit.PublicationAuthorizationRequired || len(unit.RunIDs) == 0 {
+				continue
+			}
+			items = append(items, actionRequiredItem{ID: "publication:" + graph.ID + ":" + unit.Candidate,
+				Kind: actionPublication, ObjectiveID: graph.ObjectiveID, ObjectiveTitle: graph.ObjectiveTitle,
+				PlanRevision: graph.PlanRevision, GraphID: graph.ID, UnitKey: unit.Key, Stage: "Publication authorization",
+				UnitTitle: unit.Title, RunID: unit.RunIDs[len(unit.RunIDs)-1], Subject: unit.Candidate,
+				Reason:  "The current candidate passed its assigned independent review; a person must authorize PR creation.",
+				Options: []string{"Authorize pull request creation"}, CanAct: true})
 		}
 	}
 	slices.SortFunc(items, func(a, b actionRequiredItem) int {
