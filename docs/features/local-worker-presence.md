@@ -14,7 +14,7 @@ permission.
 flowchart LR
     Browser[React dashboard<br/>Mantine + Tabler] -->|GET /healthz<br/>GET /api/v1/workers<br/>GET /api/v1/projects| UI[Dashboard dev server<br/>127.0.0.1:4173]
     UI -->|proxy API requests| API[Go control plane<br/>127.0.0.1:8080]
-    Worker[Go local worker] -->|scan local root<br/>PUT names, branch, IDs + sanitized origin locator + coding CLI status| API
+    Worker[Go local worker] -->|scan local root<br/>PUT /api/v1/workers/{id}/heartbeat<br/>names, branch, IDs + sanitized origin locator + coding CLI status| API
     Worker -->|bounded auth probe in worker process environment| CLIs[Installed Codex / Claude CLIs]
     CLIs -->|probe output and exit status| Worker
     Worker -->|derived provider status and reason only| API
