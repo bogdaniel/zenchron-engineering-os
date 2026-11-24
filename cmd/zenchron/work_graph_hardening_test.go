@@ -295,4 +295,16 @@ func TestPublicationPersistenceFailureReleasesUpdateBarrier(t *testing.T) {
 	if restarted.items[integration.ID].Publishing {
 		t.Fatal("recovered run was marked as publishing")
 	}
+	harness.duringPullCreate = nil
+	harness.restart()
+	response = harness.call(http.MethodPost, "/api/v1/agent-runs/"+integration.ID+"/publish",
+		fmt.Sprintf(`{"candidate_sha":%q}`, commit(4)))
+	var published agentRun
+	if err := json.NewDecoder(response.Body).Decode(&published); err != nil || response.Code != http.StatusOK ||
+		published.Publication != publicationPublished || published.PullRequestURL == "" {
+		t.Fatalf("publication retry after restart = HTTP %d, run %#v, decode error %v", response.Code, published, err)
+	}
+	if harness.pullCreates != 1 {
+		t.Fatalf("restart retry created %d pull requests, want the already-created pull request to be reused", harness.pullCreates)
+	}
 }
