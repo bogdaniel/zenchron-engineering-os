@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -88,6 +89,12 @@ func TestManagedLaunchAgentDoesNotForceKillGracefulShutdown(t *testing.T) {
 	contents := renderLaunchAgent("entrypoint", "home", "logs", map[string]string{"PATH": "/usr/bin:/bin"})
 	if !strings.Contains(string(contents), "<key>ExitTimeOut</key><integer>0</integer>") {
 		t.Fatal("managed LaunchAgent does not allow the supervisor to finish graceful shutdown")
+	}
+	legacy := bytes.Replace(contents, []byte("<key>ExitTimeOut</key><integer>0</integer>"),
+		[]byte("<key>ExitTimeOut</key><integer>20</integer>"), 1)
+	updated, err := withLaunchAgentExitTimeout(legacy)
+	if err != nil || !bytes.Contains(updated, []byte("<key>ExitTimeOut</key><integer>0</integer>")) {
+		t.Fatalf("LaunchAgent reload did not remove its finite shutdown timeout: error=%v", err)
 	}
 }
 
