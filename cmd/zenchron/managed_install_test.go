@@ -84,6 +84,13 @@ func TestLaunchEnvironmentResolvesRelativeStateDirectory(t *testing.T) {
 	}
 }
 
+func TestManagedLaunchAgentDoesNotForceKillGracefulShutdown(t *testing.T) {
+	contents := renderLaunchAgent("entrypoint", "home", "logs", map[string]string{"PATH": "/usr/bin:/bin"})
+	if !strings.Contains(string(contents), "<key>ExitTimeOut</key><integer>0</integer>") {
+		t.Fatal("managed LaunchAgent does not allow the supervisor to finish graceful shutdown")
+	}
+}
+
 func TestEnsureManagedAgentRepairsLoadedLaunchAgentWithoutRestart(t *testing.T) {
 	userHome := t.TempDir()
 	managed := filepath.Join(userHome, "installation")
