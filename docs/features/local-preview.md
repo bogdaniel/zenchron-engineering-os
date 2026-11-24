@@ -55,7 +55,8 @@ For the current objective-to-PR workflow, grant these repository permissions to 
 - **Pull requests: read and write** to inspect candidates and create pull requests.
 - **Issues: read and write** for issue details and comments.
 - **Actions: read**, **Checks: read**, and **Commit statuses: read** for delivery and updater verification.
-- **Metadata: read** is granted automatically.
+- **Administration: read** when the updater must inspect classic branch protection rules; it does not need Administration write.
+- **Metadata: read** is granted automatically and covers repository/ruleset metadata.
 
 Install the App only on the updater repository and the repositories the operator intends to use. The worker pushes its candidate branch with the workstation's configured Git credentials; the App token does not go to workers. **Contents: write** is only needed for the separate App-mediated GitHub merge action. Do not grant it when the intended workflow stops at reviewed PR creation.
 
@@ -157,10 +158,10 @@ GitHub authentication is required to inspect protected-branch/ruleset metadata a
 existing GitHub App through `zenchron-engineering auth github-app configure`; App IDs and the managed key path are kept
 in the existing owner-only LaunchAgent plist, and a copied private key is kept in an owner-only file under the managed
 installation, outside the repository and versioned releases. The App settings are loaded by the existing supervisor
-and control plane, and are not passed to the worker or dashboard. The GitHub App
-needs repository metadata, contents, administration, commit statuses, and check runs read access to verify branch
-protection and required checks. Pull requests: write is additionally required only when the control plane is authorized
-to create PRs.
+and control plane, and are not passed to the worker or dashboard. The GitHub App needs repository metadata, contents, commit statuses, check runs, and (when classic branch protection
+is used) administration read access to verify branch protection and required checks. Administration write is not
+needed. Pull requests read is needed to inspect candidates; write is additionally required only when the control plane
+is authorized to create PRs.
 
 The installation requires no root privileges, containers or external server. This implementation currently uses
 macOS LaunchAgents. By default it reuses the existing `<UserConfigDir>/zenchron` durable state directory and keeps

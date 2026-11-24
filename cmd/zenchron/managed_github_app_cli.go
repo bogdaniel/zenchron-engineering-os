@@ -286,7 +286,12 @@ func inspectManagedGitHubAppStatus(home string) (managedGitHubAppDiagnostic, err
 }
 
 func readManagedUpdaterStatus(client *http.Client) (updater.Status, error) {
-	response, err := client.Get("http://127.0.0.1:8080/api/v1/system/update")
+	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/update", nil)
+	if err != nil {
+		return updater.Status{}, err
+	}
+	request.Header.Set(localStatusCredentialHeader, localStatusCredential())
+	response, err := client.Do(request)
 	if err != nil {
 		return updater.Status{}, err
 	}

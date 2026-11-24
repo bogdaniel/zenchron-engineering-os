@@ -189,6 +189,10 @@ func authHandler(next http.Handler, config *authConfig) http.Handler {
 			return
 		}
 		if config != nil && strings.HasPrefix(r.URL.Path, "/api/v1/") {
+			if localStatusCredentialRequest(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			if r.URL.Path == "/api/v1/system/status" && r.Method == http.MethodGet && config.statusGrants != nil {
 				if token := r.Header.Get("X-Zenchron-Status-Grant"); token != "" {
 					if !isLoopbackRequest(r) {

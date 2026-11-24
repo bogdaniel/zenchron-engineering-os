@@ -81,7 +81,7 @@ func writeLocalSystemStatus(w http.ResponseWriter, r *http.Request, registry *wo
 		return
 	}
 	token := localStatusCredential()
-	if !hasSystemStatusGrant(r) && (token == "" || !hmac.Equal([]byte(r.Header.Get("X-Zenchron-Local-Status-Token")), []byte(token))) {
+	if !hasSystemStatusGrant(r) && (token == "" || !hmac.Equal([]byte(r.Header.Get(localStatusCredentialHeader)), []byte(token))) {
 		http.Error(w, "system status credential required", http.StatusUnauthorized)
 		return
 	}
@@ -266,6 +266,8 @@ func summarizeStoredRunUsage(runs *agentRunStore) *systemStatusUsage {
 	return usage
 }
 
+const localStatusCredentialHeader = "X-Zenchron-Local-Status-Token"
+
 func localStatusCredential() string {
 	// Read the plist first so a live credential repair also updates an older supervisor process.
 	if path, err := managedLaunchAgentPlistPath(); err == nil {
@@ -276,4 +278,15 @@ func localStatusCredential() string {
 		}
 	}
 	return strings.TrimSpace(os.Getenv("ZENCHRON_LOCAL_STATUS_TOKEN"))
+}
+
+func localStatusCredentialRequest(r *http.Request) bool {
+	if r.Method != http.MethodGet || !isLoopbackRequest(r) {
+		return false
+	}
+	if r.URL.Path != "/api/v1/system/status" && r.URL.Path != "/api/v1/system/update" {
+		return false
+	}
+	token := localStatusCredential()
+	return token != "" && hmac.Equal([]byte(r.Header.Get(localStatusCredentialHeader)), []byte(token))
 }
