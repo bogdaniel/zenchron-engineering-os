@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -48,6 +49,18 @@ func newGitHubAppAuthFromEnv() *gitHubAppAuth {
 
 func (auth *gitHubAppAuth) configured() bool {
 	return auth.appID != "" && auth.installationID != "" && auth.privateKeyPath != ""
+}
+
+func (auth *gitHubAppAuth) configurationFingerprint() string {
+	if !auth.configured() {
+		return ""
+	}
+	key, err := loadGitHubAppPrivateKey(auth.privateKeyPath)
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256([]byte(auth.appID + "\x00" + auth.installationID + "\x00" + publicKeyFingerprint(key)))
+	return hex.EncodeToString(digest[:])
 }
 
 func (auth *gitHubAppAuth) accessToken(ctx context.Context, client gitHubClient) (string, error) {

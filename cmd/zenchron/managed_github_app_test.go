@@ -172,6 +172,40 @@ func TestManagedUpdaterVerificationClassifiesFailureStates(t *testing.T) {
 	}
 }
 
+func TestGitHubAppConfigurationFingerprintBindsAppInstallationAndKey(t *testing.T) {
+	key := writeManagedAppTestKey(t, t.TempDir(), 0o600)
+	base := gitHubAppAuth{appID: "123", installationID: "456", privateKeyPath: key}
+	want := base.configurationFingerprint()
+	if want == "" || base.configurationFingerprint() != want {
+		t.Fatal("GitHub App configuration fingerprint was empty or unstable")
+	}
+	changedApp := gitHubAppAuth{appID: "789", installationID: base.installationID, privateKeyPath: key}
+	changedInstallation := gitHubAppAuth{appID: base.appID, installationID: "101112", privateKeyPath: key}
+	if changedApp.configurationFingerprint() == want || changedInstallation.configurationFingerprint() == want {
+		t.Fatal("GitHub App configuration fingerprint did not bind both IDs")
+	}
+}
+
+func TestManagedGitHubAppRuntimeRefreshDecision(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		diagnostic managedGitHubAppDiagnostic
+		want       bool
+	}{
+		{name: "active exact app config", diagnostic: managedGitHubAppDiagnostic{Authentication: gitHubAuthMethodApp, Updater: "verified"}},
+		{name: "stale active app config", diagnostic: managedGitHubAppDiagnostic{Authentication: gitHubAuthMethodApp, Updater: "runtime_configuration_stale"}, want: true},
+		{name: "old runtime provider", diagnostic: managedGitHubAppDiagnostic{Authentication: gitHubAuthMethodMissing, Updater: "runtime_unavailable"}, want: true},
+		{name: "pat takes precedence", diagnostic: managedGitHubAppDiagnostic{Authentication: gitHubAuthMethodPersonalToken,
+			Updater: "personal_token_precedence"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := managedGitHubAppRuntimeNeedsRefresh(test.diagnostic); got != test.want {
+				t.Fatalf("runtime refresh decision = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
 func TestManagedGitHubAppStatusDistinguishesMissingKeyAndInstallation(t *testing.T) {
 	userHome, managed, plist := managedGitHubAppTestSetup(t)
 	t.Setenv("HOME", userHome)

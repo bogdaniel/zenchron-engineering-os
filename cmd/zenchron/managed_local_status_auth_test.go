@@ -1,9 +1,11 @@
 package main
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,7 +70,7 @@ func TestManagedStatusRequestsDoNotFollowRedirects(t *testing.T) {
 		call func(*http.Client) error
 	}{
 		{name: "updater status", call: func(client *http.Client) error {
-			_, err := readManagedUpdaterStatus(client)
+			_, _, _, err := readManagedUpdaterStatus(client)
 			return err
 		}},
 		{name: "active-run preflight", call: func(client *http.Client) error {
@@ -94,5 +96,22 @@ func TestManagedStatusRequestsDoNotFollowRedirects(t *testing.T) {
 				t.Fatalf("local status request made %d HTTP requests, want 1", calls)
 			}
 		})
+	}
+}
+
+func TestReadManagedUpdaterStatusDecodesRuntimeAuthenticationEvidence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ZENCHRON_LOCAL_STATUS_TOKEN", "owner-local-status-token")
+	client := &http.Client{Transport: managedTestTransport(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Host != "127.0.0.1:8080" || request.Header.Get(localStatusCredentialHeader) != "owner-local-status-token" {
+			t.Fatal("runtime authentication evidence request used the wrong target or credential")
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header),
+			Body:    io.NopCloser(strings.NewReader(`{"state":"idle","authentication_method":"github_app","app_config_fingerprint":"runtime-fingerprint"}`)),
+			Request: request}, nil
+	})}
+	status, method, fingerprint, err := readManagedUpdaterStatus(client)
+	if err != nil || status.State != "idle" || method != gitHubAuthMethodApp || fingerprint != "runtime-fingerprint" {
+		t.Fatalf("runtime updater evidence = (%#v, %q, %q, %v)", status, method, fingerprint, err)
 	}
 }

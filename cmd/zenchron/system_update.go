@@ -14,7 +14,7 @@ import (
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
-func systemUpdateStatus(w http.ResponseWriter, _ *http.Request) {
+func systemUpdateStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	path := strings.TrimSpace(os.Getenv("ZENCHRON_UPDATE_STATUS_FILE"))
 	if path == "" {
@@ -24,6 +24,20 @@ func systemUpdateStatus(w http.ResponseWriter, _ *http.Request) {
 	status, err := updater.ReadStatus(path)
 	if err != nil {
 		http.Error(w, "update status is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if localStatusCredentialRequest(r) {
+		client := newGitHubClient()
+		authenticationMethod := client.authenticationMethod()
+		response := struct {
+			updater.Status
+			AuthenticationMethod string `json:"authentication_method"`
+			AppConfigFingerprint string `json:"app_config_fingerprint,omitempty"`
+		}{Status: status, AuthenticationMethod: authenticationMethod}
+		if authenticationMethod == gitHubAuthMethodApp {
+			response.AppConfigFingerprint = client.appAuth.configurationFingerprint()
+		}
+		writeJSON(w, http.StatusOK, response)
 		return
 	}
 	writeJSON(w, http.StatusOK, status)

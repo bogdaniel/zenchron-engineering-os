@@ -21,9 +21,10 @@ import (
 const gitHubAppVerificationTimeout = 30 * time.Second
 
 type managedGitHubAppDiagnostic struct {
-	Configuration string
-	Key           string
-	Updater       string
+	Configuration  string
+	Key            string
+	Authentication string
+	Updater        string
 }
 
 func runManagedGitHubAppCommand(args []string) error {
@@ -91,6 +92,33 @@ func configureManagedGitHubApp(home string, args []string) error {
 		diagnostic, err := inspectManagedGitHubAppStatus(home)
 		printGitHubAppDiagnostic(diagnostic)
 		if err != nil {
+			return err
+		}
+		if diagnostic.Authentication == gitHubAuthMethodPersonalToken {
+			return errors.New("managed updater uses a personal access token; GitHub App verification is not established")
+		}
+		if managedGitHubAppRuntimeNeedsRefresh(diagnostic) {
+			verificationRequestedAt := time.Now().UTC()
+			if loaded {
+				if err := managedGitHubAppSetupPreflight(home); err != nil {
+					return err
+				}
+				if err := restartManagedSupervisor(); err != nil {
+					return errors.New("saved GitHub App settings are not active; the supervisor did not accept a graceful restart request")
+				}
+			} else {
+				entrypoint, err := installStableEntrypoint(home)
+				if err != nil {
+					return errors.New("saved GitHub App settings could not be activated")
+				}
+				if err := installLaunchAgent(home, entrypoint); err != nil {
+					return errors.New("saved GitHub App settings could not be activated")
+				}
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), gitHubAppVerificationTimeout)
+			defer cancel()
+			diagnostic, err = waitForManagedGitHubAppVerification(ctx, home, verificationRequestedAt)
+			printGitHubAppDiagnostic(diagnostic)
 			return err
 		}
 		if diagnostic.Updater != "verified" && diagnostic.Updater != "verified_update_in_progress" {
@@ -204,12 +232,21 @@ func printManagedGitHubAppStatus(home string) error {
 }
 
 func printGitHubAppDiagnostic(diagnostic managedGitHubAppDiagnostic) {
-	fmt.Printf("GitHub App configuration: %s\nPrivate key: %s\nManaged updater verification: %s\n",
-		diagnostic.Configuration, diagnostic.Key, diagnostic.Updater)
+	fmt.Printf("GitHub App configuration: %s\nPrivate key: %s\nManaged runtime authentication: %s\nManaged updater verification: %s\n",
+		diagnostic.Configuration, diagnostic.Key, diagnostic.Authentication, diagnostic.Updater)
+}
+
+func managedGitHubAppRuntimeNeedsRefresh(diagnostic managedGitHubAppDiagnostic) bool {
+	if diagnostic.Authentication == gitHubAuthMethodPersonalToken {
+		return false
+	}
+	return diagnostic.Authentication != gitHubAuthMethodApp || diagnostic.Updater == "not_verified" ||
+		diagnostic.Updater == "runtime_unavailable" || diagnostic.Updater == "runtime_configuration_stale"
 }
 
 func inspectManagedGitHubAppStatus(home string) (managedGitHubAppDiagnostic, error) {
-	diagnostic := managedGitHubAppDiagnostic{Configuration: "missing", Key: "missing", Updater: "not_verified"}
+	diagnostic := managedGitHubAppDiagnostic{Configuration: "missing", Key: "missing", Authentication: gitHubAuthMethodMissing,
+		Updater: "not_verified"}
 	plist, err := managedLaunchAgentPlistPath()
 	if err != nil {
 		diagnostic.Configuration = "invalid"
@@ -276,32 +313,48 @@ func inspectManagedGitHubAppStatus(home string) (managedGitHubAppDiagnostic, err
 		diagnostic.Updater = "runtime_unavailable"
 		return diagnostic, nil
 	}
-	status, err := readManagedUpdaterStatus(client)
+	status, authenticationMethod, runtimeFingerprint, err := readManagedUpdaterStatus(client)
 	if err != nil {
 		diagnostic.Updater = "runtime_unavailable"
+		return diagnostic, nil
+	}
+	diagnostic.Authentication = authenticationMethod
+	if authenticationMethod == gitHubAuthMethodPersonalToken {
+		diagnostic.Updater = "personal_token_precedence"
+		return diagnostic, nil
+	}
+	expectedFingerprint := (&gitHubAppAuth{appID: settings["ZENCHRON_GITHUB_APP_ID"],
+		installationID: settings["ZENCHRON_GITHUB_INSTALLATION_ID"],
+		privateKeyPath: settings["ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH"]}).configurationFingerprint()
+	if authenticationMethod != gitHubAuthMethodApp || expectedFingerprint == "" || runtimeFingerprint != expectedFingerprint {
+		diagnostic.Updater = "runtime_configuration_stale"
 		return diagnostic, nil
 	}
 	diagnostic.Updater = managedUpdaterVerification(status, plistInfo.ModTime())
 	return diagnostic, nil
 }
 
-func readManagedUpdaterStatus(client *http.Client) (updater.Status, error) {
+func readManagedUpdaterStatus(client *http.Client) (updater.Status, string, string, error) {
 	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/update", nil)
 	if err != nil {
-		return updater.Status{}, err
+		return updater.Status{}, "", "", err
 	}
 	request.Header.Set(localStatusCredentialHeader, localStatusCredential())
 	response, err := doLocalStatusRequest(client, request)
 	if err != nil {
-		return updater.Status{}, err
+		return updater.Status{}, "", "", err
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return updater.Status{}, errors.New("managed updater status is unavailable")
+		return updater.Status{}, "", "", errors.New("managed updater status is unavailable")
 	}
-	var status updater.Status
+	var status struct {
+		updater.Status
+		AuthenticationMethod string `json:"authentication_method"`
+		AppConfigFingerprint string `json:"app_config_fingerprint"`
+	}
 	err = json.NewDecoder(response.Body).Decode(&status)
-	return status, err
+	return status.Status, status.AuthenticationMethod, status.AppConfigFingerprint, err
 }
 
 func managedUpdaterVerification(status updater.Status, configuredAt time.Time) string {
@@ -339,7 +392,8 @@ func waitForManagedGitHubAppVerification(ctx context.Context, home string, confi
 		if err != nil {
 			return diagnostic, err
 		}
-		if diagnostic.Updater != "not_verified" && diagnostic.Updater != "runtime_unavailable" {
+		if diagnostic.Updater != "not_verified" && diagnostic.Updater != "runtime_unavailable" &&
+			diagnostic.Updater != "runtime_configuration_stale" {
 			if diagnostic.Updater == "verified" || diagnostic.Updater == "verified_update_in_progress" {
 				return diagnostic, nil
 			}

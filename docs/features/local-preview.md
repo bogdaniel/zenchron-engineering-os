@@ -43,11 +43,14 @@ running revision.
 IDs and the copied PEM path in the existing owner-only LaunchAgent plist, copies the PEM into an owner-only file, and
 requests a graceful restart of the existing LaunchAgent. It defers when active runs are present. Reinstall preserves
 the plist settings when the invoking shell has no App credentials, and self-update keeps the LaunchAgent environment.
-`auth github-app status` reports configuration, key readability, and the managed updater's latest verification as
-value-free status categories. `invalid_installation` covers failure to validate the local active release and GitHub
-rejecting the App installation-token request. A `404` while reading the configured repository remains an
-updater-verification failure because that response does not prove the installation ID is invalid. A `403` is reported as insufficient permissions. Workers
-never receive GitHub App credentials.
+`auth github-app status` reports configuration, key readability, the active runtime's authentication method, and the
+managed updater's latest verification as value-free categories. Verification requires a recent updater attempt from
+the running supervisor with the same App ID, installation ID, and public-key identity saved in the LaunchAgent. A
+personal access token taking precedence is reported separately and never counts as GitHub App verification.
+`invalid_installation` covers failure to validate the local active release and GitHub rejecting the App
+installation-token request. A `404` while reading the configured repository remains an updater-verification failure
+because that response does not prove the installation ID is invalid. A `403` is reported as insufficient permissions.
+Workers never receive GitHub App credentials.
 
 
 ### GitHub App permissions and safe configuration
@@ -100,7 +103,7 @@ sequenceDiagram
     S->>S: LaunchAgent restarts after graceful exit
     S->>S: Reload App settings after restart and self-update
     S->>GH: Verify trusted main using the managed App credentials
-    G->>CP: Read updater result from the managed control plane
+    G->>CP: Read updater result and runtime auth provenance from the managed control plane
     CP->>U: Read persisted supervisor verification
     CP-->>G: Return value-free status categories
     G-->>O: Report configuration, key, installation, permission or updater state
