@@ -52,6 +52,49 @@ func TestConfinementSelfTestRejectsASandboxThatDoesNotConfine(t *testing.T) {
 	}
 }
 
+func TestConfinementSelfTestStopsDescendantsOnCancellation(t *testing.T) {
+	directory := t.TempDir()
+	release := filepath.Join(directory, "release")
+	pidFile := filepath.Join(directory, "child.pid")
+	t.Cleanup(func() {
+		if err := os.WriteFile(release, nil, 0o600); err != nil {
+			t.Error(err)
+		}
+	})
+	script := "/bin/sh -c 'while [ ! -f \"$1\" ]; do sleep 0.01; done' sh " + strconv.Quote(release) +
+		" &\necho $! > " + strconv.Quote(pidFile) + "\nwait\n"
+	binary := fakeSandboxCLI(t, script)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- verifyCodexConfinement(ctx, binary) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(pidFile); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := os.Stat(pidFile); err != nil {
+		cancel()
+		t.Fatal("sandbox probe descendant did not start")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		if err := os.WriteFile(release, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("cancelled confinement probe waited on a descendant's inherited output pipes")
+		}
+		t.Fatal("cancelled confinement probe did not stop its descendant promptly")
+	}
+}
+
 func TestRunnerChecksProviderReadinessConcurrently(t *testing.T) {
 	directory := t.TempDir()
 	startedPath := filepath.Join(directory, "started")

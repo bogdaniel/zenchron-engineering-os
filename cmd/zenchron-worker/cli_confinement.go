@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"syscall"
 )
 
 // sharedDataRoots are where operating systems keep other users' files and mounted volumes. They are
@@ -82,7 +83,15 @@ func verifyCodexConfinement(ctx context.Context, binary string) error {
 		"-c", "permissions.zenchron.filesystem="+codexFilesystemProfile(workspace, true), "--",
 		"/bin/sh", "-c", `cat "$1"; echo x > "$2"; echo x > "$3"`, "sh", secret, outside, inside)
 	probe.Dir, probe.Env = workspace.path, providerEnvironment(os.Environ())
-	output, _ := probe.CombinedOutput()
+	ownProcessGroup(probe)
+	probe.WaitDelay = workerHeartbeatInterval
+	output, runErr := probe.CombinedOutput()
+	if probe.Process != nil {
+		_ = syscall.Kill(-probe.Process.Pid, syscall.SIGKILL)
+	}
+	if runErr != nil {
+		return fmt.Errorf("run codex sandbox self-test: %w", runErr)
+	}
 	if _, err := os.Stat(inside); err != nil {
 		return fmt.Errorf("codex sandbox self-test: the sandboxed command could not write inside the workspace: %w", err)
 	}
