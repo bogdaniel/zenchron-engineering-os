@@ -38,6 +38,7 @@ type gitHubReview struct {
 }
 
 type gitHubCheckRun struct {
+	ID         int64  `json:"id"`
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`

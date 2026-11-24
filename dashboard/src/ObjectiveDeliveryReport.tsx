@@ -6,15 +6,17 @@ import { livePageHref } from './livePageHref';
 import './objective-delivery-report.css';
 
 const executionSchema = z.object({
-  run_id: z.string(), status: z.string(), profile_id: z.string().optional(), profile_name: z.string().optional(),
+  run_id: z.string(), result_attempt: z.number().optional(), updated_at: z.string().optional(), status: z.string(),
+  profile_id: z.string().optional(), profile_name: z.string().optional(),
   profile_version: z.number().optional(), persona_id: z.string().optional(), persona_name: z.string().optional(),
   persona_version: z.number().optional(), provider: z.string().optional(), provider_version: z.string().optional(),
-  attempts: z.number(), candidate_commit: z.string().optional(), candidate_tree_sha: z.string().optional(), review_verdict: z.string().optional(),
+  attempts: z.number(), candidate_commit: z.string().optional(), base_commit_sha: z.string().optional(),
+  candidate_tree_sha: z.string().optional(), review_verdict: z.string().optional(),
   verification: z.string().optional(), publication: z.string().optional(), pull_request_url: z.string().optional(),
   failure_recorded: z.boolean().optional(),
 });
 const reportSchema = z.object({
-  graph_id: z.string(), objective_id: z.string(), objective_title: z.string(), plan_revision: z.number(),
+  graph_id: z.string(), graph_revision: z.number().optional(), objective_id: z.string(), objective_title: z.string(), plan_revision: z.number(),
   workflow_id: z.string().optional(), workflow_version: z.number().optional(),
   workflow_mode: z.enum(['compiled', 'guidance']).optional(), status: z.string(),
   approved_plan: z.object({ revision: z.number(), status: z.string(), hash: z.string(), summary: z.string(),
@@ -22,7 +24,7 @@ const reportSchema = z.object({
   units: z.array(z.object({ key: z.string(), kind: z.string(), agent_id: z.string().optional(), agent_name: z.string(),
     state: z.string(), reason: z.string().optional(), candidate: z.string().optional(), verdict: z.string().optional(), run_ids: z.array(z.string()),
     attempts: z.number(), providers: z.array(z.string()), executions: z.array(executionSchema) })),
-  handoffs: z.array(z.object({ from: z.string(), run_id: z.string().optional(), attempt: z.number().optional(),
+  handoffs: z.array(z.object({ message_id: z.string().optional(), from: z.string(), run_id: z.string().optional(), attempt: z.number().optional(),
     commit: z.string().optional(), summary: z.string(), notes: z.array(z.string()) })),
   decisions: z.array(z.object({ request_id: z.string(), question: z.string(), options: z.array(z.string()),
     resolution: z.string().optional(), resolved_by: z.string().optional(), resolved_at: z.string().optional() })),
@@ -37,13 +39,14 @@ const reportSchema = z.object({
   pull_request_url: z.string().optional(),
   pull_request_external_state: z.object({ number: z.number(), state: z.enum(['open', 'closed']), draft: z.boolean(),
     merged: z.boolean(), head_sha: z.string(), candidate_matches_head: z.boolean().optional(), observed_at: z.string(),
-    candidate_checks: z.object({ head_sha: z.string(), observed_at: z.string(), runs: z.array(z.object({ name: z.string(),
+    candidate_checks: z.object({ head_sha: z.string(), observed_at: z.string(), runs: z.array(z.object({ id: z.number().optional(), name: z.string(),
       status: z.string(), conclusion: z.string().optional() })) }).optional() }).optional(),
 });
 type Report = z.infer<typeof reportSchema>;
 const unknownEvidenceLabels: Record<string, string> = {
   candidate_tree_sha: 'candidate tree SHA',
   candidate_checks: 'GitHub checks for the integrated candidate',
+  policy_backed_assurance: 'independent policy-backed assurance',
   publication_authority: 'publication authority',
   pull_request_external_state: 'current pull request state',
 };
@@ -91,6 +94,7 @@ function ReportDetails({ report }: { report: Report }) {
       <Badge variant="light">{report.status}</Badge>
       <Button size="xs" variant="default" onClick={() => downloadReport(report)}>Export JSON</Button>
     </div>
+    <p>WorkGraph <code>{report.graph_id}</code> · revision {report.graph_revision ?? 'unknown'}</p>
     <h5>{report.objective_title}</h5>
     <p>Approved plan revision {report.approved_plan.revision} · {report.approved_plan.status}
       {report.approved_plan.approved_by && ` · approved by ${report.approved_plan.approved_by}`}
@@ -104,10 +108,16 @@ function ReportDetails({ report }: { report: Report }) {
         {unit.candidate && <> · candidate <code>{unit.candidate}</code></>}
         {unit.verdict && <> · verdict {unit.verdict}</>}</p>
       {unit.executions.map((run) => <div className="objective-delivery-run" key={run.run_id}>
-        <span><a href={livePageHref('reviews', { run: run.run_id })}>Run {run.run_id}</a> · {run.status} · {run.attempts} attempt{run.attempts === 1 ? '' : 's'}</span>
+        <span>
+          <a href={livePageHref('reviews', { run: run.run_id })}>Run {run.run_id}</a>
+          {' · result attempt '}{run.result_attempt ?? 'unknown'}
+          {' · record updated '}{run.updated_at ? new Date(run.updated_at).toLocaleString() : 'unknown'}
+          {' · '}{run.status} · {run.attempts} attempt{run.attempts === 1 ? '' : 's'}
+        </span>
         <span>{run.profile_name ? `${run.profile_name} v${run.profile_version ?? 'unknown'}` : 'Zenchron integration'}
           {run.persona_name && ` · ${run.persona_name} v${run.persona_version ?? 'unknown'}`}
           {run.provider && ` · ${run.provider}${run.provider_version ? ` ${run.provider_version}` : ''}`}</span>
+        {unit.kind === 'review' && <span>Reviewed candidate: {run.base_commit_sha ? <code>{run.base_commit_sha}</code> : 'unknown'}</span>}
         <span>Worker-reported verification: {run.verification || 'Not run'}</span>
         {run.candidate_commit && <span>Commit <code>{run.candidate_commit}</code></span>}
         {run.candidate_tree_sha && <span>Tree <code>{run.candidate_tree_sha}</code></span>}
@@ -137,12 +147,14 @@ function ReportDetails({ report }: { report: Report }) {
       {report.pull_request_external_state.candidate_checks.runs.length === 0
         ? <p>No check runs were reported for this candidate.</p>
         : <ul>{report.pull_request_external_state.candidate_checks.runs.map((check, index) => <li key={`${check.name}-${index}`}>
-          {check.name}{' · '}{check.status}{check.conclusion ? ` · ${check.conclusion}` : ''}
+          {check.id !== undefined && <>Check #{check.id} · </>}{check.name}{' · '}{check.status}
+          {check.conclusion ? ` · ${check.conclusion}` : ''}
         </li>)}</ul>}
     </div>}
     <h5>Handoffs and decisions</h5>
     {report.handoffs.map((handoff, index) => <p key={`${handoff.run_id}-${handoff.attempt}-${index}`}>
-      <b>{handoff.from}</b>{handoff.commit && <> · <code>{handoff.commit}</code></>} · {handoff.summary}
+      <b>{handoff.from}</b>{handoff.message_id && <> · message <code>{handoff.message_id}</code></>}
+      {handoff.commit && <> · <code>{handoff.commit}</code></>} · {handoff.summary}
       {handoff.notes.length > 0 && ` · ${handoff.notes.join('; ')}`}</p>)}
     {report.decisions.map((decision) => <p key={decision.request_id}>
       Decision: {decision.question} · {decision.resolution ? `resolved by ${decision.resolved_by}: ${decision.resolution}` : 'outstanding'}

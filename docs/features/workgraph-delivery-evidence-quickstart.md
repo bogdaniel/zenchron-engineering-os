@@ -36,8 +36,9 @@ publication, and PR link where available. `candidate` and `verdict` are present 
 remains listed if its run record is missing; that missing record contributes no attempt/provider data.
 `handoffs`, `decisions`, and `outstanding_steps` preserve recorded progress and unresolved work.
 The top-level `pull_request_url` is present only when the integrate unit has a recorded URL; it does not establish
-a PR's merged state. `unknown_evidence` names missing candidate-tree, publication-authority and external-PR-state
-evidence, rather than inventing it.
+a PR's merged state. `unknown_evidence` names missing candidate-tree, policy-backed assurance, publication-authority
+and external-PR-state evidence, rather than inventing it. Worker-reported verification and GitHub check runs are not
+treated as independent assurance authority.
 
 `measurements` has counts derived from graph or attempt records and optional values derived from run usage or graph
 timestamps:

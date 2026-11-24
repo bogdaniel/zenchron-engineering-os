@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -176,23 +177,45 @@ func (runner *agentRunner) attempt(
 		result.ProviderVersion = provider.version
 	}
 	worktree := workspace.path
-	runner.checkout.Lock()
-	err := prepareWorktree(ctx, root, project, command.ID, command.Branch, command.BaseBranch)
-	runner.checkout.Unlock()
-	if cancelled, _ := reporter.state(); cancelled && err != nil {
-		return cancelledRun(result)
-	}
-	if err != nil {
-		return failed(result, workerapi.TerminationWorkerError, "Could not prepare an isolated branch.")
-	}
-	// No process of this attempt starts before every process of an earlier attempt is gone.
-	owner, err := acquireWorktree(ctx, worktree, runner.guard)
+	lifecycleLock, err := lockWorktreeLifecycle(ctx, root, project.ID)
 	if cancelled, _ := reporter.state(); cancelled && err != nil {
 		return cancelledRun(result)
 	}
 	if err != nil {
 		log.Printf("agent run %s attempt %d: %v", command.ID, command.Attempts, err)
+		return failed(result, workerapi.TerminationWorkerError, "Could not lock the run worktree lifecycle.")
+	}
+	runner.checkout.Lock()
+	err = prepareWorktree(ctx, root, project, command.ID, command.Branch, command.BaseBranch)
+	runner.checkout.Unlock()
+	if cancelled, _ := reporter.state(); cancelled && err != nil {
+		if closeErr := lifecycleLock.Close(); closeErr != nil {
+			log.Printf("agent run %s attempt %d: close worktree lifecycle lock: %v", command.ID, command.Attempts, closeErr)
+		}
+		return cancelledRun(result)
+	}
+	if err != nil {
+		err = errors.Join(err, lifecycleLock.Close())
+		log.Printf("agent run %s attempt %d: %v", command.ID, command.Attempts, err)
+		return failed(result, workerapi.TerminationWorkerError, "Could not prepare an isolated branch.")
+	}
+	// No process of this attempt starts before every process of an earlier attempt is gone.
+	owner, err := acquireWorktree(ctx, worktree, runner.guard)
+	if cancelled, _ := reporter.state(); cancelled && err != nil {
+		if closeErr := lifecycleLock.Close(); closeErr != nil {
+			log.Printf("agent run %s attempt %d: close worktree lifecycle lock: %v", command.ID, command.Attempts, closeErr)
+		}
+		return cancelledRun(result)
+	}
+	if err != nil {
+		err = errors.Join(err, lifecycleLock.Close())
+		log.Printf("agent run %s attempt %d: %v", command.ID, command.Attempts, err)
 		return failed(result, workerapi.TerminationWorkerError, "The run worktree is still in use by an earlier attempt's processes.")
+	}
+	if err := lifecycleLock.Close(); err != nil {
+		owner.release()
+		log.Printf("agent run %s attempt %d: close worktree lifecycle lock: %v", command.ID, command.Attempts, err)
+		return failed(result, workerapi.TerminationWorkerError, "Could not release the run worktree lifecycle lock.")
 	}
 	defer owner.release()
 	runner.checkout.Lock()

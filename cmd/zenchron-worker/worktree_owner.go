@@ -150,11 +150,30 @@ func acquireWorktree(ctx context.Context, worktree string, guard []string) (*wor
 			}
 		}
 	}
+	if err := verifyWorktreeOwnerLock(lock, worktree); err != nil {
+		owner.release()
+		return nil, err
+	}
 	if err := writeOwnerRecord(recordFile, ownerRecord{}); err != nil {
 		owner.release()
 		return nil, fmt.Errorf("clear worktree ownership record: %w", err)
 	}
 	return owner, nil
+}
+
+func verifyWorktreeOwnerLock(lock *os.File, worktree string) error {
+	lockedFile, err := lock.Stat()
+	if err != nil {
+		return fmt.Errorf("inspect open worktree ownership lock: %w", err)
+	}
+	pathFile, err := os.Lstat(worktree + ".owner")
+	if err != nil {
+		return fmt.Errorf("inspect worktree ownership path: %w", err)
+	}
+	if pathFile.Mode()&os.ModeSymlink != 0 || !os.SameFile(lockedFile, pathFile) {
+		return errors.New("worktree ownership lock path changed during acquisition")
+	}
+	return nil
 }
 
 func (owner *worktreeOwner) tryLock() bool {

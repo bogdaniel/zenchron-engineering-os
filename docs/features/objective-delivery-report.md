@@ -33,8 +33,8 @@ flowchart LR
 - `GET /api/v1/work-graphs/{id}/report` returns a report from durable records plus a bounded, read-only GitHub lookup
   when a recorded canonical PR URL matches the graph repository. It never reconciles or persists. An unknown graph id
   or a graph the caller may not read returns 404.
-- Top-level `graph_id`, `objective_id`, `objective_title`, `plan_revision`, and `status` identify the graph and its
-  objective and report the graph's plan revision and status.
+- Top-level `graph_id`, `graph_revision`, `objective_id`, `objective_title`, `plan_revision`, and `status` identify the
+  exact graph snapshot and its approved objective plan.
 - Top-level `units` is an array. Each unit has `key`, `kind`, `agent_name`, and `state`; `candidate` and `verdict` are
   omitted when empty; `run_ids` is always an array. `attempts` sums the `attempts` counter of its runs. A run id
   without a stored run adds nothing. `providers` is always an array of sorted distinct strings, each containing the
@@ -43,8 +43,11 @@ flowchart LR
   and version come from the compiled plan and graph. Each execution reports the recorded profile and persona IDs,
   names and versions, provider, candidate commit and its Git tree SHA when reported, worker-reported verification,
   review verdict, publication state, PR link, attempts, and failures. Tree evidence is considered known only when the
-  successful integration run's tree accompanies the selected candidate commit. Verification belongs to that run; it
-  is not an independent assurance record.
+  successful integration run's tree accompanies the selected candidate commit. Reviewer runs expose the exact base
+  commit they inspected. Each run also names its accepted result attempt and last persisted update time; handoffs carry
+  their immutable message ids, and GitHub checks carry their check-run ids. Verification belongs to that run; it
+  is not an independent assurance record. `unknown_evidence` includes `policy_backed_assurance` because the current
+  WorkGraph has no authoritative policy-backed assurance record bound to a candidate.
   Handoffs, decisions and unresolved steps are shown from immutable WorkGraph messages and state.
 - `unknown_evidence` names evidence the available sources cannot establish. Candidate tree SHA remains unknown until a
   successful integration run records it for the selected candidate. Publication authority remains unknown. Current PR
