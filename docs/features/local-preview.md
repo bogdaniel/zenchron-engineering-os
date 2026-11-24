@@ -46,6 +46,29 @@ the plist settings when the invoking shell has no App credentials, and self-upda
 `auth github-app status` reports configuration, key readability, and the managed updater's latest verification as
 value-free status categories. Workers never receive GitHub App credentials.
 
+
+### GitHub App permissions and safe configuration
+
+For the current objective-to-PR workflow, grant these repository permissions to the GitHub App:
+
+- **Contents: read** for the managed updater and private repository reads.
+- **Pull requests: read and write** to inspect candidates and create pull requests.
+- **Issues: read and write** for issue details and comments.
+- **Actions: read**, **Checks: read**, and **Commit statuses: read** for delivery and updater verification.
+- **Metadata: read** is granted automatically.
+
+Install the App only on the updater repository and the repositories the operator intends to use. The worker pushes its candidate branch with the workstation's configured Git credentials; the App token does not go to workers. **Contents: write** is only needed for the separate App-mediated GitHub merge action. Do not grant it when the intended workflow stops at reviewed PR creation.
+
+After this managed-installation change is integrated, configure the existing installation with the App ID, installation ID, and local PEM file path:
+
+```sh
+zenchron-engineering auth github-app configure --app-id ID --installation-id ID --private-key FILE
+zenchron-engineering auth github-app status
+```
+
+Keep the PEM file local; never paste its contents into a command, issue, commit, log, or chat. The configure command copies it into the existing owner-only managed directory and refuses to change settings when it cannot verify that work is idle. Check the value-free status until the managed updater reports verified.
+
+
 ## Feature diagram
 
 ```mermaid
