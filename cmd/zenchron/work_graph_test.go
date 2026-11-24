@@ -271,6 +271,7 @@ func TestObjectiveRunsParallelProducersThroughReviewRemediationIntegrationAndOne
 	if publication.ID != integration.ID || !publication.PublishPullRequest || publication.PublishCommit != commit(4) {
 		t.Fatalf("publication = run %s publish %v", publication.ID, publication.PublishPullRequest)
 	}
+	harness.pullHead = commit(4)
 	harness.report(publication, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
 		Verification: workerapi.VerificationPassed, BranchPushed: true, Result: string(merged)})
 	graph = harness.graph()
@@ -356,6 +357,7 @@ func TestReviewedCandidateWaitsForExactHumanPublicationAuthorization(t *testing.
 	if !command.PublishPullRequest || command.PublishCommit != commit(4) {
 		t.Fatalf("authorized publication command = %#v", command)
 	}
+	harness.pullHead = commit(4)
 	harness.report(command, workerapi.AgentRunResult{CommitSHA: commit(4), BranchPushed: true, Result: `{"integration":{}}`})
 	if graph = harness.graph(); graph.Status != graphCompleted || graph.unit("integrate").PullRequestURL == "" || harness.pullCreates != 1 {
 		t.Fatalf("authorized delivery = graph %s, unit %#v, PR creates %d", graph.Status, graph.unit("integrate"), harness.pullCreates)

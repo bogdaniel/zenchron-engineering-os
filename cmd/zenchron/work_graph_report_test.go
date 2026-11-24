@@ -171,9 +171,9 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	harness.verdict(harness.claimUnit("review-all"), commit(4), `{"review":{"verdict":"accept"}}`)
 	harness.authorizePublication(integration.ID, commit(4))
 	publication := harness.claimUnit("integrate")
+	harness.pullHead = commit(4)
 	harness.report(publication, workerapi.AgentRunResult{CommitSHA: commit(4), CommitTreeSHA: commit(5), BaseCommit: commit(9),
 		Output: "Merged.", Verification: workerapi.VerificationPassed, BranchPushed: true, Result: string(merged)})
-	harness.pullHead = commit(4)
 
 	before := harness.graph()
 	report, body := harness.deliveryReport(started.ID)
