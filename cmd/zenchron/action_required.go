@@ -48,10 +48,12 @@ func (store *workGraphStore) actionRequired(w http.ResponseWriter, r *http.Reque
 			continue
 		}
 		project, online := store.runs.registry.onlineProject(plan.ProjectID)
-		canAct := online && access.mayDispatchTo(project.WorkerID)
+		canAct := online && access.allows(project.GitRemote) && access.mayDispatchTo(project.WorkerID)
 		blocker := ""
 		if !online {
 			blocker = "The plan's worker is offline."
+		} else if !access.allows(project.GitRemote) {
+			blocker = "Your current access does not include the plan's current repository."
 		} else if !canAct {
 			blocker = "Your current access cannot dispatch work to the plan's worker."
 		}
