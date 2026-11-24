@@ -29,6 +29,7 @@ async function useLiveFixtures(
   page: Page, products: ProductFixture[] = [nova, orion], objectivesUnavailable = false, historyCount = 1,
 ) {
   const writes: { method: string; path: string; body: unknown }[] = [];
+  let configurationRevision = 2;
   await page.route('**/api/v1/**', (route) => route.fulfill(json([])));
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
   await page.route('**/api/v1/products**', async (route) => {
@@ -37,18 +38,19 @@ async function useLiveFixtures(
     const body = request.postDataJSON() as { name: string; description: string; repository_ids: string[] };
     writes.push({ method: request.method(), path: new URL(request.url()).pathname, body });
     const saved = { ...nova, ...body };
+    if (request.method() === 'PUT') configurationRevision++;
     products.splice(0, 1, saved);
     return route.fulfill(json(saved));
   });
   await page.route('**/api/v1/products/*/environment', (route) => route.fulfill(json({
     product_id: route.request().url().includes(novaID) ? novaID : orionID,
-    configuration_revision: 2,
+    configuration_revision: route.request().url().includes(novaID) ? configurationRevision : 1,
     configuration_history_complete: route.request().url().includes(novaID),
     configuration_history: route.request().url().includes(novaID) ? [
       { revision: 1, name: 'Nova Platform', description: 'Previous product scope', repository_ids: [projectID],
         changed_at: createdAt },
-      { revision: 2, name: 'Nova Platform', description: 'Developer platform', repository_ids: [projectID],
-        changed_at: createdAt },
+        { revision: configurationRevision, name: products[0]?.name ?? 'Nova Platform',
+          description: products[0]?.description ?? 'Developer platform', repository_ids: [projectID], changed_at: createdAt },
     ] : [],
     objectives: route.request().url().includes(novaID) ? [{
       graph_id: 'f'.repeat(32), graph_status: 'running', findings: 2, handoffs: 1,
@@ -309,6 +311,8 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await dialog.getByLabel('Product name').fill('Nova Core');
   await dialog.getByRole('button', { name: 'Save product' }).click();
   await expect(page.locator('.workspace-mock-heading h1')).toHaveText('Nova Core');
+  await expect(configurationHistory).toContainText('Revision 3');
+  await expect(configurationHistory).toContainText('Nova Core');
   expect(writes).toEqual([{ method: 'PUT', path: `/api/v1/products/${novaID}`,
     body: { name: 'Nova Core', description: 'Developer platform', repository_ids: [projectID],
       default_workflow_id: 'release' } }]);
