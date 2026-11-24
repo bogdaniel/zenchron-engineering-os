@@ -68,6 +68,8 @@ async function mockOrchestration(page: Page, state: { graphs?: unknown[]; plans?
     description: 'The product.', repository_ids: [projectID], created_at: now, updated_at: now }])));
   await page.route('**/api/v1/agents', (route) => route.fulfill(json(agents)));
   await page.route('**/api/v1/projects', (route) => route.fulfill(json(projects)));
+  await page.route('**/api/v1/workers', (route) => route.fulfill(json([{ id: workerID, name: 'dev-laptop', status: 'online',
+    last_seen: now, providers: [] }])));
   await page.route('**/api/v1/work-graphs', (route) => state.graphsStatus
     ? route.fulfill({ status: state.graphsStatus, body: 'unavailable' }) : route.fulfill(json(state.graphs ?? [])));
   await page.route(`**/api/v1/objectives/${objectiveID}/plans`, (route) => route.request().method() === 'GET'
@@ -649,3 +651,4 @@ test('an objective plan approved in the dashboard runs through decision, review,
   expect(await noHorizontalScroll(page)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('workspace-evidence-mobile.png'), fullPage: true });
 });
+
