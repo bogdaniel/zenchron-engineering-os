@@ -355,7 +355,10 @@ export function useLiveWorkspace(enabled: boolean, facts: WorkspaceFacts, select
       if (!response.ok) throw new Error(await response.text());
       return productSchema.parse(await response.json());
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
+    onSuccess: async (_product, { productID }) => {
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
+      if (productID) await queryClient.invalidateQueries({ queryKey: ['product-environment', productID] });
+    },
   });
   const definitions = {
     workflows: workflows.data?.map((workflow) => ({ name: workflow.name, state: workflow.status,
