@@ -168,6 +168,11 @@ func TestCopyManagedGitHubAppKeyRejectsOversizedAndSymlinkedSources(t *testing.T
 		t.Fatalf("oversized source was not rejected by the bounded read: %v", err)
 	}
 
+	shared := writeManagedAppTestKey(t, t.TempDir(), 0o644)
+	if _, err := copyManagedGitHubAppKey(home, shared); err == nil || !strings.Contains(err.Error(), "private regular file") {
+		t.Fatalf("shared source key was not rejected: %v", err)
+	}
+
 	target := writeManagedAppTestKey(t, t.TempDir(), 0o600)
 	link := filepath.Join(t.TempDir(), "linked.pem")
 	if err := os.Symlink(target, link); err != nil {
