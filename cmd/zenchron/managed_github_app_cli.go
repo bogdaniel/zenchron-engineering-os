@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -237,7 +238,9 @@ func persistManagedGitHubAppEnvironment(home string, appEnvironment map[string]s
 		return false, valueFreeGitHubAppError("managed LaunchAgent is unavailable", err)
 	}
 	contents, err := os.ReadFile(plist)
+	plistExists := true
 	if errors.Is(err, os.ErrNotExist) {
+		plistExists = false
 		userHome, homeErr := os.UserHomeDir()
 		if homeErr != nil {
 			return false, valueFreeGitHubAppError("managed LaunchAgent is unavailable", homeErr)
@@ -262,12 +265,19 @@ func persistManagedGitHubAppEnvironment(home string, appEnvironment map[string]s
 	if err != nil {
 		return false, valueFreeGitHubAppError("managed LaunchAgent settings are invalid", err)
 	}
-	if sameGitHubAppEnvironment(existing, appEnvironment) {
-		return false, nil
+	original := contents
+	if !sameGitHubAppEnvironment(existing, appEnvironment) {
+		contents, err = withLaunchAgentEnvironmentValues(contents, appEnvironment)
+		if err != nil {
+			return false, valueFreeGitHubAppError("managed LaunchAgent settings could not be updated", err)
+		}
 	}
-	contents, err = withLaunchAgentEnvironmentValues(contents, appEnvironment)
+	contents, err = withLaunchAgentExitTimeout(contents)
 	if err != nil {
-		return false, valueFreeGitHubAppError("managed LaunchAgent settings could not be updated", err)
+		return false, valueFreeGitHubAppError("managed LaunchAgent shutdown settings could not be updated", err)
+	}
+	if plistExists && bytes.Equal(contents, original) {
+		return false, nil
 	}
 	if err := writeInstallFile(plist, contents, 0o600); err != nil {
 		return false, valueFreeGitHubAppError("managed LaunchAgent settings could not be saved", err)
