@@ -53,7 +53,9 @@ sequenceDiagram
   Worker->>Tree: Recheck candidate and run configured verification
   Worker->>Remote: Push the exact authorized commit
   Worker->>API: PUT .../agent-runs/{run} (branch-pushed evidence)
-  API->>GH: Find or create pull request "Closes #issue"
+  API->>GH: Find or create pull request for exact candidate SHA
+  GH-->>API: Return pull-request head SHA
+  API->>API: Reject a stale or mismatched head
   API->>Store: Persist publication and pull-request identity
   User->>UI: Reviews > Local branches > Evidence, Code changes
   UI->>API: GET /api/v1/agent-runs, .../events, .../diff, .../pull-request
@@ -153,8 +155,9 @@ that exits successfully is therefore not reported as delivered work unless verif
 - The control plane creates the pull request with its GitHub credential only after a person authorized and the worker
   pushed the exact candidate. It is titled after the issue and ends with `Closes #<issue>`. Creation reuses an existing
   pull request for the same branch and base, including closed pull requests, so an uncertain GitHub response does not
-  create a duplicate. If GitHub fails after the push, `POST /api/v1/agent-runs/{id}/publish` retries without creating a
-  duplicate or reopening a closed pull request.
+  create a duplicate. Reuse is accepted only when GitHub reports the human-authorized candidate SHA as the PR head;
+  a stale or missing SHA leaves publication failed. If GitHub fails after the push,
+  `POST /api/v1/agent-runs/{id}/publish` retries without creating a duplicate or reopening a closed pull request.
 - A change request from the dashboard, one delivered by a [GitHub webhook](github-webhooks.md), or one imported
   from GitHub with `sync-reviews`, queues another attempt on the
   same branch and worktree. The new candidate remains local until a person authorizes its exact SHA; the next
