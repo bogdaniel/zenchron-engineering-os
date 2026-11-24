@@ -174,6 +174,15 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	harness.report(publication, workerapi.AgentRunResult{CommitSHA: commit(4), CommitTreeSHA: commit(5), BaseCommit: commit(9),
 		Output: "Merged.", Verification: workerapi.VerificationPassed, BranchPushed: true, Result: string(merged)})
 	harness.pullHead = commit(4)
+	updatedProfile, err := json.Marshal(agentProfileInput{Name: harness.profile.Name, Provider: harness.profile.Provider,
+		Model: "changed-after-run", Status: harness.profile.Status, SystemPrompt: harness.profile.SystemPrompt,
+		GoalPrompt: harness.profile.GoalPrompt, Tools: harness.profile.Tools})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response := harness.call(http.MethodPut, "/api/v1/agents/"+harness.profile.ID, string(updatedProfile)); response.Code != http.StatusOK {
+		t.Fatalf("update current agent profile returned HTTP %d: %s", response.Code, response.Body.String())
+	}
 
 	before := harness.graph()
 	report, body := harness.deliveryReport(started.ID)
