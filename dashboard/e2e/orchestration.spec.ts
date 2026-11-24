@@ -651,4 +651,3 @@ test('an objective plan approved in the dashboard runs through decision, review,
   expect(await noHorizontalScroll(page)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('workspace-evidence-mobile.png'), fullPage: true });
 });
-
