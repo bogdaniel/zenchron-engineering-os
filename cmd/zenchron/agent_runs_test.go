@@ -289,7 +289,7 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 		ProjectName: "platform", WorkerID: testWorkerID, WorkerName: "worker", Branch: workerapi.AgentRunBranch(runID),
 		BaseBranch: "main", Prompt: "Add review flow", Output: "Agent summary.", Status: "running", Attempts: 1,
 		LeaseUntil: time.Now().Add(time.Minute), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
-		Profile: &profile, PullRequestEnabled: true, PublicationAuthorizations: []publicationAuthorization{{
+		Profile: &profile, PullRequestEnabled: true, PublishOnly: true, PublicationAuthorizations: []publicationAuthorization{{
 			CommitSHA: strings.Repeat("a", 40), By: "test operator", At: time.Now().UTC(), Attempt: 1,
 		}}}
 	store.items[item.ID] = item

@@ -444,9 +444,15 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not persist run recovery before claiming work", http.StatusInternalServerError)
 		return
 	}
-	store.graphs.mu.Lock()
-	selected, status, message := store.lease(worker, accessFor(r), store.graphs.plannerRunIDsLocked())
-	store.graphs.mu.Unlock()
+	var plannerRunIDs map[string]struct{}
+	if store.graphs != nil {
+		store.graphs.mu.Lock()
+		plannerRunIDs = store.graphs.plannerRunIDsLocked()
+	}
+	selected, status, message := store.lease(worker, accessFor(r), plannerRunIDs)
+	if store.graphs != nil {
+		store.graphs.mu.Unlock()
+	}
 	if status != 0 {
 		http.Error(w, message, status)
 		return
