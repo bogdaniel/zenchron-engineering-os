@@ -246,7 +246,7 @@ test('proposed plan approval stays disabled while its repository worker is offli
   await expect(approval).toBeDisabled();
   await expect(approval).toHaveAttribute('title',
     'The plan’s repository worker is offline; bring it online before approval.');
-  await expect(panel).toContainText('Plan approval unavailable');
+  await expect(panel).toContainText('Plan approval is unavailable');
 });
 
 test('plan revisions show planning, invalid problems, and a refused approval; proposing names a planner and workflow', async ({ page }) => {
