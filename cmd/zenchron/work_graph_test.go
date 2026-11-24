@@ -261,7 +261,8 @@ func TestObjectiveRunsParallelProducersThroughReviewRemediationIntegrationAndOne
 		t.Fatalf("reviewed candidate was published without human authorization: %#v, PR creates %d", unit, harness.pullCreates)
 	}
 	actions := harness.actionRequired()
-	if len(actions) != 1 || actions[0].Kind != actionPublication || actions[0].RunID != integration.ID || actions[0].Subject != commit(4) {
+	if len(actions) != 1 || actions[0].Kind != actionPublication || !actions[0].CanAct ||
+		actions[0].RunID != integration.ID || actions[0].Subject != commit(4) {
 		t.Fatalf("reviewed candidate action = %#v", actions)
 	}
 	harness.authorizePublication(integration.ID, commit(4))
@@ -306,7 +307,7 @@ func TestReviewedCandidateWaitsForExactHumanPublicationAuthorization(t *testing.
 		t.Fatalf("reviewed candidate did not wait for a person: graph %#v, PR creates %d", graph, harness.pullCreates)
 	}
 	actions := harness.actionRequired()
-	if len(actions) != 1 || actions[0].Kind != actionPublication || actions[0].GraphID != graph.ID ||
+	if len(actions) != 1 || actions[0].Kind != actionPublication || !actions[0].CanAct || actions[0].GraphID != graph.ID ||
 		actions[0].RunID != integration.ID || actions[0].Subject != commit(4) {
 		t.Fatalf("pending publication action = %#v", actions)
 	}

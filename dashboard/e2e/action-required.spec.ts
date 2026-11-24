@@ -23,7 +23,7 @@ function decisionAction(unit: string, question: string, graphID: string) {
   return { id: `decision-${unit}`, kind: 'work_graph_decision', objective_id: objectiveID,
     objective_title: 'Ship usage export', plan_revision: 1, graph_id: graphID, unit_key: unit,
     stage: 'produce', unit_title: `Produce ${unit}`, run_id: `run-${unit}`, subject: question,
-    reason: 'Waiting for a person to choose.', options: ['allow', 'decline'] };
+    reason: 'Waiting for a person to choose.', options: ['allow', 'decline'], can_act: true };
 }
 
 function publicationAction(graphID: string, candidate: string) {
@@ -31,7 +31,7 @@ function publicationAction(graphID: string, candidate: string) {
     objective_title: 'Ship usage export', plan_revision: 2, graph_id: graphID, unit_key: 'integrate',
     stage: 'Publication authorization', unit_title: 'Integrate candidate', run_id: 'run-integrate', subject: candidate,
     reason: 'The current candidate passed its assigned independent review; a person must authorize PR creation.',
-    options: ['Authorize pull request creation'] };
+    options: ['Authorize pull request creation'], can_act: true };
 }
 
 async function useLiveSession(page: Page, graphs: unknown[], actions?: unknown[]) {
@@ -69,6 +69,7 @@ for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: '
     await expect(exactAction).toContainText('Decision decision-api-old · Should this export include archived records?');
     await expect(exactAction).toContainText('Waiting reason: Waiting for a person to choose.');
     await expect(exactAction).toContainText('Options: allow · decline');
+    await expect(exactAction).toContainText('Available action: resolve this decision in Objective Workspace');
     await expect(exactAction).toContainText('Run run-api-old');
     await expect(exactAction).toHaveAttribute('href', new RegExp(`graph_id=${oldGraphID}.*decision=decision-api-old`));
     await page.screenshot({ path: testInfo.outputPath(`action-required-${viewport.name}.png`), fullPage: true });
@@ -177,7 +178,7 @@ for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: '
       summary: 'Prepare and review the usage export', max_parallel: 1, units: [], problems: [], created_at: '2026-11-03T00:00:00Z' };
     const planAction = { id: `plan:${objectiveID}:3`, kind: 'plan_approval', objective_id: objectiveID,
       objective_title: 'Ship usage export', plan_revision: 3, stage: 'Plan approval', unit_title: '', run_id: '',
-      subject: plan.summary, reason: 'This proposed revision needs approval before work can start.', options: [] };
+      subject: plan.summary, reason: 'This proposed revision needs approval before work can start.', options: [], can_act: true };
     await useLiveSession(page, [], [planAction]);
     await page.route(`**/api/v1/objectives/${objectiveID}/plans`, (route) => route.fulfill(json([plan])));
     await page.goto('/?mode=live#overview');
@@ -223,3 +224,24 @@ test('Action Required deep links stay selected until their action is complete', 
   await page.locator('.sidebar nav a[href="#objectives"]').click();
   await expect(page).not.toHaveURL(/objective=|tab=|graph_id=|decision=/);
 });
+
+for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: 'mobile', width: 390, height: 844 }]) {
+  test(`Action Required explains when worker permissions block an action (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const decision = { ...decisionAction('api-private', 'Which export format should ship?', currentGraphID),
+      can_act: false, action_blocker: "Your current access cannot dispatch work to this graph's worker." };
+    const plan = { id: `plan:${objectiveID}:3`, kind: 'plan_approval', objective_id: objectiveID,
+      objective_title: 'Ship usage export', plan_revision: 3, stage: 'Plan approval', subject: 'Prepare export',
+      reason: 'This proposed revision needs approval before work can start.', options: [], can_act: false,
+      action_blocker: "Your current access cannot dispatch work to the plan's worker." };
+    await useLiveSession(page, [], [decision, plan]);
+    await page.goto('/?mode=live#overview');
+    const rows = page.getByRole('region', { name: 'Action Required' }).getByRole('link');
+    const decisionRow = rows.filter({ hasText: 'Decision decision-api-private' });
+    const planRow = rows.filter({ hasText: 'Prepare export' });
+    await expect(decisionRow).toContainText("Action unavailable: Your current access cannot dispatch work to this graph's worker.");
+    await expect(decisionRow).toHaveAttribute('href', new RegExp(`graph_id=${currentGraphID}.*decision=decision-api-private`));
+    await expect(planRow).toContainText("Action unavailable: Your current access cannot dispatch work to the plan's worker.");
+    await expect(planRow).toHaveAttribute('href', new RegExp(`objective=${objectiveID}.*tab=plan`));
+  });
+}
