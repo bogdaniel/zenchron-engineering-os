@@ -113,6 +113,42 @@ func withLaunchAgentEnvironmentValues(contents []byte, values map[string]string)
 	return updated, nil
 }
 
+func withLaunchAgentExitTimeout(contents []byte) ([]byte, error) {
+	const key = "<key>ExitTimeOut</key>"
+	const timeout = "<integer>0</integer>"
+	if keyOffset := bytes.Index(contents, []byte(key)); keyOffset >= 0 {
+		valueStart := keyOffset + len(key)
+		if !bytes.HasPrefix(contents[valueStart:], []byte("<integer>")) {
+			return nil, errors.New("managed LaunchAgent exit timeout is invalid")
+		}
+		valueEnd := bytes.Index(contents[valueStart:], []byte("</integer>"))
+		if valueEnd < 0 {
+			return nil, errors.New("managed LaunchAgent exit timeout is incomplete")
+		}
+		valueEnd += valueStart + len("</integer>")
+		if bytes.Equal(contents[valueStart:valueEnd], []byte(timeout)) {
+			return contents, nil
+		}
+		updated := make([]byte, 0, len(contents)+len(timeout))
+		updated = append(updated, contents[:valueStart]...)
+		updated = append(updated, timeout...)
+		updated = append(updated, contents[valueEnd:]...)
+		return updated, nil
+	}
+
+	const rootEnd = "</dict></plist>"
+	end := bytes.LastIndex(contents, []byte(rootEnd))
+	if end < 0 {
+		return nil, errors.New("managed LaunchAgent property list is incomplete")
+	}
+	updated := make([]byte, 0, len(contents)+len(key)+len(timeout))
+	updated = append(updated, contents[:end]...)
+	updated = append(updated, key...)
+	updated = append(updated, timeout...)
+	updated = append(updated, contents[end:]...)
+	return updated, nil
+}
+
 func readLaunchAgentEnvironmentDictionary(decoder *xml.Decoder) (map[string]string, error) {
 	environment := make(map[string]string)
 	for {
