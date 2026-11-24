@@ -479,7 +479,7 @@ func renderLaunchAgent(entrypoint, home, logDir string, environment map[string]s
 	for key, value := range environment {
 		writePlistString(&body, key, value)
 	}
-	body.WriteString("</dict></dict></plist>\n")
+	body.WriteString("</dict><key>ExitTimeOut</key><integer>0</integer></dict></plist>\n")
 	return []byte(body.String())
 }
 
