@@ -75,8 +75,8 @@ func copyManagedGitHubAppKey(home, sourcePath string) (string, error) {
 	if err != nil {
 		return "", valueFreeGitHubAppError("source GitHub App private key is unavailable", err)
 	}
-	if !info.Mode().IsRegular() || !managedOAuthPathOwnedByCurrentUser(info) {
-		return "", errors.New("source GitHub App key must be a regular file owned by the current user and within the size limit")
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || !managedOAuthPathOwnedByCurrentUser(info) {
+		return "", errors.New("source GitHub App key must be a private regular file owned by the current user")
 	}
 	data, err := io.ReadAll(io.LimitReader(source, maxGitHubAppPrivateKeySize+1))
 	if err != nil {
