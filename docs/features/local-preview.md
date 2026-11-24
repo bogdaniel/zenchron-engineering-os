@@ -37,9 +37,9 @@ blocked before service shutdown.
 
 The local `status` command and Settings / System Update page read the same persisted status record. `active_runs` in
 that record is the last count observed during an updater drain, not a live idle check. The live count endpoint requires
-the managed supervisor's process-local token; there is no supported operator command to obtain that token. The
+the managed supervisor's process-local token; there is no supported operator command to obtain that token. Unless an existing supported diagnostic provides a live count, treat service idleness as unknown; persisted `active_runs` cannot prove it. Request graceful shutdown and wait for the existing supervisor process to exit before restarting the same LaunchAgent. Do not bootstrap a second process or force-stop the service if graceful shutdown cannot complete. The
 supervisor uses the endpoint internally to close admission and drain active or publishing runs before an update or
-graceful shutdown. Do not force-stop the service if graceful shutdown cannot complete. If the live status API is
+graceful shutdown. If the live status API is
 unavailable, `zenchron-engineering status` reports that and falls back to the persisted status file; after requesting
 a check, confirm `last_attempt` advanced before treating that file as the result. The dashboard reconnects to update
 progress, keeps Mock isolated from the API, and automatically reloads only after it observes a new running revision.
