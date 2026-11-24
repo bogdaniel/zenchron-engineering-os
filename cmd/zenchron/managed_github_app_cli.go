@@ -112,11 +112,10 @@ func configureManagedGitHubApp(home string, args []string) error {
 					return errors.New("saved GitHub App settings are not active; the existing LaunchAgent could not be reloaded")
 				}
 			} else {
-				entrypoint, err := installStableEntrypoint(home)
-				if err != nil {
+				if _, err := installStableEntrypoint(home); err != nil {
 					return errors.New("saved GitHub App settings could not be activated")
 				}
-				if err := bootstrapManagedGitHubAppLaunchAgent(home, entrypoint); err != nil {
+				if err := bootstrapManagedGitHubAppLaunchAgent(); err != nil {
 					return errors.New("saved GitHub App settings could not be activated")
 				}
 			}
@@ -136,11 +135,10 @@ func configureManagedGitHubApp(home string, args []string) error {
 			return errors.New("GitHub App settings were saved; the existing LaunchAgent could not be reloaded")
 		}
 	} else {
-		entrypoint, err := installStableEntrypoint(home)
-		if err != nil {
+		if _, err := installStableEntrypoint(home); err != nil {
 			return errors.New("GitHub App settings were saved; the existing managed service could not be started")
 		}
-		if err := bootstrapManagedGitHubAppLaunchAgent(home, entrypoint); err != nil {
+		if err := bootstrapManagedGitHubAppLaunchAgent(); err != nil {
 			return errors.New("GitHub App settings were saved; the existing managed service could not be started")
 		}
 	}
@@ -176,40 +174,17 @@ func reloadManagedGitHubAppLaunchAgent(home string) error {
 	return nil
 }
 
-func bootstrapManagedGitHubAppLaunchAgent(home, entrypoint string) error {
-	userHome, err := os.UserHomeDir()
+func bootstrapManagedGitHubAppLaunchAgent() error {
+	plist, err := managedLaunchAgentPlistPath()
 	if err != nil {
-		return errors.New("could not resolve the managed LaunchAgent owner")
+		return errors.New("could not locate the saved managed LaunchAgent")
 	}
-	launchDirectory := filepath.Join(userHome, "Library", "LaunchAgents")
-	logDirectory := filepath.Join(home, "logs")
-	if err := os.MkdirAll(launchDirectory, 0o700); err != nil {
-		return errors.New("could not prepare the existing managed LaunchAgent")
-	}
-	if err := os.MkdirAll(logDirectory, 0o700); err != nil {
-		return errors.New("could not prepare the existing managed LaunchAgent")
-	}
-	environment, err := launchEnvironment()
-	if err != nil {
-		return err
-	}
-	plist := filepath.Join(launchDirectory, managedLaunchAgentLabel+".plist")
 	savedContents, err := os.ReadFile(plist)
 	if err != nil {
 		return valueFreeGitHubAppError("could not read saved managed LaunchAgent settings", err)
 	}
-	savedApp, err := launchAgentGitHubAppEnvironment(savedContents)
-	if err != nil {
-		return valueFreeGitHubAppError("saved managed GitHub App settings are invalid", err)
-	}
-	for _, key := range managedGitHubAppEnvironmentKeys {
-		delete(environment, key)
-		if savedApp[key] != "" {
-			environment[key] = savedApp[key]
-		}
-	}
-	if err := writeInstallFile(plist, renderLaunchAgent(entrypoint, userHome, logDirectory, environment), 0o600); err != nil {
-		return errors.New("could not save the existing managed LaunchAgent settings")
+	if _, err := launchAgentEnvironmentValues(savedContents); err != nil {
+		return valueFreeGitHubAppError("saved managed LaunchAgent settings are invalid", err)
 	}
 	current, err := user.Current()
 	if err != nil {
@@ -327,6 +302,10 @@ func managedGitHubAppRuntimeNeedsRefresh(diagnostic managedGitHubAppDiagnostic) 
 }
 
 func inspectManagedGitHubAppStatus(home string) (managedGitHubAppDiagnostic, error) {
+	return inspectManagedGitHubAppStatusAfter(home, time.Time{})
+}
+
+func inspectManagedGitHubAppStatusAfter(home string, requestedAt time.Time) (managedGitHubAppDiagnostic, error) {
 	diagnostic := managedGitHubAppDiagnostic{Configuration: "missing", Key: "missing", Authentication: gitHubAuthMethodMissing,
 		Updater: "not_verified"}
 	plist, err := managedLaunchAgentPlistPath()
@@ -412,8 +391,16 @@ func inspectManagedGitHubAppStatus(home string) (managedGitHubAppDiagnostic, err
 		diagnostic.Updater = "runtime_configuration_stale"
 		return diagnostic, nil
 	}
-	diagnostic.Updater = managedUpdaterVerification(status, plistInfo.ModTime())
+	verificationCutoff := managedGitHubAppVerificationCutoff(plistInfo.ModTime(), requestedAt)
+	diagnostic.Updater = managedUpdaterVerification(status, verificationCutoff)
 	return diagnostic, nil
+}
+
+func managedGitHubAppVerificationCutoff(plistModifiedAt, requestedAt time.Time) time.Time {
+	if requestedAt.After(plistModifiedAt) {
+		return requestedAt
+	}
+	return plistModifiedAt
 }
 
 func readManagedUpdaterStatus(client *http.Client) (updater.Status, string, string, error) {
@@ -470,7 +457,7 @@ func waitForManagedGitHubAppVerification(ctx context.Context, home string, confi
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		diagnostic, err := inspectManagedGitHubAppStatus(home)
+		diagnostic, err := inspectManagedGitHubAppStatusAfter(home, configuredAt)
 		if err != nil {
 			return diagnostic, err
 		}
