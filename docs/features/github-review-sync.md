@@ -19,6 +19,12 @@ sequenceDiagram
     participant Remote as GitHub Git remote
     participant GH as GitHub REST API
     participant UI as Reviews dashboard
+    participant Operator as Managed installation operator
+    participant Config as Owner-only LaunchAgent plist and PEM
+    participant Supervisor as Managed supervisor
+    Operator->>Config: Configure App IDs and copy local PEM
+    Config->>Supervisor: Reload existing service with saved settings
+    Supervisor->>API: Pass GitHub App settings to the control plane only
     Worker->>API: Heartbeat with sanitized github.com locator
     UI->>API: GET open issues and pull requests
     API->>API: Validate project locator and GitHub host
@@ -28,6 +34,7 @@ sequenceDiagram
         GH-->>API: One-hour installation token
         API->>API: Cache token until one minute before expiry
     end
+    Note over Supervisor,API: Worker and dashboard never receive GitHub App credentials
     API->>GH: GET open items (anonymous, App token, or PAT)
     loop Issue pages until 100 issues, a short page, or the page cap
         GH-->>API: Up to 100 recently updated issues and pull requests
