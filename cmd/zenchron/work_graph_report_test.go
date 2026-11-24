@@ -166,7 +166,8 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 
 	integration := harness.claimUnit("integrate")
 	merged, _ := json.Marshal(map[string]any{"integration": workerapi.MergeResult{Merged: integration.Merge}})
-	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
+	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9),
+		Output:       "private provider transcript sentinel",
 		Verification: workerapi.VerificationPassed, Result: string(merged)})
 	harness.verdict(harness.claimUnit("review-all"), commit(4), `{"review":{"verdict":"accept"}}`)
 	harness.authorizePublication(integration.ID, commit(4))
@@ -186,6 +187,9 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 
 	before := harness.graph()
 	report, body := harness.deliveryReport(started.ID)
+	if strings.Contains(body, "private provider transcript sentinel") {
+		t.Fatalf("delivery report exposed the provider transcript: %s", body)
+	}
 	if report.GraphID != started.ID || report.GraphRevision != before.Revision || report.ObjectiveID != harness.objectiveID ||
 		report.ObjectiveTitle != "Ship usage export" ||
 		report.PlanRevision != 1 || report.Status != graphCompleted || before.Status != graphCompleted ||
