@@ -95,6 +95,39 @@ func TestConfinementSelfTestStopsDescendantsOnCancellation(t *testing.T) {
 	}
 }
 
+func TestProviderLatchesConfirmedSandboxEscapeAtContextExpiry(t *testing.T) {
+	directory := t.TempDir()
+	binary := filepath.Join(directory, "codex")
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	for _, phase := range []string{"startup", "heartbeat"} {
+		t.Run(phase, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			provider := newCLIProviders()[workerapi.ProviderCodex]
+			provider.confinement = func(context.Context, string) error {
+				cancel()
+				return errConfinementViolation
+			}
+			if phase == "startup" {
+				provider.detect(ctx)
+			} else {
+				provider.path = binary
+				provider.setReadiness(false, false, "sandbox verification pending")
+				provider.refreshReadiness(ctx)
+			}
+			provider.readinessMu.RLock()
+			ready, reason := provider.ready, provider.reason
+			provider.readinessMu.RUnlock()
+			if ready || reason != "sandbox self-test failed" {
+				t.Fatalf("confirmed sandbox escape at context expiry = ready %t, reason %q", ready, reason)
+			}
+		})
+	}
+}
+
 func TestRunnerChecksProviderReadinessConcurrently(t *testing.T) {
 	directory := t.TempDir()
 	startedPath := filepath.Join(directory, "started")
@@ -216,8 +249,11 @@ func TestCodexSignedOutStatusUsesItsExitAndOutput(t *testing.T) {
 }
 
 func TestProviderProbeStopsDescendantsWhenCancelled(t *testing.T) {
-	pidFile := filepath.Join(t.TempDir(), "child.pid")
-	script := "#!/bin/sh\nsleep 30 &\necho $! > " + pidFile + "\nwait\n"
+	pidFile := filepath.Join(t.TempDir(), "path with spaces", "child.pid")
+	if err := os.MkdirAll(filepath.Dir(pidFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nsleep 30 &\necho $! > \"$1\"\nwait\n"
 	provider := &cliProvider{id: workerapi.ProviderClaude}
 	provider.path = filepath.Join(t.TempDir(), "probe")
 	if err := os.WriteFile(provider.path, []byte(script), 0o700); err != nil {
@@ -226,7 +262,7 @@ func TestProviderProbeStopsDescendantsWhenCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	finished := make(chan error, 1)
 	go func() {
-		_, err := provider.probe(ctx, nil)
+		_, err := provider.probe(ctx, []string{pidFile})
 		finished <- err
 	}()
 	deadline := time.Now().Add(2 * time.Second)

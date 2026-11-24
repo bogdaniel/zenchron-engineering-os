@@ -112,13 +112,13 @@ func (provider *cliProvider) detect(ctx context.Context) {
 		err := provider.confinement(confinementCtx, provider.path)
 		unfinished := confinementCtx.Err() != nil
 		cancel()
-		if unfinished || (err != nil && !errors.Is(err, errConfinementViolation)) {
-			provider.setReadiness(false, false, "sandbox verification pending")
-			return
-		}
-		if err != nil {
+		if errors.Is(err, errConfinementViolation) {
 			log.Printf("%s is not ready: %v", provider.id, err)
 			provider.setReadiness(false, false, "sandbox self-test failed")
+			return
+		}
+		if unfinished || err != nil {
+			provider.setReadiness(false, false, "sandbox verification pending")
 			return
 		}
 	}
@@ -167,16 +167,12 @@ func (provider *cliProvider) refreshReadiness(ctx context.Context) {
 		err := provider.confinement(confinementCtx, provider.path)
 		unfinished := confinementCtx.Err() != nil
 		cancel()
-		if unfinished {
-			provider.setReadiness(false, false, "sandbox verification pending")
-			return
-		}
 		if errors.Is(err, errConfinementViolation) {
 			log.Printf("%s is not ready: %v", provider.id, err)
 			provider.setReadiness(false, false, "sandbox self-test failed")
 			return
 		}
-		if err != nil {
+		if unfinished || err != nil {
 			provider.setReadiness(false, false, "sandbox verification pending")
 			return
 		}
