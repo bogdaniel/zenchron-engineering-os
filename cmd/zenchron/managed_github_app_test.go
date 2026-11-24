@@ -16,21 +16,26 @@ import (
 	"github.com/bogdaniel/zenchron-engineering-os/internal/updater"
 )
 
-func TestEnsureManagedAgentPersistsGitHubAppSettingsForLoadedInstallation(t *testing.T) {
+func TestEnsureManagedAgentPreservesSavedGitHubAppSettingsForLoadedInstallation(t *testing.T) {
 	userHome, managed, plist := managedGitHubAppTestSetup(t)
 	t.Setenv("HOME", userHome)
 	t.Setenv("ZENCHRON_MANAGED_HOME", managed)
 	sourceKey := writeManagedAppTestKey(t, t.TempDir(), 0o600)
-	t.Setenv("ZENCHRON_GITHUB_APP_ID", "123456")
-	t.Setenv("ZENCHRON_GITHUB_INSTALLATION_ID", "987654")
+	t.Setenv("ZENCHRON_GITHUB_APP_ID", "222222")
+	t.Setenv("ZENCHRON_GITHUB_INSTALLATION_ID", "333333")
 	t.Setenv("ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", sourceKey)
+	savedKey := writeManagedAppTestKey(t, t.TempDir(), 0o600)
 	commandDirectory := t.TempDir()
 	commandLog := filepath.Join(t.TempDir(), "launchctl.log")
 	t.Setenv("LAUNCHCTL_LOG", commandLog)
 	writeLaunchctlStub(t, commandDirectory, "printf '%s\\n' \"$*\" >> \"$LAUNCHCTL_LOG\"\nexit 0\n")
 	t.Setenv("PATH", commandDirectory+string(os.PathListSeparator)+"/usr/bin:/bin")
 	contents := renderLaunchAgent(filepath.Join(userHome, ".local", "bin", "zenchron-engineering"), userHome,
-		filepath.Join(managed, "logs"), map[string]string{"PATH": "/usr/bin:/bin", "ZENCHRON_LOCAL_STATUS_TOKEN": "existing"})
+		filepath.Join(managed, "logs"), map[string]string{
+			"PATH": "/usr/bin:/bin", "ZENCHRON_LOCAL_STATUS_TOKEN": "existing",
+			"ZENCHRON_GITHUB_APP_ID": "123456", "ZENCHRON_GITHUB_INSTALLATION_ID": "987654",
+			"ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH": savedKey,
+		})
 	if err := os.WriteFile(plist, contents, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -51,15 +56,15 @@ func TestEnsureManagedAgentPersistsGitHubAppSettingsForLoadedInstallation(t *tes
 	if err != nil || keyInfo.Mode().Perm() != 0o600 {
 		t.Fatalf("managed private key mode = %v, %v; want 0600", keyInfo, err)
 	}
-	if environment["ZENCHRON_GITHUB_APP_ID"] != "123456" || environment["ZENCHRON_GITHUB_INSTALLATION_ID"] != "987654" {
-		t.Fatalf("persisted LaunchAgent settings = %#v", environment)
+	if environment["ZENCHRON_GITHUB_APP_ID"] != "123456" || environment["ZENCHRON_GITHUB_INSTALLATION_ID"] != "987654" || keyPath != savedKey {
+		t.Fatal("repeated installation replaced saved GitHub App settings with transient shell values")
 	}
 	if strings.Contains(string(updated), string(mustReadFile(t, keyPath))) {
 		t.Fatal("LaunchAgent plist contains private-key contents")
 	}
 	commands := string(mustReadFile(t, commandLog))
-	if !strings.Contains(commands, "kill SIGTERM gui/") {
-		t.Fatalf("changed credentials did not request graceful restart: %q", commands)
+	if strings.Contains(commands, "kill SIGTERM") {
+		t.Fatalf("repeated installation restarted the service for transient credentials: %q", commands)
 	}
 	for _, key := range managedGitHubAppEnvironmentKeys {
 		t.Setenv(key, "")
@@ -67,8 +72,8 @@ func TestEnsureManagedAgentPersistsGitHubAppSettingsForLoadedInstallation(t *tes
 	if err := ensureManagedAgent(managed, filepath.Join(userHome, ".local", "bin", "zenchron-engineering")); err != nil {
 		t.Fatalf("repeated install with no shell credentials: %v", err)
 	}
-	if got := strings.Count(string(mustReadFile(t, commandLog)), "kill SIGTERM"); got != 1 {
-		t.Fatalf("idempotent install requested %d restarts, want only the original restart", got)
+	if got := strings.Count(string(mustReadFile(t, commandLog)), "kill SIGTERM"); got != 0 {
+		t.Fatalf("idempotent install requested %d restarts, want none", got)
 	}
 }
 
@@ -76,9 +81,9 @@ func TestLaunchEnvironmentPreservesGitHubAppSettingsOnStoppedReinstall(t *testin
 	userHome, managed, plist := managedGitHubAppTestSetup(t)
 	t.Setenv("HOME", userHome)
 	t.Setenv("ZENCHRON_MANAGED_HOME", managed)
-	for _, key := range managedGitHubAppEnvironmentKeys {
-		t.Setenv(key, "")
-	}
+	t.Setenv("ZENCHRON_GITHUB_APP_ID", "222222")
+	t.Setenv("ZENCHRON_GITHUB_INSTALLATION_ID", "333333")
+	t.Setenv("ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", writeManagedAppTestKey(t, t.TempDir(), 0o600))
 	legacyKey := writeManagedAppTestKey(t, t.TempDir(), 0o600)
 	contents := renderLaunchAgent("entrypoint", userHome, filepath.Join(managed, "logs"), map[string]string{
 		"PATH": "/usr/bin:/bin", "ZENCHRON_GITHUB_APP_ID": "123456",
@@ -92,7 +97,7 @@ func TestLaunchEnvironmentPreservesGitHubAppSettingsOnStoppedReinstall(t *testin
 		t.Fatal(err)
 	}
 	if environment["ZENCHRON_GITHUB_APP_ID"] != "123456" || environment["ZENCHRON_GITHUB_INSTALLATION_ID"] != "987654" {
-		t.Fatalf("saved App identifiers lost on reinstall: %#v", environment)
+		t.Fatal("stopped reinstall replaced saved App identifiers with transient shell values")
 	}
 	if environment["ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH"] == legacyKey {
 		t.Fatal("reinstall continued to depend on the external source key")
