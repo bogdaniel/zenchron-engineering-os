@@ -395,8 +395,9 @@ a long session. They apply to every agent, including subagents and parallel work
 - Keep implementation scope narrow. Before modifying shared entry points, bootstrap code, global middleware, or common
   request handling, check whether the requirement can be met through feature-specific routes, middleware, controllers,
   or services; use that narrower approach whenever possible. Adding a feature registration to a shared routing file is
-  acceptable. Changing behavior for existing consumers requires a demonstrated shared need, an explanation of the
-  affected consumers, and appropriate regression checks. Passing tests alone does not justify an unnecessarily broad
+  acceptable. Changing shared behavior that affects existing consumers requires a demonstrated shared need, an
+  explanation of the affected consumers, and appropriate regression checks. Feature-specific behavior changes do not
+  by themselves trigger this shared-need requirement. Passing tests alone does not justify an unnecessarily broad
   change.
 - Report pre-existing problems you notice (dead code, flaky tests, design inconsistencies) in the final report as
   findings. Do not fix them unless the task requires it or the human agrees.
