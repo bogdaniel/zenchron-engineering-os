@@ -26,6 +26,8 @@ type actionRequiredItem struct {
 	Subject        string   `json:"subject"`
 	Reason         string   `json:"reason"`
 	Options        []string `json:"options"`
+	CanAct         bool     `json:"can_act"`
+	ActionBlocker  string   `json:"action_blocker,omitempty"`
 }
 
 // actionRequired projects current human work from the existing plans and WorkGraphs. The plan and
@@ -45,10 +47,19 @@ func (store *workGraphStore) actionRequired(w http.ResponseWriter, r *http.Reque
 		if plan.Status != planProposed || !access.allows(plan.Repository) {
 			continue
 		}
+		project, online := store.runs.registry.onlineProject(plan.ProjectID)
+		canAct := online && access.mayDispatchTo(project.WorkerID)
+		blocker := ""
+		if !online {
+			blocker = "The plan's worker is offline."
+		} else if !canAct {
+			blocker = "Your current access cannot dispatch work to the plan's worker."
+		}
 		items = append(items, actionRequiredItem{ID: "plan:" + objectiveID + ":" + strconv.Itoa(plan.Revision),
 			Kind: actionPlanApproval, ObjectiveID: objectiveID, ObjectiveTitle: item.Title, PlanRevision: plan.Revision,
 			Stage: "Plan approval", Subject: plan.Summary,
-			Reason: "This proposed revision needs approval before work can start.", Options: []string{}})
+			Reason: "This proposed revision needs approval before work can start.", Options: []string{},
+			CanAct: canAct, ActionBlocker: blocker})
 	}
 	for _, graph := range store.graphs {
 		if graph.Status == graphCancelled || !store.mayRead(access, graph) {
@@ -70,11 +81,16 @@ func (store *workGraphStore) actionRequired(w http.ResponseWriter, r *http.Reque
 				stage, title = unit.Kind, unit.Title
 				reason = cmp.Or(unit.Reason, reason)
 			}
+			canAct := access.mayDispatchTo(graph.WorkerID)
+			blocker := ""
+			if !canAct {
+				blocker = "Your current access cannot dispatch work to this graph's worker."
+			}
 			items = append(items, actionRequiredItem{ID: message.ID, Kind: actionDecision, ObjectiveID: graph.ObjectiveID,
 				ObjectiveTitle: graph.ObjectiveTitle, PlanRevision: graph.PlanRevision, GraphID: graph.ID,
 				UnitKey: message.From, Stage: stage, UnitTitle: title,
 				RunID: message.RunID, Subject: message.Body, Reason: reason,
-				Options: append([]string{}, message.Notes...)})
+				Options: append([]string{}, message.Notes...), CanAct: canAct, ActionBlocker: blocker})
 		}
 	}
 	slices.SortFunc(items, func(a, b actionRequiredItem) int {

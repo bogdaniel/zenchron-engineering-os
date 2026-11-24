@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
@@ -54,6 +56,55 @@ func TestActionRequiredProjectsCurrentPlanAndGraphDecisionsAcrossRestart(t *test
 	harness.restart()
 	if items = harness.actionRequired(); len(items) != 1 || items[0].ID != decisionID {
 		t.Fatalf("graph decision after restart = %#v", items)
+	}
+}
+
+func TestActionRequiredMarksWorkerAuthorizationFromCurrentAccess(t *testing.T) {
+	harness := newGraphHarness(t)
+	plan, response := harness.propose(harness.twoProducerPlan())
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("propose plan returned HTTP %d", response.StatusCode)
+	}
+	access := requestAccess{enforced: true, user: "reviewer", admin: true, policy: &accessFile{
+		Workers: []workerGrant{{ID: testWorkerID, Owner: "worker-owner"}},
+	}}
+	responseRecorder := httptest.NewRecorder()
+	request := withRequestAccess(httptest.NewRequest(http.MethodGet, "/api/v1/action-required", nil), access)
+	harness.server.ServeHTTP(responseRecorder, request)
+	var actions []actionRequiredItem
+	if responseRecorder.Code != http.StatusOK || json.Unmarshal(responseRecorder.Body.Bytes(), &actions) != nil ||
+		len(actions) != 1 || actions[0].Kind != actionPlanApproval || actions[0].CanAct || actions[0].ActionBlocker == "" {
+		t.Fatalf("unauthorized plan action = HTTP %d %s, %#v", responseRecorder.Code, responseRecorder.Body.String(), actions)
+	}
+	request = withRequestAccess(httptest.NewRequest(http.MethodPost,
+		"/api/v1/objectives/"+harness.objectiveID+"/plans/"+strconv.Itoa(plan.Revision)+"/approve", nil), access)
+	responseRecorder = httptest.NewRecorder()
+	harness.server.ServeHTTP(responseRecorder, request)
+	if responseRecorder.Code != http.StatusConflict {
+		t.Fatalf("unauthorized plan approval returned HTTP %d, want conflict", responseRecorder.Code)
+	}
+	graph, status := harness.approve(plan.Revision)
+	if status != http.StatusCreated {
+		t.Fatalf("approve plan returned HTTP %d", status)
+	}
+	producer := harness.claimUnit("api")
+	harness.report(producer, workerapi.AgentRunResult{Output: "Need a decision.",
+		Result: `{"decision_request":{"question":"Which export format should ship?","options":["JSON","CSV"]}}`})
+	graph = harness.graph()
+	decisionID := messagesOf(graph, messageDecisionRequest)[0].ID
+	responseRecorder = httptest.NewRecorder()
+	request = withRequestAccess(httptest.NewRequest(http.MethodGet, "/api/v1/action-required", nil), access)
+	harness.server.ServeHTTP(responseRecorder, request)
+	if responseRecorder.Code != http.StatusOK || json.Unmarshal(responseRecorder.Body.Bytes(), &actions) != nil ||
+		len(actions) != 1 || actions[0].ID != decisionID || actions[0].CanAct || actions[0].ActionBlocker == "" {
+		t.Fatalf("unauthorized decision action = HTTP %d %s, %#v", responseRecorder.Code, responseRecorder.Body.String(), actions)
+	}
+	request = withRequestAccess(jsonRequest(http.MethodPost,
+		"/api/v1/work-graphs/"+graph.ID+"/decisions/"+decisionID, strings.NewReader(`{"resolution":"Use JSON."}`)), access)
+	responseRecorder = httptest.NewRecorder()
+	harness.server.ServeHTTP(responseRecorder, request)
+	if responseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("unauthorized decision resolution returned HTTP %d, want forbidden", responseRecorder.Code)
 	}
 }
 

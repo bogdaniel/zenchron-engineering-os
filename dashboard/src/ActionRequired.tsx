@@ -11,6 +11,7 @@ const actionsSchema = z.array(z.object({
   objective_title: z.string(), plan_revision: z.number(), graph_id: z.string().optional(), unit_key: z.string().optional(),
   stage: z.string(), unit_title: z.string().optional(), run_id: z.string().optional(), subject: z.string(),
   reason: z.string(), options: z.array(z.string()).nullish().transform((items) => items ?? []),
+  can_act: z.boolean(), action_blocker: z.string().optional(),
 }));
 type ActionRequiredItem = z.infer<typeof actionsSchema>[number];
 
@@ -47,9 +48,14 @@ export function ActionRequired() {
             <span>Plan revision {action.plan_revision} · {action.stage}{action.unit_title ? `: ${action.unit_title}` : ''}</span>
             <span>{action.kind === 'plan_approval' ? 'Plan subject' : `Decision ${action.id}`} · {action.subject || 'Subject not recorded'}</span>
             <span>Waiting reason: {action.reason || 'Not recorded'}</span>
-            {action.kind === 'plan_approval'
-              ? <span>Available action: review the plan and approve it in Objective Workspace</span>
-              : <span>{action.options.length ? `Options: ${action.options.join(' · ')}` : 'Options not recorded'}</span>}
+            {action.kind === 'plan_approval' && <span>{action.can_act
+              ? 'Available action: review the plan and approve it in Objective Workspace'
+              : `Action unavailable: ${action.action_blocker || 'Not authorized'}`}</span>}
+            {action.kind === 'work_graph_decision' && <>
+              <span>{action.options.length ? `Options: ${action.options.join(' · ')}` : 'Options not recorded'}</span>
+              <span>{action.can_act ? 'Available action: resolve this decision in Objective Workspace'
+                : `Action unavailable: ${action.action_blocker || 'Not authorized'}`}</span>
+            </>}
             <span>WorkUnit {action.unit_key || (action.kind === 'plan_approval' ? 'not started' : 'not recorded')} ·
               {' '}Run {action.run_id || (action.kind === 'plan_approval' ? 'not started' : 'not recorded')}</span>
           </a>
