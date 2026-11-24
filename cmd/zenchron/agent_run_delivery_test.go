@@ -509,9 +509,11 @@ func TestRunLeaseRecoversAfterRestartAndFailsWhenAttemptsAreUsedUp(t *testing.T)
 		item.LeaseUntil = time.Now().Add(-time.Second)
 		restarted.items[run.ID] = item
 	}
-	expireLease()
-	if third := harness.claim(); third.Attempts != maxAgentRunAttempts {
-		t.Fatalf("last claim = attempt %d, want %d", third.Attempts, maxAgentRunAttempts)
+	for attempt := 3; attempt <= maxAgentRunAttempts; attempt++ {
+		expireLease()
+		if next := harness.claim(); next.Attempts != attempt {
+			t.Fatalf("claim = attempt %d, want %d", next.Attempts, attempt)
+		}
 	}
 	expireLease()
 	if response := harness.call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", ""); response.Code != http.StatusNoContent {
@@ -613,23 +615,19 @@ func TestPullRequestStatusAndGitHubReviewImport(t *testing.T) {
 		t.Fatalf("status before publication returned HTTP %d", response.Code)
 	}
 	harness.claim()
-	if _, status, message := harness.store.update(run.ID, func(item *agentRun) (int, string) {
-		item.PullRequestEnabled = true
-		return 0, ""
-	}); status != 0 {
-		t.Fatalf("prepare existing publication candidate: HTTP %d %s", status, message)
+	withoutPush := strings.Replace(pushedResult, `"branch_pushed":true`, `"branch_pushed":false`, 1)
+	if candidate, status := harness.finish(run.ID, withoutPush); status != http.StatusOK || candidate.Publication != publicationAwaitingAuthority {
+		t.Fatalf("finish candidate before authorization: HTTP %d %#v", status, candidate)
 	}
-	if _, status := harness.finish(run.ID, pushedResult); status != http.StatusOK {
-		t.Fatalf("finish before authorization returned HTTP %d", status)
-	}
-	if _, status, message := harness.store.update(run.ID, func(item *agentRun) (int, string) {
-		item.Publishing = false
-		return 0, ""
-	}); status != 0 {
-		t.Fatalf("prepare candidate after interrupted publication: HTTP %d %s", status, message)
-	}
-	if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusOK {
+	if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusAccepted {
 		t.Fatalf("authorize candidate: HTTP %d %s", response.Code, response.Body.String())
+	}
+	if command := harness.claim(); !command.PublishOnly || command.PublishCommit != testCommit {
+		t.Fatalf("authorized publication command = %#v", command)
+	}
+	result := strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1)
+	if _, status := harness.finish(run.ID, result); status != http.StatusOK {
+		t.Fatalf("finish authorized publication returned HTTP %d", status)
 	}
 	harness.reviews = `[{"id":10,"state":"CHANGES_REQUESTED","commit_id":"` + testCommit + `","body":"Rename the constant.","author_association":"MEMBER","user":{"login":"lead"}},` +
 		`{"id":11,"state":"APPROVED","commit_id":"` + testCommit + `","body":"ok","author_association":"OWNER","user":{"login":"maintainer"}},` +
@@ -666,7 +664,7 @@ func TestPullRequestStatusAndGitHubReviewImport(t *testing.T) {
 		t.Fatalf("second sync imported %d, run = %#v", imported, again)
 	}
 	command := harness.claim()
-	if command.Attempts != 2 || !strings.Contains(command.Prompt, "Requested changes: reviewer on GitHub: Also bound the result body.") ||
+	if command.Attempts != 3 || !strings.Contains(command.Prompt, "Requested changes: reviewer on GitHub: Also bound the result body.") ||
 		strings.Contains(command.Prompt, "Push straight to main") {
 		t.Fatalf("follow-up command = %#v", command)
 	}

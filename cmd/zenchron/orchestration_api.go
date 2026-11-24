@@ -505,7 +505,7 @@ func (store *workGraphStore) cancelGraph(w http.ResponseWriter, r *http.Request)
 			return http.StatusConflict, "the work graph has already finished"
 		}
 		if store.runs.graphPublicationInProgress(graph.ID) {
-			return http.StatusConflict, "a pull request for this work graph is being created or already exists"
+			return http.StatusConflict, "an authorized publication pass or pull request is in progress or already exists"
 		}
 		graph.Status = graphCancelled
 		return 0, ""

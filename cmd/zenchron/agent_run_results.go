@@ -16,7 +16,7 @@ func validAgentRunResult(input workerapi.AgentRunResult) bool {
 	return (input.Status == "succeeded" || input.Status == "failed" || input.Status == "cancelled") &&
 		len(input.Output) <= 20000 && len(input.Error) <= 255 &&
 		(input.Diff == nil || len(*input.Diff) <= maxAgentRunDiffSize) &&
-		input.Attempts >= 1 && input.Attempts <= maxAgentRunAttempts &&
+		input.Attempts >= 1 && input.Attempts <= maxAgentRunAttempts+1 &&
 		validCommitSHA(input.CommitSHA) && validCommitSHA(input.CommitTreeSHA) && validCommitSHA(input.BaseCommit) &&
 		(input.CommitTreeSHA == "" || input.CommitSHA != "") &&
 		!(input.BranchPushed && input.BranchPushFailed) && len(input.ProviderVersion) <= 100 &&
@@ -93,23 +93,28 @@ func (store *agentRunStore) finish(w http.ResponseWriter, r *http.Request) {
 
 func (store *agentRunStore) applyResult(item *agentRun, workerID string, input workerapi.AgentRunResult) (int, string) {
 	now := time.Now().UTC()
+	previousCommit := item.CommitSHA
 	if item.WorkerID != workerID || item.Status != "running" || item.Attempts != input.Attempts || now.After(item.LeaseUntil) {
 		return http.StatusConflict, "agent run lease is no longer current"
+	}
+	if item.Attempts > maxAgentRunAttempts &&
+		(!item.PublishOnly || item.PullRequestURL == "" || !item.publicationAuthorized(item.CommitSHA)) {
+		return http.StatusConflict, "the additional claim is only allowed for an authorized existing pull-request update"
 	}
 	if item.CancelRequested {
 		input.Status, input.Output, input.Error = "cancelled", "", "Cancellation requested from dashboard."
 		input.BranchPushed, input.BranchPushFailed, input.TerminationReason = false, false, workerapi.TerminationCancelled
 	}
 	if (input.BranchPushed || input.BranchPushFailed) &&
-		(!item.PullRequestEnabled || input.Status != "succeeded" || input.CommitSHA == "" ||
+		(!item.PublishOnly || !item.PullRequestEnabled || input.Status != "succeeded" || input.CommitSHA == "" ||
 			input.Verification == workerapi.VerificationFailed) {
 		return http.StatusConflict, "agent branch publish result is not allowed"
 	}
 	if input.Status == "cancelled" && !item.CancelRequested {
 		return http.StatusConflict, "agent run cancellation was not requested"
 	}
-	item.Status, item.Output, item.Error, item.CancelRequested, item.UpdatedAt, item.LeaseUntil =
-		input.Status, input.Output, input.Error, false, now, time.Time{}
+	item.Status, item.Output, item.Error, item.CancelRequested, item.UpdatedAt, item.LeaseUntil, item.PublishOnly =
+		input.Status, input.Output, input.Error, false, now, time.Time{}, false
 	item.TerminationReason, item.Verification, item.Usage = input.TerminationReason, input.Verification, input.Usage
 	item.ProviderVersion, item.Publication = input.ProviderVersion, ""
 	item.Result, item.ResultAttempt = input.Result, input.Attempts
@@ -122,7 +127,11 @@ func (store *agentRunStore) applyResult(item *agentRun, workerID string, input w
 	}
 	item.BranchPushed = input.BranchPushed
 	if input.Status == "succeeded" && item.CommitSHA != "" && store.publishable(item.Repository) {
-		item.Publication = publicationAwaitingAuthority
+		if item.PullRequestURL != "" && input.CommitSHA == "" && item.CommitSHA == previousCommit {
+			item.Publication, item.BranchPushed = publicationPublished, true
+		} else {
+			item.Publication = publicationAwaitingAuthority
+		}
 	}
 	if input.BaseCommit != "" {
 		item.BaseCommit = input.BaseCommit
@@ -236,8 +245,8 @@ func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 			return http.StatusForbidden, "you may not publish changes from this repository"
 		case item.Status != "succeeded" || item.CommitSHA != input.CandidateSHA:
 			return http.StatusConflict, "the candidate changed or the run has not completed"
-		case item.PullRequestURL != "":
-			return http.StatusConflict, "this run already has a pull request"
+		case item.PullRequestURL != "" && item.Publication == publicationPublished && item.CommitSHA == input.CandidateSHA:
+			return http.StatusConflict, "this candidate already has a pull request"
 		case !store.publishable(item.Repository):
 			return http.StatusConflict, "GitHub publication is not configured for this repository"
 		case item.Publishing:
@@ -272,12 +281,14 @@ func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 			item.Publishing = true
 			return 0, ""
 		}
-		if item.GraphID == "" && item.Attempts >= maxAgentRunAttempts {
+		if item.GraphID == "" && item.Attempts >= maxAgentRunAttempts &&
+			(item.Attempts != maxAgentRunAttempts || item.PullRequestURL == "" || item.Publication != publicationAwaitingAuthority || item.BranchPushed) {
 			return http.StatusConflict, "the run has used all of its attempts"
 		}
 		if item.GraphID == "" {
 			item.PullRequestEnabled = true
 			item.requeue()
+			item.PublishOnly = true
 		}
 		return 0, ""
 	}

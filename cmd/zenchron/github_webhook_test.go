@@ -83,29 +83,26 @@ func checkRunEvent(name, conclusion, commit, completedAt string, pullRequest int
 		name, conclusion, commit, completedAt, pullRequest)
 }
 
-// publishedRun returns a run that finished its first attempt and published pull request #23.
+// publishedRun returns a run that finished and published pull request #23.
 func (harness *deliveryHarness) publishedRun() agentRun {
 	harness.t.Helper()
 	run := harness.createIssueRun()
 	harness.claim()
-	if _, status, message := harness.store.update(run.ID, func(item *agentRun) (int, string) {
-		item.PullRequestEnabled = true
-		return 0, ""
-	}); status != 0 {
-		harness.t.Fatalf("prepare existing publication candidate: HTTP %d %s", status, message)
-	}
-	awaiting, status := harness.finish(run.ID, pushedResult)
+	withoutPush := strings.Replace(pushedResult, `"branch_pushed":true`, `"branch_pushed":false`, 1)
+	awaiting, status := harness.finish(run.ID, withoutPush)
 	if status != http.StatusOK || awaiting.Publication != publicationAwaitingAuthority {
 		harness.t.Fatalf("finish before authorization: HTTP %d, %#v", status, awaiting)
 	}
-	if _, status, message := harness.store.update(run.ID, func(item *agentRun) (int, string) {
-		item.Publishing = false
-		return 0, ""
-	}); status != 0 {
-		harness.t.Fatalf("prepare candidate after interrupted publication: HTTP %d %s", status, message)
-	}
-	if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusOK {
+	if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusAccepted {
 		harness.t.Fatalf("authorize candidate: HTTP %d, %s", response.Code, response.Body.String())
+	}
+	if command := harness.claim(); !command.PublishOnly || command.PublishCommit != testCommit {
+		harness.t.Fatalf("publication command = %#v", command)
+	}
+	result := strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1)
+	finished, status := harness.finish(run.ID, result)
+	if status != http.StatusOK || finished.Publication != publicationPublished {
+		harness.t.Fatalf("publish: HTTP %d, %#v", status, finished)
 	}
 	finished, exists := harness.store.get(run.ID)
 	if !exists || finished.PullRequestNumber != 23 || finished.CommitSHA != testCommit {
@@ -170,7 +167,7 @@ func TestWebhookChangeRequestQueuesOneBoundedFollowUpAndIsIdempotent(t *testing.
 		t.Fatalf("change request: HTTP %d %s", response.Code, response.Body.String())
 	}
 	queued := harness.run(run.ID)
-	if queued.Status != "queued" || queued.Attempts != 1 || len(queued.ReviewComments) != 1 || !queued.ReviewComments[0].RequestChanges ||
+	if queued.Status != "queued" || queued.Attempts != 2 || len(queued.ReviewComments) != 1 || !queued.ReviewComments[0].RequestChanges ||
 		queued.ReviewComments[0].Body != "maintainer on GitHub: Handle the empty body too." || queued.ImportedReviewID != 501 ||
 		len(queued.GitHubReviews) != 1 || !queued.GitHubReviews[0].Queued || queued.PullRequestNumber != 23 || queued.Branch != run.Branch {
 		t.Fatalf("queued run = %#v", queued)
@@ -182,37 +179,48 @@ func TestWebhookChangeRequestQueuesOneBoundedFollowUpAndIsIdempotent(t *testing.
 			t.Errorf("replay %s: HTTP %d %s", delivery, response.Code, response.Body.String())
 		}
 	}
-	if replayed := harness.run(run.ID); len(replayed.ReviewComments) != 1 || len(replayed.GitHubReviews) != 1 || replayed.Attempts != 1 {
+	if replayed := harness.run(run.ID); len(replayed.ReviewComments) != 1 || len(replayed.GitHubReviews) != 1 || replayed.Attempts != 2 {
 		t.Fatalf("a replay changed the run: %#v", replayed)
 	}
-	// The follow-up publishes a new commit on the same pull request; the worker's prompt carries the feedback.
+	// The follow-up creates a local candidate and does not inherit authority for the previous commit.
 	command := harness.claim()
-	if command.Attempts != 2 || !strings.Contains(command.Prompt, "Requested changes: maintainer on GitHub: Handle the empty body too.") {
+	if command.Attempts != 3 || command.PublishOnly || command.PublishPullRequest || command.PublishCommit != "" ||
+		!strings.Contains(command.Prompt, "Requested changes: maintainer on GitHub: Handle the empty body too.") {
 		t.Fatalf("follow-up command = %#v", command)
 	}
 	secondCommit := strings.Repeat("c", 40)
-	second := strings.Replace(strings.Replace(pushedResult, testCommit, secondCommit, 1), `"attempts":1`, `"attempts":2`, 1)
-	if finished, status := harness.finish(run.ID, second); status != http.StatusOK || finished.CommitSHA != secondCommit || finished.PullRequestNumber != 23 {
+	second := strings.Replace(strings.Replace(pushedResult, testCommit, secondCommit, 1), `"attempts":1`, `"attempts":3`, 1)
+	second = strings.Replace(second, `"branch_pushed":true`, `"branch_pushed":false`, 1)
+	if finished, status := harness.finish(run.ID, second); status != http.StatusOK || finished.CommitSHA != secondCommit ||
+		finished.Publication != publicationAwaitingAuthority || finished.PullRequestNumber != 23 {
 		t.Fatalf("second attempt: HTTP %d %#v", status, finished)
 	}
-	// A late review of the first commit is stale and must not start the third attempt.
+	// A late review of the first commit is stale and must not queue another claim.
 	stale := reviewEvent{id: 502, commit: testCommit}.json(harness.run(run.ID))
 	if response := deliver(harness.server, webhookSecret, "pull_request_review", "d-3", stale); !strings.Contains(response.Body.String(), deferredOutcome) {
 		t.Errorf("stale review: %s", response.Body.String())
 	}
-	current := harness.run(run.ID)
-	third := reviewEvent{id: 503, body: "One more thing."}.json(current)
-	deliver(harness.server, webhookSecret, "pull_request_review", "d-4", third)
-	harness.claim()
-	thirdResult := strings.Replace(strings.Replace(pushedResult, testCommit, strings.Repeat("d", 40), 1), `"attempts":1`, `"attempts":3`, 1)
-	harness.finish(run.ID, thirdResult)
-	// The run has used its three attempts: further change requests are kept as feedback and start nothing.
+	if response := harness.authorizePublication(run.ID, secondCommit); response.Code != http.StatusAccepted {
+		t.Fatalf("authorize updated candidate: HTTP %d %s", response.Code, response.Body.String())
+	}
+	publication := harness.claim()
+	if publication.Attempts != 4 || !publication.PublishOnly || publication.PublishCommit != secondCommit {
+		t.Fatalf("updated candidate publication = %#v", publication)
+	}
+	updatedResult := strings.Replace(strings.Replace(pushedResult, testCommit, secondCommit, 1), `"attempts":1`, `"attempts":4`, 1)
+	if finished, status := harness.finish(run.ID, updatedResult); status != http.StatusOK || finished.Publication != publicationPublished {
+		t.Fatalf("publish updated candidate: HTTP %d %#v", status, finished)
+	}
+	if harness.pullCreates != 1 {
+		t.Fatalf("updated candidate created %d pull requests, want reuse of #23", harness.pullCreates)
+	}
+	// Three execution attempts and one authorized PR update exhaust this run's bounded work.
 	exhausted := reviewEvent{id: 504, body: "And another."}.json(harness.run(run.ID))
 	response := deliver(harness.server, webhookSecret, "pull_request_review", "d-5", exhausted)
 	final := harness.run(run.ID)
-	if !strings.Contains(response.Body.String(), "feedback recorded") || final.Status != "succeeded" || final.Attempts != 3 ||
+	if !strings.Contains(response.Body.String(), "feedback recorded") || final.Status != "succeeded" || final.Attempts != 4 ||
 		final.GitHubReviews[len(final.GitHubReviews)-1].Queued {
-		t.Fatalf("a fourth attempt was admitted: %s %#v", response.Body.String(), final)
+		t.Fatalf("a fifth claim was admitted: %s %#v", response.Body.String(), final)
 	}
 }
 
@@ -237,7 +245,7 @@ func TestConcurrentWebhookDeliveriesImportReviewOnce(t *testing.T) {
 		}
 	}
 	after := harness.run(run.ID)
-	if after.Status != "queued" || after.Attempts != 1 || after.ImportedReviewID != 508 ||
+	if after.Status != "queued" || after.Attempts != 2 || after.ImportedReviewID != 508 ||
 		len(after.ReviewComments) != 1 || len(after.GitHubReviews) != 1 {
 		t.Fatalf("concurrent review was applied more than once: %#v", after)
 	}
@@ -267,7 +275,7 @@ func TestWebhookAndReviewSyncImportTheSameReviewOnce(t *testing.T) {
 		}
 	}
 	after := harness.run(run.ID)
-	if after.Status != "queued" || after.Attempts != 1 || after.ImportedReviewID != 509 || len(after.ReviewComments) != 1 {
+	if after.Status != "queued" || after.Attempts != 2 || after.ImportedReviewID != 509 || len(after.ReviewComments) != 1 {
 		t.Fatalf("webhook and sync duplicated review feedback: %#v", after)
 	}
 }
@@ -316,7 +324,7 @@ func TestWebhookStoresCheckRunsForTheHeadCommitWithoutStartingWork(t *testing.T)
 	send("c-1", checkRunEvent("go", "failure", testCommit, "2026-11-14T10:05:00Z", 23))
 	send("c-2", checkRunEvent("dashboard", "success", testCommit, "2026-11-14T10:06:00Z", 23))
 	failed := harness.run(run.ID)
-	if failed.Status != "succeeded" || failed.Attempts != 1 || len(failed.Checks) != 2 || failed.Checks[0].Conclusion != "failure" ||
+	if failed.Status != "succeeded" || failed.Attempts != 2 || len(failed.Checks) != 2 || failed.Checks[0].Conclusion != "failure" ||
 		failed.Checks[0].CommitSHA != testCommit || failed.Checks[0].URL == "" {
 		t.Fatalf("a failed check must be stored and must not queue work: %#v", failed)
 	}
