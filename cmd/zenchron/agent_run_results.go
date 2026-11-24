@@ -243,6 +243,11 @@ func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case !access.allows(item.Repository):
 			return http.StatusForbidden, "you may not publish changes from this repository"
+		case !access.mayDispatchTo(item.WorkerID):
+			return http.StatusForbidden, "this run's worker is not available to this user"
+		case item.GraphID != "" && (store.graphs == nil || store.graphs.graphs[item.GraphID] == nil ||
+			!store.graphs.mayRead(access, store.graphs.graphs[item.GraphID])):
+			return http.StatusNotFound, "agent run not found"
 		case item.Status != "succeeded" || item.CommitSHA != input.CandidateSHA:
 			return http.StatusConflict, "the candidate changed or the run has not completed"
 		case item.PullRequestURL != "" && item.Publication == publicationPublished && item.CommitSHA == input.CandidateSHA:
