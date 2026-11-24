@@ -108,6 +108,54 @@ func TestActionRequiredMarksWorkerAuthorizationFromCurrentAccess(t *testing.T) {
 	}
 }
 
+func TestActionRequiredRechecksCurrentRepositoryAuthorization(t *testing.T) {
+	harness := newGraphHarness(t)
+	access := requestAccess{enforced: true, user: "reviewer", repositories: []string{"github.com/acme/platform"},
+		policy: &accessFile{Users: map[string][]string{"reviewer": {"github.com/acme/platform"}},
+			Workers: []workerGrant{{ID: testWorkerID, Owner: "reviewer"}}}}
+	request := withRequestAccess(jsonRequest(http.MethodPost, "/api/v1/objectives",
+		strings.NewReader(`{"title":"Review the current repository grant"}`)), access)
+	responseRecorder := httptest.NewRecorder()
+	harness.server.ServeHTTP(responseRecorder, request)
+	var item objective
+	if responseRecorder.Code != http.StatusCreated || json.Unmarshal(responseRecorder.Body.Bytes(), &item) != nil {
+		t.Fatalf("create objective returned HTTP %d: %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	harness.objectiveID = item.ID
+	request = withRequestAccess(jsonRequest(http.MethodPost, "/api/v1/objectives/"+item.ID+"/plans",
+		strings.NewReader(harness.twoProducerPlan())), access)
+	responseRecorder = httptest.NewRecorder()
+	harness.server.ServeHTTP(responseRecorder, request)
+	var plan objectivePlan
+	if responseRecorder.Code != http.StatusCreated || json.Unmarshal(responseRecorder.Body.Bytes(), &plan) != nil {
+		t.Fatalf("propose plan returned HTTP %d: %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+
+	registry := harness.store.registry
+	registry.mu.Lock()
+	project := registry.projects[testWorkerID+":"+testProjectID]
+	project.GitRemote = "github.com/acme/renamed"
+	registry.projects[testWorkerID+":"+testProjectID] = project
+	registry.mu.Unlock()
+
+	request = withRequestAccess(httptest.NewRequest(http.MethodGet, "/api/v1/action-required", nil), access)
+	responseRecorder = httptest.NewRecorder()
+	harness.server.ServeHTTP(responseRecorder, request)
+	var actions []actionRequiredItem
+	if responseRecorder.Code != http.StatusOK || json.Unmarshal(responseRecorder.Body.Bytes(), &actions) != nil ||
+		len(actions) != 1 || actions[0].ID != "plan:"+harness.objectiveID+":"+strconv.Itoa(plan.Revision) ||
+		actions[0].CanAct || actions[0].ActionBlocker != "Your current access does not include the plan's current repository." {
+		t.Fatalf("stale repository authorization = HTTP %d %s, %#v", responseRecorder.Code, responseRecorder.Body.String(), actions)
+	}
+	request = withRequestAccess(httptest.NewRequest(http.MethodPost,
+		"/api/v1/objectives/"+harness.objectiveID+"/plans/"+strconv.Itoa(plan.Revision)+"/approve", nil), access)
+	responseRecorder = httptest.NewRecorder()
+	harness.server.ServeHTTP(responseRecorder, request)
+	if responseRecorder.Code != http.StatusConflict {
+		t.Fatalf("stale repository authorization approval returned HTTP %d, want conflict", responseRecorder.Code)
+	}
+}
+
 func (harness *graphHarness) actionRequired() []actionRequiredItem {
 	harness.t.Helper()
 	response := harness.call(http.MethodGet, "/api/v1/action-required", "")
