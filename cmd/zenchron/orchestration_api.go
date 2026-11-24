@@ -336,6 +336,7 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	now := time.Now().UTC()
+	previousPlans := slices.Clone(plans)
 	graph := &workGraph{ID: graphID, ObjectiveID: item.ID, ObjectiveTitle: item.Title, PlanRevision: plan.Revision,
 		PlanHash: plan.Hash, Revision: 1, Status: graphActive, ProjectID: project.ID, ProjectName: project.Name,
 		Repository: project.GitRemote, WorkerID: project.WorkerID, WorkerName: project.WorkerName, BaseBranch: project.Branch,
@@ -355,7 +356,7 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 	store.graphs[graph.ID] = graph
 	if err := store.persistLocked(); err != nil {
 		delete(store.graphs, graph.ID)
-		plan.Status, plan.GraphID, plan.ApprovedBy, plan.ApprovedAt = planProposed, "", "", nil
+		store.plans[item.ID] = previousPlans
 		store.mu.Unlock()
 		http.Error(w, "could not persist the work graph", http.StatusInternalServerError)
 		return
@@ -485,15 +486,13 @@ func (store *workGraphStore) changeAfterCommit(
 		http.Error(w, "could not persist work graph", http.StatusInternalServerError)
 		return
 	}
-	// Persist run cancellation before result acceptance can observe the cancelled graph.
+	store.mu.Unlock()
 	if afterCommit != nil {
 		if status, message := afterCommit(updated.ID); status != 0 {
-			store.mu.Unlock()
 			http.Error(w, message, status)
 			return
 		}
 	}
-	store.mu.Unlock()
 	store.reconcileAll()
 	store.writeGraph(w, http.StatusOK, updated.ID)
 }
@@ -503,9 +502,6 @@ func (store *workGraphStore) cancelGraph(w http.ResponseWriter, r *http.Request)
 	store.changeAfterCommit(w, r, func(graph *workGraph) (int, string) {
 		if graph.Status == graphCompleted || graph.Status == graphCancelled {
 			return http.StatusConflict, "the work graph has already finished"
-		}
-		if store.runs.graphPublicationInProgress(graph.ID) {
-			return http.StatusConflict, "an authorized publication pass or pull request is in progress or already exists"
 		}
 		graph.Status = graphCancelled
 		return 0, ""
