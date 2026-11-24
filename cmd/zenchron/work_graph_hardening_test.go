@@ -195,6 +195,10 @@ func TestUnitIsNotReportedBlockedWhileItsPullRequestIsBeingCreated(t *testing.T)
 	var during workGraph
 	var cancelStatus int
 	harness.duringPullCreate = func() {
+		current, exists := harness.store.get(integration.ID)
+		if !exists || !current.Publishing {
+			t.Error("authorized publication did not hold its in-flight barrier")
+		}
 		cancelStatus = harness.call(http.MethodPost, "/api/v1/work-graphs/"+graphID+"/cancel", "").Code
 		during = harness.graph()
 	}
