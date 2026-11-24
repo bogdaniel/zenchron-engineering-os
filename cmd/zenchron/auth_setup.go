@@ -107,7 +107,7 @@ func managedOAuthActiveRunCount(statusToken string, client *http.Client) (int, e
 		return 0, fmt.Errorf("create managed status request: %w", err)
 	}
 	request.Header.Set(localStatusCredentialHeader, statusToken)
-	response, err := client.Do(request)
+	response, err := doLocalStatusRequest(client, request)
 	if err != nil {
 		return 0, fmt.Errorf("request managed status: %w", err)
 	}

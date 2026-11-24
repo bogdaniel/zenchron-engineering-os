@@ -291,7 +291,7 @@ func readManagedUpdaterStatus(client *http.Client) (updater.Status, error) {
 		return updater.Status{}, err
 	}
 	request.Header.Set(localStatusCredentialHeader, localStatusCredential())
-	response, err := client.Do(request)
+	response, err := doLocalStatusRequest(client, request)
 	if err != nil {
 		return updater.Status{}, err
 	}

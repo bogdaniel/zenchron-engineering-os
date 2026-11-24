@@ -58,3 +58,41 @@ func TestLocalStatusCredentialReadsUpdaterAndActiveRunsWithSessionAuthEnabled(t 
 		t.Fatalf("local status token reached a non-read-only method: HTTP %d", got.Code)
 	}
 }
+
+func TestManagedStatusRequestsDoNotFollowRedirects(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	token := "owner-local-status-token"
+	t.Setenv("ZENCHRON_LOCAL_STATUS_TOKEN", token)
+	for _, scenario := range []struct {
+		name string
+		call func(*http.Client) error
+	}{
+		{name: "updater status", call: func(client *http.Client) error {
+			_, err := readManagedUpdaterStatus(client)
+			return err
+		}},
+		{name: "active-run preflight", call: func(client *http.Client) error {
+			_, err := managedOAuthActiveRunCount(token, client)
+			return err
+		}},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			calls := 0
+			client := &http.Client{Transport: managedTestTransport(func(request *http.Request) (*http.Response, error) {
+				calls++
+				if request.URL.Host != "127.0.0.1:8080" || request.Header.Get(localStatusCredentialHeader) != token {
+					t.Fatalf("local status request target or credential was incorrect")
+				}
+				response := &http.Response{StatusCode: http.StatusFound, Header: make(http.Header), Body: http.NoBody, Request: request}
+				response.Header.Set("Location", "https://example.invalid/credential-target")
+				return response, nil
+			})}
+			if err := scenario.call(client); err == nil {
+				t.Fatal("redirect response was treated as successful")
+			}
+			if calls != 1 {
+				t.Fatalf("local status request made %d HTTP requests, want 1", calls)
+			}
+		})
+	}
+}

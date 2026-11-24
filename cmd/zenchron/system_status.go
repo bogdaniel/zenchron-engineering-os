@@ -280,6 +280,13 @@ func localStatusCredential() string {
 	return strings.TrimSpace(os.Getenv("ZENCHRON_LOCAL_STATUS_TOKEN"))
 }
 
+func doLocalStatusRequest(client *http.Client, request *http.Request) (*http.Response, error) {
+	// Never forward the LaunchAgent credential through a redirect from the local control plane.
+	localClient := *client
+	localClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return localClient.Do(request)
+}
+
 func localStatusCredentialRequest(r *http.Request) bool {
 	if r.Method != http.MethodGet || !isLoopbackRequest(r) {
 		return false
