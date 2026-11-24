@@ -96,16 +96,16 @@ sequenceDiagram
     participant U as system-update.json
     participant A as agent-runs.json and in-memory admission
     O->>G: Configure App ID, installation ID and local PEM file
-    G->>CP: Read managed health and active-run count
+    G->>CP: GET /healthz and GET /api/v1/system/update/active-runs
     CP->>A: Read durable active runs
     CP-->>G: Return the active-run count
     G->>G: Validate and save protected config outside release directories
-    G->>S: Request graceful restart of the existing LaunchAgent
+    G->>S: launchctl bootout then bootstrap the saved plist
     S->>CP: Quiesce run admission and drain any work that raced setup
-    S->>S: LaunchAgent restarts after graceful exit
+    S->>S: Gracefully drain and restart with the reloaded definition
     S->>S: Reload App settings after restart and self-update
     S->>GH: Verify trusted main using the managed App credentials
-    G->>CP: Read updater result and runtime auth provenance from the managed control plane
+    G->>CP: GET /api/v1/system/update for updater result and runtime auth provenance
     CP->>U: Read persisted supervisor verification
     CP-->>G: Return value-free status categories
     G-->>O: Report configuration, key, installation, permission or updater state
