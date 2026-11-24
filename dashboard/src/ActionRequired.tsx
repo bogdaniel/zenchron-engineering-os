@@ -24,6 +24,7 @@ async function loadActions() {
 function actionHref(action: ActionRequiredItem) {
   return livePageHref('objectives', {
     objective: action.objective_id, tab: 'plan',
+    ...(action.kind === 'plan_approval' ? { plan_revision: String(action.plan_revision) } : {}),
     ...(action.kind === 'work_graph_decision' && action.graph_id ? { graph_id: action.graph_id, decision: action.id } : {}),
   });
 }

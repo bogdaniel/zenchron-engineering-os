@@ -148,14 +148,43 @@ for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: '
     await expect(action).toContainText('Plan subject · Prepare and review the usage export');
     await expect(action).toContainText('Available action: review the plan and approve it in Objective Workspace');
     await expect(action).toContainText('WorkUnit not started · Run not started');
-    await expect(action).toHaveAttribute('href', new RegExp(`objective=${objectiveID}.*tab=plan`));
+    await expect(action).toHaveAttribute('href', new RegExp(`objective=${objectiveID}.*tab=plan.*plan_revision=3`));
     await page.screenshot({ path: testInfo.outputPath(`action-required-plan-${viewport.name}.png`), fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await action.click();
-    await expect(page.getByRole('button', { name: 'Approve plan and start' })).toBeVisible();
-    await expect(page.getByText(plan.summary)).toBeVisible();
+    const exactRevision = page.locator('#plan-revision-3');
+    await expect(exactRevision).toHaveAttribute('aria-current', 'location');
+    await expect(exactRevision).toContainText('Opened from Action Required for this exact plan revision.');
+    await expect(exactRevision.getByRole('button', { name: 'Approve plan and start' })).toBeVisible();
+    await expect(exactRevision).toContainText(plan.summary);
+    await page.screenshot({ path: testInfo.outputPath(`objective-plan-targeted-${viewport.name}.png`), fullPage: true });
   });
 }
+
+test('Action Required reports when its exact plan revision is no longer available', async ({ page }) => {
+  const plan = { objective_id: objectiveID, revision: 4, status: 'proposed', project_id: 'repository',
+    summary: 'Current proposal', max_parallel: 1, units: [], problems: [], created_at: '2026-11-04T00:00:00Z' };
+  const planAction = { id: `plan:${objectiveID}:3`, kind: 'plan_approval', objective_id: objectiveID,
+    objective_title: 'Ship usage export', plan_revision: 3, stage: 'Plan approval', subject: 'Earlier proposal',
+    reason: 'This proposed revision needs approval before work can start.', options: [], can_act: true };
+  await useLiveSession(page, [], [planAction]);
+  await page.route(`**/api/v1/objectives/${objectiveID}/plans`, (route) => route.fulfill(json([plan])));
+  await page.goto('/?mode=live#overview');
+  await page.getByRole('region', { name: 'Action Required' }).getByRole('link').click();
+  await expect(page.getByRole('alert')).toContainText('Plan revision 3 is no longer available');
+  await expect(page.locator('#plan-revision-4')).toContainText('Current proposal');
+  await expect(page.getByRole('button', { name: 'Approve plan and start' })).toBeVisible();
+});
+
+test('Objective Workspace reports a malformed plan revision link', async ({ page }) => {
+  const plan = { objective_id: objectiveID, revision: 4, status: 'proposed', project_id: 'repository',
+    summary: 'Current proposal', max_parallel: 1, units: [], problems: [], created_at: '2026-11-04T00:00:00Z' };
+  await useLiveSession(page, []);
+  await page.route(`**/api/v1/objectives/${objectiveID}/plans`, (route) => route.fulfill(json([plan])));
+  await page.goto(`/?mode=live&objective=${objectiveID}&tab=plan&plan_revision=00#objectives`);
+  await expect(page.getByRole('alert')).toContainText('This plan revision link is invalid.');
+  await expect(page.locator('#plan-revision-4')).not.toHaveAttribute('aria-current', 'location');
+});
 
 test('Action Required deep links stay selected until their action is complete', async ({ page }) => {
   await useLiveSession(page, [graph(cancelledGraphID, 'api-cancelled', 'Old graph decision', '2026-11-02T00:00:00Z', 'cancelled')]);

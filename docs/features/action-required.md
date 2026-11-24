@@ -2,8 +2,9 @@
 
 The Live Overview projects the latest proposed plan approvals and unresolved typed WorkGraph decision requests from
 the existing control-plane stores through `GET /api/v1/action-required`. It omits cancelled graphs and plans outside
-the caller's existing objective/repository visibility. Plan rows link to the existing Plan tab and its latest plan
-approval control; graph rows link to the exact objective, graph, and decision. Rows show objective, plan revision,
+the caller's existing objective/repository visibility. Plan rows carry the exact revision and focus it in the plan view;
+an unavailable revision is reported instead of silently substituting another proposal. Graph rows link to the exact
+objective, graph, and decision. Rows show objective, plan revision,
 stage/unit/run where present, exact subject, recorded waiting reason, and decision options; missing values remain
 explicitly unrecorded. The projection reports whether the current caller may act based on the same worker-dispatch
 grant each existing mutation endpoint checks; otherwise the row stays available for review and names why its action
@@ -17,7 +18,7 @@ graphs as cancelled.
 
 ```mermaid
 flowchart LR
-    Link["Action Required deep link<br/>objective · tab · graph · decision"] -->|Retain selection until navigation or approval| Overview
+    Link["Action Required deep link<br/>objective · tab · plan revision · graph · decision"] -->|Retain selection until navigation or approval| Overview
     Overview[Live Overview] -->|GET /api/v1/action-required| CP[(Existing Go control plane)]
     CP -->|visible proposed plans and unresolved typed decisions| Overview
     Overview -->|objective_id · plan revision| Objective[Existing Objective Plan view]
