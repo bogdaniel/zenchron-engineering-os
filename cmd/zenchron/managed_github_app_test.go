@@ -206,6 +206,31 @@ func TestManagedGitHubAppRuntimeRefreshDecision(t *testing.T) {
 	}
 }
 
+func TestGitHubAppBootstrapDoesNotBootOutAServiceThatRacedConfiguration(t *testing.T) {
+	userHome, managed, plist := managedGitHubAppTestSetup(t)
+	t.Setenv("HOME", userHome)
+	t.Setenv("ZENCHRON_MANAGED_HOME", managed)
+	for _, key := range managedGitHubAppEnvironmentKeys {
+		t.Setenv(key, "")
+	}
+	commandDirectory := t.TempDir()
+	commandLog := filepath.Join(t.TempDir(), "launchctl.log")
+	t.Setenv("LAUNCHCTL_LOG", commandLog)
+	writeLaunchctlStub(t, commandDirectory, "printf '%s\\n' \"$*\" >> \"$LAUNCHCTL_LOG\"\nexit 1\n")
+	t.Setenv("PATH", commandDirectory+string(os.PathListSeparator)+"/usr/bin:/bin")
+
+	if err := bootstrapManagedGitHubAppLaunchAgent(managed, "managed-entrypoint"); err == nil {
+		t.Fatal("a bootstrap conflict was treated as a successful start")
+	}
+	if _, err := os.Stat(plist); err != nil {
+		t.Fatalf("saved LaunchAgent settings were not preserved: %v", err)
+	}
+	commands := string(mustReadFile(t, commandLog))
+	if !strings.Contains(commands, "bootstrap gui/") || strings.Contains(commands, "bootout") {
+		t.Fatalf("racing configuration stopped a loaded service: %q", commands)
+	}
+}
+
 func TestManagedGitHubAppStatusDistinguishesMissingKeyAndInstallation(t *testing.T) {
 	userHome, managed, plist := managedGitHubAppTestSetup(t)
 	t.Setenv("HOME", userHome)

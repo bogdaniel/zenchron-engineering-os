@@ -111,7 +111,7 @@ func configureManagedGitHubApp(home string, args []string) error {
 				if err != nil {
 					return errors.New("saved GitHub App settings could not be activated")
 				}
-				if err := installLaunchAgent(home, entrypoint); err != nil {
+				if err := bootstrapManagedGitHubAppLaunchAgent(home, entrypoint); err != nil {
 					return errors.New("saved GitHub App settings could not be activated")
 				}
 			}
@@ -135,7 +135,7 @@ func configureManagedGitHubApp(home string, args []string) error {
 		if err != nil {
 			return errors.New("GitHub App settings were saved; the existing managed service could not be started")
 		}
-		if err := installLaunchAgent(home, entrypoint); err != nil {
+		if err := bootstrapManagedGitHubAppLaunchAgent(home, entrypoint); err != nil {
 			return errors.New("GitHub App settings were saved; the existing managed service could not be started")
 		}
 	}
@@ -145,6 +145,38 @@ func configureManagedGitHubApp(home string, args []string) error {
 	printGitHubAppDiagnostic(diagnostic)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func bootstrapManagedGitHubAppLaunchAgent(home, entrypoint string) error {
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return errors.New("could not resolve the managed LaunchAgent owner")
+	}
+	launchDirectory := filepath.Join(userHome, "Library", "LaunchAgents")
+	logDirectory := filepath.Join(home, "logs")
+	if err := os.MkdirAll(launchDirectory, 0o700); err != nil {
+		return errors.New("could not prepare the existing managed LaunchAgent")
+	}
+	if err := os.MkdirAll(logDirectory, 0o700); err != nil {
+		return errors.New("could not prepare the existing managed LaunchAgent")
+	}
+	environment, err := launchEnvironment()
+	if err != nil {
+		return err
+	}
+	plist := filepath.Join(launchDirectory, managedLaunchAgentLabel+".plist")
+	if err := writeInstallFile(plist, renderLaunchAgent(entrypoint, userHome, logDirectory, environment), 0o600); err != nil {
+		return errors.New("could not save the existing managed LaunchAgent settings")
+	}
+	current, err := user.Current()
+	if err != nil {
+		return errors.New("could not identify the managed LaunchAgent owner")
+	}
+	domain := "gui/" + current.Uid
+	if _, err := exec.Command("launchctl", "bootstrap", domain, plist).CombinedOutput(); err != nil {
+		return errors.New("could not start the managed LaunchAgent without stopping an already loaded service")
 	}
 	return nil
 }

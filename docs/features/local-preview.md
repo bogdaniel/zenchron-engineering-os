@@ -46,7 +46,9 @@ the plist settings when the invoking shell has no App credentials, and self-upda
 `auth github-app status` reports configuration, key readability, the active runtime's authentication method, and the
 managed updater's latest verification as value-free categories. Verification requires a recent updater attempt from
 the running supervisor with the same App ID, installation ID, and public-key identity saved in the LaunchAgent. A
-personal access token taking precedence is reported separately and never counts as GitHub App verification.
+personal access token taking precedence is reported separately and never counts as GitHub App verification. Repeating
+`configure` retries a stale runtime using the active-run check and graceful restart; a concurrent service start is
+never booted out.
 `invalid_installation` covers failure to validate the local active release and GitHub rejecting the App
 installation-token request. A `404` while reading the configured repository remains an updater-verification failure
 because that response does not prove the installation ID is invalid. A `403` is reported as insufficient permissions.
