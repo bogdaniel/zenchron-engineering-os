@@ -39,12 +39,21 @@ The local `status` command and Settings / System Update page read the same persi
 reconnects to update progress, keeps Mock isolated from the API, and automatically reloads only after it observes a new
 running revision.
 
+`zenchron-engineering auth github-app configure --app-id ID --installation-id ID --private-key FILE` saves GitHub App
+IDs and the copied PEM path in the existing owner-only LaunchAgent plist, copies the PEM into an owner-only file, and
+requests a graceful restart of the existing LaunchAgent. It defers when active runs are present. Reinstall preserves
+the plist settings when the invoking shell has no App credentials, and self-update keeps the LaunchAgent environment.
+`auth github-app status` reports configuration, key readability, and the managed updater's latest verification as
+value-free status categories. Workers never receive GitHub App credentials.
+
 ## Feature diagram
 
 ```mermaid
 sequenceDiagram
     participant I as Local installer
     participant C as Doctor command
+    participant O as Local operator
+    participant G as Managed GitHub App command
     participant GH as Trusted GitHub main
     participant S as Managed supervisor
     participant R as Versioned release store
@@ -54,6 +63,20 @@ sequenceDiagram
     participant DP as Dashboard dev/test proxy
     participant U as system-update.json
     participant A as agent-runs.json and in-memory admission
+    O->>G: Configure App ID, installation ID and local PEM file
+    G->>CP: Read managed health and active-run count
+    CP->>A: Read durable active runs
+    CP-->>G: Return the active-run count
+    G->>G: Validate and save protected config outside release directories
+    G->>S: Request graceful restart of the existing LaunchAgent
+    S->>CP: Quiesce run admission and drain any work that raced setup
+    S->>S: LaunchAgent restarts after graceful exit
+    S->>S: Reload App settings after restart and self-update
+    S->>GH: Verify trusted main using the managed App credentials
+    G->>CP: Read updater result from the managed control plane
+    CP->>U: Read persisted supervisor verification
+    CP-->>G: Return value-free status categories
+    G-->>O: Report configuration, key, installation, permission or updater state
     I->>I: Validate canonical entrypoint and PATH without changing them
     C->>C: Resolve PATH and inspect shadowing commands
     C->>R: Verify the active release
@@ -107,11 +130,14 @@ origin; it forwards foreign and malformed origins unchanged so the control plane
 
 ## Configuration and boundaries
 
-GitHub authentication is required to inspect protected-branch/ruleset metadata and fetch private source. Prefer the
-existing GitHub App configuration; credentials are stored in the per-user LaunchAgent environment and are not passed
-to the worker or dashboard. The GitHub App needs repository metadata, contents, administration, commit statuses, and
-check runs read access to verify branch protection and required checks. Keep the private key at an owner-only path
-outside the repository.
+GitHub authentication is required to inspect protected-branch/ruleset metadata and fetch private source. Configure the
+existing GitHub App through `zenchron-engineering auth github-app configure`; App IDs and the managed key path are kept
+in the existing owner-only LaunchAgent plist, and a copied private key is kept in an owner-only file under the managed
+installation, outside the repository and versioned releases. The App settings are loaded by the existing supervisor
+and control plane, and are not passed to the worker or dashboard. The GitHub App
+needs repository metadata, contents, administration, commit statuses, and check runs read access to verify branch
+protection and required checks. Pull requests: write is additionally required only when the control plane is authorized
+to create PRs.
 
 The installation requires no root privileges, containers or external server. This implementation currently uses
 macOS LaunchAgents. By default it reuses the existing `<UserConfigDir>/zenchron` durable state directory and keeps

@@ -323,7 +323,7 @@ func TestManagedOAuthSetupRechecksActiveRunsBeforeWritingConfig(t *testing.T) {
 	}
 }
 
-func TestRestartManagedForOAuthUsesGracefulLaunchdSignal(t *testing.T) {
+func TestRestartManagedSupervisorUsesGracefulLaunchdSignal(t *testing.T) {
 	launchctlDirectory := t.TempDir()
 	launchctlLog := filepath.Join(t.TempDir(), "launchctl.log")
 	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$LAUNCHCTL_LOG\"\n" +
@@ -337,7 +337,7 @@ func TestRestartManagedForOAuthUsesGracefulLaunchdSignal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := restartManagedForOAuth(); err != nil {
+	if err := restartManagedSupervisor(); err != nil {
 		t.Fatal(err)
 	}
 	commands, err := os.ReadFile(launchctlLog)

@@ -21,8 +21,11 @@ import (
 const managedOAuthCallback = "http://127.0.0.1:8080/auth/github/callback"
 
 func runAuthCommand(args []string) error {
+	if len(args) > 0 && args[0] == "github-app" {
+		return runManagedGitHubAppCommand(args[1:])
+	}
 	if len(args) != 1 || args[0] != "setup" {
-		return errors.New("use `zenchron-engineering auth setup` to configure optional local GitHub sign-in")
+		return errors.New("use `zenchron-engineering auth setup` or `zenchron-engineering auth github-app configure`")
 	}
 	if runtime.GOOS != "darwin" {
 		return errors.New("GitHub sign-in setup requires the managed macOS installation")
@@ -69,7 +72,7 @@ func runAuthCommand(args []string) error {
 	activeRunCount := func() (int, error) { return managedOAuthActiveRunCount(statusToken, client) }
 	return setupManagedOAuth(home, terminal, terminal, readTerminalSecret,
 		func() error { return managedOAuthSetupPreflight(home, statusToken, client) }, activeRunCount,
-		restartManagedForOAuth, waitForConfiguredOAuth, waitForLocalWorkspace)
+		restartManagedSupervisor, waitForConfiguredOAuth, waitForLocalWorkspace)
 }
 
 func managedOAuthSetupPreflight(home, statusToken string, client *http.Client) error {
@@ -331,7 +334,7 @@ func managedOAuthSessionIsConfigured(status int, body io.Reader) (bool, error) {
 	return !session.Local, nil
 }
 
-func restartManagedForOAuth() error {
+func restartManagedSupervisor() error {
 	current, err := user.Current()
 	if err != nil {
 		return fmt.Errorf("resolve current user for managed restart: %w", err)

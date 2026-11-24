@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,6 +55,96 @@ func launchAgentStatusCredential(contents []byte) (string, bool, error) {
 		return "", false, errors.New("LaunchAgent status credential is incomplete")
 	}
 	return string(contents[valueStart : valueStart+valueEndOffset]), true, nil
+}
+
+func launchAgentEnvironmentValues(contents []byte) (map[string]string, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(contents))
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, errors.New("managed LaunchAgent property list is invalid")
+		}
+		start, ok := token.(xml.StartElement)
+		if !ok || start.Name.Local != "key" {
+			continue
+		}
+		var key string
+		if err := decoder.DecodeElement(&key, &start); err != nil {
+			return nil, errors.New("managed LaunchAgent property list is invalid")
+		}
+		if key != "EnvironmentVariables" {
+			continue
+		}
+		token, err = decoder.Token()
+		if err != nil {
+			return nil, errors.New("managed LaunchAgent environment is incomplete")
+		}
+		start, ok = token.(xml.StartElement)
+		if !ok || start.Name.Local != "dict" {
+			return nil, errors.New("managed LaunchAgent environment is invalid")
+		}
+		return readLaunchAgentEnvironmentDictionary(decoder)
+	}
+}
+
+func withLaunchAgentEnvironmentValues(contents []byte, values map[string]string) ([]byte, error) {
+	start, end, err := launchAgentEnvironmentBounds(contents)
+	if err != nil {
+		return nil, err
+	}
+	environment, err := launchAgentEnvironmentValues(contents)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range values {
+		environment[key] = value
+	}
+	var body strings.Builder
+	for key, value := range environment {
+		writePlistString(&body, key, value)
+	}
+	updated := make([]byte, 0, len(contents)+body.Len())
+	updated = append(updated, contents[:start]...)
+	updated = append(updated, body.String()...)
+	updated = append(updated, contents[end:]...)
+	return updated, nil
+}
+
+func readLaunchAgentEnvironmentDictionary(decoder *xml.Decoder) (map[string]string, error) {
+	environment := make(map[string]string)
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, errors.New("managed LaunchAgent environment is incomplete")
+		}
+		if end, ok := token.(xml.EndElement); ok && end.Name.Local == "dict" {
+			return environment, nil
+		}
+		start, ok := token.(xml.StartElement)
+		if !ok || start.Name.Local != "key" {
+			continue
+		}
+		var key string
+		if err := decoder.DecodeElement(&key, &start); err != nil {
+			return nil, errors.New("managed LaunchAgent environment key is invalid")
+		}
+		token, err = decoder.Token()
+		if err != nil {
+			return nil, errors.New("managed LaunchAgent environment value is missing")
+		}
+		valueStart, ok := token.(xml.StartElement)
+		if !ok || valueStart.Name.Local != "string" {
+			return nil, errors.New("managed LaunchAgent environment values must be strings")
+		}
+		var value string
+		if err := decoder.DecodeElement(&value, &valueStart); err != nil {
+			return nil, errors.New("managed LaunchAgent environment value is invalid")
+		}
+		environment[key] = value
+	}
 }
 
 func withLaunchAgentStatusCredential(contents []byte, token string) ([]byte, error) {

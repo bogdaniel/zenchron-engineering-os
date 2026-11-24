@@ -185,7 +185,6 @@ func ensureManagedAgent(home, entrypoint string) error {
 		return fmt.Errorf("resolve current user: %w", err)
 	}
 	if _, err := exec.Command("launchctl", "print", "gui/"+current.Uid+"/"+managedLaunchAgentLabel).CombinedOutput(); err == nil {
-		// The status endpoint reads this plist value live, so repairing it does not restart active work.
 		plist, err := managedLaunchAgentPlistPath()
 		if err != nil {
 			return err
@@ -194,11 +193,40 @@ func ensureManagedAgent(home, entrypoint string) error {
 		if err != nil {
 			return fmt.Errorf("read managed LaunchAgent: %w", err)
 		}
+		existingApp, err := launchAgentGitHubAppEnvironment(contents)
+		if err != nil {
+			return valueFreeGitHubAppError("existing managed GitHub App settings are invalid", err)
+		}
+		requestedApp := make(map[string]string, len(managedGitHubAppEnvironmentKeys))
+		for _, key := range managedGitHubAppEnvironmentKeys {
+			requestedApp[key] = environmentValue(os.Environ(), key)
+			if requestedApp[key] == "" {
+				requestedApp[key] = existingApp[key]
+			}
+		}
+		normalizedApp, configured, err := normalizeManagedGitHubAppEnvironment(home, requestedApp)
+		if err != nil {
+			return valueFreeGitHubAppError("managed GitHub App settings could not be applied", err)
+		}
+		appConfigChanged := false
+		if configured && !sameGitHubAppEnvironment(existingApp, normalizedApp) {
+			contents, err = withLaunchAgentEnvironmentValues(contents, normalizedApp)
+			if err != nil {
+				return valueFreeGitHubAppError("managed GitHub App settings could not be applied", err)
+			}
+			if err := writeInstallFile(plist, contents, 0o600); err != nil {
+				return valueFreeGitHubAppError("managed GitHub App settings could not be persisted", err)
+			}
+			appConfigChanged = true
+		}
 		token, found, err := launchAgentStatusCredential(contents)
 		if err != nil {
 			return fmt.Errorf("read local status credential from managed LaunchAgent: %w", err)
 		}
 		if found && token != "" {
+			if appConfigChanged {
+				return restartManagedSupervisor()
+			}
 			return nil
 		}
 		token, err = randomToken(32)
@@ -211,6 +239,9 @@ func ensureManagedAgent(home, entrypoint string) error {
 		}
 		if err := writeInstallFile(plist, contents, 0o600); err != nil {
 			return fmt.Errorf("persist local status credential: %w", err)
+		}
+		if appConfigChanged {
+			return restartManagedSupervisor()
 		}
 		return nil
 	}
@@ -517,6 +548,32 @@ func launchEnvironment() (map[string]string, error) {
 	environment := map[string]string{"PATH": path, "ZENCHRON_MANAGED_HOME": managed}
 	for _, key := range keys {
 		if value := os.Getenv(key); value != "" {
+			environment[key] = value
+		}
+	}
+	plist, err := managedLaunchAgentPlistPath()
+	if err != nil {
+		return nil, err
+	}
+	if contents, err := os.ReadFile(plist); err == nil {
+		saved, err := launchAgentGitHubAppEnvironment(contents)
+		if err != nil {
+			return nil, valueFreeGitHubAppError("saved managed GitHub App settings are invalid", err)
+		}
+		for _, key := range managedGitHubAppEnvironmentKeys {
+			if environment[key] == "" {
+				environment[key] = saved[key]
+			}
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, valueFreeGitHubAppError("saved managed GitHub App settings are unavailable", err)
+	}
+	appEnvironment, configured, err := normalizeManagedGitHubAppEnvironment(managed, environment)
+	if err != nil {
+		return nil, valueFreeGitHubAppError("managed GitHub App settings are invalid", err)
+	}
+	if configured {
+		for key, value := range appEnvironment {
 			environment[key] = value
 		}
 	}
