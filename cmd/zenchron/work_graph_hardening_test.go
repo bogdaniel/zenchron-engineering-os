@@ -191,10 +191,18 @@ func TestUnitIsNotReportedBlockedWhileItsPullRequestIsBeingCreated(t *testing.T)
 	harness.verdict(harness.claimUnit("check"), commit(4), `{"review":{"verdict":"accept"}}`)
 	harness.authorizePublication(integration.ID, commit(4))
 	publication := harness.claimUnit("integrate")
+	graphID := harness.graph().ID
 	var during workGraph
-	harness.duringPullCreate = func() { during = harness.graph() }
+	var cancelStatus int
+	harness.duringPullCreate = func() {
+		cancelStatus = harness.call(http.MethodPost, "/api/v1/work-graphs/"+graphID+"/cancel", "").Code
+		during = harness.graph()
+	}
 	harness.report(publication, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
 		BranchPushed: true, Result: `{"integration":{}}`})
+	if cancelStatus != http.StatusConflict {
+		t.Fatalf("cancellation during authorized PR creation returned HTTP %d, want %d", cancelStatus, http.StatusConflict)
+	}
 	if unit := during.unit("integrate"); unit.State != unitWaiting || unit.Reason != "Creating the pull request." || during.Status != graphActive {
 		t.Fatalf("while GitHub was answering: graph %s, integrate %s %q", during.Status, unit.State, unit.Reason)
 	}
