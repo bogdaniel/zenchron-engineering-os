@@ -60,7 +60,7 @@ func setRunAdmission(w http.ResponseWriter, r *http.Request, runs *agentRunStore
 
 func activeSystemRunCount(w http.ResponseWriter, r *http.Request, runs *agentRunStore) {
 	if !managedSupervisorRequest(r) && !localStatusCredentialRequest(r) {
-		http.Error(w, "run status is available only to the local supervisor", http.StatusForbidden)
+		http.Error(w, "run status requires a local status or supervisor credential", http.StatusForbidden)
 		return
 	}
 	active, err := runs.countActiveRuns()
