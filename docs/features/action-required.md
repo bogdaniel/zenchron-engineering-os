@@ -6,13 +6,13 @@ the caller's existing objective/repository visibility. Plan rows carry the exact
 an unavailable revision is reported instead of silently substituting another proposal. Graph rows link to the exact
 objective, graph, and decision. Rows show objective, plan revision,
 stage/unit/run where present, exact subject, recorded waiting reason, and decision options; missing values remain
-explicitly unrecorded. The projection reports whether the current caller may act based on the same worker-dispatch
-grant each existing mutation endpoint checks; otherwise the row stays available for review and names why its action
-is unavailable. Plan approval is not a separate authorization system: the existing plan endpoint rechecks whether
-the caller may start work. Graph resolution remains owned by the existing decision endpoint. A successful
-replacement-plan approval clears the old graph and decision from the deep link so the refreshed plan view follows the
-newly approved graph. Product Workspace decision links use the same exact deep link and label decisions in cancelled
-graphs as cancelled.
+explicitly unrecorded. The projection reports whether the current caller may act based on the same repository and
+worker-dispatch grants each existing mutation endpoint checks; otherwise the row stays available for review and names
+why its action is unavailable. Plan approval is not a separate authorization system: the existing plan endpoint
+rechecks whether the caller may start work. Graph resolution remains owned by the existing decision endpoint. A
+successful replacement-plan approval clears the old graph and decision from the deep link so the refreshed plan view
+follows the newly approved graph. Product Workspace decision links use the same exact deep link and label decisions in
+cancelled graphs as cancelled.
 
 ## Feature diagram
 
@@ -40,6 +40,6 @@ review navigation, server-authorized action guidance, desktop and phone layouts,
 error states, and unknown fields.
 `cd dashboard && npm run test:e2e -- e2e/orchestration.spec.ts --grep 'an objective plan approved in the dashboard runs through decision'`
 checks plan approval and graph decisions through the real control plane and worker. `go test ./cmd/zenchron -run
-'TestActionRequiredProjectsCurrentPlanAndGraphDecisionsAcrossRestart|TestActionRequiredMarksWorkerAuthorizationFromCurrentAccess|TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions' -count=1`
-checks projection durability, approval removal, decision recovery, current worker authorization, caller visibility,
-and product scoping.
+'TestActionRequiredProjectsCurrentPlanAndGraphDecisionsAcrossRestart|TestActionRequiredMarksWorkerAuthorizationFromCurrentAccess|TestActionRequiredRechecksCurrentRepositoryAuthorization|TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions' -count=1`
+checks projection durability, approval removal, decision recovery, current repository and worker authorization, caller
+visibility, and product scoping.
