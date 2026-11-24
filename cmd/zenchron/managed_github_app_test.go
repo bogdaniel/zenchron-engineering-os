@@ -177,6 +177,54 @@ func TestCopyManagedGitHubAppKeyRejectsOversizedAndSymlinkedSources(t *testing.T
 	}
 }
 
+func TestPersistManagedGitHubAppConfigurationRepairsAndCreatesLaunchAgent(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		plistMode string
+	}{
+		{name: "missing plist", plistMode: "missing"},
+		{name: "legacy shutdown timeout", plistMode: "legacy_timeout"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			userHome, managed, plist := managedGitHubAppTestSetup(t)
+			t.Setenv("HOME", userHome)
+			t.Setenv("ZENCHRON_MANAGED_HOME", managed)
+			t.Setenv("PATH", "/usr/bin:/bin")
+			sourceKey := writeManagedAppTestKey(t, t.TempDir(), 0o600)
+			appValues := map[string]string{
+				"ZENCHRON_GITHUB_APP_ID": "123456", "ZENCHRON_GITHUB_INSTALLATION_ID": "987654",
+				"ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH": sourceKey,
+			}
+			for key, value := range appValues {
+				t.Setenv(key, value)
+			}
+			managedApp, configured, err := normalizeManagedGitHubAppEnvironment(managed, appValues)
+			if err != nil || !configured {
+				t.Fatalf("test App settings were not normalized: configured=%t error=%v", configured, err)
+			}
+			if test.plistMode == "legacy_timeout" {
+				legacy := renderLaunchAgent("entrypoint", userHome, filepath.Join(managed, "logs"), managedApp)
+				legacy = bytes.Replace(legacy, []byte("<key>ExitTimeOut</key><integer>0</integer>"), nil, 1)
+				if err := os.WriteFile(plist, legacy, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			changed, err := persistManagedGitHubAppEnvironment(managed, managedApp)
+			if err != nil || !changed {
+				t.Fatalf("managed App settings were not persisted: changed=%t error=%v", changed, err)
+			}
+			contents := mustReadFile(t, plist)
+			if !bytes.Contains(contents, []byte("<key>ExitTimeOut</key><integer>0</integer>")) {
+				t.Fatal("LaunchAgent was saved without an unbounded graceful shutdown timeout")
+			}
+			changed, err = persistManagedGitHubAppEnvironment(managed, managedApp)
+			if err != nil || changed {
+				t.Fatalf("repeated configuration was not idempotent: changed=%t error=%v", changed, err)
+			}
+		})
+	}
+}
+
 func TestConfigureGitHubAppParserDoesNotEchoArguments(t *testing.T) {
 	secretArgument := "--private-key=/sensitive/local/path.pem"
 	previousStderr := os.Stderr
