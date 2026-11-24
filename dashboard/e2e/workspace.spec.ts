@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 9354)
-Total output lines: 528
-
 import { expect, test, type Page } from '@playwright/test';
 
 const novaID = 'a'.repeat(32);
@@ -206,7 +203,120 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(metrics.filter({ hasText: 'Delivery Metrics' }).locator('strong')).toHaveText('1');
   await expect(metrics.filter({ hasText: 'Pending Decisions' }).locator('strong')).toHaveText('1');
   await expect(page.getByRole('img', { name: 'Active initiative trend' })).toHaveCount(0);
-  await expect(page.getByRole('img', {…2354 tokens truncated…le('menuitem', { name: 'Orion Analytics' }).click();
+  await expect(page.getByRole('img', { name: 'Delivery metrics trend' })).toHaveCount(0);
+
+  await expect(page.getByRole('heading', { name: 'Open Objectives (2)' })).toBeVisible();
+  await expect(page.locator('.workspace-mock-objectives > div').first()).toContainText('Ship Platform v3.0 · On track · Alex');
+  await expect(page.getByRole('heading', { name: 'Available Workflows (1)' })).toBeVisible();
+  await expect(page.locator('.workspace-mock-card.linked-workflows')).toContainText('Release train');
+  await expect(page.locator('.workspace-mock-card.files')).toContainText('Unavailable: files and evidence');
+  await expect(page.locator('.workspace-mock-card.people')).toContainText('Unavailable: workspace membership');
+  await expect(page.locator('.workspace-mock-card.release')).toContainText('Unavailable: release streams');
+  await expect(page.locator('.workspace-mock-card.decisions')).toContainText('Publish the revised export?');
+  await expect(page.locator('.workspace-mock-card.analytics')).toContainText('WorkGraphs1 current');
+  await expect(page.locator('.workspace-mock-card.analytics')).toContainText('Findings2 recorded');
+  const configurationHistory = page.locator('.workspace-mock-card.configuration-history');
+  await expect(configurationHistory).toContainText('Configuration History (2)');
+  await expect(configurationHistory.locator('.configuration-history-list > div')).toHaveCount(2);
+  await expect(configurationHistory).toContainText('Revision 1');
+  await expect(configurationHistory).toContainText('Previous product scope');
+  await expect(configurationHistory).toContainText('Actor unrecorded');
+  await expect(configurationHistory).toContainText('Current');
+  await expect(page.locator('.workspace-mock-card.decisions').getByRole('link', { name: 'Publish the revised export?' }))
+    .toHaveAttribute('href', `/?objective=${'1'.repeat(32)}&tab=plan&graph_id=${'f'.repeat(32)}&decision=decision-1&mode=live#objectives`);
+  const workGraph = page.locator('.workspace-mock-card.history');
+  await expect(workGraph.locator('.history-list > div')).toHaveCount(5);
+  await workGraph.getByRole('button', { name: 'View All' }).click();
+  await expect(workGraph.locator('.history-list > div')).toHaveCount(10);
+  await expect(workGraph).toContainText('Plan r3 · aaaaaaaa · Product config r2 · Graph r8 · release v2 · automatic');
+  await expect(workGraph).toContainText('Runs: run-1, run-2 · Handoffs 2 · Findings 1');
+  await expect(workGraph.getByRole('link', { name: 'Ship Platform v3.0' }).first())
+    .toHaveAttribute('href', `/?objective=${'1'.repeat(32)}&tab=plan&graph_id=${'9'.repeat(32)}&mode=live#objectives`);
+  await expect(workGraph).toContainText(`build: ${'d'.repeat(32)} profile v1 · persona v4`);
+  await expect(workGraph.locator('.history-list > div').last()).toBeVisible();
+  expect(await workGraph.evaluate((card) => card.scrollHeight <= card.clientHeight + 1)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('workspace-history-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await expect(configurationHistory).toContainText('Configuration History (2)');
+  expect(await workGraph.evaluate((card) => card.scrollHeight <= card.clientHeight + 1)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('workspace-history-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Configuration' }).click();
+  await expect(configurationHistory).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('workspace-configuration-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  const sectionTabs = page.getByRole('navigation', { name: 'Product sections' });
+  await expect(sectionTabs.getByRole('button', { name: 'Configuration' })).toBeVisible();
+  expect(await sectionTabs.evaluate((tabs) => [...tabs.querySelectorAll('button')].every((button, index, buttons) =>
+    buttons.slice(index + 1).every((other) => button.getBoundingClientRect().right <= other.getBoundingClientRect().left ||
+      other.getBoundingClientRect().right <= button.getBoundingClientRect().left ||
+      button.getBoundingClientRect().bottom <= other.getBoundingClientRect().top ||
+      other.getBoundingClientRect().bottom <= button.getBoundingClientRect().top)))).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('workspace-configuration-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Overview' }).click();
+  await page.screenshot({ path: testInfo.outputPath('workspace-environment-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({ path: testInfo.outputPath('workspace-environment-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await expect(page.getByRole('img', { name: /Delivery trend/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Choose delivery metrics time range' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Choose delivery metrics time range' }))
+    .toHaveAttribute('title', 'No time-series delivery data is recorded.');
+  await expect(page.getByRole('button', { name: 'Add Nova Platform to favorites' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add Nova Platform to favorites' }))
+    .toHaveAttribute('title', 'Favorites are not stored by the control plane');
+  for (const fixtureValue of ['zenchron/agent-sdk', 'Alex Chen', 'AI Agent SDK', '99.4%', 'Stable (v3.x)']) {
+    await expect(page.locator('.workspace-mock')).not.toContainText(fixtureValue);
+  }
+
+  const sections = page.getByRole('navigation', { name: 'Product sections' });
+  await sections.getByRole('button', { name: 'Objectives' }).click();
+  await expect(page.getByRole('heading', { name: 'Objectives (3)' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Completed objective' })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Timeline' }).click();
+  await expect(page.locator('.workspace-mock-timeline-row').first()).toContainText('On track · Due Dec 15, 2026 · 78%');
+  await page.getByRole('button', { name: 'Roadmap', exact: true }).click();
+  await page.getByRole('button', { name: 'Choose roadmap quarter' }).click();
+  await page.getByRole('menuitem', { name: 'Q1 ’27' }).click();
+  await expect(page.locator('.workspace-mock-quarter-labels > span').nth(1)).toHaveText('Q1 ’27');
+  await expect(page.locator('.workspace-mock-roadmap-row')).toHaveCount(1);
+  await expect(page.locator('.workspace-mock-roadmap-row')).toContainText('Launch Agent SDK');
+  await sections.getByRole('button', { name: 'Templates' }).click();
+  await expect(page.getByRole('heading', { name: 'Workflows and Agent Profiles (2)' })).toBeVisible();
+  await expect(page.locator('.workspace-mock-card.linked-workflows')).toContainText('Code ReviewerReview specialist · codex-cli · gpt-6.1-solcodex-cli ready');
+  await expect(page.locator('.workspace-mock-card.linked-workflows').getByRole('link', { name: 'Code Reviewer' }))
+    .toHaveAttribute('href', `/?profile=${'d'.repeat(32)}&mode=live#agents`);
+  await page.screenshot({ path: testInfo.outputPath('workspace-profiles-desktop.png'), fullPage: true });
+  await sections.getByRole('button', { name: 'Overview' }).click();
+  await page.locator('.workspace-mock-card.people').getByRole('button', { name: /Manage/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Stakeholders' })).toContainText('not configured in the control plane');
+  await page.keyboard.press('Escape');
+  expect(writes, 'reading the workspace sends no write').toEqual([]);
+
+  await page.getByRole('button', { name: 'Product actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit product' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit product' });
+  await expect(dialog.getByLabel('Product name')).toHaveValue('Nova Platform');
+  // Blank passes the browser's required check, so the schema's own validation has to reject it.
+  await dialog.getByLabel('Product name').fill('   ');
+  await dialog.getByRole('button', { name: 'Save product' }).click();
+  await expect(dialog).toContainText('Add a product name');
+  expect(writes).toEqual([]);
+  await dialog.getByLabel('Product name').fill('Nova Core');
+  await dialog.getByRole('button', { name: 'Save product' }).click();
+  await expect(page.locator('.workspace-mock-heading h1')).toHaveText('Nova Core');
+  expect(writes).toEqual([{ method: 'PUT', path: `/api/v1/products/${novaID}`,
+    body: { name: 'Nova Core', description: 'Developer platform', repository_ids: [projectID],
+      default_workflow_id: 'release' } }]);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.workspace-mock-directory')).toBeHidden();
+  await page.getByRole('button', { name: 'Product actions' }).click();
+  await page.getByRole('menuitem', { name: 'Orion Analytics' }).click();
   await expect(page.locator('.workspace-mock-heading h1')).toHaveText('Orion Analytics');
   await expect(page.locator('.workspace-mock-card.repositories')).toContainText('No repositories linked yet.');
   await expect(page.locator('.workspace-mock-card.history')).toContainText('No WorkGraph history is recorded for this product.');
