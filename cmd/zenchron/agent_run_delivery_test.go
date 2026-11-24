@@ -509,9 +509,11 @@ func TestRunLeaseRecoversAfterRestartAndFailsWhenAttemptsAreUsedUp(t *testing.T)
 		item.LeaseUntil = time.Now().Add(-time.Second)
 		restarted.items[run.ID] = item
 	}
-	expireLease()
-	if third := harness.claim(); third.Attempts != maxAgentRunAttempts {
-		t.Fatalf("last claim = attempt %d, want %d", third.Attempts, maxAgentRunAttempts)
+	for attempt := 3; attempt <= maxAgentRunAttempts; attempt++ {
+		expireLease()
+		if next := harness.claim(); next.Attempts != attempt {
+			t.Fatalf("claim = attempt %d, want %d", next.Attempts, attempt)
+		}
 	}
 	expireLease()
 	if response := harness.call(http.MethodPost, "/api/v1/workers/"+testWorkerID+"/agent-runs/claim", ""); response.Code != http.StatusNoContent {

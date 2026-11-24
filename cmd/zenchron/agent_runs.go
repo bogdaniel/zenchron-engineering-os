@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	agentRunLease             = 3 * time.Minute
-	maxAgentRuns              = 200
-	maxAgentRunAttempts       = 3
+	agentRunLease = 3 * time.Minute
+	maxAgentRuns  = 200
+	// Four claims allow one exact-candidate publish pass before and after one change-request pass.
+	maxAgentRunAttempts       = 4
 	maxAgentRunDiffSize       = 128 << 10
 	maxAgentRunStateFileSize  = 64 << 20
 	maxIssueContextSize       = 12_000
@@ -52,6 +53,7 @@ type agentRun struct {
 	DiffTruncated             bool                       `json:"diff_truncated,omitempty"`
 	CanRequestChanges         bool                       `json:"can_request_changes,omitempty"`
 	PullRequestEnabled        bool                       `json:"pull_request_enabled,omitempty"`
+	PublishOnly               bool                       `json:"publish_only,omitempty"`
 	PullRequestURL            string                     `json:"pull_request_url,omitempty"`
 	PullRequestNumber         int                        `json:"pull_request_number,omitempty"`
 	PullRequestError          string                     `json:"pull_request_error,omitempty"`
@@ -137,7 +139,7 @@ type agentRunAttempt struct {
 
 // publicAgentRun removes the fields that are only needed to build the worker command.
 func publicAgentRun(item agentRun) agentRun {
-	item.Profile, item.IssueContext, item.Result = nil, "", ""
+	item.Profile, item.IssueContext, item.Result, item.PublishOnly = nil, "", "", false
 	return item
 }
 
@@ -243,6 +245,8 @@ func validStoredAgentRun(item agentRun) bool {
 		len(item.AttemptLog) <= maxAgentRunAttempts && validPublication(item.Publication) &&
 		validRunObservations(item.Checks, item.GitHubReviews) && len(item.CreatedBy) <= 100 &&
 		validPublicationAuthorizations(item.PublicationAuthorizations, item.Attempts) &&
+		(!item.PublishOnly || (item.Status == "queued" || item.Status == "running") && item.PullRequestEnabled &&
+			item.publicationAuthorized(item.CommitSHA)) &&
 		len(item.Provider) <= 100 && len(item.ProviderVersion) <= 100 && item.DiffAttempt >= 0 && item.DiffAttempt <= item.Attempts &&
 		(item.GraphID == "" || validHexID(item.GraphID)) && len(item.UnitKey) <= maxUnitKeySize &&
 		len(item.Result) <= workerapi.MaxResultSize && item.ResultAttempt >= 0 && item.ResultAttempt <= item.Attempts &&
@@ -440,7 +444,9 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not persist run recovery before claiming work", http.StatusInternalServerError)
 		return
 	}
-	selected, status, message := store.lease(worker, accessFor(r), store.graphs.plannerRunIDs())
+	store.graphs.mu.Lock()
+	selected, status, message := store.lease(worker, accessFor(r), store.graphs.plannerRunIDsLocked())
+	store.graphs.mu.Unlock()
 	if status != 0 {
 		http.Error(w, message, status)
 		return
@@ -453,9 +459,9 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, workerapi.AgentRunCommand{
 		ID: selected.ID, ProjectID: selected.ProjectID, Branch: selected.Branch, BaseBranch: selected.BaseBranch,
 		Prompt: agentRunPrompt(selected) + store.graphs.runContext(selected), Attempts: selected.Attempts,
-		PublishPullRequest: selected.PullRequestEnabled, Merge: selected.Merge,
+		PublishPullRequest: selected.PublishOnly, Merge: selected.Merge,
 		PublishCommit: store.publicationCommit(selected),
-		PublishOnly:   selected.PullRequestEnabled && selected.publicationAuthorized(selected.CommitSHA),
+		PublishOnly:   selected.PublishOnly,
 		Profile: workerapi.AgentProfile{Provider: profile.Provider, Model: profile.Model,
 			SystemPrompt: profile.SystemPrompt, GoalPrompt: profile.GoalPrompt, Tools: profile.Tools,
 			Persona: func() *workerapi.AgentPersona {
@@ -471,7 +477,7 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 }
 
 func (store *agentRunStore) publicationCommit(run agentRun) string {
-	if !run.PullRequestEnabled || !run.publicationAuthorized(run.CommitSHA) {
+	if !run.PublishOnly || !run.PullRequestEnabled || !run.publicationAuthorized(run.CommitSHA) {
 		return ""
 	}
 	if run.GraphID == "" {
@@ -593,7 +599,8 @@ func (store *agentRunStore) graphPublicationInProgress(graphID string) bool {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	for _, item := range store.items {
-		if item.GraphID == graphID && (item.Publishing || item.PullRequestURL != "") {
+		publishingRun := item.Status == "running" && item.PublishOnly
+		if item.GraphID == graphID && (item.Publishing || item.PullRequestURL != "" || publishingRun) {
 			return true
 		}
 	}
@@ -671,9 +678,9 @@ func (item *agentRun) expireLease(now time.Time) {
 	item.closeAttempt(now, "lease_expired", workerapi.TerminationLeaseLost)
 	switch {
 	case item.CancelRequested:
-		item.Status, item.Error, item.CancelRequested = "cancelled", "Worker stopped after cancellation was requested.", false
+		item.Status, item.Error, item.CancelRequested, item.PublishOnly = "cancelled", "Worker stopped after cancellation was requested.", false, false
 	case item.Attempts >= maxAgentRunAttempts:
-		item.Status, item.Error, item.TerminationReason = "failed", "worker lease expired", workerapi.TerminationLeaseLost
+		item.Status, item.Error, item.TerminationReason, item.PublishOnly = "failed", "worker lease expired", workerapi.TerminationLeaseLost, false
 	default:
 		item.Status = "queued"
 	}

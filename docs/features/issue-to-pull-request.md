@@ -80,11 +80,11 @@ stateDiagram-v2
   running --> succeeded: provider finished, verification not failed
   running --> failed: provider error, limit reached, or verification failed
   running --> cancelled: cancellation requested
-  running --> queued: lease expired or control plane restarted (attempts < 3)
-  running --> failed: lease expired on the third attempt
-  succeeded --> queued: change request (attempts < 3)
-  failed --> queued: change request on a run with a diff (attempts < 3)
-  cancelled --> queued: change request on a run with a diff (attempts < 3)
+  running --> queued: lease expired or control plane restarted (attempts < 4)
+  running --> failed: lease expired on the fourth attempt
+  succeeded --> queued: change request (attempts < 4)
+  failed --> queued: change request on a run with a diff (attempts < 4)
+  cancelled --> queued: change request on a run with a diff (attempts < 4)
   succeeded --> queued: human authorizes exact candidate; publish-only pass
   succeeded --> [*]
   failed --> [*]
@@ -157,7 +157,9 @@ that exits successfully is therefore not reported as delivered work unless verif
   duplicate or reopening a closed pull request.
 - A change request from the dashboard, one delivered by a [GitHub webhook](github-webhooks.md), or one imported
   from GitHub with `sync-reviews`, queues another attempt on the
-  same branch and worktree; the new commit lands on the same pull request. A run has at most three attempts. When
+  same branch and worktree. The new candidate remains local until a person authorizes its exact SHA; the next
+  publish-only pass updates the existing pull request. A run has at most four claims so one remediation can be
+  followed by an authorized publication pass. When
   several change requests are imported at once, all are kept and the newest queues the attempt.
 - Evidence actions validate the `sync-reviews` response before showing the imported count. Publication retry is a
   success on any 2xx response and does not depend on a response body.
@@ -382,4 +384,4 @@ panel. The other dashboard rows in the table above were driven by a script actin
   Before each publish-only pass, the control plane rechecks the current candidate, producer inputs, and accepted reviews;
   it does not require the whole graph revision to remain unchanged as publication status advances.
 - Usage is whatever the CLI reports. Codex reports tokens without cost; Claude Code reports a cost figure even under
-  a subscription. No budget is enforced beyond the time limits and the three-attempt cap.
+  a subscription. No budget is enforced beyond the time limits and the four-claim cap.

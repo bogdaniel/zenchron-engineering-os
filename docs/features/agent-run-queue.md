@@ -36,13 +36,15 @@ sequenceDiagram
   CLI-->>Worker: Event lines: messages, tool activity, usage, final message
   Worker->>Worker: Capture bounded diff from isolated worktree
   Worker->>Branch: Commit successful, reviewable changes on the run branch
-  opt GitHub origin and control-plane token configured
-    Worker->>Worker: Confirm push origin matches sanitized GitHub locator
-    Worker->>Remote: Push only the run branch using local Git credentials
-  end
-  Worker->>API: Complete with output, diff, and publish result
+  Worker->>API: Complete with candidate, diff, and verification evidence
   API->>Store: Persist terminal result and diff metadata
   API->>API: Store diff as per-attempt sidecar
+  UI->>API: Authorize exact candidate SHA
+  API->>Store: Persist the publish-only attempt intent
+  Worker->>API: Claim the publish-only attempt
+  Worker->>Worker: Recheck clean worktree, exact SHA, and verification
+  Worker->>Remote: Push only the authorized run-branch commit
+  Worker->>API: Complete with branch-push result
   opt Branch was pushed
     API->>GH: Find or create PR for run branch and base
     GH-->>API: Pull-request number and URL
@@ -61,10 +63,14 @@ sequenceDiagram
   API->>Store: Find the run by its stored pull-request number and persist feedback
   opt Request changes and worker can accept another pass
     API->>Store: Requeue the same run and branch
+    Note over Store: A new candidate does not inherit the old publish-only intent
     Worker->>API: Claim feedback-updated run
   end
   Reviewer->>API: Cancel queued or running run
   API->>Store: Cancel queued run or flag active lease
+  alt Authorized publication pass is already running
+    API-->>Reviewer: 409; publication side effect is in progress
+  end
   Worker->>API: POST .../agent-runs/{run}/progress (renews lease)
   API-->>Worker: cancel_requested: true
   Worker->>CLI: Stop the CLI process group
@@ -167,5 +173,8 @@ and tool-activity limits, and 20,000 bytes of final output.
 - `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Reviews page'` covers local branch feedback and same-run requeue.
 
 Run history is capped at 200 records. An abandoned lease can be retried up to three times; after that the run fails.
-Diff sidecars are bounded by the same 200 runs and three attempts (at most 75 MiB before filesystem overhead).
+Diff sidecars are bounded by the same 200 runs and four claims (at most 100 MiB before filesystem overhead).
 Worker presence is in-memory, so the worker must heartbeat again after a control-plane restart before claiming work.
+Each durable claim records whether it is a publish-only pass. Review remediation clears that intent and requires a new
+exact-candidate authorization before a changed commit can be pushed. Four total claims allow a publication pass before
+and after one change-request pass; the budget remains bounded.

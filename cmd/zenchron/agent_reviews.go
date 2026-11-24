@@ -139,7 +139,7 @@ func (store *agentRunStore) recordReviewLocked(
 // requeue returns a finished run to the queue for another pass on the same branch and worktree.
 func (item *agentRun) requeue() {
 	item.Status, item.Output, item.Error, item.CancelRequested, item.LeaseUntil = "queued", "", "", false, time.Time{}
-	item.TerminationReason, item.Verification, item.Publication = "", "", ""
+	item.TerminationReason, item.Verification, item.Publication, item.PublishOnly = "", "", "", false
 	item.UpdatedAt = time.Now().UTC()
 }
 
@@ -156,6 +156,7 @@ func (store *agentRunStore) requeueForUnit(runID string, publish bool) (agentRun
 		}
 		item.requeue()
 		item.PullRequestEnabled = item.PullRequestEnabled || publish
+		item.PublishOnly = publish
 		return 0, ""
 	})
 }
