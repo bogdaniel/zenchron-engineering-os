@@ -392,6 +392,12 @@ a long session. They apply to every agent, including subagents and parallel work
 - Scope is the acceptance list, no more and no less. Do not add features, refactors, renames, reformatting, dependency
   bumps, or "while I'm here" cleanups the task did not ask for. Do not quietly narrow the task either: if a part turns
   out to be hard, finish every other part and say explicitly what was left and why (§14.2).
+- Keep implementation scope narrow. Before modifying shared entry points, bootstrap code, global middleware, or common
+  request handling, check whether the requirement can be met through feature-specific routes, middleware, controllers,
+  or services; use that narrower approach whenever possible. Adding a feature registration to a shared routing file is
+  acceptable. Changing behavior for existing consumers requires a demonstrated shared need, an explanation of the
+  affected consumers, and appropriate regression checks. Passing tests alone does not justify an unnecessarily broad
+  change.
 - Report pre-existing problems you notice (dead code, flaky tests, design inconsistencies) in the final report as
   findings. Do not fix them unless the task requires it or the human agrees.
 - Check the diff against the acceptance list before reporting. Every hunk must trace to an item on the list or to a
