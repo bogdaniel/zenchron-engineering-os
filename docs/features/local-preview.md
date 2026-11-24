@@ -103,6 +103,7 @@ sequenceDiagram
     CP->>A: Read durable active runs
     CP-->>G: Return the active-run count
     G->>G: Validate, save IDs in the plist and copy the PEM outside releases
+    G->>CP: Recheck active-run count immediately before any loaded-job unload
     alt LaunchAgent is loaded
         G->>S: launchctl bootout the existing definition (graceful SIGTERM drain)
         G->>S: launchctl bootstrap the saved plist
