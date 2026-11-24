@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 var managedGitHubAppEnvironmentKeys = []string{
@@ -65,14 +66,19 @@ func copyManagedGitHubAppKey(home, sourcePath string) (string, error) {
 	if err := verifyManagedOAuthDirectory(home); err != nil {
 		return "", valueFreeGitHubAppError("managed GitHub App directory is not private", err)
 	}
-	info, err := os.Lstat(sourcePath)
+	source, err := os.OpenFile(sourcePath, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return "", valueFreeGitHubAppError("source GitHub App private key is unavailable", err)
 	}
-	if !info.Mode().IsRegular() || !managedOAuthPathOwnedByCurrentUser(info) || info.Size() > maxGitHubAppPrivateKeySize {
+	defer source.Close()
+	info, err := source.Stat()
+	if err != nil {
+		return "", valueFreeGitHubAppError("source GitHub App private key is unavailable", err)
+	}
+	if !info.Mode().IsRegular() || !managedOAuthPathOwnedByCurrentUser(info) {
 		return "", errors.New("source GitHub App key must be a regular file owned by the current user and within the size limit")
 	}
-	data, err := os.ReadFile(sourcePath)
+	data, err := io.ReadAll(io.LimitReader(source, maxGitHubAppPrivateKeySize+1))
 	if err != nil {
 		return "", valueFreeGitHubAppError("source GitHub App private key is unreadable", err)
 	}
