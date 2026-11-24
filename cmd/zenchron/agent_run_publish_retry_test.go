@@ -58,6 +58,10 @@ func TestRequestChangesDoNotReplayThePreviouslyAuthorizedCandidate(t *testing.T)
 	if command := harness.claim(); !command.PublishOnly || !command.PublishPullRequest || command.PublishCommit != newCandidate {
 		t.Fatalf("updated candidate publication command = %#v", command)
 	}
+	harness.mu.Lock()
+	harness.pullHead = newCandidate
+	harness.pulls[0] = strings.Replace(harness.pulls[0], testCommit, newCandidate, 1)
+	harness.mu.Unlock()
 	result = strings.Replace(pushedResult, `"attempts":1`, `"attempts":4`, 1)
 	result = strings.Replace(result, testCommit, newCandidate, 1)
 	updated, status := harness.finish(run.ID, result)

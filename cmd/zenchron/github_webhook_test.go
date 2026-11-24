@@ -207,6 +207,10 @@ func TestWebhookChangeRequestQueuesOneBoundedFollowUpAndIsIdempotent(t *testing.
 	if publication.Attempts != 4 || !publication.PublishOnly || publication.PublishCommit != secondCommit {
 		t.Fatalf("updated candidate publication = %#v", publication)
 	}
+	harness.mu.Lock()
+	harness.pullHead = secondCommit
+	harness.pulls[0] = strings.Replace(harness.pulls[0], testCommit, secondCommit, 1)
+	harness.mu.Unlock()
 	updatedResult := strings.Replace(strings.Replace(pushedResult, testCommit, secondCommit, 1), `"attempts":1`, `"attempts":4`, 1)
 	if finished, status := harness.finish(run.ID, updatedResult); status != http.StatusOK || finished.Publication != publicationPublished {
 		t.Fatalf("publish updated candidate: HTTP %d %#v", status, finished)

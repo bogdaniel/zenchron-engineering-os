@@ -275,7 +275,7 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 			t.Errorf("pull request input = %#v, decode error = %v", input, err)
 		}
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"number":23,"title":"Add review flow","state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":"` + workerapi.AgentRunBranch(runID) + `"},"base":{"ref":"main"}}`))
+		_, _ = w.Write([]byte(`{"number":23,"title":"Add review flow","state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":"` + workerapi.AgentRunBranch(runID) + `","sha":"` + strings.Repeat("a", 40) + `"},"base":{"ref":"main"}}`))
 	}))
 	defer provider.Close()
 	registry := newWorkerRegistry()

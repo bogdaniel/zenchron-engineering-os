@@ -109,8 +109,8 @@ func (harness *deliveryHarness) serveGitHub(w http.ResponseWriter, r *http.Reque
 		}
 		_ = json.NewDecoder(r.Body).Decode(&input)
 		harness.lastPullBody = input.Title + "\n" + input.Body
-		pull := fmt.Sprintf(`{"number":23,"state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":%q},"base":{"ref":%q}}`,
-			input.Head, input.Base)
+		pull := fmt.Sprintf(`{"number":23,"state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":%q,"sha":%q},"base":{"ref":%q}}`,
+			input.Head, harness.pullHead, input.Base)
 		harness.pulls = append(harness.pulls, pull)
 		w.WriteHeader(http.StatusCreated)
 		_, _ = io.WriteString(w, pull)
