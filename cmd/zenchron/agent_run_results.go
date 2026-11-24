@@ -365,7 +365,7 @@ func (store *agentRunStore) createPullRequest(ctx context.Context, item agentRun
 	if err != nil {
 		return gitHubPullRequest{}, err
 	}
-	if pull.Number < 1 || !strings.HasPrefix(pull.HTMLURL, "https://github.com/") {
+	if pull.Number < 1 || !strings.HasPrefix(pull.HTMLURL, "https://github.com/") || pull.Head.SHA != item.CommitSHA {
 		return gitHubPullRequest{}, fmt.Errorf("GitHub returned an invalid pull request")
 	}
 	return pull, nil
