@@ -226,7 +226,10 @@ func TestProviderStatusRefreshesAuthenticationUnderWorkerEnvironment(t *testing.
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(binDir, "claude"), []byte(
-		"#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo fake-claude; exit 0; fi\ncat \"$XDG_CONFIG_HOME/readiness.json\"\n"), 0o700); err != nil {
+		"#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo fake-claude; exit 0; fi\n"+
+			"status=$(cat \"$XDG_CONFIG_HOME/readiness.json\") || exit $?\n"+
+			"printf '%s\\n' \"$status\"\n"+
+			"case \"$status\" in *'\"loggedIn\":false'*) exit 1;; esac\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))

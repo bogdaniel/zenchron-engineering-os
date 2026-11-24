@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -192,9 +193,20 @@ func (provider *cliProvider) refreshReadiness(ctx context.Context) {
 func authReadinessReason(providerID string, output []byte, err error) string {
 	if err != nil {
 		var exitError *exec.ExitError
-		if providerID == workerapi.ProviderCodex && errors.As(err, &exitError) && exitError.ExitCode() == 1 &&
-			strings.Contains(strings.ToLower(string(output)), "not logged in") {
-			return "not signed in"
+		if errors.As(err, &exitError) && exitError.ExitCode() == 1 {
+			switch providerID {
+			case workerapi.ProviderCodex:
+				if strings.Contains(strings.ToLower(string(output)), "not logged in") {
+					return "not signed in"
+				}
+			case workerapi.ProviderClaude:
+				var status struct {
+					LoggedIn *bool `json:"loggedIn"`
+				}
+				if json.Unmarshal(output, &status) == nil && status.LoggedIn != nil && !*status.LoggedIn {
+					return "not signed in"
+				}
+			}
 		}
 		return "auth status unavailable"
 	}
