@@ -42,7 +42,8 @@ running revision.
 `zenchron-engineering auth github-app configure --app-id ID --installation-id ID --private-key FILE` saves GitHub App
 IDs and the copied PEM path in the existing owner-only LaunchAgent plist, copies the PEM into an owner-only file, and
 requests a graceful restart of the existing LaunchAgent. It defers when active runs are present. Reinstall preserves
-the plist settings when the invoking shell has no App credentials, and self-update keeps the LaunchAgent environment.
+saved App settings over transient shell values; use `auth github-app configure` to change them. Self-update keeps the
+LaunchAgent environment.
 `auth github-app status` reports configuration, key readability, the active runtime's authentication method, and the
 managed updater's latest verification as value-free categories. Verification requires a recent updater attempt from
 the running supervisor with the same App ID, installation ID, and public-key identity saved in the LaunchAgent. A
