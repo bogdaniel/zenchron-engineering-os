@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -354,8 +355,8 @@ func TestGitHubAppBootstrapUsesSavedSettingsOverShellValues(t *testing.T) {
 	}
 }
 
-func TestReloadManagedGitHubAppLaunchAgentUnloadsAndBootstrapsSavedDefinition(t *testing.T) {
-	userHome, _, _ := managedGitHubAppTestSetup(t)
+func TestReloadManagedGitHubAppLaunchAgentRequiresActiveRunPreflight(t *testing.T) {
+	userHome, managed, _ := managedGitHubAppTestSetup(t)
 	t.Setenv("HOME", userHome)
 	commandDirectory := t.TempDir()
 	commandLog := filepath.Join(t.TempDir(), "launchctl.log")
@@ -363,13 +364,11 @@ func TestReloadManagedGitHubAppLaunchAgentUnloadsAndBootstrapsSavedDefinition(t 
 	writeLaunchctlStub(t, commandDirectory, "printf '%s\\n' \"$*\" >> \"$LAUNCHCTL_LOG\"\nexit 0\n")
 	t.Setenv("PATH", commandDirectory+string(os.PathListSeparator)+"/usr/bin:/bin")
 
-	if err := reloadManagedGitHubAppLaunchAgent(); err != nil {
-		t.Fatal(err)
+	if err := reloadManagedGitHubAppLaunchAgent(managed); err == nil {
+		t.Fatal("LaunchAgent reloaded without verifying the control-plane active-run boundary")
 	}
-	commands := strings.Split(strings.TrimSpace(string(mustReadFile(t, commandLog))), "\n")
-	if len(commands) != 2 || !strings.HasPrefix(commands[0], "bootout gui/") ||
-		!strings.HasPrefix(commands[1], "bootstrap gui/") {
-		t.Fatalf("LaunchAgent reload command sequence = %q", commands)
+	if _, err := os.Stat(commandLog); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("LaunchAgent was unloaded before active-run verification succeeded")
 	}
 }
 
