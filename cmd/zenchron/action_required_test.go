@@ -188,8 +188,8 @@ func TestActionRequiredPublicationActionUsesWorkerAuthorization(t *testing.T) {
 	}
 
 	config := requirePublicationAccess(t, harness.deliveryHarness, "different-user")
-	policyPath := writeAccessFile(t, `{"admins":["alice"],"workers":[{"id":"`+testWorkerID+`","token_sha256":"`+
-		tokenHash("publication-auth-test-worker-token")+ `","owner":"different-user","repositories":["github.com/acme/platform"]}],
+	policyPath := writeAccessFile(t, `{"admins":["alice"],"workers":[{"id":"` + testWorkerID + `","token_sha256":"`+
+		tokenHash("publication-auth-test-worker-token") + `","owner":"different-user","repositories":["github.com/acme/platform"]}],
 		"users":{"alice":["github.com/acme/platform"]}}`)
 	policy, err := loadAccessPolicyAt(policyPath)
 	if err != nil {
