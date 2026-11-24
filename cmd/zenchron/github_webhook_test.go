@@ -214,7 +214,7 @@ func TestWebhookChangeRequestQueuesOneBoundedFollowUpAndIsIdempotent(t *testing.
 	if harness.pullCreates != 1 {
 		t.Fatalf("updated candidate created %d pull requests, want reuse of #23", harness.pullCreates)
 	}
-	// The run has used its four claims: later change requests are kept as feedback and start nothing.
+	// Three execution attempts and one authorized PR update exhaust this run's bounded work.
 	exhausted := reviewEvent{id: 504, body: "And another."}.json(harness.run(run.ID))
 	response := deliver(harness.server, webhookSecret, "pull_request_review", "d-5", exhausted)
 	final := harness.run(run.ID)
@@ -245,7 +245,7 @@ func TestConcurrentWebhookDeliveriesImportReviewOnce(t *testing.T) {
 		}
 	}
 	after := harness.run(run.ID)
-	if after.Status != "queued" || after.Attempts != 1 || after.ImportedReviewID != 508 ||
+	if after.Status != "queued" || after.Attempts != 2 || after.ImportedReviewID != 508 ||
 		len(after.ReviewComments) != 1 || len(after.GitHubReviews) != 1 {
 		t.Fatalf("concurrent review was applied more than once: %#v", after)
 	}
@@ -275,7 +275,7 @@ func TestWebhookAndReviewSyncImportTheSameReviewOnce(t *testing.T) {
 		}
 	}
 	after := harness.run(run.ID)
-	if after.Status != "queued" || after.Attempts != 1 || after.ImportedReviewID != 509 || len(after.ReviewComments) != 1 {
+	if after.Status != "queued" || after.Attempts != 2 || after.ImportedReviewID != 509 || len(after.ReviewComments) != 1 {
 		t.Fatalf("webhook and sync duplicated review feedback: %#v", after)
 	}
 }
@@ -324,7 +324,7 @@ func TestWebhookStoresCheckRunsForTheHeadCommitWithoutStartingWork(t *testing.T)
 	send("c-1", checkRunEvent("go", "failure", testCommit, "2026-11-14T10:05:00Z", 23))
 	send("c-2", checkRunEvent("dashboard", "success", testCommit, "2026-11-14T10:06:00Z", 23))
 	failed := harness.run(run.ID)
-	if failed.Status != "succeeded" || failed.Attempts != 1 || len(failed.Checks) != 2 || failed.Checks[0].Conclusion != "failure" ||
+	if failed.Status != "succeeded" || failed.Attempts != 2 || len(failed.Checks) != 2 || failed.Checks[0].Conclusion != "failure" ||
 		failed.Checks[0].CommitSHA != testCommit || failed.Checks[0].URL == "" {
 		t.Fatalf("a failed check must be stored and must not queue work: %#v", failed)
 	}

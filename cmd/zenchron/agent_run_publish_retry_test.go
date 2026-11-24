@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -65,5 +66,33 @@ func TestRequestChangesDoNotReplayThePreviouslyAuthorizedCandidate(t *testing.T)
 	}
 	if harness.pullCreates != 1 {
 		t.Fatalf("GitHub created %d pull requests while updating the existing one", harness.pullCreates)
+	}
+}
+
+func TestFourthClaimCannotPublishBeforeAFirstPullRequestExists(t *testing.T) {
+	harness := newDeliveryHarness(t, workerapi.ProviderCodex)
+	run := harness.createIssueRun()
+	for attempt, candidateSHA := range []string{strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40)} {
+		command := harness.claim()
+		result := strings.Replace(pushedResult, `"attempts":1`, `"attempts":`+strconv.Itoa(command.Attempts), 1)
+		result = strings.Replace(result, testCommit, candidateSHA, 1)
+		result = strings.Replace(result, `"branch_pushed":true`, `"branch_pushed":false`, 1)
+		if _, status := harness.finish(run.ID, result); status != http.StatusOK {
+			t.Fatalf("candidate attempt %d returned HTTP %d", command.Attempts, status)
+		}
+		if attempt < 2 {
+			response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/request-changes", `{"comment":"Continue the bounded edit."}`)
+			if response.Code != http.StatusOK {
+				t.Fatalf("request changes after attempt %d returned HTTP %d", command.Attempts, response.Code)
+			}
+		}
+	}
+	if response := harness.authorizePublication(run.ID, strings.Repeat("c", 40)); response.Code != http.StatusConflict {
+		t.Fatalf("a fourth claim without an existing pull request returned HTTP %d", response.Code)
+	}
+	current, exists := harness.store.get(run.ID)
+	if !exists || current.Attempts != maxAgentRunAttempts || current.PullRequestURL != "" ||
+		len(current.PublicationAuthorizations) != 0 || current.Status != "succeeded" {
+		t.Fatalf("attempt-limit rejection changed the run: %#v", current)
 	}
 }

@@ -17,10 +17,9 @@ import (
 )
 
 const (
-	agentRunLease = 3 * time.Minute
-	maxAgentRuns  = 200
-	// Four claims allow one exact-candidate publish pass before and after one change-request pass.
-	maxAgentRunAttempts       = 4
+	agentRunLease             = 3 * time.Minute
+	maxAgentRuns              = 200
+	maxAgentRunAttempts       = 3
 	maxAgentRunDiffSize       = 128 << 10
 	maxAgentRunStateFileSize  = 64 << 20
 	maxIssueContextSize       = 12_000
@@ -237,12 +236,14 @@ func validStoredAgentRun(item agentRun) bool {
 		(item.PullRequestURL == "" || (strings.HasPrefix(item.PullRequestURL, "https://github.com/") && item.PullRequestNumber > 0)) &&
 		(item.Status == "queued" || item.Status == "running" || item.Status == "succeeded" || item.Status == "failed" ||
 			item.Status == "cancelled") && (!item.CancelRequested || item.Status == "running") &&
-		item.Attempts >= 0 && item.Attempts <= maxAgentRunAttempts && !item.CreatedAt.IsZero() && !item.UpdatedAt.IsZero() &&
+		item.Attempts >= 0 && item.Attempts <= maxAgentRunAttempts+1 &&
+		(item.Attempts <= maxAgentRunAttempts || item.PullRequestURL != "" && item.publicationAuthorized(item.CommitSHA)) &&
+		!item.CreatedAt.IsZero() && !item.UpdatedAt.IsZero() &&
 		item.Profile != nil && validStoredAgentProfile(*item.Profile) && validAgentRunComments(item.ReviewComments) &&
 		validCommitSHA(item.BaseCommit) && (item.Repository == "" || validGitRemote(item.Repository)) &&
 		item.IssueNumber >= 0 && len(item.IssueContext) <= maxIssueContextSize && len(item.IssueTitle) <= 300 &&
 		workerapi.ValidTerminationReason(item.TerminationReason) && workerapi.ValidVerification(item.Verification) &&
-		len(item.AttemptLog) <= maxAgentRunAttempts && validPublication(item.Publication) &&
+		len(item.AttemptLog) <= maxAgentRunAttempts+1 && validPublication(item.Publication) &&
 		validRunObservations(item.Checks, item.GitHubReviews) && len(item.CreatedBy) <= 100 &&
 		validPublicationAuthorizations(item.PublicationAuthorizations, item.Attempts) &&
 		(!item.PublishOnly || (item.Status == "queued" || item.Status == "running") && item.PullRequestEnabled &&

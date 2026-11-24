@@ -173,8 +173,9 @@ and tool-activity limits, and 20,000 bytes of final output.
 - `cd dashboard && npm run test:e2e -- e2e/home.spec.ts --grep 'Reviews page'` covers local branch feedback and same-run requeue.
 
 Run history is capped at 200 records. An abandoned lease can be retried up to three times; after that the run fails.
-Diff sidecars are bounded by the same 200 runs and four claims (at most 100 MiB before filesystem overhead).
+Diff sidecars are bounded by the same 200 runs and three execution attempts plus one authorized existing-PR update
+(at most 100 MiB before filesystem overhead).
 Worker presence is in-memory, so the worker must heartbeat again after a control-plane restart before claiming work.
 Each durable claim records whether it is a publish-only pass. Review remediation clears that intent and requires a new
-exact-candidate authorization before a changed commit can be pushed. Four total claims allow a publication pass before
-and after one change-request pass; the budget remains bounded.
+exact-candidate authorization before a changed commit can be pushed. Only a run that already has a pull request can use
+one fourth claim to update it after a new candidate is authorized; other runs retain the three-attempt ceiling.

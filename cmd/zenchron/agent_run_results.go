@@ -16,7 +16,7 @@ func validAgentRunResult(input workerapi.AgentRunResult) bool {
 	return (input.Status == "succeeded" || input.Status == "failed" || input.Status == "cancelled") &&
 		len(input.Output) <= 20000 && len(input.Error) <= 255 &&
 		(input.Diff == nil || len(*input.Diff) <= maxAgentRunDiffSize) &&
-		input.Attempts >= 1 && input.Attempts <= maxAgentRunAttempts &&
+		input.Attempts >= 1 && input.Attempts <= maxAgentRunAttempts+1 &&
 		validCommitSHA(input.CommitSHA) && validCommitSHA(input.CommitTreeSHA) && validCommitSHA(input.BaseCommit) &&
 		(input.CommitTreeSHA == "" || input.CommitSHA != "") &&
 		!(input.BranchPushed && input.BranchPushFailed) && len(input.ProviderVersion) <= 100 &&
@@ -96,6 +96,10 @@ func (store *agentRunStore) applyResult(item *agentRun, workerID string, input w
 	previousCommit := item.CommitSHA
 	if item.WorkerID != workerID || item.Status != "running" || item.Attempts != input.Attempts || now.After(item.LeaseUntil) {
 		return http.StatusConflict, "agent run lease is no longer current"
+	}
+	if item.Attempts > maxAgentRunAttempts &&
+		(!item.PublishOnly || item.PullRequestURL == "" || !item.publicationAuthorized(item.CommitSHA)) {
+		return http.StatusConflict, "the additional claim is only allowed for an authorized existing pull-request update"
 	}
 	if item.CancelRequested {
 		input.Status, input.Output, input.Error = "cancelled", "", "Cancellation requested from dashboard."
@@ -277,7 +281,8 @@ func (store *agentRunStore) publish(w http.ResponseWriter, r *http.Request) {
 			item.Publishing = true
 			return 0, ""
 		}
-		if item.GraphID == "" && item.Attempts >= maxAgentRunAttempts {
+		if item.GraphID == "" && item.Attempts >= maxAgentRunAttempts &&
+			(item.Attempts != maxAgentRunAttempts || item.PullRequestURL == "" || item.Publication != publicationAwaitingAuthority || item.BranchPushed) {
 			return http.StatusConflict, "the run has used all of its attempts"
 		}
 		if item.GraphID == "" {
