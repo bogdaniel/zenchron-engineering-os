@@ -42,7 +42,9 @@ flowchart LR
   omitted when empty; `run_ids` is always an array. `attempts` sums the `attempts` counter of its runs. A run id
   without a stored run adds nothing. `providers` is always an array of sorted distinct strings, each containing the
   run's provider and, when recorded, a space and its provider version.
-- `approved_plan` records the approved revision, content hash, summary, approver, and approval time. Workflow identity
+- `approved_plan` records the approved revision, content hash, summary, approver, and approval time. If its durable
+  revision record is missing, the object is omitted and `unknown_evidence` names `approved_plan`; the dashboard does
+  not display a zero revision. Workflow identity
   and version come from the compiled plan and graph. Each execution reports the recorded profile and persona IDs,
   names and versions, model from the frozen profile snapshot, provider, candidate commit and its Git tree SHA when
   reported, worker-reported verification, review verdict, publication state, PR link, attempts, and failures. Tree
@@ -74,7 +76,8 @@ flowchart LR
   - `review_rounds`: number of run ids belonging to review units.
   - `findings`, `decisions_requested`, and `decisions_resolved`: counts of messages of type `finding`,
     `decision_request`, and `decision_resolution`, respectively.
-  - `human_actions`: resolved decisions plus the recorded plan approval. `human_actions_complete` is false because
+  - `human_actions`: resolved decisions, the plan approval when its approved status is recorded, and explicit
+    publication authorizations. `human_actions_complete` is false because
     the system does not record every human action.
   - `remediation_passes`: for each produce unit, each attempt after its first when a finding addressed to that unit
     was created between the previous attempt's start and its own start.

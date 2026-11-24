@@ -26,7 +26,7 @@ type deliveryReport struct {
 	WorkflowVersion      int                         `json:"workflow_version,omitempty"`
 	WorkflowMode         string                      `json:"workflow_mode,omitempty"`
 	Status               string                      `json:"status"`
-	ApprovedPlan         reportPlan                  `json:"approved_plan"`
+	ApprovedPlan         *reportPlan                 `json:"approved_plan,omitempty"`
 	Units                []reportUnit                `json:"units"`
 	Handoffs             []reportHandoff             `json:"handoffs"`
 	Decisions            []reportDecision            `json:"decisions"`
@@ -297,8 +297,10 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 		UnknownEvidence: []string{"candidate_tree_sha", "candidate_checks", "policy_backed_assurance", "publication_authority",
 			"pull_request_external_state"}}
 	if plan != nil {
-		report.ApprovedPlan = reportPlan{Revision: plan.Revision, Status: plan.Status, Hash: plan.Hash, Summary: plan.Summary,
+		report.ApprovedPlan = &reportPlan{Revision: plan.Revision, Status: plan.Status, Hash: plan.Hash, Summary: plan.Summary,
 			ApprovedBy: plan.ApprovedBy, ApprovedAt: plan.ApprovedAt}
+	} else {
+		report.UnknownEvidence = append(report.UnknownEvidence, "approved_plan")
 	}
 	measured := &report.Measurements
 	measured.UnitCount = len(graph.Units)
@@ -377,7 +379,11 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 		}
 	}
 	// Plan approval, resolved graph decisions, and recorded publication authorizations are durable human actions.
-	measured.HumanActions = measured.DecisionsResolved + publicationAuthorizations + 1
+	planApprovals := 0
+	if report.ApprovedPlan != nil && report.ApprovedPlan.Status == planApproved {
+		planApprovals = 1
+	}
+	measured.HumanActions = measured.DecisionsResolved + publicationAuthorizations + planApprovals
 	measured.HumanActionsComplete = false
 	measured.Unknown = []string{supervisionMinutes, "unrecorded_human_actions"}
 	if missingRunRecords {

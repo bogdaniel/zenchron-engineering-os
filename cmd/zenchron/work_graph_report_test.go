@@ -193,8 +193,8 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	if report.GraphID != started.ID || report.GraphRevision != before.Revision || report.ObjectiveID != harness.objectiveID ||
 		report.ObjectiveTitle != "Ship usage export" ||
 		report.PlanRevision != 1 || report.Status != graphCompleted || before.Status != graphCompleted ||
-		report.PullRequestURL != "https://github.com/acme/platform/pull/23" || report.ApprovedPlan.Revision != 1 ||
-		report.ApprovedPlan.Status != planApproved || report.ApprovedPlan.ApprovedBy == "" {
+		report.PullRequestURL != "https://github.com/acme/platform/pull/23" || report.ApprovedPlan == nil ||
+		report.ApprovedPlan.Revision != 1 || report.ApprovedPlan.Status != planApproved || report.ApprovedPlan.ApprovedBy == "" {
 		t.Fatalf("report identity = %s", body)
 	}
 	measured := report.Measurements
@@ -400,6 +400,20 @@ func TestWorkGraphReportOmitsWhatWasNotRecorded(t *testing.T) {
 		if !slices.Contains(measured.Unknown, missing) {
 			t.Fatalf("missing run record did not mark %q unknown: %v", missing, measured.Unknown)
 		}
+	}
+}
+
+func TestWorkGraphReportMarksMissingApprovedPlanUnknown(t *testing.T) {
+	harness := newGraphHarness(t)
+	graph := harness.start(harness.reviewedPlan())
+	harness.store.graphs.mu.Lock()
+	delete(harness.store.graphs.plans, graph.ObjectiveID)
+	harness.store.graphs.mu.Unlock()
+
+	report, body := harness.deliveryReport(graph.ID)
+	if report.ApprovedPlan != nil || !slices.Contains(report.UnknownEvidence, "approved_plan") ||
+		report.Measurements.HumanActions != 0 || strings.Contains(body, `"approved_plan":`) {
+		t.Fatalf("missing plan source was reported as observed evidence: %s", body)
 	}
 }
 

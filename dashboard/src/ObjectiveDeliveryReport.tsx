@@ -21,7 +21,7 @@ const reportSchema = z.object({
   workflow_id: z.string().optional(), workflow_version: z.number().optional(),
   workflow_mode: z.enum(['compiled', 'guidance']).optional(), status: z.string(),
   approved_plan: z.object({ revision: z.number(), status: z.string(), hash: z.string(), summary: z.string(),
-    approved_by: z.string().optional(), approved_at: z.string().optional() }),
+    approved_by: z.string().optional(), approved_at: z.string().optional() }).optional(),
   units: z.array(z.object({ key: z.string(), kind: z.string(), agent_id: z.string().optional(), agent_name: z.string(),
     state: z.string(), reason: z.string().optional(), candidate: z.string().optional(), verdict: z.string().optional(), run_ids: z.array(z.string()),
     attempts: z.number(), providers: z.array(z.string()), executions: z.array(executionSchema) })),
@@ -53,6 +53,7 @@ const unknownEvidenceLabels: Record<string, string> = {
   publication_authority: 'publication authority',
   pull_request_external_state: 'current pull request state',
   missing_run_records: 'details for one or more referenced runs',
+  approved_plan: 'the approved plan revision',
 };
 const unknownMeasurementLabels: Record<string, string> = {
   attempt_count_for_some_runs: 'attempt totals for some runs',
@@ -106,10 +107,12 @@ function ReportDetails({ report }: { report: Report }) {
     </div>
     <p>WorkGraph <code>{report.graph_id}</code> · revision {report.graph_revision ?? 'unknown'}</p>
     <h5>{report.objective_title}</h5>
-    <p>Approved plan revision {report.approved_plan.revision} · {report.approved_plan.status}
-      {report.approved_plan.approved_by && ` · approved by ${report.approved_plan.approved_by}`}
-      {report.approved_plan.approved_at && ` · ${new Date(report.approved_plan.approved_at).toLocaleString()}`}</p>
-    <p>{report.approved_plan.summary || 'No plan summary recorded.'}</p>
+    {report.approved_plan ? <>
+      <p>Approved plan revision {report.approved_plan.revision} · {report.approved_plan.status}
+        {report.approved_plan.approved_by && ` · approved by ${report.approved_plan.approved_by}`}
+        {report.approved_plan.approved_at && ` · ${new Date(report.approved_plan.approved_at).toLocaleString()}`}</p>
+      <p>{report.approved_plan.summary || 'No plan summary recorded.'}</p>
+    </> : <p>Approved plan revision unavailable: its durable record is missing.</p>}
     {report.workflow_id && <p>{report.workflow_mode === 'compiled' ? 'Compiled from workflow ' : report.workflow_mode === 'guidance' ? 'Guided by workflow ' : 'Workflow execution mode unknown · workflow '}<a href={livePageHref('workflows', { workflow: report.workflow_id })}>{report.workflow_id}</a> · version {report.workflow_version ?? 'unknown'}</p>}
     <h5>Executed work units</h5>
     <div className="objective-delivery-units">{report.units.map((unit) => {
@@ -211,7 +214,7 @@ function ReportDetails({ report }: { report: Report }) {
     {unknown.size > 0 && <p className="objective-delivery-unknown">Unknown or incomplete: {Array.from(unknown)
       .map((item) => unknownMeasurementLabels[item] ?? item).join(', ')}</p>}
     {!metrics.human_actions_complete && <p className="objective-delivery-unknown">
-      Human action totals are incomplete: the system records plan approval and resolved decisions, not every operator action.
+      Human action totals are incomplete: the system records plan approvals, resolved decisions, and publication authorizations, not every operator action.
     </p>}
   </div>;
 }
