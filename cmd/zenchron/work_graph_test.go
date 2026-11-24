@@ -26,6 +26,7 @@ type graphHarness struct {
 func newGraphHarness(t *testing.T) *graphHarness {
 	t.Helper()
 	harness := &graphHarness{deliveryHarness: newDeliveryHarness(t, workerapi.ProviderCodex)}
+	harness.pullHead = commit(4)
 	harness.store.graphs.path = filepath.Join(filepath.Dir(harness.path), "work-graphs.json")
 	now := time.Now().UTC()
 	harness.second = agentProfile{ID: strings.Repeat("b", 32), Name: "Second engineer", Provider: workerapi.ProviderCodex,
