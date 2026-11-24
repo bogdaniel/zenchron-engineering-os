@@ -158,7 +158,9 @@ GitHub authentication is required to inspect protected-branch/ruleset metadata a
 existing GitHub App through `zenchron-engineering auth github-app configure`; App IDs and the managed key path are kept
 in the existing owner-only LaunchAgent plist, and a copied private key is kept in an owner-only file under the managed
 installation, outside the repository and versioned releases. The App settings are loaded by the existing supervisor
-and control plane, and are not passed to the worker or dashboard. The GitHub App needs repository metadata, contents, commit statuses, check runs, and (when classic branch protection
+and control plane, and are not passed to the worker or dashboard. The local status credential grants only read access
+to updater status and active-run count for local setup diagnostics; it does not bypass OAuth on the system-status
+route or grant other API access. The GitHub App needs repository metadata, contents, commit statuses, check runs, and (when classic branch protection
 is used) administration read access to verify branch protection and required checks. Administration write is not
 needed. Pull requests read is needed to inspect candidates; write is additionally required only when the control plane
 is authorized to create PRs.

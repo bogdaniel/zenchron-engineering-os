@@ -102,7 +102,7 @@ func managedOAuthActiveRunCount(statusToken string, client *http.Client) (int, e
 	if strings.TrimSpace(statusToken) == "" {
 		return 0, errors.New("local status credential is unavailable")
 	}
-	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
+	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/update/active-runs", nil)
 	if err != nil {
 		return 0, fmt.Errorf("create managed status request: %w", err)
 	}
@@ -116,15 +116,13 @@ func managedOAuthActiveRunCount(statusToken string, client *http.Client) (int, e
 		return 0, fmt.Errorf("managed status returned HTTP %d", response.StatusCode)
 	}
 	var status struct {
-		Work struct {
-			ActiveAgentRuns *int `json:"active_agent_runs"`
-		} `json:"work"`
+		ActiveRuns *int `json:"active_runs"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 4096)).Decode(&status); err != nil ||
-		status.Work.ActiveAgentRuns == nil || *status.Work.ActiveAgentRuns < 0 {
+		status.ActiveRuns == nil || *status.ActiveRuns < 0 {
 		return 0, errors.New("managed status did not include a valid active agent run count")
 	}
-	return *status.Work.ActiveAgentRuns, nil
+	return *status.ActiveRuns, nil
 }
 
 func setupManagedOAuth(home string, input io.Reader, output io.Writer, readSecret func(io.Writer) (string, error),

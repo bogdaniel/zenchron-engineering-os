@@ -284,7 +284,7 @@ func localStatusCredentialRequest(r *http.Request) bool {
 	if r.Method != http.MethodGet || !isLoopbackRequest(r) {
 		return false
 	}
-	if r.URL.Path != "/api/v1/system/status" && r.URL.Path != "/api/v1/system/update" {
+	if r.URL.Path != "/api/v1/system/update" && r.URL.Path != "/api/v1/system/update/active-runs" {
 		return false
 	}
 	token := localStatusCredential()
