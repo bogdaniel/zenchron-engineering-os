@@ -71,7 +71,7 @@ For the current objective-to-PR workflow, grant these repository permissions to 
 
 Install the App only on the updater repository and the repositories the operator intends to use. The worker pushes its candidate branch with the workstation's configured Git credentials; the App token does not go to workers. **Contents: write** is only needed for the separate App-mediated GitHub merge action. Do not grant it when the intended workflow stops at reviewed PR creation.
 
-After this managed-installation change is integrated, configure the existing installation with the App ID, installation ID, and local PEM file path:
+After this managed-installation change is integrated, restrict the downloaded PEM to its owner with `chmod 600 FILE`, then configure the existing installation with the App ID, installation ID, and local PEM file path:
 
 ```sh
 zenchron-engineering auth github-app configure --app-id ID --installation-id ID --private-key FILE
@@ -99,16 +99,20 @@ sequenceDiagram
     participant U as system-update.json
     participant A as agent-runs.json and in-memory admission
     O->>G: Configure App ID, installation ID and local PEM file
-    G->>CP: GET /healthz and GET /api/v1/system/update/active-runs
+    G->>CP: GET /healthz
+    CP-->>G: Return health and active-release revision
+    G->>CP: GET /api/v1/system/update/active-runs with the local status credential
     CP->>A: Read durable active runs
     CP-->>G: Return the active-run count
-    G->>G: Validate, save IDs in the plist and copy the PEM outside releases
-    G->>CP: Recheck active-run count immediately before any loaded-job unload
+    G->>G: Validate the PEM and copy it to an owner-only managed file outside releases
+    G->>G: Save App IDs and managed PEM path in the owner-only LaunchAgent plist
+    G->>CP: Recheck active-run count immediately before unloading a loaded job
     alt LaunchAgent is loaded
-        G->>S: launchctl bootout the existing definition (graceful SIGTERM drain)
+        G->>S: launchctl bootout the existing definition; launchd sends SIGTERM
+        S->>S: Stop admission and gracefully drain current work
         G->>S: launchctl bootstrap the saved plist
     else LaunchAgent is stopped
-        G->>S: launchctl bootstrap the saved plist
+        G->>S: launchctl bootstrap the saved plist without bootout
     end
     S->>CP: Quiesce run admission and drain any work that raced setup
     S->>S: Gracefully drain and restart with the reloaded definition
