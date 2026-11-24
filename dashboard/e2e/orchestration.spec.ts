@@ -237,6 +237,18 @@ for (const viewport of viewports) {
   });
 }
 
+test('proposed plan approval stays disabled while its repository worker is offline', async ({ page }) => {
+  await page.setViewportSize(viewports[0]);
+  const proposed = { ...plan, status: 'proposed', graph_id: undefined, approved_by: undefined };
+  await mockOrchestration(page, { plans: [proposed] });
+  const panel = await openPlan(page);
+  const approval = panel.getByRole('button', { name: 'Approve plan and start' });
+  await expect(approval).toBeDisabled();
+  await expect(approval).toHaveAttribute('title',
+    'The plan’s repository worker is offline; bring it online before approval.');
+  await expect(panel).toContainText('Plan approval unavailable');
+});
+
 test('plan revisions show planning, invalid problems, and a refused approval; proposing names a planner and workflow', async ({ page }) => {
   await page.setViewportSize(viewports[0]);
   const revisions = [
