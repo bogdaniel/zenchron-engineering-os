@@ -2,25 +2,25 @@
 
 The Live Overview projects the latest proposed plan approvals and unresolved typed WorkGraph decision requests from
 the existing control-plane stores through `GET /api/v1/action-required`. It omits cancelled graphs and plans outside
-the caller's existing objective/repository visibility. Plan rows link to the existing Plan tab and its latest plan
-approval control; graph rows link to the exact objective, graph, and decision; reviewed candidate rows link to the
-exact WorkGraph integration unit for human publication authorization. Rows show objective, plan revision,
-stage/unit/run where present, exact subject, recorded waiting reason, and available actions; missing values remain
-explicitly unrecorded. The projection reports whether the current caller may act based on the same worker-dispatch
-grant each plan/decision mutation checks. Reviewed-candidate authorization follows repository access, the same
-permission checked by the existing agent-run publish endpoint. Unavailable actions remain navigable for review and
-name their blocker. Plan approval is not a separate authorization system: the existing plan endpoint rechecks
-whether the caller may start work. Graph resolution remains owned by the existing decision endpoint, and publication
-authorization is recorded by the existing agent-run publish endpoint against an exact candidate SHA. A successful
-replacement-plan approval clears the old graph and decision from the deep link so the refreshed plan view follows the
-newly approved graph. Product Workspace decision links use the same exact deep link and label decisions in cancelled
-graphs as cancelled.
+the caller's existing objective/repository visibility. Plan rows carry the exact revision and focus it in the plan view;
+an unavailable revision is reported instead of silently substituting another proposal. Graph rows link to the exact
+objective, graph, and decision; reviewed-candidate rows link to the exact WorkGraph integration unit for human
+publication authorization. Rows show objective, plan revision, stage/unit/run where present, exact subject, recorded
+waiting reason, and available actions; missing values remain explicitly unrecorded. The projection reports whether the
+current caller may act based on the same worker-dispatch grant each plan/decision mutation checks. Reviewed-candidate
+authorization follows repository access, the same permission checked by the existing agent-run publish endpoint.
+Unavailable actions remain navigable for review and name their blocker. Plan approval is not a separate authorization
+system: the existing plan endpoint rechecks whether the caller may start work. Graph resolution remains owned by the
+existing decision endpoint, and publication authorization is recorded by the existing agent-run publish endpoint
+against an exact candidate SHA. A successful replacement-plan approval clears the old graph and decision from the deep
+link so the refreshed plan view follows the newly approved graph. Product Workspace decision links use the same exact
+deep link and label decisions in cancelled graphs as cancelled.
 
 ## Feature diagram
 
 ```mermaid
 flowchart LR
-    Link["Action Required deep link<br/>objective · tab · graph · decision"] -->|Retain selection until navigation or approval| Overview
+    Link["Action Required deep link<br/>objective · tab · plan revision · graph · decision"] -->|Retain selection until navigation or approval| Overview
     Overview[Live Overview] -->|GET /api/v1/action-required| CP[(Existing Go control plane)]
     CP -->|visible proposed plans and unresolved typed decisions| Overview
     CP -->|reviewed candidate awaiting a person| Overview
