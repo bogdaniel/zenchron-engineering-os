@@ -27,6 +27,14 @@ function planReadinessProblems(plan: ObjectivePlan, source: OrchestrationSource)
     .filter(Boolean);
 }
 
+function planApprovalBlocker(plan: ObjectivePlan, source: OrchestrationSource) {
+  if (source.options.workersLoading) return 'Checking the plan’s repository worker; approval is unavailable until this finishes.';
+  if (source.options.workersFailed) return 'Worker availability could not be checked; retry before approving this plan.';
+  const workerID = source.options.projectWorkerIDs[plan.project_id];
+  const worker = source.options.workers.find((item) => item.id === workerID);
+  return worker?.status === 'online' ? '' : 'The plan’s repository worker is offline; bring it online before approval.';
+}
+
 function PlanRevision({ plan, latest, source, live, requested }: {
   plan: ObjectivePlan; latest: boolean; source: OrchestrationSource; live: boolean; requested: boolean;
 }) {
@@ -51,6 +59,7 @@ function PlanRevision({ plan, latest, source, live, requested }: {
   }
   const readinessChecking = plan.units.length > 0 && (source.options.agentsLoading || source.options.workersLoading);
   const readinessProblems = planReadinessProblems(plan, source);
+  const approvalBlocker = latest && plan.status === 'proposed' ? planApprovalBlocker(plan, source) : '';
   return <li id={`plan-revision-${plan.revision}`} className="plan-revision" tabIndex={requested ? -1 : undefined}
     aria-current={requested ? 'location' : undefined}>
     {requested && <p role="status">Opened from Action Required for this exact plan revision.
@@ -58,7 +67,8 @@ function PlanRevision({ plan, latest, source, live, requested }: {
     <div className="work-graph-head"><b>Revision {plan.revision}</b><StateBadge state={plan.status} />
       {plan.approved_by && <span>approved by {plan.approved_by}</span>}
       {latest && plan.status === 'proposed' && <Button size="compact-xs" color="violet" loading={approving}
-        disabled={!source.approve} title={source.readOnlyReason || undefined} onClick={() => void approve()}>
+        disabled={!source.approve || Boolean(approvalBlocker)}
+        title={source.readOnlyReason || approvalBlocker || undefined} onClick={() => void approve()}>
         Approve plan and start</Button>}
     </div>
     {plan.status === 'planning' && <p className="work-unit-reason" role="status">
@@ -71,8 +81,12 @@ function PlanRevision({ plan, latest, source, live, requested }: {
       {plan.problems.map((problem) => <li key={problem}>{problem}</li>)}</ul>}
     {readinessChecking && <p className="work-unit-reason" role="status">Checking current CLI readiness for assigned profiles…</p>}
     {readinessProblems.length > 0 && <p className="work-unit-reason" role="status" aria-label={`CLI readiness for revision ${plan.revision}`}>
-      Current CLI readiness: {readinessProblems.join('; ')}. The plan can be approved, but its runs wait until ready.
+      Current CLI readiness: {readinessProblems.join('; ')}. {approvalBlocker
+        ? `Plan approval is unavailable: ${approvalBlocker}`
+        : 'The plan can be approved, but its runs wait until ready.'}
     </p>}
+    {approvalBlocker && readinessProblems.length === 0 &&
+      <p className="work-unit-reason" role="status">Plan approval unavailable: {approvalBlocker}</p>}
     {error && <p className="work-unit-failure" role="alert">{error}</p>}
     {plan.units.length > 0 && <ul className="work-units" aria-label={`Units of revision ${plan.revision}`}>
       {plan.units.map((unit) => <li className="work-unit" key={unit.key}>
