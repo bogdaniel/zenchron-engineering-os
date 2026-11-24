@@ -44,7 +44,10 @@ IDs and the copied PEM path in the existing owner-only LaunchAgent plist, copies
 requests a graceful restart of the existing LaunchAgent. It defers when active runs are present. Reinstall preserves
 the plist settings when the invoking shell has no App credentials, and self-update keeps the LaunchAgent environment.
 `auth github-app status` reports configuration, key readability, and the managed updater's latest verification as
-value-free status categories. Workers never receive GitHub App credentials.
+value-free status categories. `invalid_installation` is reported only when GitHub rejects the installation-token
+request; a `404` while reading the configured repository remains an updater-verification failure because that
+response does not prove the installation ID is invalid. A `403` is reported as insufficient permissions. Workers
+never receive GitHub App credentials.
 
 
 ### GitHub App permissions and safe configuration

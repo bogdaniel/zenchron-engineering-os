@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -79,6 +80,10 @@ func (auth *gitHubAppAuth) accessToken(ctx context.Context, client gitHubClient)
 	body, err := client.requestBytesWithToken(ctx, http.MethodPost, path, "application/vnd.github+json", nil,
 		[]byte("{}"), jwt)
 	if err != nil {
+		var response gitHubHTTPError
+		if errors.As(err, &response) && response.statusCode == http.StatusNotFound {
+			return "", fmt.Errorf("GitHub App installation not found: %w", err)
+		}
 		return "", fmt.Errorf("create GitHub installation token: %w", err)
 	}
 	var response struct {

@@ -321,7 +321,7 @@ func managedUpdaterVerification(status updater.Status, configuredAt time.Time) s
 	switch {
 	case strings.Contains(reason, "authentication is required"), strings.Contains(reason, "app authentication needs"):
 		return "missing_configuration"
-	case strings.Contains(reason, "http 404"):
+	case strings.Contains(reason, "installation not found"):
 		return "invalid_installation"
 	case strings.Contains(reason, "http 403"), strings.Contains(reason, "grant the github app"),
 		strings.Contains(reason, "resource not accessible by integration"):
