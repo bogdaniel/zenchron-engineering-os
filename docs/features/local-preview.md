@@ -38,6 +38,8 @@ blocked before service shutdown.
 The local `status` command and Settings / System Update page read the same persisted status record. The dashboard
 reconnects to update progress, keeps Mock isolated from the API, and automatically reloads only after it observes a new
 running revision.
+The managed LaunchAgent sets `ExitTimeOut` to zero so launchd does not force-kill the supervisor while its graceful
+shutdown is draining work.
 
 `zenchron-engineering auth github-app configure --app-id ID --installation-id ID --private-key FILE` saves GitHub App
 IDs and the copied PEM path in the existing owner-only LaunchAgent plist, copies the PEM into an owner-only file, and
