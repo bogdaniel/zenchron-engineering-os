@@ -125,6 +125,15 @@ func TestProductConfigurationHistoryRedactsRepositoriesOutsideCurrentAccess(t *t
 		!slices.Equal(history[0].RepositoryIDs, []string{firstID}) {
 		t.Fatalf("partial repository access returned unredacted configuration: %#v, complete %t", history, complete)
 	}
+
+	item.AccessRepositories = nil
+	item.RepositoryIDs = nil
+	item.ConfigurationHistory = []productConfigurationRevision{{Revision: 1, Name: "Scoped", RepositoryIDs: []string{secondID},
+		AccessRepositories: map[string]string{secondID: "github.com/acme/project-b"}}}
+	history, complete = item.configurationHistoryFor(requestAccess{enforced: true, user: "owner"})
+	if !complete || len(history) != 1 || !history[0].RepositoriesRedacted || len(history[0].RepositoryIDs) != 0 {
+		t.Fatalf("creator without current repository access saw historical repository: %#v, complete %t", history, complete)
+	}
 }
 
 func TestLegacyProductWithoutConfigurationRevisionRemainsReadableAndAdvances(t *testing.T) {
