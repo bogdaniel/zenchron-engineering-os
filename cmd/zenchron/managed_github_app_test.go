@@ -181,6 +181,7 @@ func TestConfigureGitHubAppParserDoesNotEchoArguments(t *testing.T) {
 	}
 	os.Stderr = writeEnd
 	configureErr := configureManagedGitHubApp(t.TempDir(), []string{secretArgument, "--unknown"})
+	helpErr := configureManagedGitHubApp(t.TempDir(), []string{"--help"})
 	_ = writeEnd.Close()
 	os.Stderr = previousStderr
 	output, readErr := io.ReadAll(readEnd)
@@ -188,7 +189,8 @@ func TestConfigureGitHubAppParserDoesNotEchoArguments(t *testing.T) {
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
-	if configureErr == nil || strings.Contains(configureErr.Error(), secretArgument) || strings.Contains(string(output), secretArgument) {
+	if configureErr == nil || helpErr != nil || !strings.Contains(string(output), "Usage:") ||
+		strings.Contains(configureErr.Error(), secretArgument) || strings.Contains(string(output), secretArgument) {
 		t.Fatalf("parser exposed a secret-bearing argument: err=%q output=%q", configureErr, output)
 	}
 }
