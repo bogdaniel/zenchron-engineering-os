@@ -55,10 +55,16 @@ func runManagedGitHubAppCommand(args []string) error {
 func configureManagedGitHubApp(home string, args []string) error {
 	flags := flag.NewFlagSet("auth github-app configure", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
+	flags.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage: zenchron-engineering auth github-app configure --app-id ID --installation-id ID --private-key FILE")
+	}
 	appID := flags.String("app-id", "", "GitHub App ID")
 	installationID := flags.String("installation-id", "", "GitHub App installation ID")
 	privateKey := flags.String("private-key", "", "local GitHub App PEM file")
 	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return errors.New("GitHub App configuration arguments are invalid")
 	}
 	if flags.NArg() != 0 || strings.TrimSpace(*appID) == "" || strings.TrimSpace(*installationID) == "" ||
