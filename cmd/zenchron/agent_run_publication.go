@@ -46,3 +46,28 @@ func (item agentRun) publicationAuthorizedFor(commitSHA, graphID string, planRev
 			authorization.PlanRevision == planRevision && authorization.PlanHash == planHash
 	})
 }
+
+// graphPublicationAttemptActiveLocked requires the run-store lock.
+func (store *agentRunStore) graphPublicationAttemptActiveLocked(graphID string) bool {
+	for _, item := range store.items {
+		if item.GraphID == graphID && (item.Publishing || item.Status == "running" && item.PublishOnly) {
+			return true
+		}
+	}
+	return false
+}
+
+// graphPublicationInProgress reports an external PR operation that graph cancellation cannot undo.
+func (store *agentRunStore) graphPublicationInProgress(graphID string) bool {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.graphPublicationAttemptActiveLocked(graphID) {
+		return true
+	}
+	for _, item := range store.items {
+		if item.GraphID == graphID && item.PullRequestURL != "" {
+			return true
+		}
+	}
+	return false
+}

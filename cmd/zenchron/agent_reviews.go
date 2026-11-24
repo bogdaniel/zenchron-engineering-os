@@ -126,6 +126,9 @@ func (store *agentRunStore) recordReviewLocked(
 	if requestChanges && !canQueue && requireQueue {
 		return http.StatusConflict, "agent run cannot accept another code-change pass"
 	}
+	if canQueue && item.GraphID != "" && store.graphPublicationAttemptActiveLocked(item.GraphID) {
+		return http.StatusConflict, "a reviewed WorkGraph candidate is being published; retry the change request afterward"
+	}
 	item.ReviewComments = append(item.ReviewComments, agentRunComment{
 		Body: comment, RequestChanges: requestChanges, CreatedAt: time.Now().UTC(),
 	})
