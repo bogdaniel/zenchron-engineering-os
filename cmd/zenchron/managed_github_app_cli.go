@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -53,7 +54,7 @@ func runManagedGitHubAppCommand(args []string) error {
 
 func configureManagedGitHubApp(home string, args []string) error {
 	flags := flag.NewFlagSet("auth github-app configure", flag.ContinueOnError)
-	flags.SetOutput(os.Stderr)
+	flags.SetOutput(io.Discard)
 	appID := flags.String("app-id", "", "GitHub App ID")
 	installationID := flags.String("installation-id", "", "GitHub App installation ID")
 	privateKey := flags.String("private-key", "", "local GitHub App PEM file")
@@ -103,8 +104,8 @@ func configureManagedGitHubApp(home string, args []string) error {
 				if err := managedGitHubAppSetupPreflight(home); err != nil {
 					return err
 				}
-				if err := restartManagedSupervisor(); err != nil {
-					return errors.New("saved GitHub App settings are not active; the supervisor did not accept a graceful restart request")
+				if err := reloadManagedGitHubAppLaunchAgent(); err != nil {
+					return errors.New("saved GitHub App settings are not active; the existing LaunchAgent could not be reloaded")
 				}
 			} else {
 				entrypoint, err := installStableEntrypoint(home)
@@ -127,8 +128,8 @@ func configureManagedGitHubApp(home string, args []string) error {
 		return nil
 	}
 	if loaded {
-		if err := restartManagedSupervisor(); err != nil {
-			return errors.New("GitHub App settings were saved; the existing supervisor did not accept a graceful restart request")
+		if err := reloadManagedGitHubAppLaunchAgent(); err != nil {
+			return errors.New("GitHub App settings were saved; the existing LaunchAgent could not be reloaded")
 		}
 	} else {
 		entrypoint, err := installStableEntrypoint(home)
@@ -145,6 +146,25 @@ func configureManagedGitHubApp(home string, args []string) error {
 	printGitHubAppDiagnostic(diagnostic)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func reloadManagedGitHubAppLaunchAgent() error {
+	current, err := user.Current()
+	if err != nil {
+		return errors.New("could not identify the managed LaunchAgent owner")
+	}
+	plist, err := managedLaunchAgentPlistPath()
+	if err != nil {
+		return errors.New("could not locate the existing managed LaunchAgent")
+	}
+	domain := "gui/" + current.Uid
+	if _, err := exec.Command("launchctl", "bootout", domain, plist).CombinedOutput(); err != nil {
+		return errors.New("could not gracefully unload the existing managed LaunchAgent")
+	}
+	if _, err := exec.Command("launchctl", "bootstrap", domain, plist).CombinedOutput(); err != nil {
+		return errors.New("could not start the managed LaunchAgent with its saved settings")
 	}
 	return nil
 }
@@ -167,6 +187,20 @@ func bootstrapManagedGitHubAppLaunchAgent(home, entrypoint string) error {
 		return err
 	}
 	plist := filepath.Join(launchDirectory, managedLaunchAgentLabel+".plist")
+	savedContents, err := os.ReadFile(plist)
+	if err != nil {
+		return valueFreeGitHubAppError("could not read saved managed LaunchAgent settings", err)
+	}
+	savedApp, err := launchAgentGitHubAppEnvironment(savedContents)
+	if err != nil {
+		return valueFreeGitHubAppError("saved managed GitHub App settings are invalid", err)
+	}
+	for _, key := range managedGitHubAppEnvironmentKeys {
+		delete(environment, key)
+		if savedApp[key] != "" {
+			environment[key] = savedApp[key]
+		}
+	}
 	if err := writeInstallFile(plist, renderLaunchAgent(entrypoint, userHome, logDirectory, environment), 0o600); err != nil {
 		return errors.New("could not save the existing managed LaunchAgent settings")
 	}
