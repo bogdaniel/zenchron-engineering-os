@@ -99,8 +99,13 @@ sequenceDiagram
     G->>CP: GET /healthz and GET /api/v1/system/update/active-runs
     CP->>A: Read durable active runs
     CP-->>G: Return the active-run count
-    G->>G: Validate and save protected config outside release directories
-    G->>S: launchctl bootout then bootstrap the saved plist
+    G->>G: Validate, save IDs in the plist and copy the PEM outside releases
+    alt LaunchAgent is loaded
+        G->>S: launchctl bootout the existing definition (graceful SIGTERM drain)
+        G->>S: launchctl bootstrap the saved plist
+    else LaunchAgent is stopped
+        G->>S: launchctl bootstrap the saved plist
+    end
     S->>CP: Quiesce run admission and drain any work that raced setup
     S->>S: Gracefully drain and restart with the reloaded definition
     S->>S: Reload App settings after restart and self-update
