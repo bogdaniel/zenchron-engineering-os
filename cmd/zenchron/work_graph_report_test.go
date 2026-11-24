@@ -231,9 +231,17 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 		len(review.Executions) != 2 || review.Executions[0].BaseCommit != commit(1) || review.Executions[1].BaseCommit != commit(3) {
 		t.Fatalf("ui unit = %#v, review unit = %#v", uiUnit, review)
 	}
+	authorizedRun, exists := harness.store.get(integration.ID)
+	if !exists || len(authorizedRun.PublicationAuthorizations) != 1 {
+		t.Fatalf("persisted publication authorization = %#v, exists %t", authorizedRun.PublicationAuthorizations, exists)
+	}
+	authorization := authorizedRun.PublicationAuthorizations[0]
 	if !slices.Equal(report.UnknownEvidence, []string{"policy_backed_assurance"}) || report.PublicationAuthority == nil ||
-		report.PublicationAuthority.By != localOperator || report.PublicationAuthority.CommitSHA != commit(4) ||
-		report.PublicationAuthority.SourceRunID != integration.ID {
+		report.PublicationAuthority.By != authorization.By || report.PublicationAuthority.CommitSHA != authorization.CommitSHA ||
+		report.PublicationAuthority.SourceRunID != integration.ID || report.PublicationAuthority.GraphID != authorization.GraphID ||
+		report.PublicationAuthority.GraphRevision != authorization.GraphRevision ||
+		report.PublicationAuthority.PlanRevision != authorization.PlanRevision ||
+		report.PublicationAuthority.PlanHash != authorization.PlanHash || report.PublicationAuthority.Attempt != authorization.Attempt {
 		t.Fatalf("unrecorded evidence = %v", report.UnknownEvidence)
 	}
 	if report.PullRequest == nil || report.PullRequest.State != "open" || !report.PullRequest.Draft || report.PullRequest.Merged ||

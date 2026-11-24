@@ -156,7 +156,7 @@ function ReportDetails({ report }: { report: Report }) {
       WorkGraph revision {report.publication_authority.graph_revision} · plan revision {report.publication_authority.plan_revision} ·{' '}
       plan hash <code>{report.publication_authority.plan_hash}</code> · run{' '}
       <a href={livePageHref('reviews', { run: report.publication_authority.source_run_id })}>
-        {report.publication_authority.source_run_id}</a>
+        {report.publication_authority.source_run_id}</a> · authorization attempt {report.publication_authority.attempt}
     </p>}
     {report.pull_request_external_state && <p aria-label="Observed GitHub pull request state">
       GitHub reports pull request #{report.pull_request_external_state.number} {report.pull_request_external_state.state}

@@ -132,15 +132,22 @@ for (const viewport of viewports) {
       graph_id: graphID, graph_revision: 12, objective_id: objectiveID,
       objective_title: objective.title, plan_revision: 1,
       status: 'completed', approved_plan: { revision: 1, status: 'approved', hash: 'h', summary: 'One producer, one review.' },
-      units: [{ key: 'final-review', kind: 'review', agent_name: 'Independent reviewer', state: 'completed',
+      units: [{ key: 'integrate', kind: 'integrate', agent_name: 'Zenchron integration', state: 'completed',
+        candidate: 'c'.repeat(40), run_ids: ['publish-run'], attempts: 2, providers: [],
+        executions: [{ run_id: 'publish-run', status: 'succeeded', attempts: 2, candidate_commit: 'c'.repeat(40),
+          publication: 'published' }] },
+      { key: 'final-review', kind: 'review', agent_name: 'Independent reviewer', state: 'completed',
         run_ids: ['review-run'], attempts: 1, providers: [],
         executions: [{ run_id: 'review-run', result_attempt: 1, updated_at: now, status: 'succeeded', attempts: 1,
           profile_name: 'Independent reviewer', profile_version: 2, provider: 'claude-code',
           base_commit_sha: 'c'.repeat(40), review_verdict: 'accept' }] }], handoffs: [], decisions: [], outstanding_steps: [],
-      measurements: { unit_count: 0, run_count: 0, attempt_count: 0, failed_attempts: 0, review_rounds: 0, findings: 0,
-        remediation_passes: 0, decisions_requested: 0, decisions_resolved: 0, human_actions: 0,
-        human_actions_complete: false, max_concurrency: 0, runs_with_usage: 0, runs_with_cost: 0, unknown: [] },
-      unknown_evidence: ['policy_backed_assurance', 'publication_authority'],
+      measurements: { unit_count: 2, run_count: 2, attempt_count: 3, failed_attempts: 0, review_rounds: 1, findings: 0,
+        remediation_passes: 0, decisions_requested: 0, decisions_resolved: 0, human_actions: 2,
+        human_actions_complete: false, max_concurrency: 1, runs_with_usage: 0, runs_with_cost: 0,
+        unknown: ['cost_usd', 'input_tokens', 'output_tokens', 'supervision_minutes', 'unrecorded_human_actions'] },
+      unknown_evidence: ['candidate_tree_sha', 'policy_backed_assurance'],
+      publication_authority: { source_run_id: 'publish-run', graph_id: graphID, graph_revision: 12,
+        plan_revision: 1, plan_hash: 'h', commit_sha: 'c'.repeat(40), by: 'operator', at: now, attempt: 2 },
       pull_request_url: 'https://github.com/acme/platform/pull/23',
       pull_request_external_state: { number: 23, state: 'open', draft: true, merged: false,
         head_sha: 'd'.repeat(40), candidate_matches_head: false, observed_at: now,
@@ -158,9 +165,8 @@ for (const viewport of viewports) {
     await expect(report).toContainText('Model: unknown');
     await expect(report).toContainText(`WorkGraph ${graphID} · revision 12`);
     await expect(report).toContainText(`Reviewed candidate: ${'c'.repeat(40)}`);
-    await expect(report).toContainText([
-      'Unknown evidence: independent policy-backed assurance', 'publication authority',
-    ].join(', '));
+    await expect(report.getByLabel('Recorded publication authorization')).toContainText('authorization attempt 2');
+    await expect(report).toContainText('Unknown evidence: candidate tree SHA, independent policy-backed assurance.');
     expect(await noHorizontalScroll(page)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`delivery-report-${viewport.name}.png`), fullPage: true });
   });
