@@ -279,6 +279,17 @@ func TestManagedUpdaterVerificationClassifiesFailureStates(t *testing.T) {
 	}
 }
 
+func TestManagedGitHubAppVerificationUsesPostActivationCutoff(t *testing.T) {
+	plistModifiedAt := time.Now().Add(-time.Minute)
+	requestedAt := time.Now()
+	if got := managedGitHubAppVerificationCutoff(plistModifiedAt, requestedAt); !got.Equal(requestedAt) {
+		t.Fatal("unchanged-settings activation accepted updater evidence from before the restart request")
+	}
+	if got := managedGitHubAppVerificationCutoff(plistModifiedAt, time.Time{}); !got.Equal(plistModifiedAt) {
+		t.Fatal("read-only status stopped using the persisted LaunchAgent timestamp")
+	}
+}
+
 func TestGitHubAppConfigurationFingerprintBindsAppInstallationAndKey(t *testing.T) {
 	key := writeManagedAppTestKey(t, t.TempDir(), 0o600)
 	base := gitHubAppAuth{appID: "123", installationID: "456", privateKeyPath: key}
@@ -332,12 +343,13 @@ func TestGitHubAppBootstrapUsesSavedSettingsOverShellValues(t *testing.T) {
 	contents := renderLaunchAgent("managed-entrypoint", userHome, filepath.Join(managed, "logs"), map[string]string{
 		"PATH": "/usr/bin:/bin", "ZENCHRON_GITHUB_APP_ID": "123456",
 		"ZENCHRON_GITHUB_INSTALLATION_ID": "987654", "ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH": savedKey,
+		"ZENCHRON_GITHUB_CLIENT_ID": "saved-oauth-client", "ZENCHRON_GITHUB_CLIENT_SECRET": "saved-oauth-secret",
 	})
 	if err := os.WriteFile(plist, contents, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := bootstrapManagedGitHubAppLaunchAgent(managed, "managed-entrypoint"); err == nil {
+	if err := bootstrapManagedGitHubAppLaunchAgent(); err == nil {
 		t.Fatal("a bootstrap conflict was treated as a successful start")
 	}
 	if _, err := os.Stat(plist); err != nil {
@@ -350,8 +362,10 @@ func TestGitHubAppBootstrapUsesSavedSettingsOverShellValues(t *testing.T) {
 	environment, err := launchAgentEnvironmentValues(mustReadFile(t, plist))
 	if err != nil || environment["ZENCHRON_GITHUB_APP_ID"] != "123456" ||
 		environment["ZENCHRON_GITHUB_INSTALLATION_ID"] != "987654" ||
-		environment["ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH"] != savedKey {
-		t.Fatalf("bootstrap replaced configured App settings with shell values: %#v, %v", environment, err)
+		environment["ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH"] != savedKey ||
+		environment["ZENCHRON_GITHUB_CLIENT_ID"] != "saved-oauth-client" ||
+		environment["ZENCHRON_GITHUB_CLIENT_SECRET"] != "saved-oauth-secret" {
+		t.Fatal("bootstrap changed saved App or OAuth settings")
 	}
 }
 
