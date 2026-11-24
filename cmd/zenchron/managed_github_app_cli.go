@@ -108,10 +108,7 @@ func configureManagedGitHubApp(home string, args []string) error {
 		if managedGitHubAppRuntimeNeedsRefresh(diagnostic) {
 			verificationRequestedAt := time.Now().UTC()
 			if loaded {
-				if err := managedGitHubAppSetupPreflight(home); err != nil {
-					return err
-				}
-				if err := reloadManagedGitHubAppLaunchAgent(); err != nil {
+				if err := reloadManagedGitHubAppLaunchAgent(home); err != nil {
 					return errors.New("saved GitHub App settings are not active; the existing LaunchAgent could not be reloaded")
 				}
 			} else {
@@ -135,7 +132,7 @@ func configureManagedGitHubApp(home string, args []string) error {
 		return nil
 	}
 	if loaded {
-		if err := reloadManagedGitHubAppLaunchAgent(); err != nil {
+		if err := reloadManagedGitHubAppLaunchAgent(home); err != nil {
 			return errors.New("GitHub App settings were saved; the existing LaunchAgent could not be reloaded")
 		}
 	} else {
@@ -157,7 +154,10 @@ func configureManagedGitHubApp(home string, args []string) error {
 	return nil
 }
 
-func reloadManagedGitHubAppLaunchAgent() error {
+func reloadManagedGitHubAppLaunchAgent(home string) error {
+	if err := managedGitHubAppSetupPreflight(home); err != nil {
+		return err
+	}
 	current, err := user.Current()
 	if err != nil {
 		return errors.New("could not identify the managed LaunchAgent owner")
