@@ -380,7 +380,8 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	}
 	// Plan approval, resolved graph decisions, and recorded publication authorizations are durable human actions.
 	planApprovals := 0
-	if report.ApprovedPlan != nil && report.ApprovedPlan.Status == planApproved {
+	if plan != nil && plan.Revision == graph.PlanRevision && plan.GraphID == graph.ID &&
+		plan.ApprovedBy != "" && plan.ApprovedAt != nil {
 		planApprovals = 1
 	}
 	measured.HumanActions = measured.DecisionsResolved + publicationAuthorizations + planApprovals
