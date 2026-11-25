@@ -299,7 +299,7 @@ func (store *workGraphStore) productContext(productID string, access requestAcce
 		context.WriteString(strconv.Itoa(productRevision) + ", organization revision " + strconv.Itoa(organizationRevision))
 		context.WriteString("\n")
 		selectedKnowledge = slices.DeleteFunc(selectedKnowledge, func(entry productKnowledge) bool {
-			return !store.productKnowledgeSourceVisible(access, entry, repository)
+			return repository == "" || !store.productKnowledgeSourceVisible(access, entry, repository)
 		})
 		appendProductKnowledgeContext(&context, selectedKnowledge, maxProductContextEntries)
 		appendProductKnowledgeContext(&context, organizationKnowledge, maxProductContextEntries)
