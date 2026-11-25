@@ -50,7 +50,8 @@ export function ActionRequired() {
           <a href={actionHref(action)}>
             <b>{action.objective_title}</b>
             <span>Plan revision {action.plan_revision} · {action.stage}{action.unit_title ? `: ${action.unit_title}` : ''}</span>
-            <span>{action.kind === 'plan_approval' ? 'Plan subject' : `Decision ${action.id}`} · {action.subject || 'Subject not recorded'}</span>
+            <span>{action.kind === 'plan_approval' ? 'Plan subject'
+              : action.kind === 'publication_authorization' ? 'Candidate to authorize' : `Decision ${action.id}`} · {action.subject || 'Subject not recorded'}</span>
             <span>Waiting reason: {action.reason || 'Not recorded'}</span>
             {action.kind === 'plan_approval' && <span>{action.can_act
               ? 'Available action: review the plan and approve it in Objective Workspace'

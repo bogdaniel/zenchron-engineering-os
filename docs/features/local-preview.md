@@ -38,6 +38,48 @@ blocked before service shutdown.
 The local `status` command and Settings / System Update page read the same persisted status record. The dashboard
 reconnects to update progress, keeps Mock isolated from the API, and automatically reloads only after it observes a new
 running revision.
+The managed LaunchAgent sets `ExitTimeOut` to zero so launchd does not force-kill the supervisor while its graceful
+shutdown is draining work.
+
+`zenchron-engineering auth github-app configure --app-id ID --installation-id ID --private-key FILE` saves GitHub App
+IDs and the copied PEM path in the existing owner-only LaunchAgent plist, copies the PEM into an owner-only file, and
+requests a graceful restart of the existing LaunchAgent. It defers when active runs are present. Reinstall preserves
+saved App settings over transient shell values; use `auth github-app configure` to change them. Self-update keeps the
+LaunchAgent environment.
+`auth github-app status` reports configuration, key readability, the active runtime's authentication method, and the
+managed updater's latest verification as value-free categories. Verification requires a recent updater attempt from
+the running supervisor with the same App ID, installation ID, and public-key identity saved in the LaunchAgent. A
+personal access token taking precedence is reported separately and never counts as GitHub App verification. Repeating
+`configure` retries a stale runtime using the active-run check and graceful restart; a concurrent service start is
+never booted out.
+`invalid_installation` covers failure to validate the local active release and GitHub rejecting the App
+installation-token request. A `404` while reading the configured repository remains an updater-verification failure
+because that response does not prove the installation ID is invalid. A `403` is reported as insufficient permissions.
+Workers never receive GitHub App credentials.
+
+
+### GitHub App permissions and safe configuration
+
+For the current objective-to-PR workflow, grant these repository permissions to the GitHub App:
+
+- **Contents: read** for the managed updater and private repository reads.
+- **Pull requests: read and write** to inspect candidates and create pull requests.
+- **Issues: read and write** for issue details and comments.
+- **Actions: read**, **Checks: read**, and **Commit statuses: read** for delivery and updater verification.
+- **Administration: read** when the updater must inspect classic branch protection rules; it does not need Administration write.
+- **Metadata: read** is granted automatically and covers repository/ruleset metadata.
+
+Install the App only on the updater repository and the repositories the operator intends to use. The worker pushes its candidate branch with the workstation's configured Git credentials; the App token does not go to workers. **Contents: write** is only needed for the separate App-mediated GitHub merge action. Do not grant it when the intended workflow stops at reviewed PR creation.
+
+After this managed-installation change is integrated, restrict the downloaded PEM to its owner with `chmod 600 FILE`, then configure the existing installation with the App ID, installation ID, and local PEM file path:
+
+```sh
+zenchron-engineering auth github-app configure --app-id ID --installation-id ID --private-key FILE
+zenchron-engineering auth github-app status
+```
+
+Keep the PEM file local; never paste its contents into a command, issue, commit, log, or chat. When the supervisor is loaded, the configure command verifies that active runs are zero before changing settings; it refuses if that count cannot be verified or is nonzero, then requests the existing supervisor's graceful restart. Check the value-free status until the managed updater reports verified.
+
 
 ## Feature diagram
 
@@ -45,6 +87,8 @@ running revision.
 sequenceDiagram
     participant I as Local installer
     participant C as Doctor command
+    participant O as Local operator
+    participant G as Managed GitHub App command
     participant GH as Trusted GitHub main
     participant S as Managed supervisor
     participant R as Versioned release store
@@ -54,6 +98,30 @@ sequenceDiagram
     participant DP as Dashboard dev/test proxy
     participant U as system-update.json
     participant A as agent-runs.json and in-memory admission
+    O->>G: Configure App ID, installation ID and local PEM file
+    G->>CP: GET /healthz
+    CP-->>G: Return health and active-release revision
+    G->>CP: GET /api/v1/system/update/active-runs with the local status credential
+    CP->>A: Read durable active runs
+    CP-->>G: Return the active-run count
+    G->>G: Validate the PEM and copy it to an owner-only managed file outside releases
+    G->>G: Save App IDs and managed PEM path in the owner-only LaunchAgent plist
+    G->>CP: Recheck active-run count immediately before unloading a loaded job
+    alt LaunchAgent is loaded
+        G->>S: launchctl bootout the existing definition; launchd sends SIGTERM
+        S->>S: Stop admission and gracefully drain current work
+        G->>S: launchctl bootstrap the saved plist
+    else LaunchAgent is stopped
+        G->>S: launchctl bootstrap the saved plist without bootout
+    end
+    S->>CP: Quiesce run admission and drain any work that raced setup
+    S->>S: Gracefully drain and restart with the reloaded definition
+    S->>S: Reload App settings after restart and self-update
+    S->>GH: Verify trusted main using the managed App credentials
+    G->>CP: GET /api/v1/system/update for updater result and runtime auth provenance
+    CP->>U: Read persisted supervisor verification
+    CP-->>G: Return value-free status categories
+    G-->>O: Report configuration, key, installation, permission or updater state
     I->>I: Validate canonical entrypoint and PATH without changing them
     C->>C: Resolve PATH and inspect shadowing commands
     C->>R: Verify the active release
@@ -107,11 +175,16 @@ origin; it forwards foreign and malformed origins unchanged so the control plane
 
 ## Configuration and boundaries
 
-GitHub authentication is required to inspect protected-branch/ruleset metadata and fetch private source. Prefer the
-existing GitHub App configuration; credentials are stored in the per-user LaunchAgent environment and are not passed
-to the worker or dashboard. The GitHub App needs repository metadata, contents, administration, commit statuses, and
-check runs read access to verify branch protection and required checks. Keep the private key at an owner-only path
-outside the repository.
+GitHub authentication is required to inspect protected-branch/ruleset metadata and fetch private source. Configure the
+existing GitHub App through `zenchron-engineering auth github-app configure`; App IDs and the managed key path are kept
+in the existing owner-only LaunchAgent plist, and a copied private key is kept in an owner-only file under the managed
+installation, outside the repository and versioned releases. The App settings are loaded by the existing supervisor
+and control plane, and are not passed to the worker or dashboard. The local status credential grants only read access
+to updater status and active-run count for local setup diagnostics; it does not bypass OAuth on the system-status
+route or grant other API access. The GitHub App needs repository metadata, contents, commit statuses, check runs, and (when classic branch protection
+is used) administration read access to verify branch protection and required checks. Administration write is not
+needed. Pull requests read is needed to inspect candidates; write is additionally required only when the control plane
+is authorized to create PRs.
 
 The installation requires no root privileges, containers or external server. This implementation currently uses
 macOS LaunchAgents. By default it reuses the existing `<UserConfigDir>/zenchron` durable state directory and keeps
