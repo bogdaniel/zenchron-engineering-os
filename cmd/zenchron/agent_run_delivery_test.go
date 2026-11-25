@@ -30,8 +30,10 @@ type deliveryHarness struct {
 	pullCreates    int
 	failPullCreate bool
 	failPullStatus bool
+	failPullClose  bool
 	pulls          []string
 	pullHead       string
+	pullCloseCalls int
 	checkHead      string
 	lastPullBody   string
 	reviews        string
@@ -114,6 +116,13 @@ func (harness *deliveryHarness) serveGitHub(w http.ResponseWriter, r *http.Reque
 		harness.pulls = append(harness.pulls, pull)
 		w.WriteHeader(http.StatusCreated)
 		_, _ = io.WriteString(w, pull)
+	case r.Method == http.MethodPatch && r.URL.Path == repository+"/pulls/23":
+		harness.pullCloseCalls++
+		if harness.failPullClose {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		_, _ = io.WriteString(w, `{"state":"closed"}`)
 	case r.Method == http.MethodGet && r.URL.Path == repository+"/pulls/23":
 		if harness.failPullStatus {
 			w.WriteHeader(http.StatusBadGateway)
@@ -316,6 +325,30 @@ func TestPullRequestPublicationRetriesWithoutDuplicates(t *testing.T) {
 	defer harness.mu.Unlock()
 	if harness.pullCreates != 2 {
 		t.Fatalf("GitHub received %d pull request creations, want one failure and one success", harness.pullCreates)
+	}
+}
+
+func TestPullRequestCleanupFailureExplainsRecoveryInRunEvidence(t *testing.T) {
+	harness := newDeliveryHarness(t, workerapi.ProviderCodex)
+	run := harness.createIssueRun()
+	harness.claim()
+	withoutPush := strings.Replace(pushedResult, `"branch_pushed":true`, `"branch_pushed":false`, 1)
+	if _, status := harness.finish(run.ID, withoutPush); status != http.StatusOK {
+		t.Fatalf("candidate result returned HTTP %d", status)
+	}
+	if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusAccepted {
+		t.Fatalf("authorize candidate returned HTTP %d", response.Code)
+	}
+	harness.claim()
+	harness.pullHead = strings.Repeat("b", 40)
+	harness.failPullClose = true
+	result := strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1)
+	failed, status := harness.finish(run.ID, result)
+	if status != http.StatusOK || failed.Publication != publicationPullRequestFailed ||
+		!strings.Contains(failed.PullRequestError, "pull request #23") ||
+		!strings.Contains(failed.PullRequestError, "Close it in GitHub before retrying publication") ||
+		harness.pullCloseCalls != 1 {
+		t.Fatalf("cleanup failure evidence = %#v, HTTP %d, close calls %d", failed, status, harness.pullCloseCalls)
 	}
 }
 

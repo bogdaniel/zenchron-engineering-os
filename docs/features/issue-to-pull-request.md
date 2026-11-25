@@ -55,8 +55,12 @@ sequenceDiagram
   Worker->>API: PUT .../agent-runs/{run} (branch-pushed evidence)
   API->>GH: Find or create pull request for exact candidate SHA
   GH-->>API: Return pull-request head SHA
-  API->>API: Reject a stale or mismatched head
-  API->>Store: Persist publication and pull-request identity
+  alt Returned head matches the authorized candidate
+    API->>Store: Persist publication and pull-request identity
+  else Newly created head mismatches
+    API->>GH: PATCH /repos/{owner}/{repo}/pulls/{number} {state: closed}
+    API->>Store: Record pull-request creation failure
+  end
   User->>UI: Reviews > Local branches > Evidence, Code changes
   UI->>API: GET /api/v1/agent-runs, .../events, .../diff, .../pull-request
   User->>UI: Retry failed PR creation or import change requests
@@ -159,8 +163,12 @@ that exits successfully is therefore not reported as delivered work unless verif
   pushed the exact candidate. It is titled after the issue and ends with `Closes #<issue>`. Creation reuses an existing
   pull request for the same branch and base only when GitHub reports the human-authorized candidate SHA as its head.
   An open PR with another head fails closed; a closed PR for an older candidate is skipped so the current candidate can
-  receive a new PR. A same-candidate PR remains reusable after an uncertain GitHub response. If GitHub fails after the
-  push, `POST /api/v1/agent-runs/{id}/publish` retries without duplicating the matching PR or reopening a closed PR.
+  receive a new PR. If branch movement causes a newly created PR to return another head, the control plane closes it
+  through the Pull Requests API and reports creation failure; if closing fails, it records that failure instead of
+  treating the mismatched PR as delivered. The run evidence identifies the possibly open PR and tells the operator to
+  close it before retrying. A same-candidate PR remains reusable after an uncertain GitHub response. If GitHub fails
+  after the push, `POST /api/v1/agent-runs/{id}/publish` retries without duplicating the matching PR or reopening a
+  closed PR.
 - A change request from the dashboard, one delivered by a [GitHub webhook](github-webhooks.md), or one imported
   from GitHub with `sync-reviews`, queues another attempt on the
   same branch and worktree. The new candidate remains local until a person authorizes its exact SHA; the next

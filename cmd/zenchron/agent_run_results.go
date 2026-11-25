@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -60,7 +61,17 @@ func (store *agentRunStore) finish(w http.ResponseWriter, r *http.Request) {
 		if item.WorkerID == workerID && !access.allows(item.Repository) {
 			return http.StatusForbidden, "this worker is no longer approved for the run's repository"
 		}
-		if item.WorkerID == workerID && item.ResultAttempt == input.Attempts && item.ResultAttempt > 0 {
+		acceptedAttempt := item.ResultAttempt == input.Attempts && item.ResultAttempt > 0
+		if !acceptedAttempt {
+			for _, attempt := range item.AttemptLog {
+				if attempt.Attempt == input.Attempts && attempt.WorkerID == workerID && attempt.FinishedAt != nil &&
+					(attempt.Status == "succeeded" || attempt.Status == "failed" || attempt.Status == "cancelled") {
+					acceptedAttempt = true
+					break
+				}
+			}
+		}
+		if item.WorkerID == workerID && acceptedAttempt {
 			return http.StatusConflict, workerapi.AgentRunResultAlreadyAccepted
 		}
 		return store.applyResult(item, workerID, input)
@@ -106,7 +117,8 @@ func (store *agentRunStore) applyResult(item *agentRun, workerID string, input w
 		input.Status, input.Output, input.Error = "cancelled", "", "Cancellation requested from dashboard."
 		input.BranchPushed, input.BranchPushFailed, input.TerminationReason = false, false, workerapi.TerminationCancelled
 	}
-	if publishOnly && !item.CancelRequested && input.CommitSHA != item.CommitSHA {
+	if publishOnly && !item.CancelRequested && (input.CommitSHA != "" && input.CommitSHA != item.CommitSHA ||
+		input.Status == "succeeded" && input.CommitSHA != item.CommitSHA) {
 		return http.StatusConflict, "publish-only result does not match the authorized candidate"
 	}
 	if (input.BranchPushed || input.BranchPushFailed) &&
@@ -184,9 +196,14 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 	default:
 		pull, err := store.createPullRequest(ctx, item)
 		if err != nil {
-			// The cause stays in the control plane's log; the run only says that creation failed.
+			// Provider details stay in the control-plane log; cleanup failures include a safe recovery action.
 			log.Printf("agent run %s: create pull request: %v", runID, err)
 			publication, publishError = publicationPullRequestFailed, "The branch was pushed, but GitHub could not create the pull request."
+			var cleanupErr *gitHubPullRequestCleanupError
+			if errors.As(err, &cleanupErr) {
+				publishError = fmt.Sprintf("GitHub created pull request #%d for a different candidate but could not close it. Close it in GitHub before retrying publication.",
+					cleanupErr.Number)
+			}
 		} else {
 			publication, number, pullURL = publicationPublished, pull.Number, pull.HTMLURL
 		}
@@ -206,7 +223,7 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 			store.mu.Lock()
 			current, exists := store.items[runID]
 			released := exists && current.Status == "succeeded" && current.Attempts == attempt &&
-				current.ResultAttempt == attempt && current.Publishing
+				current.Publishing
 			if released {
 				current.Publishing = false
 				store.items[runID] = current

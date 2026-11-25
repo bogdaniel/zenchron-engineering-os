@@ -435,7 +435,7 @@ func TestGitHubCreatesPullRequestFromPublishedBranch(t *testing.T) {
 			t.Errorf("create PR payload = %#v, decode error = %v", input, err)
 		}
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"number":23,"title":"Add review flow","state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":"zenchron/agent-run/123"},"base":{"ref":"main"}}`))
+		_, _ = w.Write([]byte(`{"number":23,"title":"Add review flow","state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":"zenchron/agent-run/123","sha":"` + testCommit + `"},"base":{"ref":"main"}}`))
 	}))
 	defer provider.Close()
 	t.Setenv("ZENCHRON_GITHUB_TOKEN", "test-token")
@@ -445,6 +445,50 @@ func TestGitHubCreatesPullRequestFromPublishedBranch(t *testing.T) {
 		testCommit, "Add review flow", "Agent summary.")
 	if err != nil || pull.Number != 23 || pull.HTMLURL != "https://github.com/acme/platform/pull/23" {
 		t.Fatalf("created pull request = %#v, error = %v", pull, err)
+	}
+}
+
+func TestGitHubPullRequestCreationClosesMismatchedCandidate(t *testing.T) {
+	for _, closeStatus := range []int{http.StatusOK, http.StatusForbidden} {
+		t.Run(http.StatusText(closeStatus), func(t *testing.T) {
+			closeRequests := 0
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/repos/acme/platform/pulls":
+					_, _ = w.Write([]byte(`[]`))
+				case r.Method == http.MethodPost && r.URL.Path == "/repos/acme/platform/pulls":
+					w.WriteHeader(http.StatusCreated)
+					body := `{"number":24,"state":"open","html_url":"https://github.com/acme/platform/pull/24",` +
+						`"head":{"ref":"zenchron/agent-run/123","sha":"` + strings.Repeat("b", 40) + `"},"base":{"ref":"main"}}`
+					_, _ = w.Write([]byte(body))
+				case r.Method == http.MethodPatch && r.URL.Path == "/repos/acme/platform/pulls/24":
+					closeRequests++
+					var input struct {
+						State string `json:"state"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.State != "closed" {
+						t.Errorf("close pull request payload = %#v, error %v", input, err)
+					}
+					w.WriteHeader(closeStatus)
+				default:
+					t.Errorf("unexpected GitHub request %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			defer provider.Close()
+			t.Setenv("ZENCHRON_GITHUB_TOKEN", "test-token")
+			client := newGitHubClient()
+			client.apiURL = provider.URL
+			pull, err := client.createPullRequest(context.Background(), "acme", "platform", "zenchron/agent-run/123", "main",
+				testCommit, "Add review flow", "Agent summary.")
+			if err == nil || closeRequests != 1 ||
+				(closeStatus == http.StatusForbidden && !strings.Contains(err.Error(), "closing")) {
+				t.Fatalf("mismatched pull request error = %v, cleanup calls %d", err, closeRequests)
+			}
+			if pull.Number != 0 {
+				t.Fatalf("mismatched pull request was returned as successful: %#v", pull)
+			}
+		})
 	}
 }
 

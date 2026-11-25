@@ -7,8 +7,9 @@ import (
 )
 
 type publicationAuthorization struct {
-	CommitSHA     string    `json:"commit_sha"`
-	GraphID       string    `json:"graph_id,omitempty"`
+	CommitSHA string `json:"commit_sha"`
+	GraphID   string `json:"graph_id,omitempty"`
+	// GraphRevision records the state seen by the person; ordinary projection changes do not revoke authority.
 	GraphRevision int       `json:"graph_revision,omitempty"`
 	PlanRevision  int       `json:"plan_revision,omitempty"`
 	PlanHash      string    `json:"plan_hash,omitempty"`

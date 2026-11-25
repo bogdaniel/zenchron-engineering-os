@@ -61,6 +61,18 @@ type gitHubPullRequest struct {
 	MergeableState string `json:"mergeable_state"`
 }
 
+type gitHubPullRequestCleanupError struct {
+	Number int
+	Err    error
+}
+
+func (err *gitHubPullRequestCleanupError) Error() string {
+	return fmt.Sprintf("GitHub created pull request #%d for a different candidate and closing it failed: %v",
+		err.Number, err.Err)
+}
+
+func (err *gitHubPullRequestCleanupError) Unwrap() error { return err.Err }
+
 type gitHubIssue struct {
 	Number      int            `json:"number"`
 	Comments    int            `json:"comments"`
@@ -262,7 +274,33 @@ func (client gitHubClient) createPullRequest(
 	if err := json.Unmarshal(response, &pull); err != nil {
 		return gitHubPullRequest{}, err
 	}
+	if pull.Head.SHA != candidateSHA {
+		if pull.Number < 1 {
+			return gitHubPullRequest{}, fmt.Errorf("GitHub created a mismatched pull request without a valid number to close it")
+		}
+		// The pull request exists, so caller cancellation must not skip cleanup.
+		if err := client.closePullRequest(context.WithoutCancel(ctx), owner, repository, pull.Number); err != nil {
+			return gitHubPullRequest{}, &gitHubPullRequestCleanupError{Number: pull.Number, Err: err}
+		}
+		return gitHubPullRequest{}, fmt.Errorf("GitHub created pull request #%d for a different candidate; it was closed",
+			pull.Number)
+	}
 	return pull, nil
+}
+
+func (client gitHubClient) closePullRequest(ctx context.Context, owner, repository string, number int) error {
+	if number < 1 {
+		return fmt.Errorf("pull request number is invalid")
+	}
+	payload, err := json.Marshal(struct {
+		State string `json:"state"`
+	}{State: "closed"})
+	if err != nil {
+		return err
+	}
+	path := "/repos/" + owner + "/" + repository + "/pulls/" + strconv.Itoa(number)
+	_, err = client.requestBytes(ctx, http.MethodPatch, path, "application/vnd.github+json", nil, payload)
+	return err
 }
 
 // localOrAuthorizedClient gates GitHub writes made with the control plane's own credentials. A remote
