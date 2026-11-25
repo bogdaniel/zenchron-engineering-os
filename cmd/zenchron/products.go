@@ -30,7 +30,9 @@ type product struct {
 	// linked under an access policy. Whoever may touch one of them may see and edit the product. They are
 	// stored because a project id resolves to a repository only while its worker is registered, and they
 	// are never returned: a viewer may lack access to some of them.
-	AccessRepositories map[string]string `json:"access_repositories,omitempty"`
+	AccessRepositories map[string]string  `json:"access_repositories,omitempty"`
+	KnowledgeRevision  int                `json:"knowledge_revision,omitempty"`
+	Knowledge          []productKnowledge `json:"knowledge,omitempty"`
 }
 
 type productConfigurationRevision struct {
@@ -45,12 +47,21 @@ type productConfigurationRevision struct {
 }
 
 type productStore struct {
-	mu    sync.RWMutex
-	items map[string]product
-	path  string
+	mu                            sync.RWMutex
+	items                         map[string]product
+	organizationKnowledgeRevision int
+	organizationKnowledge         []productKnowledge
+	path                          string
 	// repositoryOf resolves a project id to its repository; set when the store is wired to the registry.
 	repositoryOf func(projectID string) (string, bool)
 	workflows    *workflowStore
+}
+
+type productStoreState struct {
+	Version                       int                `json:"version"`
+	Items                         map[string]product `json:"items"`
+	OrganizationKnowledgeRevision int                `json:"organization_knowledge_revision,omitempty"`
+	OrganizationKnowledge         []productKnowledge `json:"organization_knowledge,omitempty"`
 }
 
 // visible reports whether the caller may see and edit a product: an administrator, anyone who may touch
@@ -75,6 +86,7 @@ func (item product) visible(access requestAccess) bool {
 func (item product) public() product {
 	item.AccessRepositories = nil
 	item.ConfigurationHistory = nil
+	item.Knowledge = nil
 	item.ConfigurationRevision = item.configurationRevision()
 	return item
 }
@@ -120,10 +132,7 @@ func newProductStore() *productStore {
 func openProductStore(path string) (*productStore, error) {
 	store := newProductStore()
 	store.path = path
-	var state struct {
-		Version int                `json:"version"`
-		Items   map[string]product `json:"items"`
-	}
+	var state productStoreState
 	exists, err := loadStateFile(path, &state)
 	if err != nil {
 		return nil, fmt.Errorf("load products: %w", err)
@@ -139,7 +148,18 @@ func openProductStore(path string) (*productStore, error) {
 			return nil, fmt.Errorf("load products: invalid record %q", id)
 		}
 	}
+	if state.OrganizationKnowledge == nil {
+		state.OrganizationKnowledge = []productKnowledge{}
+	}
+	if !validProductKnowledge(state.OrganizationKnowledge, state.OrganizationKnowledgeRevision, productKnowledgeOrganization) {
+		return nil, fmt.Errorf("load products: invalid organization knowledge")
+	}
+	if !validOrganizationKnowledge(state.OrganizationKnowledge, state.Items) {
+		return nil, fmt.Errorf("load products: organization knowledge has no matching product source")
+	}
 	store.items = state.Items
+	store.organizationKnowledgeRevision = state.OrganizationKnowledgeRevision
+	store.organizationKnowledge = state.OrganizationKnowledge
 	return store, nil
 }
 
@@ -148,10 +168,9 @@ func (store *productStore) persistLocked() error {
 		return nil
 	}
 	// ponytail: serialize snapshots under the store lock; move to a transactional writer if write traffic grows.
-	return writeStateFile(store.path, struct {
-		Version int                `json:"version"`
-		Items   map[string]product `json:"items"`
-	}{stateFileVersion, store.items})
+	return writeStateFile(store.path, productStoreState{Version: stateFileVersion, Items: store.items,
+		OrganizationKnowledgeRevision: store.organizationKnowledgeRevision,
+		OrganizationKnowledge:         store.organizationKnowledge})
 }
 
 func validStoredProduct(item product) bool {
@@ -165,6 +184,12 @@ func validStoredProduct(item product) bool {
 		if len(item.DefaultWorkflowID) > 100 || strings.TrimSpace(item.DefaultWorkflowID) != item.DefaultWorkflowID {
 			return false
 		}
+	}
+	if !validProductKnowledge(item.Knowledge, item.KnowledgeRevision, productKnowledgeProduct) {
+		return false
+	}
+	if slices.ContainsFunc(item.Knowledge, func(entry productKnowledge) bool { return entry.ProductID != item.ID }) {
+		return false
 	}
 	seen := make(map[string]struct{}, len(item.RepositoryIDs))
 	for _, repositoryID := range item.RepositoryIDs {

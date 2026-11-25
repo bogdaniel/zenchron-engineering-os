@@ -76,8 +76,10 @@ type objectivePlan struct {
 	Status      string `json:"status"`
 	ProjectID   string `json:"project_id"`
 	// ProductContext is the linked product identity and description frozen when this plan revision is proposed.
-	ProductContext               string `json:"product_context,omitempty"`
-	ProductConfigurationRevision int    `json:"product_configuration_revision,omitempty"`
+	ProductContext                string `json:"product_context,omitempty"`
+	ProductConfigurationRevision  int    `json:"product_configuration_revision,omitempty"`
+	ProductKnowledgeRevision      int    `json:"product_knowledge_revision,omitempty"`
+	OrganizationKnowledgeRevision int    `json:"organization_knowledge_revision,omitempty"`
 	// Repository is the repository of the project when the plan was proposed; reading the plan needs a grant for it.
 	Repository       string                  `json:"repository,omitempty"`
 	WorkflowID       string                  `json:"workflow_id,omitempty"`

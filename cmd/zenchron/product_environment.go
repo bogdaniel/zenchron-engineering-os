@@ -11,16 +11,40 @@ import (
 // objectives, plans, work graphs, decisions, and pull requests that belong to it. It is a projection of
 // records owned elsewhere and stores nothing of its own, so one product can never carry another's work.
 type productEnvironment struct {
-	ProductID             string                             `json:"product_id"`
-	Name                  string                             `json:"name"`
-	Description           string                             `json:"description"`
-	ConfigurationRevision int                                `json:"configuration_revision"`
-	ConfigurationHistory  []productConfigurationRevisionView `json:"configuration_history"`
-	ConfigurationComplete bool                               `json:"configuration_history_complete"`
-	RepositoryIDs         []string                           `json:"repository_ids"`
-	Objectives            []environmentObjective             `json:"objectives"`
-	Decisions             []environmentDecision              `json:"decisions"`
-	History               []environmentGraph                 `json:"history"`
+	ProductID                     string                             `json:"product_id"`
+	Name                          string                             `json:"name"`
+	Description                   string                             `json:"description"`
+	ConfigurationRevision         int                                `json:"configuration_revision"`
+	ConfigurationHistory          []productConfigurationRevisionView `json:"configuration_history"`
+	ConfigurationComplete         bool                               `json:"configuration_history_complete"`
+	KnowledgeRevision             int                                `json:"knowledge_revision"`
+	OrganizationKnowledgeRevision int                                `json:"organization_knowledge_revision"`
+	Knowledge                     []productKnowledgeView             `json:"knowledge"`
+	RepositoryIDs                 []string                           `json:"repository_ids"`
+	Objectives                    []environmentObjective             `json:"objectives"`
+	Decisions                     []environmentDecision              `json:"decisions"`
+	History                       []environmentGraph                 `json:"history"`
+}
+
+type productKnowledgeView struct {
+	ID                string    `json:"id"`
+	Revision          int       `json:"revision"`
+	Scope             string    `json:"scope"`
+	Content           string    `json:"content"`
+	ProductID         string    `json:"product_id,omitempty"`
+	ObjectiveID       string    `json:"objective_id,omitempty"`
+	GraphID           string    `json:"graph_id,omitempty"`
+	PlanHash          string    `json:"plan_hash,omitempty"`
+	MessageID         string    `json:"message_id,omitempty"`
+	RunID             string    `json:"run_id,omitempty"`
+	Unit              string    `json:"unit,omitempty"`
+	Candidate         string    `json:"candidate,omitempty"`
+	CreatedBy         string    `json:"created_by,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	PromotedFromID    string    `json:"promoted_from_id,omitempty"`
+	PromotedBy        string    `json:"promoted_by,omitempty"`
+	PromotedAt        time.Time `json:"promoted_at,omitzero"`
+	SourceUnavailable bool      `json:"source_unavailable,omitempty"`
 }
 
 type productConfigurationRevisionView struct {
@@ -36,23 +60,25 @@ type productConfigurationRevisionView struct {
 
 // environmentGraph is a product-scoped reference to a durable execution record, without copying its evidence.
 type environmentGraph struct {
-	ID                           string                  `json:"id"`
-	ObjectiveID                  string                  `json:"objective_id"`
-	PlanRevision                 int                     `json:"plan_revision"`
-	PlanHash                     string                  `json:"plan_hash"`
-	ProductConfigurationRevision int                     `json:"product_configuration_revision,omitempty"`
-	WorkflowID                   string                  `json:"workflow_id,omitempty"`
-	WorkflowVersion              int                     `json:"workflow_version,omitempty"`
-	WorkflowMode                 string                  `json:"workflow_mode,omitempty"`
-	Assignments                  []environmentAssignment `json:"assignments"`
-	Revision                     int                     `json:"revision"`
-	Status                       string                  `json:"status"`
-	CreatedAt                    time.Time               `json:"created_at"`
-	UpdatedAt                    time.Time               `json:"updated_at"`
-	RunIDs                       []string                `json:"run_ids"`
-	Handoffs                     int                     `json:"handoffs"`
-	Findings                     int                     `json:"findings"`
-	PullRequestURL               string                  `json:"pull_request_url,omitempty"`
+	ID                            string                  `json:"id"`
+	ObjectiveID                   string                  `json:"objective_id"`
+	PlanRevision                  int                     `json:"plan_revision"`
+	PlanHash                      string                  `json:"plan_hash"`
+	ProductConfigurationRevision  int                     `json:"product_configuration_revision,omitempty"`
+	ProductKnowledgeRevision      int                     `json:"product_knowledge_revision,omitempty"`
+	OrganizationKnowledgeRevision int                     `json:"organization_knowledge_revision,omitempty"`
+	WorkflowID                    string                  `json:"workflow_id,omitempty"`
+	WorkflowVersion               int                     `json:"workflow_version,omitempty"`
+	WorkflowMode                  string                  `json:"workflow_mode,omitempty"`
+	Assignments                   []environmentAssignment `json:"assignments"`
+	Revision                      int                     `json:"revision"`
+	Status                        string                  `json:"status"`
+	CreatedAt                     time.Time               `json:"created_at"`
+	UpdatedAt                     time.Time               `json:"updated_at"`
+	RunIDs                        []string                `json:"run_ids"`
+	Handoffs                      int                     `json:"handoffs"`
+	Findings                      int                     `json:"findings"`
+	PullRequestURL                string                  `json:"pull_request_url,omitempty"`
 }
 
 // environmentAssignment references the immutable profile and persona revisions captured by a plan unit.
@@ -99,11 +125,45 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 		http.NotFound(w, r)
 		return
 	}
+	products := store.objectives.products
+	products.mu.RLock()
+	item, exists = products.items[item.ID]
+	if !exists || !item.visible(access) {
+		products.mu.RUnlock()
+		http.NotFound(w, r)
+		return
+	}
+	productKnowledge := slices.Clone(item.Knowledge)
+	organizationKnowledge := slices.Clone(products.organizationKnowledge)
+	knowledgeRevision, organizationKnowledgeRevision := item.KnowledgeRevision, products.organizationKnowledgeRevision
+	products.mu.RUnlock()
+	for _, entry := range organizationKnowledge {
+		productKnowledge = append(productKnowledge, entry)
+	}
+	knowledgeViews := make([]productKnowledgeView, 0, len(productKnowledge))
+	for _, entry := range productKnowledge {
+		view := productKnowledgeView{ID: entry.ID, Revision: entry.Revision, Scope: entry.Scope, Content: entry.Content,
+			ProductID: entry.ProductID, ObjectiveID: entry.ObjectiveID, GraphID: entry.GraphID, PlanHash: entry.PlanHash,
+			MessageID: entry.MessageID, RunID: entry.RunID, Unit: entry.Unit, Candidate: entry.Candidate,
+			CreatedBy: entry.CreatedBy, CreatedAt: entry.CreatedAt, PromotedFromID: entry.PromotedFromID,
+			PromotedBy: entry.PromotedBy, PromotedAt: entry.PromotedAt}
+		if !store.productKnowledgeSourceVisible(access, entry, "") {
+			if entry.Scope == productKnowledgeProduct {
+				continue
+			}
+			view.ProductID, view.ObjectiveID, view.GraphID, view.PlanHash = "", "", "", ""
+			view.MessageID, view.RunID, view.Unit, view.Candidate, view.CreatedBy = "", "", "", "", ""
+			view.PromotedFromID = ""
+			view.SourceUnavailable = true
+		}
+		knowledgeViews = append(knowledgeViews, view)
+	}
 	configurationHistory, configurationComplete := item.configurationHistoryFor(access)
 	environment := productEnvironment{ProductID: item.ID, Name: item.Name, Description: item.Description,
 		ConfigurationRevision: item.configurationRevision(), ConfigurationHistory: configurationHistory,
-		ConfigurationComplete: configurationComplete,
-		RepositoryIDs:         item.RepositoryIDs, Objectives: []environmentObjective{}, Decisions: []environmentDecision{},
+		ConfigurationComplete: configurationComplete, KnowledgeRevision: knowledgeRevision,
+		OrganizationKnowledgeRevision: organizationKnowledgeRevision, Knowledge: knowledgeViews,
+		RepositoryIDs: item.RepositoryIDs, Objectives: []environmentObjective{}, Decisions: []environmentDecision{},
 		History: []environmentGraph{}}
 	objectives := store.objectives.ofProduct(item.ID)
 	store.mu.Lock()
@@ -119,8 +179,10 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 			}
 		}
 		planConfigurationRevisions := make(map[int]int, len(store.plans[objective.ID]))
+		planKnowledgeRevisions := make(map[int][2]int, len(store.plans[objective.ID]))
 		for _, plan := range store.plans[objective.ID] {
 			planConfigurationRevisions[plan.Revision] = plan.ProductConfigurationRevision
+			planKnowledgeRevisions[plan.Revision] = [2]int{plan.ProductKnowledgeRevision, plan.OrganizationKnowledgeRevision}
 		}
 		var newest environmentGraph
 		hasNewest := false
@@ -145,6 +207,8 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 						PersonaVersion: unit.PersonaVersion})
 				}
 			}
+			knowledgeRevisions := planKnowledgeRevisions[graph.PlanRevision]
+			reference.ProductKnowledgeRevision, reference.OrganizationKnowledgeRevision = knowledgeRevisions[0], knowledgeRevisions[1]
 			for _, message := range graph.Messages {
 				switch message.Type {
 				case messageHandoff:
