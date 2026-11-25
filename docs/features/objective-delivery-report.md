@@ -76,8 +76,9 @@ flowchart LR
   - `review_rounds`: number of run ids belonging to review units.
   - `findings`, `decisions_requested`, and `decisions_resolved`: counts of messages of type `finding`,
     `decision_request`, and `decision_resolution`, respectively.
-  - `human_actions`: resolved decisions, the plan approval when its approved status is recorded, and explicit
-    publication authorizations. `human_actions_complete` is false because
+  - `human_actions`: resolved decisions, plan approvals proven by durable approver/time and graph/revision
+    binding, and explicit publication authorizations. A later superseded status does not erase an earlier approval.
+    `human_actions_complete` is false because
     the system does not record every human action.
   - `remediation_passes`: for each produce unit, each attempt after its first when a finding addressed to that unit
     was created between the previous attempt's start and its own start.
