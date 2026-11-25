@@ -338,6 +338,30 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.screenshot({ path: testInfo.outputPath('workspace-platform-operator-mobile.png'), fullPage: true });
+  await focus.selectOption('All sections');
+  const mobileTabLayout = await tabs.evaluate((element) => {
+    const buttons = [...element.querySelectorAll('button')];
+    return {
+      count: buttons.length,
+      overflowing: buttons.filter((button) => button.scrollWidth > button.clientWidth).length,
+    };
+  });
+  expect(mobileTabLayout).toEqual({ count: 7, overflowing: 0 });
+  await page.screenshot({ path: testInfo.outputPath('workspace-all-sections-mobile.png'), fullPage: true });
+
+  await page.setViewportSize({ width: 310, height: 844 });
+  const narrowTabLayout = await tabs.evaluate((element) => {
+    const buttons = [...element.querySelectorAll('button')];
+    const bounds = buttons.map((button) => button.getBoundingClientRect());
+    return {
+      count: buttons.length,
+      overflowing: buttons.filter((button) => button.scrollWidth > button.clientWidth).length,
+      undersized: buttons.filter((button) => button.clientHeight < 24 || button.clientWidth < 24).length,
+      overlapping: bounds.some((left, index) => bounds.slice(index + 1).some((right) =>
+        Math.abs(left.top - right.top) < 1 && left.right > right.left)),
+    };
+  });
+  expect(narrowTabLayout).toEqual({ count: 7, overflowing: 0, undersized: 0, overlapping: false });
 
 });
 

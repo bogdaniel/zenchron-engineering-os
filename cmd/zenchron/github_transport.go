@@ -14,6 +14,14 @@ import (
 var errGitHubUnprocessableEntity = errors.New("GitHub returned HTTP 422")
 var errGitHubResponseTooLarge = errors.New("GitHub response exceeded the size limit")
 
+type gitHubHTTPError struct {
+	statusCode int
+}
+
+func (err gitHubHTTPError) Error() string {
+	return fmt.Sprintf("GitHub returned HTTP %d", err.statusCode)
+}
+
 func (client gitHubClient) authConfigured() bool {
 	return client.token != "" || client.appAuth != nil && client.appAuth.configured()
 }
@@ -73,7 +81,7 @@ func (client gitHubClient) requestBytesWithToken(
 		if response.StatusCode == http.StatusUnprocessableEntity {
 			return nil, errGitHubUnprocessableEntity
 		}
-		return nil, fmt.Errorf("GitHub returned HTTP %d", response.StatusCode)
+		return nil, gitHubHTTPError{statusCode: response.StatusCode}
 	}
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, maxGitHubResponseSize+1))
 	if err != nil {

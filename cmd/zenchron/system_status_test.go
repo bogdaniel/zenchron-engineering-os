@@ -298,6 +298,7 @@ func TestLocalSystemStatusOmitsActiveGraphWhenNoWorkIsActive(t *testing.T) {
 }
 
 func TestLocalSystemStatusRequiresSessionAndAdministratorWithAccessPolicy(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	config := testAuthConfig()
 	server := authHandler(newMux(), config)
 	request := localStatusTestRequest(t)

@@ -23,6 +23,12 @@ const maxGitHubIssueListPages = 10
 
 const gitHubAPIURL = "https://api.github.com"
 
+const (
+	gitHubAuthMethodPersonalToken = "personal_access_token"
+	gitHubAuthMethodApp           = "github_app"
+	gitHubAuthMethodMissing       = "missing"
+)
+
 type gitHubClient struct {
 	apiURL  string
 	token   string
@@ -79,6 +85,16 @@ func newGitHubClient() gitHubClient {
 		apiURL: gitHubAPIURL, token: strings.TrimSpace(os.Getenv("ZENCHRON_GITHUB_TOKEN")),
 		appAuth: newGitHubAppAuthFromEnv(), client: &http.Client{Timeout: 10 * time.Second},
 	}
+}
+
+func (client gitHubClient) authenticationMethod() string {
+	if client.token != "" {
+		return gitHubAuthMethodPersonalToken
+	}
+	if client.appAuth != nil && client.appAuth.configured() {
+		return gitHubAuthMethodApp
+	}
+	return gitHubAuthMethodMissing
 }
 
 func (client gitHubClient) request(ctx context.Context, path string, target any) error {

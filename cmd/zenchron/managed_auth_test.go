@@ -273,11 +273,11 @@ func TestManagedOAuthSetupPreflightDefersWhileAgentRunIsActive(t *testing.T) {
 			}
 			client := &http.Client{Transport: managedTestTransport(func(request *http.Request) (*http.Response, error) {
 				body := `{"status":"ok","revision":"` + revision + `"}`
-				if request.URL.Path == "/api/v1/system/status" {
+				if request.URL.Path == "/api/v1/system/update/active-runs" {
 					if request.Header.Get("X-Zenchron-Local-Status-Token") != "local-status-token" {
-						return nil, fmt.Errorf("system status request omitted the existing local credential")
+						return nil, fmt.Errorf("active-run status request omitted the existing local credential")
 					}
-					body = fmt.Sprintf(`{"work":{"active_agent_runs":%d}}`, activeRuns)
+					body = fmt.Sprintf(`{"active_runs":%d}`, activeRuns)
 				}
 				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)),
 					Header: make(http.Header), Request: request}, nil
@@ -323,7 +323,7 @@ func TestManagedOAuthSetupRechecksActiveRunsBeforeWritingConfig(t *testing.T) {
 	}
 }
 
-func TestRestartManagedForOAuthUsesGracefulLaunchdSignal(t *testing.T) {
+func TestRestartManagedSupervisorUsesGracefulLaunchdSignal(t *testing.T) {
 	launchctlDirectory := t.TempDir()
 	launchctlLog := filepath.Join(t.TempDir(), "launchctl.log")
 	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$LAUNCHCTL_LOG\"\n" +
@@ -337,7 +337,7 @@ func TestRestartManagedForOAuthUsesGracefulLaunchdSignal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := restartManagedForOAuth(); err != nil {
+	if err := restartManagedSupervisor(); err != nil {
 		t.Fatal(err)
 	}
 	commands, err := os.ReadFile(launchctlLog)
