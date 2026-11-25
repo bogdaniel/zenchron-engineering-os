@@ -287,7 +287,8 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 	item := agentRun{ID: runID, AgentID: profile.ID, AgentName: profile.Name, ProjectID: testProjectID,
 		Repository:  "github.com/acme/platform",
 		ProjectName: "platform", WorkerID: testWorkerID, WorkerName: "worker", Branch: workerapi.AgentRunBranch(runID),
-		BaseBranch: "main", Prompt: "Add review flow", Output: "Agent summary.", Status: "running", Attempts: 1,
+		BaseBranch: "main", Prompt: "Add review flow", Output: "Agent summary.", CommitSHA: strings.Repeat("a", 40),
+		Status: "running", Attempts: 1,
 		LeaseUntil: time.Now().Add(time.Minute), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 		Profile: &profile, PullRequestEnabled: true, PublishOnly: true, PublicationAuthorizations: []publicationAuthorization{{
 			CommitSHA: strings.Repeat("a", 40), By: "test operator", At: time.Now().UTC(), Attempt: 1,
@@ -300,10 +301,11 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 	request.SetPathValue("requestID", item.ID)
 	response := httptest.NewRecorder()
 	store.finish(response, request)
+	responseBody := response.Body.String()
 	var result agentRun
-	if err := json.NewDecoder(response.Body).Decode(&result); err != nil || response.Code != http.StatusOK ||
+	if err := json.NewDecoder(strings.NewReader(responseBody)).Decode(&result); err != nil || response.Code != http.StatusOK ||
 		result.PullRequestNumber != 23 || result.PullRequestURL != "https://github.com/acme/platform/pull/23" || result.PullRequestError != "" {
-		t.Fatalf("finished run = %#v, decode error = %v, HTTP %d: %s", result, err, response.Code, response.Body.String())
+		t.Fatalf("finished run = %#v, decode error = %v, HTTP %d: %s", result, err, response.Code, responseBody)
 	}
 }
 

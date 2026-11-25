@@ -347,12 +347,20 @@ func TestPublishOnlyResultPreservesExecutionEvidenceWhenFieldsAreMissing(t *test
 	run := harness.createIssueRun()
 	harness.claim()
 	treeSHA := strings.Repeat("d", 40)
-	initial := strings.Replace(pushedResult, `"branch_pushed":true`, `"branch_pushed":false`, 1)
-	initial = strings.Replace(initial, `"provider_version":"1.2.3"`, `"commit_tree_sha":"`+treeSHA+`","provider_version":"1.2.3"`, 1)
-	initial = strings.Replace(initial, `"provider_version":"1.2.3"`, `"result":"{\"summary\":\"initial\"}","provider_version":"1.2.3"`, 1)
-	finished, status := harness.finish(run.ID, initial)
-	if status != http.StatusOK || finished.Result == "" || finished.Usage == nil || finished.ProviderVersion != "1.2.3" {
-		t.Fatalf("initial execution evidence = %#v, HTTP %d", finished, status)
+	diff := "diff --git a/a b/a\n+bound\n"
+	initial, err := json.Marshal(workerapi.AgentRunResult{Status: "succeeded", Output: "Bounded the body and added a test.",
+		Attempts: 1, CommitSHA: testCommit, CommitTreeSHA: treeSHA, BaseCommit: strings.Repeat("b", 40), Diff: &diff,
+		ProviderVersion: "1.2.3", TerminationReason: workerapi.TerminationCompleted,
+		Verification: workerapi.VerificationPassed, Result: `{"summary":"initial"}`,
+		Usage: &workerapi.Usage{InputTokens: 120, OutputTokens: 30}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	finished, status := harness.finish(run.ID, string(initial))
+	stored, exists := harness.store.get(run.ID)
+	if status != http.StatusOK || !exists || stored.Result != `{"summary":"initial"}` || finished.Usage == nil ||
+		finished.ProviderVersion != "1.2.3" {
+		t.Fatalf("initial execution evidence = %#v, stored %#v, HTTP %d", finished, stored, status)
 	}
 	if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusAccepted {
 		t.Fatalf("authorize candidate returned HTTP %d", response.Code)
@@ -362,19 +370,25 @@ func TestPublishOnlyResultPreservesExecutionEvidenceWhenFieldsAreMissing(t *test
 		`","branch_pushed":true,"verification":"passed"}`
 	harness.failPullCreate = true
 	finished, status = harness.finish(run.ID, publication)
-	if status != http.StatusOK || finished.Publication != publicationPullRequestFailed || finished.Result != `{"summary":"initial"}` ||
+	stored, exists = harness.store.get(run.ID)
+	if status != http.StatusOK || finished.Publication != publicationPullRequestFailed ||
+		!exists || stored.Result != `{"summary":"initial"}` ||
 		finished.ResultAttempt != 1 || finished.Usage == nil || finished.Usage.InputTokens != 120 ||
 		finished.Usage.OutputTokens != 30 || finished.ProviderVersion != "1.2.3" || finished.CommitTreeSHA != treeSHA {
-		t.Fatalf("publication lost execution evidence: %#v, HTTP %d", finished, status)
+		t.Fatalf("publication lost execution evidence: %#v, stored %#v, HTTP %d", finished, stored, status)
 	}
 	harness.failPullCreate = false
 	response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", `{"candidate_sha":"`+testCommit+`"}`)
 	var published agentRun
 	if err := json.NewDecoder(response.Body).Decode(&published); err != nil || response.Code != http.StatusOK ||
-		published.Publication != publicationPublished || published.Result != `{"summary":"initial"}` ||
+		published.Publication != publicationPublished ||
 		published.ResultAttempt != 1 || published.Usage == nil || published.Usage.InputTokens != 120 ||
 		published.Usage.OutputTokens != 30 || published.ProviderVersion != "1.2.3" || published.CommitTreeSHA != treeSHA {
 		t.Fatalf("publication retry lost execution evidence: %#v, HTTP %d, %v", published, response.Code, err)
+	}
+	stored, exists = harness.store.get(run.ID)
+	if !exists || stored.Result != `{"summary":"initial"}` {
+		t.Fatalf("publication retry lost typed result: %#v", stored)
 	}
 }
 
