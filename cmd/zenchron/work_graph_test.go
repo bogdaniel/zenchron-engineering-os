@@ -354,6 +354,12 @@ func TestReviewedCandidateWaitsForExactHumanPublicationAuthorization(t *testing.
 		authorized.PublicationAuthorizations[0].PlanHash != graph.PlanHash {
 		t.Fatalf("publication authority record = %#v", authorized.PublicationAuthorizations)
 	}
+	authorizationRevision := authorized.PublicationAuthorizations[0].GraphRevision
+	if current := harness.graph(); current.Revision <= authorizationRevision || current.PlanRevision != graph.PlanRevision ||
+		current.PlanHash != graph.PlanHash {
+		t.Fatalf("publication changed the WorkGraph contract or failed to advance its projection: authorized at %d, current %#v",
+			authorizationRevision, current)
+	}
 	command := harness.claimUnit("integrate")
 	if !command.PublishPullRequest || command.PublishCommit != commit(4) {
 		t.Fatalf("authorized publication command = %#v", command)
@@ -366,6 +372,7 @@ func TestReviewedCandidateWaitsForExactHumanPublicationAuthorization(t *testing.
 	report, _ := harness.deliveryReport(graph.ID)
 	if report.PublicationAuthority == nil || report.PublicationAuthority.By != localOperator ||
 		report.PublicationAuthority.PlanHash != graph.PlanHash || report.PublicationAuthority.PlanRevision != graph.PlanRevision ||
+		report.PublicationAuthority.GraphRevision != authorizationRevision || report.GraphRevision <= authorizationRevision ||
 		slices.Contains(report.UnknownEvidence, "publication_authority") {
 		t.Fatalf("publication authority report = %#v, unknown=%v", report.PublicationAuthority, report.UnknownEvidence)
 	}
