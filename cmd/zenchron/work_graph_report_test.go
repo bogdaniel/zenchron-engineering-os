@@ -417,6 +417,35 @@ func TestWorkGraphReportMarksMissingApprovedPlanUnknown(t *testing.T) {
 	}
 }
 
+func TestWorkGraphReportPreservesHistoricalPlanApprovalAfterSupersession(t *testing.T) {
+	harness := newGraphHarness(t)
+	firstPlan, response := harness.propose(harness.twoProducerPlan())
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("propose first plan returned HTTP %d", response.StatusCode)
+	}
+	firstGraph, status := harness.approve(firstPlan.Revision)
+	if status != http.StatusCreated {
+		t.Fatalf("approve first plan returned HTTP %d", status)
+	}
+	if response := harness.call(http.MethodPost, "/api/v1/work-graphs/"+firstGraph.ID+"/cancel", ""); response.Code >= http.StatusBadRequest {
+		t.Fatalf("cancel first graph returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+	secondPlan, response := harness.propose(harness.twoProducerPlan())
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("propose second plan returned HTTP %d", response.StatusCode)
+	}
+	if _, status := harness.approve(secondPlan.Revision); status != http.StatusCreated {
+		t.Fatalf("approve second plan returned HTTP %d", status)
+	}
+
+	report, body := harness.deliveryReport(firstGraph.ID)
+	if report.ApprovedPlan == nil || report.ApprovedPlan.Revision != firstPlan.Revision ||
+		report.ApprovedPlan.Status != planSuperseded || report.ApprovedPlan.ApprovedBy == "" ||
+		report.ApprovedPlan.ApprovedAt == nil || report.Measurements.HumanActions != 1 {
+		t.Fatalf("historical plan approval was not preserved: %s", body)
+	}
+}
+
 func TestWorkGraphReportIsHiddenFromOtherCallers(t *testing.T) {
 	harness := newAccessHarness(t)
 	if harness.heartbeat(aliceWorkerID, aliceToken, projectJSON(projectA, repositoryA)) != http.StatusOK {
