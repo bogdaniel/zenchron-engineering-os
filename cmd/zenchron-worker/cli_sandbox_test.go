@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -100,6 +101,15 @@ func TestConfinementSelfTestStopsDescendantsOnCancellation(t *testing.T) {
 		}
 		t.Fatal("cancelled confinement probe did not stop its descendant promptly")
 	}
+	contents, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var childPID int
+	if _, err := fmt.Sscanf(string(contents), "%d", &childPID); err != nil {
+		t.Fatal(err)
+	}
+	waitForProcessExit(t, childPID)
 }
 
 func TestProviderLatchesConfirmedSandboxEscapeAtContextExpiry(t *testing.T) {
@@ -255,6 +265,20 @@ func TestCodexSignedOutStatusUsesItsExitAndOutput(t *testing.T) {
 	}
 }
 
+func TestClaudeSuccessfulMalformedAuthStatusIsUnavailable(t *testing.T) {
+	directory := t.TempDir()
+	script := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo fake-claude; exit 0; fi\necho not-json\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(directory, "claude"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	provider := newCLIProviders()[workerapi.ProviderClaude]
+	provider.detect(context.Background())
+	if status := provider.status(context.Background()); status.Ready || status.Reason != "auth status unavailable" {
+		t.Fatalf("Claude malformed auth status = %#v", status)
+	}
+}
+
 func TestProviderProbeStopsDescendantsWhenCancelled(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "path with spaces", "child.pid")
 	if err := os.MkdirAll(filepath.Dir(pidFile), 0o700); err != nil {
@@ -296,12 +320,28 @@ func TestProviderProbeStopsDescendantsWhenCancelled(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("cancelled probe waited on a descendant's inherited output pipes")
 	}
-	processes, err := listProcesses()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, running := processes[childPID]; running {
-		t.Fatalf("probe descendant %d is still running", childPID)
+	waitForProcessExit(t, childPID)
+}
+
+func waitForProcessExit(t *testing.T, pid int) {
+	t.Helper()
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		err := syscall.Kill(pid, 0)
+		if errors.Is(err, syscall.ESRCH) {
+			return
+		}
+		if err != nil {
+			t.Fatalf("check descendant process %d: %v", pid, err)
+		}
+		select {
+		case <-timer.C:
+			t.Fatalf("cancelled probe descendant %d is still running", pid)
+		case <-ticker.C:
+		}
 	}
 }
 

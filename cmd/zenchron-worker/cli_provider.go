@@ -206,7 +206,7 @@ func authReadinessReason(providerID string, output []byte, err error) string {
 		}
 		return "auth status unavailable"
 	}
-	return "not signed in"
+	return "auth status unavailable"
 }
 
 func (provider *cliProvider) setReadiness(ready, sandboxVerified bool, reason string) {
