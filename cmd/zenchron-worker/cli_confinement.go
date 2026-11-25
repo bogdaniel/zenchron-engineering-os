@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"syscall"
 )
 
 // sharedDataRoots are where operating systems keep other users' files and mounted volumes. They are
@@ -55,6 +56,8 @@ func confidentialRoots(worktreeRoot string, projects []discoveredProject) []stri
 
 const confinementCanary = "zenchron-confinement-canary"
 
+var errConfinementViolation = errors.New("sandbox confinement violation")
+
 // verifyCodexConfinement runs one shell command under Codex's own sandbox with the same filesystem
 // profile a run gets, and fails unless the sandbox let it write inside the workspace, refused a write
 // outside it, and refused to read a denied file next to it. It needs no model call. Passing arguments
@@ -80,15 +83,23 @@ func verifyCodexConfinement(ctx context.Context, binary string) error {
 		"-c", "permissions.zenchron.filesystem="+codexFilesystemProfile(workspace, true), "--",
 		"/bin/sh", "-c", `cat "$1"; echo x > "$2"; echo x > "$3"`, "sh", secret, outside, inside)
 	probe.Dir, probe.Env = workspace.path, providerEnvironment(os.Environ())
-	output, _ := probe.CombinedOutput()
-	if _, err := os.Stat(inside); err != nil {
-		return fmt.Errorf("codex sandbox self-test: the sandboxed command could not write inside the workspace: %w", err)
+	ownProcessGroup(probe)
+	probe.WaitDelay = workerHeartbeatInterval
+	output, runErr := probe.CombinedOutput()
+	if probe.Process != nil {
+		_ = syscall.Kill(-probe.Process.Pid, syscall.SIGKILL)
 	}
 	if bytes.Contains(output, []byte(confinementCanary)) {
-		return errors.New("codex sandbox self-test: the sandbox let a command read a denied file")
+		return fmt.Errorf("%w: codex sandbox self-test let a command read a denied file", errConfinementViolation)
 	}
 	if _, err := os.Stat(outside); !errors.Is(err, os.ErrNotExist) {
-		return errors.New("codex sandbox self-test: the sandbox let a command write outside the workspace")
+		return fmt.Errorf("%w: codex sandbox self-test let a command write outside the workspace", errConfinementViolation)
+	}
+	if runErr != nil {
+		return fmt.Errorf("run codex sandbox self-test: %w", runErr)
+	}
+	if _, err := os.Stat(inside); err != nil {
+		return fmt.Errorf("codex sandbox self-test: the sandboxed command could not write inside the workspace: %w", err)
 	}
 	return nil
 }

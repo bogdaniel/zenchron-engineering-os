@@ -26,7 +26,7 @@ func liveProvider(t *testing.T, id string) *cliProvider {
 	}
 	provider := newCLIProviders()[id]
 	provider.detect(context.Background())
-	if !provider.ready {
+	if !provider.readyForRuns() {
 		t.Skipf("%s is not installed and ready on this machine: %s", id, provider.reason)
 	}
 	return provider
