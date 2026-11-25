@@ -23,6 +23,7 @@ func TestPublicationPassIsBoundToTheReviewedCommitAndAFailedPushIsRetried(t *tes
 	}
 	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.", Result: `{"integration":{}}`})
 	harness.verdict(harness.claimUnit("check"), commit(4), `{"review":{"verdict":"accept"}}`)
+	harness.authorizePublication(integration.ID, commit(4))
 
 	// The worker is told the one commit it may push, and refuses any other before pushing.
 	publication := harness.claimUnit("integrate")
@@ -79,6 +80,10 @@ func TestCancelledQueuedPublicationFailsItsWorkGraphUnit(t *testing.T) {
 	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
 		Result: "{\"integration\":{}}"})
 	harness.verdict(harness.claimUnit("check"), commit(4), "{\"review\":{\"verdict\":\"accept\"}}")
+	if queued, exists := harness.store.get(integration.ID); !exists || queued.Status != "succeeded" {
+		t.Fatalf("candidate was queued for publication before authorization: %#v", queued)
+	}
+	harness.authorizePublication(integration.ID, commit(4))
 	queued, exists := harness.store.get(integration.ID)
 	if !exists || queued.Status != "queued" || queued.Attempts != 1 {
 		t.Fatalf("publication run = exists %t status %q attempt %d", exists, queued.Status, queued.Attempts)
@@ -178,13 +183,30 @@ func TestPlansAndGraphsNeedTheRepositoryGrantNotOnlyTheObjective(t *testing.T) {
 
 func TestUnitIsNotReportedBlockedWhileItsPullRequestIsBeingCreated(t *testing.T) {
 	harness := newGraphHarness(t)
-	harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID), unitJSON("integrate", unitIntegrate, "", "api")))
+	harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID), unitJSON("integrate", unitIntegrate, "", "api"),
+		unitJSON("check", unitReview, harness.reviewer.ID, "integrate")))
 	harness.handOff(harness.claimUnit("api"), commit(1), "api")
 	integration := harness.claimUnit("integrate")
+	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Result: `{"integration":{}}`})
+	harness.verdict(harness.claimUnit("check"), commit(4), `{"review":{"verdict":"accept"}}`)
+	harness.authorizePublication(integration.ID, commit(4))
+	publication := harness.claimUnit("integrate")
+	graphID := harness.graph().ID
 	var during workGraph
-	harness.duringPullCreate = func() { during = harness.graph() }
-	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
+	var cancelStatus int
+	harness.duringPullCreate = func() {
+		current, exists := harness.store.get(integration.ID)
+		if !exists || !current.Publishing {
+			t.Error("authorized publication did not hold its in-flight barrier")
+		}
+		cancelStatus = harness.call(http.MethodPost, "/api/v1/work-graphs/"+graphID+"/cancel", "").Code
+		during = harness.graph()
+	}
+	harness.report(publication, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
 		BranchPushed: true, Result: `{"integration":{}}`})
+	if cancelStatus != http.StatusConflict {
+		t.Fatalf("cancellation during authorized PR creation returned HTTP %d, want %d", cancelStatus, http.StatusConflict)
+	}
 	if unit := during.unit("integrate"); unit.State != unitWaiting || unit.Reason != "Creating the pull request." || during.Status != graphActive {
 		t.Fatalf("while GitHub was answering: graph %s, integrate %s %q", during.Status, unit.State, unit.Reason)
 	}
@@ -193,20 +215,65 @@ func TestUnitIsNotReportedBlockedWhileItsPullRequestIsBeingCreated(t *testing.T)
 	}
 }
 
+func TestGraphCancellationIsRejectedDuringAuthorizedPullRequestRetry(t *testing.T) {
+	harness := newGraphHarness(t)
+	harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID),
+		unitJSON("integrate", unitIntegrate, "", "api"), unitJSON("check", unitReview, harness.reviewer.ID, "integrate")))
+	harness.handOff(harness.claimUnit("api"), commit(1), "api")
+	integration := harness.claimUnit("integrate")
+	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Result: `{"integration":{}}`})
+	harness.verdict(harness.claimUnit("check"), commit(4), `{"review":{"verdict":"accept"}}`)
+	graphID := harness.graph().ID
+	harness.authorizePublication(integration.ID, commit(4))
+	publication := harness.claimUnit("integrate")
+	harness.mu.Lock()
+	harness.failPullCreate = true
+	harness.mu.Unlock()
+	harness.report(publication, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
+		BranchPushed: true, Result: `{"integration":{}}`})
+	if run, _ := harness.store.get(integration.ID); run.Publication != publicationPullRequestFailed || run.Publishing {
+		t.Fatalf("failed initial publication = %#v", run)
+	}
+	harness.mu.Lock()
+	harness.failPullCreate = false
+	harness.mu.Unlock()
+
+	var cancelStatus int
+	harness.duringPullCreate = func() {
+		cancelStatus = harness.call(http.MethodPost, "/api/v1/work-graphs/"+graphID+"/cancel", "").Code
+	}
+	response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+integration.ID+"/publish",
+		fmt.Sprintf(`{"candidate_sha":%q}`, commit(4)))
+	var retried agentRun
+	if err := json.NewDecoder(response.Body).Decode(&retried); err != nil || response.Code != http.StatusOK || retried.PullRequestURL == "" {
+		t.Fatalf("authorized PR retry = HTTP %d, run %#v, decode error %v", response.Code, retried, err)
+	}
+	if cancelStatus != http.StatusConflict {
+		t.Fatalf("cancellation during PR creation returned HTTP %d, want %d", cancelStatus, http.StatusConflict)
+	}
+	if graph := harness.graph(); graph.Status == graphCancelled {
+		t.Fatalf("work graph was cancelled while its authorized PR was being created: %#v", graph)
+	}
+}
+
 func TestPublicationPersistenceFailureReleasesUpdateBarrier(t *testing.T) {
 	harness := newGraphHarness(t)
 	harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID),
-		unitJSON("integrate", unitIntegrate, "", "api")))
+		unitJSON("integrate", unitIntegrate, "", "api"), unitJSON("check", unitReview, harness.reviewer.ID, "integrate")))
 	harness.handOff(harness.claimUnit("api"), commit(1), "api")
 	integration := harness.claimUnit("integrate")
+	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Result: `{"integration":{}}`})
+	harness.verdict(harness.claimUnit("check"), commit(4), `{"review":{"verdict":"accept"}}`)
+	harness.authorizePublication(integration.ID, commit(4))
+	publication := harness.claimUnit("integrate")
 	statePath := harness.store.path
 	failedPath := filepath.Join(t.TempDir(), "missing", "agent-runs.json")
 	harness.duringPullCreate = func() {
 		harness.store.path = failedPath
 	}
-	result, _ := json.Marshal(workerapi.AgentRunResult{Status: "succeeded", Attempts: integration.Attempts,
+	result, _ := json.Marshal(workerapi.AgentRunResult{Status: "succeeded", Attempts: publication.Attempts,
 		CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.", BranchPushed: true,
-		TerminationReason: workerapi.TerminationCompleted, Result: `{"integration":{}}`})
+		TerminationReason: workerapi.TerminationCompleted})
 	if _, status := harness.finish(integration.ID, string(result)); status != http.StatusInternalServerError {
 		t.Fatalf("finish after the post-publication write failure returned HTTP %d", status)
 	}
@@ -239,5 +306,17 @@ func TestPublicationPersistenceFailureReleasesUpdateBarrier(t *testing.T) {
 	}
 	if restarted.items[integration.ID].Publishing {
 		t.Fatal("recovered run was marked as publishing")
+	}
+	harness.duringPullCreate = nil
+	harness.restart()
+	response = harness.call(http.MethodPost, "/api/v1/agent-runs/"+integration.ID+"/publish",
+		fmt.Sprintf(`{"candidate_sha":%q}`, commit(4)))
+	var published agentRun
+	if err := json.NewDecoder(response.Body).Decode(&published); err != nil || response.Code != http.StatusOK ||
+		published.Publication != publicationPublished || published.PullRequestURL == "" {
+		t.Fatalf("publication retry after restart = HTTP %d, run %#v, decode error %v", response.Code, published, err)
+	}
+	if harness.pullCreates != 1 {
+		t.Fatalf("restart retry created %d pull requests, want the already-created pull request to be reused", harness.pullCreates)
 	}
 }

@@ -119,12 +119,18 @@ func (store *agentRunStore) recordReviewLocked(
 	if !reviewableAgentRun(*item) {
 		return http.StatusConflict, "only completed agent runs can be reviewed"
 	}
+	if requestChanges && item.Publishing {
+		return http.StatusConflict, "pull request publication is in progress"
+	}
 	if len(item.ReviewComments) >= maxAgentRunComments {
 		return http.StatusConflict, "agent run review history is full"
 	}
 	canQueue := requestChanges && store.canRequestChanges(*item) && access.mayDispatchTo(item.WorkerID)
 	if requestChanges && !canQueue && requireQueue {
 		return http.StatusConflict, "agent run cannot accept another code-change pass"
+	}
+	if canQueue && item.GraphID != "" && store.graphPublicationAttemptActiveLocked(item.GraphID) {
+		return http.StatusConflict, "a reviewed WorkGraph candidate is being published; retry the change request afterward"
 	}
 	item.ReviewComments = append(item.ReviewComments, agentRunComment{
 		Body: comment, RequestChanges: requestChanges, CreatedAt: time.Now().UTC(),
@@ -139,7 +145,7 @@ func (store *agentRunStore) recordReviewLocked(
 // requeue returns a finished run to the queue for another pass on the same branch and worktree.
 func (item *agentRun) requeue() {
 	item.Status, item.Output, item.Error, item.CancelRequested, item.LeaseUntil = "queued", "", "", false, time.Time{}
-	item.TerminationReason, item.Verification, item.Publication = "", "", ""
+	item.TerminationReason, item.Verification, item.Publication, item.PublishOnly = "", "", "", false
 	item.UpdatedAt = time.Now().UTC()
 }
 
@@ -156,6 +162,7 @@ func (store *agentRunStore) requeueForUnit(runID string, publish bool) (agentRun
 		}
 		item.requeue()
 		item.PullRequestEnabled = item.PullRequestEnabled || publish
+		item.PublishOnly = publish
 		return 0, ""
 	})
 }

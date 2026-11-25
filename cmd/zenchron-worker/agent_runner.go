@@ -142,18 +142,26 @@ func (runner *agentRunner) run(
 		return failedRun(workerapi.TerminationWorkerError, "Project checkout is unavailable."), true
 	}
 	project := projects[index]
+	if command.PublishPullRequest && command.PublishCommit == "" {
+		return failedRun(workerapi.TerminationWorkerError, "Pull request publication has no human-authorized candidate commit."), true
+	}
+	if command.PublishOnly && !command.PublishPullRequest {
+		return failedRun(workerapi.TerminationWorkerError, "A publish-only run must carry an authorized publication request."), true
+	}
 	if command.Branch != workerapi.AgentRunBranch(command.ID) {
 		return failedRun(workerapi.TerminationWorkerError, "Run branch is not the branch authorized for this run."), true
 	}
 	// An integration run combines branches with Git and starts no provider.
 	var provider *cliProvider
 	if len(command.Merge) == 0 {
-		if !modelPattern.MatchString(command.Profile.Model) {
+		if !command.PublishOnly && !modelPattern.MatchString(command.Profile.Model) {
 			return failedRun(workerapi.TerminationWorkerError, "The agent profile's model name is not valid for a CLI provider."), true
 		}
-		provider = runner.providers[command.Profile.Provider]
-		if provider == nil || !provider.readyForRuns() {
-			return failedRun(workerapi.TerminationWorkerError, "The agent provider is not ready on this worker."), true
+		if !command.PublishOnly {
+			provider = runner.providers[command.Profile.Provider]
+			if provider == nil || !provider.readyForRuns() {
+				return failedRun(workerapi.TerminationWorkerError, "The agent provider is not ready on this worker."), true
+			}
 		}
 	}
 	root, err := worktreeRoot()
@@ -182,9 +190,11 @@ func (runner *agentRunner) attempt(
 	ctx context.Context, command workerapi.AgentRunCommand, project discoveredProject, root string,
 	workspace runWorkspace, provider *cliProvider, reporter *progressReporter,
 ) workerapi.AgentRunResult {
-	result := workerapi.AgentRunResult{ProviderVersion: "git merge"}
+	result := workerapi.AgentRunResult{}
 	if provider != nil {
 		result.ProviderVersion = provider.version
+	} else if len(command.Merge) > 0 {
+		result.ProviderVersion = "git merge"
 	}
 	worktree := workspace.path
 	lifecycleLock, err := lockWorktreeLifecycle(ctx, root, project.ID)
@@ -242,8 +252,10 @@ func (runner *agentRunner) attempt(
 		if err := validateAgentRunRemote(reconcileCtx, worktree, project.Remote, command.Branch); err != nil {
 			return failed(result, workerapi.TerminationWorkerError, "Could not validate the run branch's GitHub remote.")
 		}
-		if err := reconcileRunBranch(reconcileCtx, worktree, command.Branch, command.ID, command.Attempts); err != nil {
-			return failed(result, workerapi.TerminationWorkerError, "Could not reconcile the run branch with its published commit.")
+		if !command.PublishOnly {
+			if err := reconcileRunBranch(reconcileCtx, worktree, command.Branch, command.ID, command.Attempts); err != nil {
+				return failed(result, workerapi.TerminationWorkerError, "Could not reconcile the run branch with its published commit.")
+			}
 		}
 	}
 	workspace.owner = owner
@@ -254,6 +266,11 @@ func (runner *agentRunner) attempt(
 		result.BaseCommit = strings.TrimSpace(base)
 	}
 	reporter.emit("status", fmt.Sprintf("Isolated worktree ready on %s from %s", command.Branch, command.BaseBranch))
+	if command.PublishOnly {
+		gitCtx, cancelGit := context.WithTimeout(context.WithoutCancel(ctx), runner.limits.gitStage)
+		defer cancelGit()
+		return runner.publishCandidate(ctx, gitCtx, command, project, workspace, result, reporter)
+	}
 	if len(command.Merge) > 0 {
 		return runner.integrate(ctx, command, project, workspace, result, reporter)
 	}
@@ -289,6 +306,84 @@ func (runner *agentRunner) attempt(
 	result.Output = truncateText(reporter.redactor.clean(execution.output), maxAgentRunOutputSize)
 	result.Result = typedResult(reporter.redactor.clean(execution.output))
 	return runner.deliver(ctx, gitCtx, command, project, workspace, result, reporter)
+}
+
+func (runner *agentRunner) publishCandidate(
+	ctx, gitCtx context.Context, command workerapi.AgentRunCommand, project discoveredProject,
+	workspace runWorkspace, result workerapi.AgentRunResult, reporter *progressReporter,
+) (output workerapi.AgentRunResult) {
+	output = result
+	result.CommitSHA = command.PublishCommit
+	candidateCheckout := false
+	defer func() {
+		if candidateCheckout && gitCommand(gitCtx, "-C", workspace.path, "checkout", command.Branch).Run() != nil {
+			output = failed(output, workerapi.TerminationWorkerError,
+				"Could not restore the run branch after checking the authorized candidate.")
+		}
+	}()
+	head, err := gitOutput(gitCtx, "-C", workspace.path, "rev-parse", "HEAD")
+	if err != nil {
+		return failed(result, workerapi.TerminationWorkerError, "Could not read the human-authorized candidate checkout.")
+	}
+	dirty, statusErr := gitOutput(gitCtx, "-C", workspace.path, "status", "--porcelain")
+	if statusErr != nil || dirty != "" {
+		return failed(result, workerapi.TerminationWorkerError, "The worktree is not clean for the exact human-authorized candidate.")
+	}
+	if strings.TrimSpace(head) != command.PublishCommit {
+		if gitCommand(gitCtx, "-C", workspace.path, "checkout", "--detach", command.PublishCommit).Run() != nil {
+			return failed(result, workerapi.TerminationWorkerError, "The worktree cannot safely check out the exact human-authorized candidate.")
+		}
+		candidateCheckout = true
+		head, err = gitOutput(gitCtx, "-C", workspace.path, "rev-parse", "HEAD")
+		if err != nil || strings.TrimSpace(head) != command.PublishCommit {
+			return failed(result, workerapi.TerminationWorkerError, "The worktree does not match the exact human-authorized candidate.")
+		}
+	}
+	tree, err := gitOutput(gitCtx, "-C", workspace.path, "rev-parse", "--verify", result.CommitSHA+"^{tree}")
+	if err != nil {
+		return failed(result, workerapi.TerminationWorkerError, "Could not read the authorized candidate tree.")
+	}
+	result.CommitTreeSHA = strings.TrimSpace(tree)
+	result.Verification = runVerification(ctx, workspace, runner.config.verificationCommands(project.Remote),
+		runner.limits.verification, reporter.emit)
+	if result.Verification == workerapi.VerificationFailed {
+		return failed(result, workerapi.TerminationVerification, "Verification failed; the authorized candidate was not pushed.")
+	}
+	if _, leaseLost := reporter.state(); leaseLost || ctx.Err() != nil {
+		return result
+	}
+	checkCtx, cancelCheck := context.WithTimeout(ctx, runner.limits.gitStage)
+	defer cancelCheck()
+	dirty, statusErr = gitOutput(checkCtx, "-C", workspace.path, "status", "--porcelain")
+	diffErr := gitCommand(checkCtx, "-C", workspace.path, "diff", "--quiet", command.PublishCommit).Run()
+	if statusErr != nil || dirty != "" || diffErr != nil {
+		return failed(result, workerapi.TerminationWorkerError,
+			"Could not confirm the worktree still matches the human-authorized candidate after verification.")
+	}
+	if candidateCheckout {
+		if err := gitCommand(checkCtx, "-C", workspace.path, "checkout", command.Branch).Run(); err != nil {
+			candidateCheckout = false
+			return failed(result, workerapi.TerminationWorkerError,
+				"Could not restore the run branch after verifying the authorized candidate.")
+		}
+		candidateCheckout = false
+	}
+	push := runner.push
+	if push == nil {
+		push = pushAgentBranch
+	}
+	pushCtx, cancelPush := context.WithTimeout(context.WithoutCancel(ctx), runner.limits.gitStage)
+	defer cancelPush()
+	if err := push(pushCtx, workspace.path, project.Remote, command.Branch, result.CommitSHA); err != nil {
+		result.BranchPushFailed = true
+		reporter.emit("error", "Git could not push the authorized candidate.")
+	} else {
+		result.BranchPushed = true
+		reporter.emit("status", "Pushed the human-authorized candidate.")
+	}
+	result.Status = "succeeded"
+	result.TerminationReason = workerapi.TerminationCompleted
+	return result
 }
 
 // deliver turns a finished execution into a candidate: commit, verify, and push the run branch.

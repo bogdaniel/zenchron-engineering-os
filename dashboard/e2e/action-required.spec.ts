@@ -63,6 +63,32 @@ for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: '
     await expect(page.getByText('Which serialization should ship?')).toHaveCount(0);
     await expect(page.getByRole('textbox', { name: 'Decision for api-old' })).toBeFocused();
   });
+
+  test(`Action Required identifies and opens the exact publication candidate (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const candidate = 'd'.repeat(40);
+    const runID = '2'.repeat(32);
+    const target = graph(currentGraphID, 'integrate', '', '2026-11-02T00:00:00Z', 'active');
+    const candidateGraph = { ...target, units: target.units.map((unit) => ({ ...unit, kind: 'integrate',
+      state: 'completed', candidate, run_ids: [runID], publication_authorization_required: true })) };
+    const action = { id: `publication:${currentGraphID}:${candidate}`, kind: 'publication_authorization',
+      objective_id: objectiveID, objective_title: 'Ship usage export', plan_revision: 1, graph_id: currentGraphID,
+      unit_key: 'integrate', stage: 'Publication authorization', unit_title: 'integrate', run_id: runID,
+      subject: candidate, reason: 'The candidate passed its assigned independent review.',
+      options: ['Authorize pull request creation'], can_act: true };
+    await useLiveSession(page, [candidateGraph], [action]);
+    await page.goto('/?mode=live#overview');
+    const queue = page.getByRole('region', { name: 'Action Required' });
+    const exactAction = queue.getByRole('link').filter({ hasText: candidate });
+    await expect(exactAction).toContainText(`Candidate to authorize · ${candidate}`);
+    await expect(exactAction).not.toContainText(`Decision ${action.id}`);
+    await expect(exactAction).toHaveAttribute('href', new RegExp(`graph_id=${currentGraphID}.*publication_graph=${currentGraphID}`));
+    await page.screenshot({ path: `test-results/action-required-publication-${viewport.name}.png`, fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await exactAction.click();
+    await expect(page.getByRole('region', { name: `Work graph for ${action.objective_title}` })
+      .getByRole('button', { name: `Authorize PR creation for ${candidate.slice(0, 7)}` })).toBeVisible();
+  });
 }
 
 test('Action Required omits an empty queue and reports an unavailable queue honestly', async ({ page }) => {

@@ -144,7 +144,9 @@ Live:
 - The Objectives tab projects each linked objective's current WorkGraph, pending decisions, findings, review and
   integration states, and observed pull-request link from existing product-environment records. Its WorkGraph view
   resolves a pending decision against that exact graph and request through the existing governed API action. Opening
-  an objective shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
+  an objective shows its plan and delivery report. A reviewed, publishable integration candidate appears in Action
+  Required and the exact WorkGraph unit; its existing publish action requires a person to authorize that candidate
+  SHA before the worker pushes. Unrecorded measurements remain unknown in that report.
 - WorkGraph-linked run IDs are joined to the app shell's agent-run records to show provider-reported token totals and
   cost with explicit run coverage. Providers that do not report cost remain unknown; budgets are not recorded here.
 - The selected product's environment projection supplies the pending-decision count, decision links, current

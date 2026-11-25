@@ -16,14 +16,18 @@ flowchart LR
   ResultAPI -->|Validated result and attempt evidence| Runs
   Graphs --> Compute[work_graph_report.go<br/>pure computation]
   Runs --> Compute
+  Compute --> Authority{Exact candidate has durable human authorization?}
+  Authority -->|Yes| Recorded[Record actor, time, attempt, plan and graph revision, candidate SHA]
+  Authority -->|No| UnknownAuthority[Publication authority remains unknown]
   Compute --> GitHub{Recorded PR URL matches graph repository?}
   GitHub -->|Yes: bounded read-only lookup| API[GitHub pull request API]
-  GitHub -->|No or lookup unavailable| Unknown[Keep external PR state unknown]
+  GitHub -->|No or lookup unavailable| UnknownPR[Keep external PR state unknown]
   API -->|Validated state and head SHA| Compute
   Compute -->|GET /repos/{owner}/{repo}/commits/{sha}/check-runs| ChecksAPI[GitHub check runs API]
   ChecksAPI -->|Checks bound to the integrated SHA| Compute
   Compute --> Response[JSON response]
   Response --> ReportUI[ObjectiveDeliveryReport.tsx]
+  ReportUI -->|While expanded: refresh every 5 seconds; governed actions invalidate| Handler
   ReportUI -->|Export JSON; revoke blob URL after download dispatch| Download[Typed report download]
   Compute -.->|no writes| ReadOnly[Stores unchanged]
 ```
@@ -39,23 +43,32 @@ flowchart LR
   omitted when empty; `run_ids` is always an array. `attempts` sums the `attempts` counter of its runs. A run id
   without a stored run adds nothing. `providers` is always an array of sorted distinct strings, each containing the
   run's provider and, when recorded, a space and its provider version.
-- `approved_plan` records the approved revision, content hash, summary, approver, and approval time. Workflow identity
+- `approved_plan` records the approved revision, content hash, summary, approver, and approval time. If its durable
+  revision record is missing, the object is omitted and `unknown_evidence` names `approved_plan`; the dashboard does
+  not display a zero revision. Workflow identity
   and version come from the compiled plan and graph. Each execution reports the recorded profile and persona IDs,
-  names and versions, provider, candidate commit and its Git tree SHA when reported, worker-reported verification,
-  review verdict, publication state, PR link, attempts, and failures. Tree evidence is considered known only when the
-  successful integration run's tree accompanies the selected candidate commit. Reviewer runs expose the exact base
-  commit they inspected. Each run also names its accepted result attempt and last persisted update time; handoffs carry
+  names and versions, model from the frozen profile snapshot, provider, candidate commit and its Git tree SHA when
+  reported, worker-reported verification, review verdict, publication state, PR link, attempts, and failures. Tree
+  evidence is considered known only when the successful integration run's tree accompanies the selected candidate
+  commit. Reviewer runs expose the exact base commit they inspected. Each run also names its accepted result attempt and
+  last persisted update time; handoffs carry
   their immutable message ids, and GitHub checks carry their check-run ids. Verification belongs to that run; it
   is not an independent assurance record. `unknown_evidence` includes `policy_backed_assurance` because the current
-  WorkGraph has no authoritative policy-backed assurance record bound to a candidate.
+  WorkGraph has no authoritative policy-backed assurance record bound to a candidate. `publication_authority` is
+  recorded only when durable human authorization matches the integrated commit and approved plan revision/hash; it
+  includes the graph revision, actor, time, attempt, and source run. Worker verification and green checks do not create or imply
+  either fact. The Objective Workspace shows the authorization attempt beside its source run and revision binding.
   Handoffs, decisions and unresolved steps are shown from immutable WorkGraph messages and state.
 - `unknown_evidence` names evidence the available sources cannot establish. Candidate tree SHA remains unknown until a
-  successful integration run records it for the selected candidate. Publication authority remains unknown. Current PR
+  successful integration run records it for the selected candidate. Publication authority remains unknown until an
+  exact candidate-bound authorization is durably recorded. Current PR
   state is read from GitHub only when the recorded canonical PR URL matches the graph repository; unavailable or
   invalid responses leave it unknown. The report includes the observed state, draft/merged flags, head SHA, observation
   time, and whether the PR head matches the integrated candidate when one is recorded. GitHub checks are read by the
   exact integrated candidate SHA and include their own observation time; unavailable or mismatched check results stay
   unknown. This read does not change stored graph or run state.
+- The browser fetches the report when opened and refreshes it every five seconds while expanded. Objective actions
+  invalidate the same report query, so decisions and plan changes appear without presenting a stale snapshot.
 - Top-level `measurements` contains:
   - `unit_count`: number of units.
   - `run_count`: number of all run ids, including ids without a stored run.
@@ -66,7 +79,9 @@ flowchart LR
   - `review_rounds`: number of run ids belonging to review units.
   - `findings`, `decisions_requested`, and `decisions_resolved`: counts of messages of type `finding`,
     `decision_request`, and `decision_resolution`, respectively.
-  - `human_actions`: resolved decisions plus the recorded plan approval. `human_actions_complete` is false because
+  - `human_actions`: resolved decisions, plan approvals proven by durable approver/time and graph/revision
+    binding, and explicit publication authorizations. A later superseded status does not erase an earlier approval.
+    `human_actions_complete` is false because
     the system does not record every human action.
   - `remediation_passes`: for each produce unit, each attempt after its first when a finding addressed to that unit
     was created between the previous attempt's start and its own start.
