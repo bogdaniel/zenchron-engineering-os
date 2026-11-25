@@ -18,11 +18,14 @@ func TestProductKnowledgePromotionIsAuditableIsolatedAndRestartSafe(t *testing.T
 	repository := "github.com/acme/platform"
 	productID, otherProductID := strings.Repeat("a", 32), strings.Repeat("b", 32)
 	otherProjectID := strings.Repeat("c", 32)
-	products.items[productID] = product{ID: productID, Name: "Alpha", RepositoryIDs: []string{testProjectID},
-		CreatedBy: "engineer", AccessRepositories: map[string]string{testProjectID: repository},
+	otherRepository := "github.com/acme/other"
+	harness.store.registry.projects["worker-b:"+otherProjectID] = projectRecord{ID: otherProjectID,
+		GitRemote: otherRepository, WorkerID: "worker-b", LastSeen: time.Now().UTC()}
+	products.items[productID] = product{ID: productID, Name: "Alpha", RepositoryIDs: []string{testProjectID, otherProjectID},
+		CreatedBy: "engineer", AccessRepositories: map[string]string{testProjectID: repository, otherProjectID: otherRepository},
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	products.items[otherProductID] = product{ID: otherProductID, Name: "Beta", RepositoryIDs: []string{otherProjectID},
-		CreatedBy: "bob", AccessRepositories: map[string]string{otherProjectID: "github.com/acme/other"},
+		CreatedBy: "bob", AccessRepositories: map[string]string{otherProjectID: otherRepository},
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	if err := products.persistLocked(); err != nil {
 		t.Fatal(err)
@@ -55,6 +58,13 @@ func TestProductKnowledgePromotionIsAuditableIsolatedAndRestartSafe(t *testing.T
 	if !ok || finding.RunID == "" {
 		t.Fatalf("review finding lacks execution provenance: %#v", finding)
 	}
+	harness.store.graphs.mu.Lock()
+	for index := range harness.store.graphs.graphs[graph.ID].Messages {
+		if harness.store.graphs.graphs[graph.ID].Messages[index].ID == finding.ID {
+			harness.store.graphs.graphs[graph.ID].Messages[index].Commit = strings.ToUpper(finding.Commit)
+		}
+	}
+	harness.store.graphs.mu.Unlock()
 	request := func(method, path, body, user string, admin bool, repositories ...string) *httptest.ResponseRecorder {
 		t.Helper()
 		if len(repositories) == 0 {
@@ -74,7 +84,8 @@ func TestProductKnowledgePromotionIsAuditableIsolatedAndRestartSafe(t *testing.T
 	var entry productKnowledge
 	if err := json.Unmarshal([]byte(createBody), &entry); err != nil || create.Code != http.StatusCreated ||
 		entry.Scope != productKnowledgeProduct || entry.ProductID != productID || entry.GraphID != graph.ID ||
-		entry.MessageID != finding.ID || entry.RunID != finding.RunID || entry.PlanHash != graph.PlanHash || entry.CreatedBy != "engineer" {
+		entry.MessageID != finding.ID || entry.RunID != finding.RunID || entry.PlanHash != graph.PlanHash || entry.CreatedBy != "engineer" ||
+		entry.Candidate != strings.ToLower(finding.Commit) {
 		t.Fatalf("record product knowledge: HTTP %d %s, entry %#v, decode %v", create.Code, createBody, entry, err)
 	}
 	sourceView := request(http.MethodGet, "/api/v1/products/"+productID+"/environment", "", "engineer", false)
@@ -82,13 +93,28 @@ func TestProductKnowledgePromotionIsAuditableIsolatedAndRestartSafe(t *testing.T
 		!strings.Contains(sourceView.Body.String(), finding.ID) || strings.Contains(sourceView.Body.String(), `"source_unavailable":true`) {
 		t.Fatalf("authorized source provenance was not available in the product environment: HTTP %d %s", sourceView.Code, sourceView.Body.String())
 	}
-	if _, _, _, _, visible := harness.store.graphs.productContext(productID, requestAccess{enforced: true,
-		user: "bob", repositories: []string{"github.com/acme/other"}}); visible {
-		t.Fatal("another product's repository grant exposed the source product context")
+	hiddenSource := request(http.MethodGet, "/api/v1/products/"+productID+"/environment", "", "bob", false, otherRepository)
+	var hiddenEnvironment productEnvironment
+	if err := json.NewDecoder(hiddenSource.Body).Decode(&hiddenEnvironment); err != nil || hiddenSource.Code != http.StatusOK ||
+		len(hiddenEnvironment.Knowledge) != 0 || strings.Contains(hiddenSource.Body.String(), content) ||
+		strings.Contains(hiddenSource.Body.String(), graph.ID) || strings.Contains(hiddenSource.Body.String(), finding.ID) ||
+		strings.Contains(hiddenSource.Body.String(), entry.ID) {
+		t.Fatalf("product environment exposed knowledge with a hidden source: HTTP %d %s", hiddenSource.Code, hiddenSource.Body.String())
+	}
+	otherRepositoryPlanBody := strings.Replace(harness.reviewedPlan(), testProjectID, otherProjectID, 1)
+	otherRepositoryPlan, response := harness.propose(otherRepositoryPlanBody)
+	if response.StatusCode != http.StatusCreated || strings.Contains(otherRepositoryPlan.ProductContext, content) ||
+		strings.Contains(otherRepositoryPlan.ProductContext, graph.ID) || strings.Contains(otherRepositoryPlan.ProductContext, finding.ID) {
+		t.Fatalf("product knowledge crossed into another repository plan: HTTP %d, context %q",
+			response.StatusCode, otherRepositoryPlan.ProductContext)
+	}
+	if _, context, _, _, visible := harness.store.graphs.productContext(productID, requestAccess{enforced: true,
+		user: "bob", repositories: []string{otherRepository}}, otherRepository); !visible || strings.Contains(context, content) {
+		t.Fatalf("another repository's worker context included unpromoted source knowledge: %q, visible %t", context, visible)
 	}
 	crossProduct := request(http.MethodPost, "/api/v1/products/"+otherProductID+"/knowledge",
 		fmt.Sprintf(`{"content":%q,"graph_id":%q,"message_id":%q}`, "cross-product", graph.ID, finding.ID),
-		"bob", false, "github.com/acme/other")
+		"bob", false, otherRepository)
 	if crossProduct.Code != http.StatusNotFound {
 		t.Fatalf("another product accepted a private finding as knowledge: HTTP %d", crossProduct.Code)
 	}
@@ -107,7 +133,7 @@ func TestProductKnowledgePromotionIsAuditableIsolatedAndRestartSafe(t *testing.T
 	if rejected := request(http.MethodPost, "/api/v1/products/"+productID+"/knowledge/"+entry.ID+"/promote", "", "", false); rejected.Code != http.StatusForbidden {
 		t.Fatalf("promotion without a recorded actor returned HTTP %d", rejected.Code)
 	}
-	if _, context, _, _, ok := harness.store.graphs.productContext(otherProductID, requestAccess{}); !ok || strings.Contains(context, content) {
+	if _, context, _, _, ok := harness.store.graphs.productContext(otherProductID, requestAccess{}, otherRepository); !ok || strings.Contains(context, content) {
 		t.Fatalf("unpromoted product knowledge crossed product scope: %q, exists %t", context, ok)
 	}
 	if response := request(http.MethodGet, "/api/v1/products/"+otherProductID+"/environment", "", "bob", false, "github.com/acme/other"); response.Code != http.StatusOK ||
@@ -126,14 +152,21 @@ func TestProductKnowledgePromotionIsAuditableIsolatedAndRestartSafe(t *testing.T
 		!strings.Contains(replay.Body.String(), promoted.ID) {
 		t.Fatalf("promotion replay was not idempotent: HTTP %d %s", replay.Code, replay.Body.String())
 	}
-	if _, context, productRevision, organizationRevision, ok := harness.store.graphs.productContext(otherProductID, requestAccess{}); !ok ||
+	if _, context, productRevision, organizationRevision, ok := harness.store.graphs.productContext(otherProductID, requestAccess{}, otherRepository); !ok ||
 		productRevision != 0 || organizationRevision != 1 || !strings.Contains(context, promoted.ID) || !strings.Contains(context, content) {
 		t.Fatalf("explicit organization promotion is missing from another product context: %q, exists %t", context, ok)
 	}
-	if response := request(http.MethodGet, "/api/v1/products/"+otherProductID+"/environment", "", "bob", false, "github.com/acme/other"); response.Code != http.StatusOK ||
-		!strings.Contains(response.Body.String(), `"scope":"organization"`) ||
-		!strings.Contains(response.Body.String(), `"source_unavailable":true`) {
-		t.Fatalf("organization knowledge provenance was not safely projected: HTTP %d %s", response.Code, response.Body.String())
+	environmentResponse := request(http.MethodGet, "/api/v1/products/"+otherProductID+"/environment", "", "bob", false, otherRepository)
+	var organizationEnvironment productEnvironment
+	if err := json.NewDecoder(environmentResponse.Body).Decode(&organizationEnvironment); err != nil || environmentResponse.Code != http.StatusOK ||
+		len(organizationEnvironment.Knowledge) != 1 || organizationEnvironment.Knowledge[0].ID != promoted.ID ||
+		organizationEnvironment.Knowledge[0].Scope != productKnowledgeOrganization ||
+		organizationEnvironment.Knowledge[0].GraphID != "" || organizationEnvironment.Knowledge[0].MessageID != "" ||
+		organizationEnvironment.Knowledge[0].PromotedFromID != "" ||
+		!organizationEnvironment.Knowledge[0].SourceUnavailable || organizationEnvironment.Knowledge[0].Content != content ||
+		strings.Contains(environmentResponse.Body.String(), entry.ID) || strings.Contains(environmentResponse.Body.String(), graph.ID) ||
+		strings.Contains(environmentResponse.Body.String(), finding.ID) {
+		t.Fatalf("organization knowledge provenance was not safely projected: HTTP %d %s", environmentResponse.Code, environmentResponse.Body.String())
 	}
 	if !validStoredProduct(products.items[productID]) ||
 		!validProductKnowledge(products.organizationKnowledge, products.organizationKnowledgeRevision, productKnowledgeOrganization) {
@@ -165,7 +198,7 @@ func TestProductKnowledgePromotionIsAuditableIsolatedAndRestartSafe(t *testing.T
 	if canceled := harness.call(http.MethodPost, "/api/v1/work-graphs/"+graph.ID+"/cancel", ""); canceled.Code != http.StatusOK {
 		t.Fatalf("cancel the source graph's remaining test runs: HTTP %d", canceled.Code)
 	}
-	if _, context, productRevision, organizationRevision, ok := harness.store.graphs.productContext(otherProductID, requestAccess{}); !ok ||
+	if _, context, productRevision, organizationRevision, ok := harness.store.graphs.productContext(otherProductID, requestAccess{}, otherRepository); !ok ||
 		productRevision != 0 || organizationRevision != 1 || !strings.Contains(context, promoted.ID) {
 		t.Fatalf("promoted product context did not survive restart: %q, exists %t", context, ok)
 	}
@@ -179,7 +212,8 @@ func TestProductKnowledgePromotionIsAuditableIsolatedAndRestartSafe(t *testing.T
 	plannedContext := planned.ProductContext
 	harness.store.graphs.mu.Unlock()
 	if planned.ProductKnowledgeRevision != 0 || planned.OrganizationKnowledgeRevision != 1 ||
-		!strings.Contains(plannedContext, promoted.ID) || !strings.Contains(plannedContext, content) || !strings.Contains(plannedContext, graph.ID) {
+		!strings.Contains(plannedContext, promoted.ID) || !strings.Contains(plannedContext, content) ||
+		strings.Contains(plannedContext, graph.ID) || strings.Contains(plannedContext, finding.ID) {
 		t.Fatalf("plan did not freeze knowledge revisions, content, and provenance: %#v", planned)
 	}
 	laterContent := "A later promotion belongs to future plans."

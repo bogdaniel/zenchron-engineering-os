@@ -96,13 +96,18 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	access := accessFor(r)
+	project, online := store.runs.registry.onlineProject(strings.ToLower(input.ProjectID))
+	if !online || !access.allows(project.GitRemote) || !access.mayDispatchTo(project.WorkerID) {
+		http.Error(w, "project_id does not identify an online checkout you may dispatch work to", http.StatusConflict)
+		return
+	}
 	var linkedProduct product
 	productContext := ""
 	productKnowledgeRevision, organizationKnowledgeRevision := 0, 0
 	if item.ProductID != "" {
 		var exists bool
 		linkedProduct, productContext, productKnowledgeRevision, organizationKnowledgeRevision, exists =
-			store.productContext(item.ProductID, access)
+			store.productContext(item.ProductID, access, project.GitRemote)
 		if !exists {
 			http.Error(w, "the objective's linked product is unavailable", http.StatusConflict)
 			return
@@ -110,11 +115,6 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	}
 	if input.Plan == nil && input.WorkflowID == "" && item.ProductID != "" {
 		input.WorkflowID = linkedProduct.DefaultWorkflowID
-	}
-	project, online := store.runs.registry.onlineProject(strings.ToLower(input.ProjectID))
-	if !online || !access.allows(project.GitRemote) || !access.mayDispatchTo(project.WorkerID) {
-		http.Error(w, "project_id does not identify an online checkout you may dispatch work to", http.StatusConflict)
-		return
 	}
 	var definition *workflow
 	if input.WorkflowID != "" {

@@ -259,9 +259,9 @@ with the unit that asked, the question, and who resolved it.
   their actor remains unrecorded.
 - Configuration history belongs to the product store; it is not a second environment or evidence store. Updating
   current product values does not alter the product context or revision frozen into existing plans or WorkGraphs.
-- The history field is additive in `products.json`. A downgrade to a binary that predates the field can read the file,
-  but its next product write will discard the history; back up the data directory before downgrading across this
-  change.
+- Configuration and knowledge fields are additive in `products.json`. A downgrade to a binary that predates these
+  fields can read the file, but its next product write will discard configuration history, product and organization
+  knowledge, and promotion provenance; back up the data directory before downgrading across this change.
 - Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
 - A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
 - Product and organization knowledge are appended to the existing `products.json` store; old files load with empty

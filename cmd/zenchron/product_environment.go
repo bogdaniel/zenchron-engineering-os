@@ -147,9 +147,13 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 			MessageID: entry.MessageID, RunID: entry.RunID, Unit: entry.Unit, Candidate: entry.Candidate,
 			CreatedBy: entry.CreatedBy, CreatedAt: entry.CreatedAt, PromotedFromID: entry.PromotedFromID,
 			PromotedBy: entry.PromotedBy, PromotedAt: entry.PromotedAt}
-		if !store.productKnowledgeSourceVisible(access, entry) {
+		if !store.productKnowledgeSourceVisible(access, entry, "") {
+			if entry.Scope == productKnowledgeProduct {
+				continue
+			}
 			view.ProductID, view.ObjectiveID, view.GraphID, view.PlanHash = "", "", "", ""
 			view.MessageID, view.RunID, view.Unit, view.Candidate, view.CreatedBy = "", "", "", "", ""
+			view.PromotedFromID = ""
 			view.SourceUnavailable = true
 		}
 		knowledgeViews = append(knowledgeViews, view)
