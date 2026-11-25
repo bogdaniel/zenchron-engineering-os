@@ -1,21 +1,29 @@
 # Action Required
 
-The Live Overview lists unresolved typed WorkGraph decision requests from the existing control plane. It omits
-cancelled graphs, reports loading, empty, and unavailable states, and links each row to the specific objective, graph,
-and decision. Rows show the plan revision, unit stage, exact question, recorded waiting reason, options, and run ID;
-missing fields stay explicitly unrecorded. The destination focuses the existing authorized resolution field; no second
-authority model or queue is stored. A successful replacement-plan approval clears the old graph and decision from the
-deep link so the refreshed plan view follows the newly approved graph. Product Workspace decision links use the same
-exact deep link and label decisions in cancelled graphs as cancelled.
+The Live Overview projects the latest proposed plan approvals and unresolved typed WorkGraph decision requests from
+the existing control-plane stores through `GET /api/v1/action-required`. It omits cancelled graphs and plans outside
+the caller's existing objective/repository visibility. Plan rows carry the exact revision and focus it in the plan view;
+an unavailable revision is reported instead of silently substituting another proposal. Graph rows link to the exact
+objective, graph, and decision. Rows show objective, plan revision,
+stage/unit/run where present, exact subject, recorded waiting reason, and decision options; missing values remain
+explicitly unrecorded. The projection reports whether the current caller may act based on the same repository and
+worker-dispatch grants each existing mutation endpoint checks; otherwise the row stays available for review and names
+why its action is unavailable. Plan approval is not a separate authorization system: the existing plan endpoint
+rechecks whether the caller may start work. Graph resolution remains owned by the existing decision endpoint. A
+successful replacement-plan approval clears the old graph and decision from the deep link so the refreshed plan view
+follows the newly approved graph. Product Workspace decision links use the same exact deep link and label decisions in
+cancelled graphs as cancelled.
 
 ## Feature diagram
 
 ```mermaid
 flowchart LR
-    Link["Action Required deep link<br/>objective · tab · graph · decision"] -->|Retain selection until navigation or approval| Overview
-    Overview[Live Overview] -->|GET /api/v1/work-graphs| CP[(Existing Go control plane)]
-    CP -->|authorized durable WorkGraphs and typed decision requests| Overview
-    Overview -->|objective_id, graph_id, decision_id| Objective[Existing Objective Plan view]
+    Link["Action Required deep link<br/>objective · tab · plan revision · graph · decision"] -->|Retain selection until navigation or approval| Overview
+    Overview[Live Overview] -->|GET /api/v1/action-required| CP[(Existing Go control plane)]
+    CP -->|visible proposed plans and unresolved typed decisions| Overview
+    Overview -->|objective_id · plan revision| Objective[Existing Objective Plan view]
+    Objective -->|POST /api/v1/objectives/{id}/plans/{revision}/approve| CP
+    Overview -->|objective_id · graph_id · decision_id| Objective
     Objective -->|POST /api/v1/work-graphs/{graph}/decisions/{decision}| CP
     Product[Product Workspace] -->|GET /api/v1/products/{id}/environment| CP
     Product -->|exact decision link with graph status| Objective
@@ -27,8 +35,11 @@ flowchart LR
 
 ## Verification
 
-`cd dashboard && npm run test:e2e -- e2e/action-required.spec.ts e2e/workspace.spec.ts` checks the exact graph and
-decision context and deep link at desktop and phone sizes, focused resolution UI, cancelled-graph filtering, empty and
-error states, and Product Workspace links. `cd dashboard && npm run test:e2e -- e2e/orchestration.spec.ts --grep 'an objective plan approved in the dashboard runs through decision'`
-checks the same queue against the real control plane and worker. `go test ./cmd/zenchron -run 'TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions' -count=1`
-checks the typed graph status in the product projection.
+`cd dashboard && npm run test:e2e -- e2e/action-required.spec.ts` checks exact graph decision context, proposed-plan
+review navigation, server-authorized action guidance, desktop and phone layouts, cancelled-graph filtering, empty and
+error states, and unknown fields.
+`cd dashboard && npm run test:e2e -- e2e/orchestration.spec.ts --grep 'an objective plan approved in the dashboard runs through decision'`
+checks plan approval and graph decisions through the real control plane and worker. `go test ./cmd/zenchron -run
+'TestActionRequiredProjectsCurrentPlanAndGraphDecisionsAcrossRestart|TestActionRequiredMarksWorkerAuthorizationFromCurrentAccess|TestActionRequiredRechecksCurrentRepositoryAuthorization|TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions' -count=1`
+checks projection durability, approval removal, decision recovery, current repository and worker authorization, caller
+visibility, and product scoping.

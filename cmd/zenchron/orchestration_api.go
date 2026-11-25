@@ -22,6 +22,7 @@ func (store *workGraphStore) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/objectives/{id}/plans", store.proposePlan)
 	mux.HandleFunc("POST /api/v1/objectives/{id}/plans/{revision}/approve", store.approvePlan)
 	mux.HandleFunc("GET /api/v1/work-graphs", store.listGraphs)
+	mux.HandleFunc("GET /api/v1/action-required", store.actionRequired)
 	mux.HandleFunc("GET /api/v1/work-graphs/{id}/report", store.reportGraph)
 	mux.HandleFunc("GET /api/v1/products/{id}/environment", store.environment)
 	mux.HandleFunc("POST /api/v1/work-graphs/{id}/cancel", store.cancelGraph)
@@ -335,6 +336,7 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	now := time.Now().UTC()
+	previousPlans := slices.Clone(plans)
 	graph := &workGraph{ID: graphID, ObjectiveID: item.ID, ObjectiveTitle: item.Title, PlanRevision: plan.Revision,
 		PlanHash: plan.Hash, Revision: 1, Status: graphActive, ProjectID: project.ID, ProjectName: project.Name,
 		Repository: project.GitRemote, WorkerID: project.WorkerID, WorkerName: project.WorkerName, BaseBranch: project.Branch,
@@ -354,7 +356,7 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 	store.graphs[graph.ID] = graph
 	if err := store.persistLocked(); err != nil {
 		delete(store.graphs, graph.ID)
-		plan.Status, plan.GraphID, plan.ApprovedBy, plan.ApprovedAt = planProposed, "", "", nil
+		store.plans[item.ID] = previousPlans
 		store.mu.Unlock()
 		http.Error(w, "could not persist the work graph", http.StatusInternalServerError)
 		return

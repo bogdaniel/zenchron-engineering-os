@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Select } from '@mantine/core';
 import { graphOfObjective, useLiveOrchestration } from './orchestration';
 import type { ObjectivePlan, OrchestrationSource } from './orchestration';
@@ -27,8 +27,16 @@ function planReadinessProblems(plan: ObjectivePlan, source: OrchestrationSource)
     .filter(Boolean);
 }
 
-function PlanRevision({ plan, latest, source, live }: {
-  plan: ObjectivePlan; latest: boolean; source: OrchestrationSource; live: boolean;
+function planApprovalBlocker(plan: ObjectivePlan, source: OrchestrationSource) {
+  if (source.options.workersLoading) return 'Checking the plan’s repository worker; approval is unavailable until this finishes.';
+  if (source.options.workersFailed) return 'Worker availability could not be checked; retry before approving this plan.';
+  const workerID = source.options.projectWorkerIDs[plan.project_id];
+  const worker = source.options.workers.find((item) => item.id === workerID);
+  return worker?.status === 'online' ? '' : 'The plan’s repository worker is offline; bring it online before approval.';
+}
+
+function PlanRevision({ plan, latest, source, live, requested }: {
+  plan: ObjectivePlan; latest: boolean; source: OrchestrationSource; live: boolean; requested: boolean;
 }) {
   const [error, setError] = useState('');
   const [approving, setApproving] = useState(false);
@@ -51,11 +59,16 @@ function PlanRevision({ plan, latest, source, live }: {
   }
   const readinessChecking = plan.units.length > 0 && (source.options.agentsLoading || source.options.workersLoading);
   const readinessProblems = planReadinessProblems(plan, source);
-  return <li className="plan-revision">
+  const approvalBlocker = latest && plan.status === 'proposed' ? planApprovalBlocker(plan, source) : '';
+  return <li id={`plan-revision-${plan.revision}`} className="plan-revision" tabIndex={requested ? -1 : undefined}
+    aria-current={requested ? 'location' : undefined}>
+    {requested && <p role="status">Opened from Action Required for this exact plan revision.
+      {plan.status !== 'proposed' && ` This revision is no longer pending approval; its status is ${plan.status}.`}</p>}
     <div className="work-graph-head"><b>Revision {plan.revision}</b><StateBadge state={plan.status} />
       {plan.approved_by && <span>approved by {plan.approved_by}</span>}
       {latest && plan.status === 'proposed' && <Button size="compact-xs" color="violet" loading={approving}
-        disabled={!source.approve} title={source.readOnlyReason || undefined} onClick={() => void approve()}>
+        disabled={!source.approve || Boolean(approvalBlocker)}
+        title={source.readOnlyReason || approvalBlocker || undefined} onClick={() => void approve()}>
         Approve plan and start</Button>}
     </div>
     {plan.status === 'planning' && <p className="work-unit-reason" role="status">
@@ -68,8 +81,12 @@ function PlanRevision({ plan, latest, source, live }: {
       {plan.problems.map((problem) => <li key={problem}>{problem}</li>)}</ul>}
     {readinessChecking && <p className="work-unit-reason" role="status">Checking current CLI readiness for assigned profiles…</p>}
     {readinessProblems.length > 0 && <p className="work-unit-reason" role="status" aria-label={`CLI readiness for revision ${plan.revision}`}>
-      Current CLI readiness: {readinessProblems.join('; ')}. The plan can be approved, but its runs wait until ready.
+      Current CLI readiness: {readinessProblems.join('; ')}. {approvalBlocker
+        ? `Plan approval is unavailable: ${approvalBlocker}`
+        : 'The plan can be approved, but its runs wait until ready.'}
     </p>}
+    {approvalBlocker && readinessProblems.length === 0 &&
+      <p className="work-unit-reason" role="status">Plan approval unavailable: {approvalBlocker}</p>}
     {error && <p className="work-unit-failure" role="alert">{error}</p>}
     {plan.units.length > 0 && <ul className="work-units" aria-label={`Units of revision ${plan.revision}`}>
       {plan.units.map((unit) => <li className="work-unit" key={unit.key}>
@@ -148,8 +165,22 @@ export function ObjectivePlanPanel({ objectiveID, productID, sampleData }: {
   const live = useLiveOrchestration(!sampleData, objectiveID, productID);
   const source = sampleData ? mock : live;
   const [requestedGraphID] = useState(() => new URLSearchParams(window.location.search).get('graph_id'));
+  const [requestedPlanLink] = useState(() => {
+    const value = new URLSearchParams(window.location.search).get('plan_revision');
+    if (value === null) return { revision: null, invalid: false };
+    if (!/^[1-9]\d*$/.test(value)) return { revision: null, invalid: true };
+    const revision = Number(value);
+    return Number.isSafeInteger(revision) ? { revision, invalid: false } : { revision: null, invalid: true };
+  });
+  const requestedPlanRevision = requestedPlanLink.revision;
   const graph = source.graphs.find((item) => item.id === requestedGraphID && item.objective_id === objectiveID)
     ?? graphOfObjective(source.graphs, objectiveID);
+  useEffect(() => {
+    if (sampleData || requestedPlanRevision === null || source.plansLoading) return;
+    const target = document.getElementById(`plan-revision-${requestedPlanRevision}`);
+    target?.focus();
+    target?.scrollIntoView({ block: 'center' });
+  }, [sampleData, requestedPlanRevision, source.plans, source.plansLoading]);
   if (source.failed || source.plansFailed) return <div className="work-panel" role="tabpanel">
     <p role="alert">Could not load the plan and its work graph.</p>
     <Button size="xs" variant="subtle" onClick={source.retry}>Retry loading the plan</Button></div>;
@@ -159,9 +190,14 @@ export function ObjectivePlanPanel({ objectiveID, productID, sampleData }: {
     {graph && <><WorkGraphView graph={graph} source={source} showRunLinks={!sampleData} />
       {!sampleData && <ObjectiveDeliveryReport graphID={graph.id} />}</>}
     <h4>Plan revisions</h4>
+    {!sampleData && requestedPlanLink.invalid && <p role="alert">This plan revision link is invalid.</p>}
+    {!sampleData && requestedPlanRevision !== null && !source.plansLoading &&
+      !source.plans.some((plan) => plan.revision === requestedPlanRevision) &&
+      <p role="alert">Plan revision {requestedPlanRevision} is no longer available. Check Action Required for current decisions.</p>}
     {source.plansLoading ? <p role="status">Loading plan revisions…</p> : source.plans.length
       ? <ul className="plan-revisions">{source.plans.map((plan, index) =>
-        <PlanRevision key={plan.revision} plan={plan} latest={index === 0} source={source} live={!sampleData} />)}</ul>
+        <PlanRevision key={plan.revision} plan={plan} latest={index === 0} source={source} live={!sampleData}
+          requested={!sampleData && plan.revision === requestedPlanRevision} />)}</ul>
       : <p className="work-empty">No plan yet. Propose one to turn this objective into reviewed, integrated work.</p>}
     <h4>{source.plans.length ? 'Propose a new revision' : 'Propose a plan'}</h4>
     <ProposeForm source={source} />

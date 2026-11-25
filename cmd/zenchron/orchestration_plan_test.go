@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -104,6 +105,31 @@ func TestChangedPlanCannotReplaceAnExecutingOneAndAnUnchangedPlanNeedsNoNewAppro
 	plans := decodeList[objectivePlan](t, harness.call(http.MethodGet, "/api/v1/objectives/"+harness.objectiveID+"/plans", ""))
 	if len(plans) != 2 || plans[0].Status != planApproved || plans[1].Status != planSuperseded {
 		t.Fatalf("plan history = %#v", plans)
+	}
+}
+
+func TestFailedPlanApprovalRestoresPreviousPlanStatuses(t *testing.T) {
+	harness := newGraphHarness(t)
+	graph := harness.start(harness.twoProducerPlan())
+	if response := harness.call(http.MethodPost, "/api/v1/work-graphs/"+graph.ID+"/cancel", ""); response.Code != http.StatusOK {
+		t.Fatalf("cancel returned HTTP %d", response.Code)
+	}
+	proposed, response := harness.propose(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID),
+		unitJSON("integrate", unitIntegrate, "", "api")))
+	if response.StatusCode != http.StatusCreated || proposed.Revision != 2 {
+		t.Fatalf("propose replacement: HTTP %d, revision %d", response.StatusCode, proposed.Revision)
+	}
+
+	harness.store.graphs.path = filepath.Join(t.TempDir(), "missing", "work-graphs.json")
+	if _, status := harness.approve(proposed.Revision); status != http.StatusInternalServerError {
+		t.Fatalf("approval with unavailable persistence returned HTTP %d", status)
+	}
+
+	harness.store.graphs.mu.Lock()
+	defer harness.store.graphs.mu.Unlock()
+	plans := harness.store.graphs.plans[harness.objectiveID]
+	if len(plans) != 2 || plans[0].Status != planApproved || plans[1].Status != planProposed || plans[1].GraphID != "" {
+		t.Fatalf("failed approval left plan history inconsistent: %#v", plans)
 	}
 }
 

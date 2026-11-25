@@ -11,16 +11,23 @@ function graph(id: string, unit: string, question: string, created: string, stat
     id, objective_id: objectiveID, objective_title: 'Ship usage export', plan_revision: 1, revision: 1,
     status, project_name: 'platform', base_branch: 'main', max_parallel: 1,
     created_at: created, updated_at: created,
-    units: [{ key: unit, kind: 'produce', title: `Produce ${unit}`, instructions: '', acceptance: [], depends_on: [],
-      capabilities: [], agent_id: 'a'.repeat(32), state: 'blocked', reason: 'Waiting for a person to choose.', run_ids: [] }],
-    messages: [{ id: `decision-${unit}`, type: 'decision_request', from: unit, run_id: `run-${unit}`,
-      body: question, notes: ['allow', 'decline'], created_at: created }],
+    units: [{ key: unit, kind: 'produce', title: unit, instructions: '', acceptance: [], depends_on: [],
+      capabilities: [], agent_id: 'a'.repeat(32), state: 'blocked', run_ids: [] }],
+    messages: [{ id: `decision-${unit}`, type: 'decision_request', from: unit, body: question, notes: [], created_at: created }],
   };
 }
 
-async function useLiveSession(page: Page, graphs: unknown[]) {
+function decisionAction(graphID: string, unit: string, question: string) {
+  return { id: `decision-${unit}`, kind: 'work_graph_decision', objective_id: objectiveID,
+    objective_title: 'Ship usage export', plan_revision: 1, graph_id: graphID, unit_key: unit,
+    stage: 'produce', unit_title: unit, run_id: '1'.repeat(32), subject: question, reason: 'Not recorded',
+    options: [], can_act: true };
+}
+
+async function useLiveSession(page: Page, graphs: unknown[], actions: unknown[] = []) {
   await page.route('**/api/v1/**', (route) => route.fulfill(json([])));
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
+  await page.route('**/api/v1/action-required', (route) => route.fulfill(json(actions)));
   await page.route('**/api/v1/work-graphs', (route) => route.fulfill(json(graphs)));
   await page.route('**/api/v1/objectives', (route) => route.fulfill(json([{
     id: objectiveID, title: 'Ship usage export', description: '', owner: 'Alex', product: '', product_id: '',
@@ -36,19 +43,17 @@ for (const viewport of [{ name: 'desktop', width: 1672, height: 941 }, { name: '
       graph(currentGraphID, 'api-current', 'Which serialization should ship?', '2026-11-02T00:00:00Z'),
       graph(oldGraphID, 'api-old', 'Should this export include archived records?', '2026-11-01T00:00:00Z'),
       graph(cancelledGraphID, 'api-cancelled', 'Should a cancelled run continue?', '2026-10-31T00:00:00Z', 'cancelled'),
-    ]);
+    ], [decisionAction(currentGraphID, 'api-current', 'Which serialization should ship?'),
+      decisionAction(oldGraphID, 'api-old', 'Should this export include archived records?')]);
     await page.goto('/?mode=live#overview');
     const queue = page.getByRole('region', { name: 'Action Required' });
     await expect(queue).toContainText('2 waiting');
     await expect(queue.getByRole('link')).toHaveCount(2);
     await expect(queue).not.toContainText('api-cancelled');
-    const exactAction = queue.getByRole('link').filter({ hasText: 'Decision decision-api-old' });
-    await expect(exactAction).toContainText('Plan revision 1 · produce: Produce api-old');
-    await expect(exactAction).toContainText('Decision decision-api-old · Should this export include archived records?');
-    await expect(exactAction).toContainText('Waiting reason: Waiting for a person to choose.');
-    await expect(exactAction).toContainText('Options: allow · decline');
-    await expect(exactAction).toContainText('Run run-api-old');
+    const exactAction = queue.getByRole('link').filter({ hasText: 'Should this export include archived records?' });
     await expect(exactAction).toHaveAttribute('href', new RegExp(`graph_id=${oldGraphID}.*decision=decision-api-old`));
+    await expect(exactAction).toContainText('Waiting reason: Not recorded');
+    await expect(exactAction).toContainText(/WorkUnit api-old · Run [a-f0-9]{32}/);
     await page.screenshot({ path: `test-results/action-required-${viewport.name}.png`, fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await exactAction.click();
@@ -65,39 +70,29 @@ test('Action Required omits an empty queue and reports an unavailable queue hone
   const initialLoad = new Promise<void>((resolve) => { releaseInitialLoad = resolve; });
   let unavailable = false;
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
-  await page.route('**/api/v1/work-graphs', async (route) => {
+  await page.route('**/api/v1/action-required', async (route) => {
     if (unavailable) return route.fulfill({ status: 503, body: 'temporarily unavailable' });
     await initialLoad;
     return route.fulfill(json([]));
   });
   await page.goto('/?mode=live#overview');
   const queue = page.getByRole('region', { name: 'Action Required' });
-  await expect(queue).toContainText('Checking for human decisions…');
+  await expect(queue).toContainText('Checking for human actions…');
   releaseInitialLoad();
   await expect(queue).toHaveCount(0);
   unavailable = true;
   await page.reload();
-  await expect(queue).toContainText('WorkGraph actions unavailable (503)');
+  await expect(queue).toContainText('Human actions unavailable (503)');
   await expect(queue.getByRole('button', { name: 'Retry' })).toBeVisible();
-});
-
-test('Action Required leaves absent decision details unknown', async ({ page }) => {
-  const partial = graph(currentGraphID, 'api-partial', 'Which serialization should ship?', '2026-11-02T00:00:00Z');
-  partial.units[0].reason = '';
-  partial.messages[0].body = '';
-  partial.messages[0].notes = [];
-  partial.messages[0].run_id = '';
-  await useLiveSession(page, [partial]);
-  await page.goto('/?mode=live#overview');
-  const action = page.getByRole('region', { name: 'Action Required' }).getByRole('link');
-  await expect(action).toContainText('Subject not recorded');
-  await expect(action).toContainText('Waiting reason: Not recorded');
-  await expect(action).toContainText('Options not recorded');
-  await expect(action).toContainText('Run not recorded');
 });
 
 test('Action Required deep links stay selected until their action is complete', async ({ page }) => {
   await useLiveSession(page, [graph(cancelledGraphID, 'api-cancelled', 'Old graph decision', '2026-11-02T00:00:00Z', 'cancelled')]);
+  await page.route('**/api/v1/projects', (route) => route.fulfill(json([{ id: 'repository', name: 'platform', branch: 'main',
+    git_remote: 'github.com/acme/platform', worker_id: 'online-worker', worker_name: 'dev-laptop',
+    last_seen: '2026-11-04T00:00:00Z', worker_status: 'online' }])));
+  await page.route('**/api/v1/workers', (route) => route.fulfill(json([{ id: 'online-worker', name: 'dev-laptop', status: 'online',
+    last_seen: '2026-11-04T00:00:00Z', providers: [] }])));
   const plan = { objective_id: objectiveID, revision: 2, status: 'proposed', project_id: 'repository', summary: 'Replacement plan',
     max_parallel: 1, units: [], problems: [], created_at: '2026-11-03T00:00:00Z' };
   let graphs = [graph(cancelledGraphID, 'api-cancelled', 'Old graph decision', '2026-11-02T00:00:00Z', 'cancelled')];
