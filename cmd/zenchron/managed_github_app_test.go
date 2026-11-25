@@ -169,6 +169,9 @@ func TestCopyManagedGitHubAppKeyRejectsOversizedAndSymlinkedSources(t *testing.T
 	}
 
 	shared := writeManagedAppTestKey(t, t.TempDir(), 0o644)
+	if err := os.Chmod(shared, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := copyManagedGitHubAppKey(home, shared); err == nil || !strings.Contains(err.Error(), "private regular file") {
 		t.Fatalf("shared source key was not rejected: %v", err)
 	}
