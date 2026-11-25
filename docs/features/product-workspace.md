@@ -52,6 +52,12 @@ flowchart LR
     Environment --> Graphs[(objectives.json · work-graphs.json)]
     Store -->|"read product context, revision and default workflow"| CP
     Store -->|"append immutable configuration snapshot on change"| Store
+    User["Authenticated product knowledge caller"] -->|"POST /api/v1/products/{id}/knowledge · source graph + finding"| Knowledge["product_knowledge.go"]
+    Knowledge -->|"Append immutable product entry"| Store
+    Admin["Existing access policy administrator"] -->|"POST /api/v1/products/{id}/knowledge/{entry}/promote"| Knowledge
+    Knowledge -->|"Append organization copy with promotion actor and source ID"| Store
+    Store -->|"GET /api/v1/products/{id}/environment · scoped provenance"| Environment
+    Store -->|"Pin knowledge revisions, IDs and content in plan hash"| Graphs
     CP -->|"resolve default only for new plans; pin workflow version"| Graphs
     Graphs -->|"matching objective, revision and hash"| RunContext["planner / WorkUnit runContext"]
     Graphs -->|"durable planner-run link gates worker claim"| RunContext
@@ -231,6 +237,21 @@ with the unit that asked, the question, and who resolved it.
 - Configuration revision advances when product name, description, default workflow, or repository links change. Each
   plan pins the revision alongside its product context and the environment projection associates that revision with
   the historical WorkGraph. Older product records without the field read as revision 1.
+- Product knowledge is a human-curated reference to an exact recorded WorkGraph finding. The authenticated caller
+  must be able to read that graph, and its objective must still belong to the selected product. Agent output is never
+  promoted automatically. Entries retain the source product, objective, graph, plan hash, finding, run, unit, and
+  candidate when recorded.
+- Product knowledge is isolated by default. When an access policy is enabled, only its administrator can explicitly
+  promote a product entry; with policy disabled, the existing unrestricted local workspace requires a signed-in,
+  recorded actor. Promotion appends an immutable organization-scoped copy with its source entry ID, actor, and time.
+  Repeating the same promotion returns the existing copy. Promotion uses the current access policy; it adds no role,
+  approval engine, audit store, or second knowledge store.
+- The product environment returns both knowledge revisions and provenance. Source identifiers are redacted when the
+  viewer cannot read the exact source graph, while explicitly promoted organization content remains available.
+- A new plan freezes product and organization knowledge revisions, entry IDs, source graph/finding IDs, and curated
+  content into the existing product-context snapshot and plan hash. WorkUnits receive that pinned text as bounded
+  task data marked as untrusted instructions; edits and later promotions affect new plans only. At most eight recent
+  entries per scope, each bounded to 400 bytes, are included in a plan context.
 - Product updates append immutable configuration snapshots to the existing `products.json` record. The Live
   Configuration tab shows each recorded revision, its values, timestamp, and actor only when the request had a
   recorded signed-in actor. Repository IDs outside the current caller's grants are redacted. Older records with no
@@ -243,9 +264,11 @@ with the unit that asked, the question, and who resolved it.
   change.
 - Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
 - A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
-- Only the default workflow and fields already owned by `productStore` are currently product-scoped configuration.
-  Provenance-aware knowledge, promotion between scopes, architecture/team references, and cross-product organization
-  knowledge remain unimplemented because they require established authority/context boundaries.
+- Product and organization knowledge are appended to the existing `products.json` store; old files load with empty
+  knowledge and no migration. Organization promotion uses the configured administrator role, or the existing
+  authenticated unrestricted-local mode when no role policy is configured. This does not
+  add repository-intelligence, policy, or team/architecture owners. Architecture/team references and organization
+  policy promotion remain unsupported because their authoritative owners are not present in this runtime.
 
-Verified by `go test ./cmd/zenchron -run 'Test(ProductEnvironment|ProductConfigurationHistorySurvivesRestartWithoutInventingActors|WorkUnitContextIncludesOnlyItsLinkedProduct|PlannerReceivesLinkedProductDescription)' -count=1`,
-including product isolation, configuration history across restart, honest actor provenance, and product context delivery to planner and WorkUnits. The Playwright E2E uses route fixtures to verify the Configuration view at desktop and mobile sizes, including unknown actors, empty product history, tab layout, and Mock/Live separation.
+Verified by `go test ./cmd/zenchron -run 'Test(ProductEnvironment|ProductConfigurationHistorySurvivesRestartWithoutInventingActors|ProductKnowledge|WorkUnitContextIncludesOnlyItsLinkedProduct|PlannerReceivesLinkedProductDescription)' -count=1`,
+including product isolation, configuration and knowledge history across restart, administrator-only auditable promotion, exact-source validation, and frozen knowledge delivery to WorkUnits. The Playwright E2E uses route fixtures to verify the Configuration view at desktop and mobile sizes, including unknown actors, empty product history, tab layout, and Mock/Live separation.

@@ -25,6 +25,8 @@ func (store *workGraphStore) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/action-required", store.actionRequired)
 	mux.HandleFunc("GET /api/v1/work-graphs/{id}/report", store.reportGraph)
 	mux.HandleFunc("GET /api/v1/products/{id}/environment", store.environment)
+	mux.HandleFunc("POST /api/v1/products/{id}/knowledge", store.addProductKnowledge)
+	mux.HandleFunc("POST /api/v1/products/{id}/knowledge/{knowledge}/promote", store.promoteProductKnowledge)
 	mux.HandleFunc("POST /api/v1/work-graphs/{id}/cancel", store.cancelGraph)
 	mux.HandleFunc("POST /api/v1/work-graphs/{id}/units/{key}/retry", store.retryUnit)
 	mux.HandleFunc("POST /api/v1/work-graphs/{id}/decisions/{message}", store.resolveDecision)
@@ -93,10 +95,14 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	if !decodeJSONBody(w, r, &input) {
 		return
 	}
+	access := accessFor(r)
 	var linkedProduct product
+	productContext := ""
+	productKnowledgeRevision, organizationKnowledgeRevision := 0, 0
 	if item.ProductID != "" {
 		var exists bool
-		linkedProduct, exists = store.objectives.products.get(item.ProductID)
+		linkedProduct, productContext, productKnowledgeRevision, organizationKnowledgeRevision, exists =
+			store.productContext(item.ProductID, access)
 		if !exists {
 			http.Error(w, "the objective's linked product is unavailable", http.StatusConflict)
 			return
@@ -105,7 +111,6 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	if input.Plan == nil && input.WorkflowID == "" && item.ProductID != "" {
 		input.WorkflowID = linkedProduct.DefaultWorkflowID
 	}
-	access := accessFor(r)
 	project, online := store.runs.registry.onlineProject(strings.ToLower(input.ProjectID))
 	if !online || !access.allows(project.GitRemote) || !access.mayDispatchTo(project.WorkerID) {
 		http.Error(w, "project_id does not identify an online checkout you may dispatch work to", http.StatusConflict)
@@ -134,11 +139,10 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	plan := objectivePlan{ObjectiveID: item.ID, ProjectID: project.ID, Repository: project.GitRemote, WorkflowID: input.WorkflowID,
 		Status: planProposed, CreatedBy: access.user, CreatedAt: time.Now().UTC()}
 	if item.ProductID != "" {
-		plan.ProductContext = "Product: " + linkedProduct.Name
+		plan.ProductContext = productContext
 		plan.ProductConfigurationRevision = linkedProduct.configurationRevision()
-		if linkedProduct.Description != "" {
-			plan.ProductContext += "\nDescription: " + linkedProduct.Description
-		}
+		plan.ProductKnowledgeRevision = productKnowledgeRevision
+		plan.OrganizationKnowledgeRevision = organizationKnowledgeRevision
 	}
 	if definition != nil {
 		plan.WorkflowVersion = definition.Version
