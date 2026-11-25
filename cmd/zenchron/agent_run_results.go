@@ -217,7 +217,7 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 			store.mu.Lock()
 			current, exists := store.items[runID]
 			released := exists && current.Status == "succeeded" && current.Attempts == attempt &&
-				current.ResultAttempt == attempt && current.Publishing
+				current.Publishing
 			if released {
 				current.Publishing = false
 				store.items[runID] = current

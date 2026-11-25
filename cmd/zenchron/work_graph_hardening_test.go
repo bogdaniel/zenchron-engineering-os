@@ -273,7 +273,7 @@ func TestPublicationPersistenceFailureReleasesUpdateBarrier(t *testing.T) {
 	}
 	result, _ := json.Marshal(workerapi.AgentRunResult{Status: "succeeded", Attempts: publication.Attempts,
 		CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.", BranchPushed: true,
-		TerminationReason: workerapi.TerminationCompleted, Result: `{"integration":{}}`})
+		TerminationReason: workerapi.TerminationCompleted})
 	if _, status := harness.finish(integration.ID, string(result)); status != http.StatusInternalServerError {
 		t.Fatalf("finish after the post-publication write failure returned HTTP %d", status)
 	}
