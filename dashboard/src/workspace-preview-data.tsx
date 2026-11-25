@@ -120,6 +120,8 @@ function mockView(selected: MockProduct | undefined, quarter = defaultQuarter): 
     history: { rows: [], note: { text: 'WorkGraph history is unavailable in this preview fixture.' } },
     configurationHistory: { rows: [], complete: false,
       note: { text: 'Configuration history is unavailable in this preview fixture.' } },
+    knowledge: { rows: [], productRevision: 0, organizationRevision: 0,
+      note: { text: 'Product knowledge is unavailable in this preview fixture.' } },
     delivery: {
       ranges: Object.keys(deliveryMetrics),
       metrics: (range) => deliveryRows.map(([label, delta], row) => [label, (deliveryMetrics[range] ?? deliveryMetrics['Last 8 weeks'])[row], delta]),

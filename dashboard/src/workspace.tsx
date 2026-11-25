@@ -15,6 +15,7 @@ import type { ProductInput } from './productEditor';
 import { useMockWorkspace } from './workspace-preview-data';
 import { useLiveWorkspace } from './workspaceView';
 import { WorkspaceExecution } from './WorkspaceExecution';
+import { WorkspaceProductKnowledge } from './WorkspaceProductKnowledge';
 import { WorkspaceObjectiveStart } from './WorkspaceObjectiveStart';
 import type { WorkspaceFacts, WorkspaceNote, WorkspaceObjectiveRow, WorkspaceStatusRow } from './workspaceView';
 import './workspace-preview.css';
@@ -23,19 +24,19 @@ interface WorkspacePageProps extends WorkspaceFacts {
   designPreview?: boolean;
 }
 
-const tabs = ['Overview', 'Objectives', 'Repos', 'Files', 'Decisions', 'History', 'Configuration', 'Templates'] as const;
+const tabs = ['Overview', 'Objectives', 'Repos', 'Files', 'Decisions', 'History', 'Knowledge', 'Configuration', 'Templates'] as const;
 type WorkspaceTab = typeof tabs[number];
 const workspaceFoci = {
   'All sections': {
     tabs,
     overview: ['roadmap', 'objectives', 'repositories', 'linked-workflows', 'files', 'people', 'release', 'decisions', 'analytics', 'configuration-history'],
   },
-  'Product owner': { tabs: ['Overview', 'Objectives', 'Decisions', 'Configuration'], overview: ['roadmap', 'objectives', 'decisions', 'analytics', 'configuration-history'] },
-  Engineer: { tabs: ['Overview', 'Objectives', 'Repos', 'Configuration', 'Templates'], overview: ['roadmap', 'objectives', 'repositories', 'linked-workflows', 'configuration-history'] },
-  Designer: { tabs: ['Overview', 'Objectives', 'Files', 'Configuration'], overview: ['roadmap', 'objectives', 'files', 'configuration-history'] },
-  'Security reviewer': { tabs: ['Objectives', 'Decisions', 'Configuration'], overview: ['objectives', 'decisions', 'configuration-history'] },
+  'Product owner': { tabs: ['Overview', 'Objectives', 'Decisions', 'Knowledge', 'Configuration'], overview: ['roadmap', 'objectives', 'decisions', 'analytics', 'configuration-history'] },
+  Engineer: { tabs: ['Overview', 'Objectives', 'Repos', 'Knowledge', 'Configuration', 'Templates'], overview: ['roadmap', 'objectives', 'repositories', 'linked-workflows', 'configuration-history'] },
+  Designer: { tabs: ['Overview', 'Objectives', 'Files', 'Knowledge', 'Configuration'], overview: ['roadmap', 'objectives', 'files', 'configuration-history'] },
+  'Security reviewer': { tabs: ['Objectives', 'Decisions', 'Knowledge', 'Configuration'], overview: ['objectives', 'decisions', 'configuration-history'] },
   'Platform operator': {
-    tabs: ['Overview', 'Repos', 'Templates', 'Decisions', 'Configuration'], overview: ['repositories', 'linked-workflows', 'decisions', 'analytics', 'configuration-history'],
+    tabs: ['Overview', 'Repos', 'Templates', 'Decisions', 'Knowledge', 'Configuration'], overview: ['repositories', 'linked-workflows', 'decisions', 'analytics', 'configuration-history'],
   },
 } as const;
 type WorkspaceFocus = keyof typeof workspaceFoci;
@@ -105,7 +106,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
   if (selected) shareURL.searchParams.set('product', selected.id);
   const view = source.view(selected?.id, roadmapQuarter);
   const { metrics, roadmap, objectives, repositories, workflows, files, stakeholders, releases, decisions, history,
-    configurationHistory, delivery } = view;
+    configurationHistory, knowledge, delivery } = view;
   const visibleTabs = (workspaceFoci[focus].tabs as readonly WorkspaceTab[])
     .filter((tab) => !designPreview || tab !== 'History' && tab !== 'Configuration');
   const visibleProducts = products.filter((product) => product.name.toLowerCase().includes(search.trim().toLowerCase())
@@ -272,7 +273,7 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
             projects={(source.repositories ?? []).filter((project) =>
               source.editable(selected.id)?.repository_ids.includes(project.id))} />}
           {/* The Objectives tab also shows how each objective is being executed: units, handoffs, findings, decisions, PR. */}
-          {activeTab === 'Objectives' && <WorkspaceExecution sampleData={designPreview} objectiveIDs={facts.objectives
+        {activeTab === 'Objectives' && <WorkspaceExecution sampleData={designPreview} productID={selected?.id} objectiveIDs={facts.objectives
             ?.filter((objective) => objective.product_id === selected?.id).map((objective) => objective.id)}
             objectivesLoading={facts.objectivesLoading} objectivesError={facts.objectivesError}
             agentRuns={facts.agentRuns} agentRunsLoading={facts.agentRunsLoading} agentRunsError={facts.agentRunsError} />}
@@ -349,6 +350,13 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
             </Badge>
           </div>)}
         </div>}
+      </Card>}
+      {!designPreview && <Card className="knowledge" title={`Product Knowledge (${knowledge.rows.length})`}
+        icon={<IconBook size={15} />} action="View All" onAction={() => setActiveTab('Knowledge')}
+        hidden={cardIsHidden('knowledge', ['Overview', 'Knowledge'])}>
+        {knowledge.note ? <Note note={knowledge.note} /> : selected && <WorkspaceProductKnowledge productID={selected.id}
+          rows={showAll ? knowledge.rows : knowledge.rows.slice(0, 5)} productRevision={knowledge.productRevision}
+          organizationRevision={knowledge.organizationRevision} />}
       </Card>}
       <Card className="analytics" title="Delivery Metrics" icon={<IconChartBar size={15} />}
         hidden={cardIsHidden('analytics', ['Overview'])}

@@ -703,4 +703,22 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await noHorizontalScroll(page)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('workspace-evidence-mobile.png'), fullPage: true });
+
+  await page.setViewportSize(viewports[0]);
+  await page.goto(`/?product=${created.productID}&mode=live#workspace`);
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
+  const findingKnowledge = page.getByRole('region', { name: 'Curate findings from Orchestrated export' });
+  await findingKnowledge.getByRole('button', { name: 'Curate as product knowledge' }).first().click();
+  await findingKnowledge.getByRole('textbox').first().fill('Keep CSV headers stable for product imports.');
+  const savedKnowledge = page.waitForResponse((response) => response.request().method() === 'POST'
+    && new URL(response.url()).pathname === `/api/v1/products/${created.productID}/knowledge`);
+  await findingKnowledge.getByRole('button', { name: 'Save knowledge' }).first().click();
+  expect((await savedKnowledge).status()).toBe(201);
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Knowledge' }).click();
+  await expect(page.locator('.workspace-mock-card.knowledge')).toContainText('Keep CSV headers stable for product imports.');
+  await expect(page.locator('.workspace-mock-card.knowledge').getByRole('link', { name: 'Open source objective and WorkGraph' }))
+    .toHaveAttribute('href', new RegExp(`objective=${saved.id}.*tab=plan.*graph_id=`));
+  await page.reload();
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Knowledge' }).click();
+  await expect(page.locator('.workspace-mock-card.knowledge')).toContainText('Keep CSV headers stable for product imports.');
 });

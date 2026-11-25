@@ -25,6 +25,12 @@ export type WorkspaceConfigurationRow = {
   revision: number; name: string; description: string; repositories: string; workflow: string;
   changedBy: string; changedAt: string; current: boolean; redacted: boolean;
 };
+export type WorkspaceKnowledgeRow = {
+  id: string; revision: number; scope: 'product' | 'organization'; content: string; objectiveID?: string;
+  graphID?: string; planHash?: string; messageID?: string; runID?: string; unit?: string; candidate?: string;
+  createdBy?: string; createdAt: string;
+  promotedBy?: string; sourceUnavailable: boolean;
+};
 
 /** Display values for the selected product, in the same shape for Mock and Live. */
 export type WorkspaceView = {
@@ -66,6 +72,7 @@ export type WorkspaceView = {
   decisions: { rows: { name: string; state: string; time?: string; href?: string }[]; note?: WorkspaceNote };
   history: { rows: WorkspaceHistoryRow[]; note?: WorkspaceNote };
   configurationHistory: { rows: WorkspaceConfigurationRow[]; complete: boolean; note?: WorkspaceNote };
+  knowledge: { rows: WorkspaceKnowledgeRow[]; productRevision: number; organizationRevision: number; note?: WorkspaceNote };
   delivery: {
     ranges: string[];
     metrics: (range: string) => [label: string, value: string, delta: string][];
@@ -126,6 +133,14 @@ const environmentSchema = z.object({
   configuration_history: z.array(z.object({ revision: z.number().int().positive(), name: z.string(), description: z.string(),
     repository_ids: z.array(z.string()), default_workflow_id: z.string().optional(), changed_by: z.string().optional(),
     changed_at: z.string().datetime(), repositories_redacted: z.boolean().optional() })).optional(),
+  knowledge_revision: z.number().int().nonnegative().optional(),
+  organization_knowledge_revision: z.number().int().nonnegative().optional(),
+  knowledge: z.array(z.object({ id: z.string(), revision: z.number().int().positive(),
+    scope: z.enum(['product', 'organization']), content: z.string(), objective_id: z.string().optional(),
+    graph_id: z.string().optional(), plan_hash: z.string().optional(), message_id: z.string().optional(),
+    run_id: z.string().optional(), unit: z.string().optional(), candidate: z.string().optional(),
+    created_by: z.string().optional(), created_at: z.string().datetime(),
+    promoted_by: z.string().optional(), source_unavailable: z.boolean().optional() })).optional(),
   objectives: z.array(z.object({ graph_id: z.string().optional(), graph_status: z.string().optional(),
     findings: z.number().int().nonnegative().optional(), handoffs: z.number().int().nonnegative().optional(),
     pull_request_url: z.string().optional() })),
@@ -324,6 +339,18 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
         ? { text: 'Configuration revision history is not available from this runtime.' }
         : !environment.configuration_history.length ? { text: 'No product configuration history is recorded.' }
           : environment.configuration_history_complete ? undefined : { text: 'Earlier configuration revisions were not recorded.' }),
+    },
+    knowledge: {
+      rows: environment?.knowledge?.map((item) => ({ id: item.id, revision: item.revision, scope: item.scope,
+        content: item.content, objectiveID: item.objective_id, graphID: item.graph_id, messageID: item.message_id,
+        planHash: item.plan_hash, runID: item.run_id, unit: item.unit, candidate: item.candidate,
+        createdBy: item.created_by, createdAt: item.created_at,
+        promotedBy: item.promoted_by, sourceUnavailable: item.source_unavailable ?? false })) ?? [],
+      productRevision: environment?.knowledge_revision ?? 0,
+      organizationRevision: environment?.organization_knowledge_revision ?? 0,
+      note: environmentNote ?? (environment?.knowledge === undefined
+        ? { text: 'Product knowledge is not available from this runtime.' }
+        : environment.knowledge.length ? undefined : { text: 'No product or promoted organization knowledge is recorded.' }),
     },
     delivery: { ranges: [], metrics: () => [
       ['WorkGraphs', String(graphCount), 'current'], ['PR links', String(pullRequestCount), 'observed'],

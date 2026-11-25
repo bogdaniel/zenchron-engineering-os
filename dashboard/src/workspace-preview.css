@@ -105,7 +105,7 @@
 .workspace-mock-health path { fill: none; stroke: #27dfa0; stroke-width: 2; }
 .workspace-mock-metric small b { color: #43dfa1; font-size: 9px; }
 .workspace-mock-tabs { display: flex; min-height: 39px; gap: 4px; margin: 15px 0 12px; padding: 4px; border: 1px solid #302b48; border-radius: 9px; background: #12121d; }
-.workspace-mock-tabs button { display: flex; min-width: 103px; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 0; border-radius: 7px; color: #d9d4e2; background: transparent; font-size: 10px; }
+.workspace-mock-tabs button { display: flex; min-width: 94px; align-items: center; justify-content: center; gap: 6px; padding: 0 8px; border: 0; border-radius: 7px; color: #d9d4e2; background: transparent; font-size: 10px; }
 .workspace-mock-tabs button.active { color: #fff; background: linear-gradient(105deg, #6738a5, #442566); }
 .workspace-mock-focus { display: flex; flex: 0 0 240px; align-items: center; gap: 6px; margin-left: auto; color: #aaa3ba; font-size: 10px; white-space: nowrap; }
 .workspace-mock-focus span { flex: 0 0 auto; }
@@ -190,6 +190,19 @@
 .workspace-mock-list.configuration-history-list > div > svg { flex: 0 0 auto; }
 .workspace-mock-bottom.history { grid-auto-rows: auto; }
 .workspace-mock-bottom.history > .workspace-mock-card.history { grid-column: 1 / -1; height: auto; min-height: 220px; }
+.workspace-mock-bottom > .workspace-mock-card.knowledge { grid-column: 1 / -1; height: auto; min-height: 150px; }
+.workspace-mock-bottom.knowledge { grid-auto-rows: auto; }
+.workspace-mock-card.knowledge { overflow: visible; }
+.workspace-knowledge-list { display: grid; gap: 8px; color: #d8d1e1; font-size: 10px; }
+.workspace-knowledge-list > p { margin: 0; color: #aaa4b8; }
+.workspace-knowledge-list article { padding: 8px; border: 1px solid #39334e; border-radius: 7px; overflow-wrap: anywhere; }
+.workspace-knowledge-list article > p { margin: 5px 0; white-space: pre-wrap; }
+.workspace-knowledge-list article small { display: block; margin: 4px 0; color: #aaa4b8; }
+.workspace-knowledge-list article a { color: #c7a9f2; }
+.workspace-knowledge-capture { margin: 6px 0 0 12px; }
+.workspace-knowledge-capture form { display: grid; max-width: 520px; gap: 6px; margin: 6px 0; }
+.workspace-knowledge-capture p, .workspace-knowledge-findings h4 { margin: 4px 0; color: #c8bfd6; font-size: 10px; }
+.workspace-knowledge-findings { display: grid; gap: 4px; margin: 8px 0; padding: 8px; border: 1px solid #39334e; border-radius: 7px; }
 .workspace-mock-state { min-height: 15px; padding: 0 5px; border: 0; border-radius: 8px; color: #3cdaa1; background: #14392e; font-size: 8px; text-transform: none; }
 .workspace-mock-state.scheduled, .workspace-mock-state.pending, .workspace-mock-state.draft,
 .workspace-mock-state.loading, .workspace-mock-state.unavailable,

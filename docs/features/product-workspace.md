@@ -49,6 +49,11 @@ flowchart LR
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
     Environment --> Store
     Environment -->|"configuration revision snapshots and recorded provenance"| Page
+    Environment -->|"scoped product and organization knowledge"| KnowledgeUI["WorkspaceProductKnowledge · exact source links"]
+    Page -->|"Knowledge tab"| KnowledgeUI
+    Execution -->|"finding + user-curated bounded text"| Capture["WorkspaceFindingKnowledge"]
+    Capture -->|"POST product knowledge with exact graph and finding IDs"| Knowledge
+    KnowledgeUI -->|"POST explicit organization promotion"| Knowledge
     Environment --> Graphs[(objectives.json · work-graphs.json)]
     Store -->|"read product context, revision and default workflow"| CP
     Store -->|"append immutable configuration snapshot on change"| Store
@@ -88,7 +93,8 @@ Both modes:
 - "Open repository inventory" in the Product actions menu goes to the Projects page.
 - The Share dialog's link includes the selected product ID, and opening it restores that product.
 - Tabs narrow the cards: Objectives (roadmap and all objectives), Repos (all repositories and workflows), Files,
-  Decisions (decisions and stakeholders), Configuration (product revision history), Templates (workflow and agent templates, release streams).
+  Decisions (decisions and stakeholders), Knowledge (provenance-linked product and organization knowledge),
+  Configuration (product revision history), Templates (workflow and agent templates, release streams).
 - At phone widths, section tabs use three columns and the workspace-focus selector occupies a full row so labels stay
   readable and do not overlap.
 - The roadmap has Roadmap and Timeline views and a "Quarterly" menu that chooses the first quarter shown.
@@ -137,8 +143,9 @@ Live:
   saved workflow does not certify it as executable: existing compilation/validation still rejects unsupported semantics.
 - Regression evidence: `orchestration.spec.ts` creates an objective through this Product Workspace entry point,
   reloads the retained selection, approves the compiled plan, and follows real backend/fake CLI decision, review,
-  remediation and integration through delivery-report JSON export. This is deterministic regression evidence;
-  installed CLI and GitHub publication acceptance is recorded separately.
+  remediation and integration through delivery-report JSON export. It also curates an actual control-plane finding
+  into product knowledge, follows its exact source link, and reloads to verify persistence. This is deterministic
+  regression evidence; installed CLI and GitHub publication acceptance is recorded separately.
   The Plan tab then offers only online repository checkouts linked to that product; legacy objectives without a product
   keep the existing all-checkouts choice.
 - The Objectives tab projects each linked objective's current WorkGraph, pending decisions, findings, review and
@@ -147,6 +154,11 @@ Live:
   an objective shows its plan and delivery report. A reviewed, publishable integration candidate appears in Action
   Required and the exact WorkGraph unit; its existing publish action requires a person to authorize that candidate
   SHA before the worker pushes. Unrecorded measurements remain unknown in that report.
+- The Knowledge tab reads the selected product's revisioned entries from the existing product environment. Product
+  entries link to their exact source graph and objective when visible; hidden provenance is identified as unavailable.
+  A finding can be curated into a bounded product note only after a user writes its content. The server validates the
+  graph, finding, product, and current access. Organization promotion is explicit; the UI reports the server's
+  authorization result and does not infer a user's authority. Mock does not call these endpoints.
 - WorkGraph-linked run IDs are joined to the app shell's agent-run records to show provider-reported token totals and
   cost with explicit run coverage. Providers that do not report cost remain unknown; budgets are not recorded here.
 - The selected product's environment projection supplies the pending-decision count, decision links, current
@@ -206,6 +218,7 @@ the create flow against the real control plane, and the Mock layout:
 go test ./cmd/zenchron -run 'TestProducts|TestProductDefaultWorkflow|TestPersistentMuxRestoresObjectivesAndWorkflows'
 cd dashboard
 npm run test:e2e -- e2e/workspace.spec.ts e2e/workspace-preview.spec.ts
+npm run test:e2e -- e2e/workspace.spec.ts --grep 'Product Workspace links runs to Reviews|server denial for organization knowledge promotion'
 npm run test:e2e -- e2e/workspace.spec.ts --grep 'local Live product navigation stays Live when opening objective creation'
 npm run test:e2e -- e2e/home.spec.ts --grep 'Product Workspace groups live repositories'
 ```
