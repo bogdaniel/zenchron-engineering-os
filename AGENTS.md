@@ -218,7 +218,12 @@ Ultra mode (§1–2) is this repo's YAGNI. In addition:
 
 ## 10. Other practices
 
-- **Feature scope.** Keep changes within the feature's scope. Before modifying shared entry points, bootstrap code, global middleware, or common request handling, check whether the requirement can be implemented through feature-specific routes, middleware, controllers, or services. Use the narrower approach whenever possible. Adding feature registrations to shared routing files is acceptable. Changing how existing consumers behave requires a demonstrated shared need, an explanation of the affected consumers, and appropriate regression checks. Passing tests alone does not justify an unnecessarily broad change.
+- **Feature scope.** Keep changes within the feature's scope. Before modifying shared entry points, bootstrap code,
+  global middleware, or common request handling, check whether the requirement can be implemented through
+  feature-specific routes, middleware, controllers, or services. Use the narrower approach whenever possible.
+  Adding feature registrations to shared routing files is acceptable. Changing how existing consumers behave
+  requires a demonstrated shared need, an explanation of the affected consumers, and appropriate regression checks.
+  Passing tests alone does not justify an unnecessarily broad change.
 
 - **Functional core, imperative shell.** Pure logic in the middle, I/O at the edges. Most code then tests without
   fakes, and gate clause (b) stays rare.
