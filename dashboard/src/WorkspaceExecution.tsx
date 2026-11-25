@@ -2,6 +2,7 @@ import { Button } from '@mantine/core';
 import { useLiveOrchestration } from './orchestration';
 import { useMockOrchestration } from './orchestration-preview-data';
 import { WorkGraphView } from './WorkGraphView';
+import { WorkspaceFindingKnowledge } from './WorkspaceProductKnowledge';
 import { livePageHref } from './livePageHref';
 import type { AgentRun } from './agentsData';
 
@@ -24,9 +25,10 @@ function providerUsage(graphID: string, runIDs: string[], runs: AgentRun[] | und
 }
 
 /** The work graphs of a product's objectives. Mock shows the one sample graph. */
-export function WorkspaceExecution({ objectiveIDs, objectivesLoading, objectivesError, sampleData, agentRuns,
+export function WorkspaceExecution({ objectiveIDs, objectivesLoading, objectivesError, sampleData, productID, agentRuns,
   agentRunsLoading = false, agentRunsError = false }: {
   objectiveIDs: string[] | undefined; objectivesLoading: boolean; objectivesError: boolean; sampleData: boolean;
+  productID?: string;
   agentRuns?: AgentRun[]; agentRunsLoading?: boolean; agentRunsError?: boolean;
 }) {
   const mock = useMockOrchestration();
@@ -64,6 +66,7 @@ export function WorkspaceExecution({ objectiveIDs, objectivesLoading, objectives
         </p>
       </div>}
       <WorkGraphView graph={graph} source={source} showRunLinks={!sampleData} />
+      {!sampleData && <WorkspaceFindingKnowledge productID={productID} graph={graph} />}
     </div>)}
   </div>;
 }

@@ -46,6 +46,12 @@ async function useLiveFixtures(
     product_id: route.request().url().includes(novaID) ? novaID : orionID,
     configuration_revision: route.request().url().includes(novaID) ? configurationRevision : 1,
     configuration_history_complete: route.request().url().includes(novaID),
+    knowledge_revision: route.request().url().includes(novaID) ? 1 : 0,
+    organization_knowledge_revision: 0,
+    knowledge: route.request().url().includes(novaID) ? [{ id: '7'.repeat(32), revision: 1, scope: 'product',
+      content: 'Exports must retain their original account scope.', product_id: novaID, objective_id: '1'.repeat(32),
+      graph_id: 'f'.repeat(32), plan_hash: 'a'.repeat(64), message_id: 'finding-1', run_id: '9'.repeat(32),
+      unit: 'api', created_by: 'Local workspace', created_at: createdAt }] : [],
     configuration_history: route.request().url().includes(novaID) ? [
       { revision: 1, name: 'Nova Platform', description: 'Previous product scope', repository_ids: [projectID],
         changed_at: createdAt },
@@ -215,6 +221,7 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(page.locator('.workspace-mock-card.people')).toContainText('Unavailable: workspace membership');
   await expect(page.locator('.workspace-mock-card.release')).toContainText('Unavailable: release streams');
   await expect(page.locator('.workspace-mock-card.decisions')).toContainText('Publish the revised export?');
+  await expect(page.locator('.workspace-mock-card.knowledge')).toContainText('Exports must retain their original account scope.');
   await expect(page.locator('.workspace-mock-card.analytics')).toContainText('WorkGraphs1 current');
   await expect(page.locator('.workspace-mock-card.analytics')).toContainText('Findings2 recorded');
   const configurationHistory = page.locator('.workspace-mock-card.configuration-history');
@@ -445,7 +452,7 @@ test('Product Workspace links runs to Reviews and resolves decisions through its
     status: string; project_name: string; base_branch: string; max_parallel: number; created_at: string; updated_at: string;
     units: { key: string; kind: string; title: string; instructions: string; acceptance: string[]; depends_on: string[];
       capabilities: string[]; agent_id: string; agent_name: string; state: string; reason: string; run_ids: string[] }[];
-    messages: { id: string; type: string; from: string; to: string[]; run_id?: string; attempt?: number; body: string;
+    messages: { id: string; type: string; from: string; to: string[]; run_id?: string; attempt?: number; title?: string; body: string;
       notes: string[]; created_at: string; resolves?: string; by?: string }[];
   } = {
     id: graphID, objective_id: objectiveID, objective_title: 'Ship Platform v3.0', plan_revision: 2,
@@ -455,10 +462,16 @@ test('Product Workspace links runs to Reviews and resolves decisions through its
       acceptance: [], depends_on: [], capabilities: ['code.write'], agent_id: 'd'.repeat(32),
       agent_name: 'Code Reviewer', state: 'blocked', reason: 'Waiting for the operator decision.',
       run_ids: ['9'.repeat(32), '8'.repeat(32)] }],
-    messages: [{ id: 'decision-1', type: 'decision_request', from: 'api', to: [], run_id: '9'.repeat(32), attempt: 1,
-      body: 'Publish the revised export?', notes: ['publish', 'hold'], created_at: createdAt }],
+    messages: [
+      { id: 'decision-1', type: 'decision_request', from: 'api', to: [], run_id: '9'.repeat(32), attempt: 1,
+        body: 'Publish the revised export?', notes: ['publish', 'hold'], created_at: createdAt },
+      { id: 'finding-1', type: 'finding', from: 'review', to: ['api'], run_id: '9'.repeat(32),
+        title: 'Account scope must remain stable', body: 'The export must preserve its original account scope.',
+        notes: [], created_at: createdAt },
+    ],
   };
   let action: { method: string; path: string; body: unknown; status?: number } | undefined;
+  let knowledgeAction: { method: string; path: string; body: unknown; status?: number } | undefined;
   await page.route('**/api/v1/work-graphs', (route) => route.fulfill(json([graph])));
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([{
     id: '9'.repeat(32), agent_id: 'd'.repeat(32), agent_name: 'Code Reviewer', project_id: projectID,
@@ -475,6 +488,12 @@ test('Product Workspace links runs to Reviews and resolves decisions through its
     await route.fulfill(json(graph));
     action.status = 200;
   });
+  await page.route('**/api/v1/products/*/knowledge', async (route) => {
+    knowledgeAction = { method: route.request().method(), path: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON() };
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ id: '8'.repeat(32) }) });
+    knowledgeAction.status = 201;
+  });
 
   await page.goto('/?mode=live#workspace');
   await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Objectives' }).click();
@@ -484,6 +503,18 @@ test('Product Workspace links runs to Reviews and resolves decisions through its
     .toHaveText('Provider-reported usage (1 of 2 runs): 1,234 input / 567 output tokens · $0.05 provider-reported cost for 1 run');
   await expect(execution.getByRole('link', { name: `Open run ${runID} in Reviews` }))
     .toHaveAttribute('href', `/?run=${runID}&mode=live#reviews`);
+  const capture = page.getByRole('region', { name: 'Curate findings from Ship Platform v3.0' });
+  await capture.getByRole('button', { name: 'Curate as product knowledge' }).click();
+  await capture.getByRole('textbox', { name: 'Curated knowledge for finding finding-1' })
+    .fill('Keep the original account scope when building exports.');
+  const refreshedEnvironment = page.waitForResponse((response) => response.url().includes(`/api/v1/products/${novaID}/environment`));
+  await capture.getByRole('button', { name: 'Save knowledge' }).click();
+  await refreshedEnvironment;
+  await expect.poll(() => knowledgeAction).toEqual({
+    method: 'POST', path: `/api/v1/products/${novaID}/knowledge`,
+    body: { content: 'Keep the original account scope when building exports.', graph_id: graphID, message_id: 'finding-1' },
+    status: 201,
+  });
   await page.screenshot({ path: testInfo.outputPath('workspace-run-links-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
@@ -497,6 +528,22 @@ test('Product Workspace links runs to Reviews and resolves decisions through its
     method: 'POST', path: `/api/v1/work-graphs/${graphID}/decisions/decision-1`,
     body: { resolution: 'publish' }, status: 200,
   });
+});
+
+test('Product Workspace reports server denial for organization knowledge promotion', async ({ page }, testInfo) => {
+  await useLiveFixtures(page);
+  await page.route('**/api/v1/products/*/knowledge/*/promote', (route) => route.fulfill({
+    status: 403, contentType: 'text/plain', body: 'organization knowledge promotion requires an authorized actor',
+  }));
+  await page.goto('/?mode=live#workspace');
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Knowledge' }).click();
+  await page.screenshot({ path: testInfo.outputPath('workspace-knowledge-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({ path: testInfo.outputPath('workspace-knowledge-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.getByRole('button', { name: 'Promote to organization knowledge' }).click();
+  await expect(page.getByRole('alert')).toContainText('requires an authorized actor');
 });
 
 test('local Live product navigation stays Live when opening objective creation', async ({ page }, testInfo) => {
