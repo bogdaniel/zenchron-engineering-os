@@ -261,12 +261,13 @@ with the unit that asked, the question, and who resolved it.
   recorded actor. Promotion appends an immutable organization-scoped copy with its source entry ID, actor, and time.
   Repeating the same promotion returns the existing copy. Promotion uses the current access policy; it adds no role,
   approval engine, audit store, or second knowledge store.
-- The product environment returns both knowledge revisions and provenance. Source identifiers are redacted when the
-  viewer cannot read the exact source graph, while explicitly promoted organization content remains available.
-- A new plan freezes product and organization knowledge revisions, entry IDs, source graph/finding IDs, and curated
-  content into the existing product-context snapshot and plan hash. WorkUnits receive that pinned text as bounded
-  task data marked as untrusted instructions; edits and later promotions affect new plans only. At most eight recent
-  entries per scope, each bounded to 400 bytes, are included in a plan context.
+- The product environment returns both knowledge revisions and provenance. It omits product entries whose source
+  graph the viewer cannot read and redacts private source identifiers from explicitly promoted organization entries.
+- A new plan freezes product and organization knowledge revisions and bounded content into the existing product-
+  context snapshot and plan hash. Product entries include their entry and source graph/finding IDs; explicitly
+  promoted organization entries include their organization entry ID and curated content without private source IDs.
+  WorkUnits receive this pinned text as untrusted task data, not instructions; edits and later promotions affect new
+  plans only. At most eight recent entries per scope, each bounded to 400 bytes, are included in a plan context.
 - Product updates append immutable configuration snapshots to the existing `products.json` record. The Live
   Configuration tab shows each recorded revision, its values, timestamp, and actor only when the request had a
   recorded signed-in actor. Repository IDs outside the current caller's grants are redacted. Older records with no
@@ -274,9 +275,9 @@ with the unit that asked, the question, and who resolved it.
   their actor remains unrecorded.
 - Configuration history belongs to the product store; it is not a second environment or evidence store. Updating
   current product values does not alter the product context or revision frozen into existing plans or WorkGraphs.
-- Configuration and knowledge fields are additive in `products.json`. A downgrade to a binary that predates these
-  fields can read the file, but its next product write will discard configuration history, product and organization
-  knowledge, and promotion provenance; back up the data directory before downgrading across this change.
+- Configuration and knowledge fields are additive in `products.json`. The strict state reader in a binary that
+  predates these fields rejects the upgraded file at load time. Back up the data directory before upgrading and
+  restore that backup before running an older binary.
 - Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
 - A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
 - Product and organization knowledge are appended to the existing `products.json` store; old files load with empty

@@ -103,10 +103,37 @@ func TestProductKnowledgePromotionIsAuditableIsolatedAndRestartSafe(t *testing.T
 	}
 	otherRepositoryPlanBody := strings.Replace(harness.reviewedPlan(), testProjectID, otherProjectID, 1)
 	otherRepositoryPlan, response := harness.propose(otherRepositoryPlanBody)
-	if response.StatusCode != http.StatusCreated || strings.Contains(otherRepositoryPlan.ProductContext, content) ||
-		strings.Contains(otherRepositoryPlan.ProductContext, graph.ID) || strings.Contains(otherRepositoryPlan.ProductContext, finding.ID) {
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("propose for another repository: HTTP %d", response.StatusCode)
+	}
+	harness.store.graphs.mu.Lock()
+	otherRepositoryContext := harness.store.graphs.plans[alphaObjective][otherRepositoryPlan.Revision-1].ProductContext
+	harness.store.graphs.mu.Unlock()
+	if otherRepositoryContext == "" || strings.Contains(otherRepositoryContext, content) ||
+		strings.Contains(otherRepositoryContext, graph.ID) || strings.Contains(otherRepositoryContext, finding.ID) {
 		t.Fatalf("product knowledge crossed into another repository plan: HTTP %d, context %q",
-			response.StatusCode, otherRepositoryPlan.ProductContext)
+			response.StatusCode, otherRepositoryContext)
+	}
+	registry := harness.store.registry
+	registry.mu.Lock()
+	otherProject := registry.projects["worker-b:"+otherProjectID]
+	otherProject.GitRemote = ""
+	registry.projects["worker-b:"+otherProjectID] = otherProject
+	registry.mu.Unlock()
+	unknownRemotePlan, response := harness.propose(otherRepositoryPlanBody)
+	registry.mu.Lock()
+	otherProject.GitRemote = otherRepository
+	registry.projects["worker-b:"+otherProjectID] = otherProject
+	registry.mu.Unlock()
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("propose with an unknown repository: HTTP %d", response.StatusCode)
+	}
+	harness.store.graphs.mu.Lock()
+	unknownRemoteContext := harness.store.graphs.plans[alphaObjective][unknownRemotePlan.Revision-1].ProductContext
+	harness.store.graphs.mu.Unlock()
+	if strings.Contains(unknownRemoteContext, content) || strings.Contains(unknownRemoteContext, graph.ID) ||
+		strings.Contains(unknownRemoteContext, finding.ID) {
+		t.Fatalf("unknown repository received product knowledge: %q", unknownRemoteContext)
 	}
 	if _, context, _, _, visible := harness.store.graphs.productContext(productID, requestAccess{enforced: true,
 		user: "bob", repositories: []string{otherRepository}}, otherRepository); !visible || strings.Contains(context, content) {
@@ -117,6 +144,12 @@ func TestProductKnowledgePromotionIsAuditableIsolatedAndRestartSafe(t *testing.T
 		"bob", false, otherRepository)
 	if crossProduct.Code != http.StatusNotFound {
 		t.Fatalf("another product accepted a private finding as knowledge: HTTP %d", crossProduct.Code)
+	}
+	adminCrossProduct := request(http.MethodPost, "/api/v1/products/"+otherProductID+"/knowledge",
+		fmt.Sprintf(`{"content":%q,"graph_id":%q,"message_id":%q}`, "cross-product", graph.ID, finding.ID),
+		"admin", true)
+	if adminCrossProduct.Code != http.StatusConflict {
+		t.Fatalf("administrator recorded a finding under the wrong product: HTTP %d", adminCrossProduct.Code)
 	}
 	productPath := products.path
 	products.path = filepath.Join(filepath.Dir(productPath), "missing", "products.json")
@@ -198,6 +231,29 @@ func TestProductKnowledgePromotionIsAuditableIsolatedAndRestartSafe(t *testing.T
 	if canceled := harness.call(http.MethodPost, "/api/v1/work-graphs/"+graph.ID+"/cancel", ""); canceled.Code != http.StatusOK {
 		t.Fatalf("cancel the source graph's remaining test runs: HTTP %d", canceled.Code)
 	}
+	harness.objectiveID = alphaObjective
+	stalePlan, response := harness.propose(harness.reviewedPlan())
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("propose before checkout change: HTTP %d", response.StatusCode)
+	}
+	harness.store.graphs.mu.Lock()
+	stalePlanContext := harness.store.graphs.plans[alphaObjective][stalePlan.Revision-1].ProductContext
+	harness.store.graphs.mu.Unlock()
+	if !strings.Contains(stalePlanContext, content) {
+		t.Fatalf("source repository context was not pinned: %q", stalePlanContext)
+	}
+	registry.mu.Lock()
+	originalProject := registry.projects[testWorkerID+":"+testProjectID]
+	changedProject := originalProject
+	changedProject.GitRemote, changedProject.LastSeen = otherRepository, time.Now().UTC()
+	registry.projects[testWorkerID+":"+testProjectID] = changedProject
+	registry.mu.Unlock()
+	if _, status := harness.approve(stalePlan.Revision); status != http.StatusConflict {
+		t.Fatalf("approval accepted a checkout with a changed remote: HTTP %d", status)
+	}
+	registry.mu.Lock()
+	registry.projects[testWorkerID+":"+testProjectID] = originalProject
+	registry.mu.Unlock()
 	if _, context, productRevision, organizationRevision, ok := harness.store.graphs.productContext(otherProductID, requestAccess{}, otherRepository); !ok ||
 		productRevision != 0 || organizationRevision != 1 || !strings.Contains(context, promoted.ID) {
 		t.Fatalf("promoted product context did not survive restart: %q, exists %t", context, ok)
