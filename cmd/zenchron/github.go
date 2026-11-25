@@ -61,6 +61,18 @@ type gitHubPullRequest struct {
 	MergeableState string `json:"mergeable_state"`
 }
 
+type gitHubPullRequestCleanupError struct {
+	Number int
+	Err    error
+}
+
+func (err *gitHubPullRequestCleanupError) Error() string {
+	return fmt.Sprintf("GitHub created pull request #%d for a different candidate and closing it failed: %v",
+		err.Number, err.Err)
+}
+
+func (err *gitHubPullRequestCleanupError) Unwrap() error { return err.Err }
+
 type gitHubIssue struct {
 	Number      int            `json:"number"`
 	Comments    int            `json:"comments"`
@@ -268,8 +280,7 @@ func (client gitHubClient) createPullRequest(
 		}
 		// The pull request exists, so caller cancellation must not skip cleanup.
 		if err := client.closePullRequest(context.WithoutCancel(ctx), owner, repository, pull.Number); err != nil {
-			return gitHubPullRequest{}, fmt.Errorf("GitHub created pull request #%d for a different candidate and closing it failed: %w",
-				pull.Number, err)
+			return gitHubPullRequest{}, &gitHubPullRequestCleanupError{Number: pull.Number, Err: err}
 		}
 		return gitHubPullRequest{}, fmt.Errorf("GitHub created pull request #%d for a different candidate; it was closed",
 			pull.Number)

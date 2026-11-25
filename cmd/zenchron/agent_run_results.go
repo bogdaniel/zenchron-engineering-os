@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -195,9 +196,14 @@ func (store *agentRunStore) publishResult(ctx context.Context, runID string, pus
 	default:
 		pull, err := store.createPullRequest(ctx, item)
 		if err != nil {
-			// The cause stays in the control plane's log; the run only says that creation failed.
+			// Provider details stay in the control-plane log; cleanup failures include a safe recovery action.
 			log.Printf("agent run %s: create pull request: %v", runID, err)
 			publication, publishError = publicationPullRequestFailed, "The branch was pushed, but GitHub could not create the pull request."
+			var cleanupErr *gitHubPullRequestCleanupError
+			if errors.As(err, &cleanupErr) {
+				publishError = fmt.Sprintf("GitHub created pull request #%d for a different candidate but could not close it. Close it in GitHub before retrying publication.",
+					cleanupErr.Number)
+			}
 		} else {
 			publication, number, pullURL = publicationPublished, pull.Number, pull.HTMLURL
 		}

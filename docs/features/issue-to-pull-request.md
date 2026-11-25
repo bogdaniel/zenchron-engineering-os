@@ -165,9 +165,10 @@ that exits successfully is therefore not reported as delivered work unless verif
   An open PR with another head fails closed; a closed PR for an older candidate is skipped so the current candidate can
   receive a new PR. If branch movement causes a newly created PR to return another head, the control plane closes it
   through the Pull Requests API and reports creation failure; if closing fails, it records that failure instead of
-  treating the mismatched PR as delivered. A same-candidate PR remains reusable after an uncertain GitHub response. If
-  GitHub fails after the push, `POST /api/v1/agent-runs/{id}/publish` retries without duplicating the matching PR or
-  reopening a closed PR.
+  treating the mismatched PR as delivered. The run evidence identifies the possibly open PR and tells the operator to
+  close it before retrying. A same-candidate PR remains reusable after an uncertain GitHub response. If GitHub fails
+  after the push, `POST /api/v1/agent-runs/{id}/publish` retries without duplicating the matching PR or reopening a
+  closed PR.
 - A change request from the dashboard, one delivered by a [GitHub webhook](github-webhooks.md), or one imported
   from GitHub with `sync-reviews`, queues another attempt on the
   same branch and worktree. The new candidate remains local until a person authorizes its exact SHA; the next
