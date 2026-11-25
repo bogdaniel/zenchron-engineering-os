@@ -19,6 +19,12 @@ sequenceDiagram
     participant Remote as GitHub Git remote
     participant GH as GitHub REST API
     participant UI as Reviews dashboard
+    participant Operator as Managed installation operator
+    participant Config as Owner-only LaunchAgent plist and PEM
+    participant Supervisor as Managed supervisor
+    Operator->>Config: Configure App IDs and copy local PEM
+    Config->>Supervisor: Reload existing service with saved settings
+    Supervisor->>API: Pass GitHub App settings to the control plane only
     Worker->>API: Heartbeat with sanitized github.com locator
     UI->>API: GET open issues and pull requests
     API->>API: Validate project locator and GitHub host
@@ -28,6 +34,7 @@ sequenceDiagram
         GH-->>API: One-hour installation token
         API->>API: Cache token until one minute before expiry
     end
+    Note over Supervisor,API: Worker and dashboard never receive GitHub App credentials
     API->>GH: GET open items (anonymous, App token, or PAT)
     loop Issue pages until 100 issues, a short page, or the page cap
         GH-->>API: Up to 100 recently updated issues and pull requests
@@ -95,7 +102,7 @@ items ordered by recent update. Issue lists scan at most 10 pages of 100 GitHub 
 `X-Zenchron-Complete: false` tells the dashboard that the returned issue list may be incomplete. Public reads work
 without credentials. Private reads need repository read access. Creating pull requests
 and submitting PR reviews need **Pull requests: write**. Posting issue comments and changing issue state needs **Issues:
-write** or **Pull requests: write** ([GitHub issue comments](https://docs.github.com/en/rest/issues/comments#create-an-issue-comment), [GitHub issues](https://docs.github.com/en/rest/issues/issues#update-an-issue)). The control plane can authenticate with a GitHub App installation configured by `ZENCHRON_GITHUB_APP_ID`, `ZENCHRON_GITHUB_INSTALLATION_ID`, and `ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH`. It signs an RS256 JWT, mints an installation token, and caches the token until one minute before GitHub's one-hour expiry. The PEM key stays on the control-plane machine. A configured `ZENCHRON_GITHUB_TOKEN` takes precedence as a personal-token fallback. Actions: read is optional and enables authenticated GitHub Actions history in Reports. The worker uses workstation Git credentials to push and never receives GitHub API credentials. The dashboard
+write** or **Pull requests: write** ([GitHub issue comments](https://docs.github.com/en/rest/issues/comments#create-an-issue-comment), [GitHub issues](https://docs.github.com/en/rest/issues/issues#update-an-issue)). The control plane can authenticate with a GitHub App installation configured by `ZENCHRON_GITHUB_APP_ID`, `ZENCHRON_GITHUB_INSTALLATION_ID`, and `ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH`. In the managed installation, `auth github-app configure` stores the App IDs and managed key path in the existing owner-only LaunchAgent plist and copies the PEM into an owner-only file outside release directories. Reinstall and self-update preserve the plist environment; the supervisor passes these settings only to the control plane. The control plane signs an RS256 JWT, mints an installation token, and caches the token until one minute before GitHub's one-hour expiry. A configured `ZENCHRON_GITHUB_TOKEN` takes precedence as a personal-token fallback. Authenticated check-run and commit-status reads require **Checks: read** and **Commit statuses: read**. **Actions: read** is optional and enables authenticated GitHub Actions history in Reports. The worker uses workstation Git credentials to push and never receives GitHub API credentials. The dashboard
 never receives them either. The review body is limited to 1,000 bytes, and only `COMMENT` and `REQUEST_CHANGES` events are
 accepted. The Reviews queue search filters the loaded list by item number, title, author, or pull-request source
 branch without another provider request.
