@@ -60,7 +60,17 @@ func (store *agentRunStore) finish(w http.ResponseWriter, r *http.Request) {
 		if item.WorkerID == workerID && !access.allows(item.Repository) {
 			return http.StatusForbidden, "this worker is no longer approved for the run's repository"
 		}
-		if item.WorkerID == workerID && item.ResultAttempt == input.Attempts && item.ResultAttempt > 0 {
+		acceptedAttempt := item.ResultAttempt == input.Attempts && item.ResultAttempt > 0
+		if !acceptedAttempt {
+			for _, attempt := range item.AttemptLog {
+				if attempt.Attempt == input.Attempts && attempt.WorkerID == workerID && attempt.FinishedAt != nil &&
+					(attempt.Status == "succeeded" || attempt.Status == "failed" || attempt.Status == "cancelled") {
+					acceptedAttempt = true
+					break
+				}
+			}
+		}
+		if item.WorkerID == workerID && acceptedAttempt {
 			return http.StatusConflict, workerapi.AgentRunResultAlreadyAccepted
 		}
 		return store.applyResult(item, workerID, input)
@@ -106,7 +116,8 @@ func (store *agentRunStore) applyResult(item *agentRun, workerID string, input w
 		input.Status, input.Output, input.Error = "cancelled", "", "Cancellation requested from dashboard."
 		input.BranchPushed, input.BranchPushFailed, input.TerminationReason = false, false, workerapi.TerminationCancelled
 	}
-	if publishOnly && !item.CancelRequested && input.CommitSHA != item.CommitSHA {
+	if publishOnly && !item.CancelRequested && (input.CommitSHA != "" && input.CommitSHA != item.CommitSHA ||
+		input.Status == "succeeded" && input.CommitSHA != item.CommitSHA) {
 		return http.StatusConflict, "publish-only result does not match the authorized candidate"
 	}
 	if (input.BranchPushed || input.BranchPushFailed) &&
