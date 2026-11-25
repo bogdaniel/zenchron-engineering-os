@@ -356,11 +356,12 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
     return {
       count: buttons.length,
       overflowing: buttons.filter((button) => button.scrollWidth > button.clientWidth).length,
+      undersized: buttons.filter((button) => button.clientHeight < 24 || button.clientWidth < 24).length,
       overlapping: bounds.some((left, index) => bounds.slice(index + 1).some((right) =>
         Math.abs(left.top - right.top) < 1 && left.right > right.left)),
     };
   });
-  expect(narrowTabLayout).toEqual({ count: 7, overflowing: 0, overlapping: false });
+  expect(narrowTabLayout).toEqual({ count: 7, overflowing: 0, undersized: 0, overlapping: false });
 
 });
 
