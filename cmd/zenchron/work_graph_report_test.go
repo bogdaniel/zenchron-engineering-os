@@ -166,7 +166,8 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 
 	integration := harness.claimUnit("integrate")
 	merged, _ := json.Marshal(map[string]any{"integration": workerapi.MergeResult{Merged: integration.Merge}})
-	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
+	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9),
+		Output:       "private provider transcript sentinel",
 		Verification: workerapi.VerificationPassed, Result: string(merged)})
 	harness.verdict(harness.claimUnit("review-all"), commit(4), `{"review":{"verdict":"accept"}}`)
 	harness.authorizePublication(integration.ID, commit(4))
@@ -174,14 +175,26 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	harness.pullHead = commit(4)
 	harness.report(publication, workerapi.AgentRunResult{CommitSHA: commit(4), CommitTreeSHA: commit(5), BaseCommit: commit(9),
 		Output: "Merged.", Verification: workerapi.VerificationPassed, BranchPushed: true, Result: string(merged)})
+	updatedProfile, err := json.Marshal(agentProfileInput{Name: harness.profile.Name, Provider: harness.profile.Provider,
+		Model: "changed-after-run", Status: harness.profile.Status, SystemPrompt: harness.profile.SystemPrompt,
+		GoalPrompt: harness.profile.GoalPrompt, Tools: harness.profile.Tools})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response := harness.call(http.MethodPut, "/api/v1/agents/"+harness.profile.ID, string(updatedProfile)); response.Code != http.StatusOK {
+		t.Fatalf("update current agent profile returned HTTP %d: %s", response.Code, response.Body.String())
+	}
 
 	before := harness.graph()
 	report, body := harness.deliveryReport(started.ID)
+	if strings.Contains(body, "private provider transcript sentinel") {
+		t.Fatalf("delivery report exposed the provider transcript: %s", body)
+	}
 	if report.GraphID != started.ID || report.GraphRevision != before.Revision || report.ObjectiveID != harness.objectiveID ||
 		report.ObjectiveTitle != "Ship usage export" ||
 		report.PlanRevision != 1 || report.Status != graphCompleted || before.Status != graphCompleted ||
-		report.PullRequestURL != "https://github.com/acme/platform/pull/23" || report.ApprovedPlan.Revision != 1 ||
-		report.ApprovedPlan.Status != planApproved || report.ApprovedPlan.ApprovedBy == "" {
+		report.PullRequestURL != "https://github.com/acme/platform/pull/23" || report.ApprovedPlan == nil ||
+		report.ApprovedPlan.Revision != 1 || report.ApprovedPlan.Status != planApproved || report.ApprovedPlan.ApprovedBy == "" {
 		t.Fatalf("report identity = %s", body)
 	}
 	measured := report.Measurements
@@ -209,7 +222,8 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 		t.Fatalf("api unit = %#v", apiUnit)
 	}
 	if len(apiUnit.Executions) != 1 || apiUnit.Executions[0].ProfileID != harness.profile.ID ||
-		apiUnit.Executions[0].ProfileVersion != harness.profile.Version || apiUnit.Executions[0].CandidateCommit != commit(3) ||
+		apiUnit.Executions[0].ProfileVersion != harness.profile.Version || apiUnit.Executions[0].Model != harness.profile.Model ||
+		apiUnit.Executions[0].CandidateCommit != commit(3) ||
 		apiUnit.Executions[0].ResultAttempt != 2 || apiUnit.Executions[0].UpdatedAt.IsZero() ||
 		len(report.Handoffs) == 0 || report.Handoffs[0].MessageID == "" || len(report.Outstanding) != 0 {
 		t.Fatalf("execution provenance, handoffs, or outstanding steps = report unit %#v, handoffs %#v, outstanding %#v",
@@ -221,9 +235,17 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 		len(review.Executions) != 2 || review.Executions[0].BaseCommit != commit(1) || review.Executions[1].BaseCommit != commit(3) {
 		t.Fatalf("ui unit = %#v, review unit = %#v", uiUnit, review)
 	}
+	authorizedRun, exists := harness.store.get(integration.ID)
+	if !exists || len(authorizedRun.PublicationAuthorizations) != 1 {
+		t.Fatalf("persisted publication authorization = %#v, exists %t", authorizedRun.PublicationAuthorizations, exists)
+	}
+	authorization := authorizedRun.PublicationAuthorizations[0]
 	if !slices.Equal(report.UnknownEvidence, []string{"policy_backed_assurance"}) || report.PublicationAuthority == nil ||
-		report.PublicationAuthority.By != localOperator || report.PublicationAuthority.CommitSHA != commit(4) ||
-		report.PublicationAuthority.SourceRunID != integration.ID {
+		report.PublicationAuthority.By != authorization.By || report.PublicationAuthority.CommitSHA != authorization.CommitSHA ||
+		report.PublicationAuthority.SourceRunID != integration.ID || report.PublicationAuthority.GraphID != authorization.GraphID ||
+		report.PublicationAuthority.GraphRevision != authorization.GraphRevision ||
+		report.PublicationAuthority.PlanRevision != authorization.PlanRevision ||
+		report.PublicationAuthority.PlanHash != authorization.PlanHash || report.PublicationAuthority.Attempt != authorization.Attempt {
 		t.Fatalf("unrecorded evidence = %v", report.UnknownEvidence)
 	}
 	if report.PullRequest == nil || report.PullRequest.State != "open" || !report.PullRequest.Draft || report.PullRequest.Merged ||
@@ -261,6 +283,22 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	}
 	if !reflect.DeepEqual(replayed, original) {
 		t.Fatalf("report after restart = %#v, before restart %#v", replayed, original)
+	}
+	harness.store.mu.Lock()
+	delete(harness.store.items, api.ID)
+	persistErr := harness.store.persistLocked()
+	harness.store.mu.Unlock()
+	if persistErr != nil {
+		t.Fatalf("persist missing run record: %v", persistErr)
+	}
+	harness.restart()
+	restarted, body := harness.deliveryReport(started.ID)
+	apiAfterRestart := reportedUnit(t, restarted, "api")
+	if restarted.Status != graphCompleted || !slices.Contains(restarted.UnknownEvidence, "missing_run_records") ||
+		apiAfterRestart.Attempts != 0 || !slices.Equal(apiAfterRestart.RunIDs, []string{api.ID}) ||
+		!slices.Contains(restarted.Measurements.Unknown, "attempt_count_for_some_runs") ||
+		!slices.Contains(restarted.Measurements.Unknown, "remediation_passes_for_some_runs") {
+		t.Fatalf("report after restarting with a lost run record = %s", body)
 	}
 
 	// Reading the report changed nothing about the graph.
@@ -344,7 +382,7 @@ func TestWorkGraphReportOmitsWhatWasNotRecorded(t *testing.T) {
 		t.Fatalf("graph moved from revision %d to %d", before.Revision, after.Revision)
 	}
 
-	// A run id whose run is no longer stored is still a run of the unit, and adds nothing else.
+	// A lost run stays counted by its graph reference while its attempt-derived details are marked unknown.
 	harness.store.mu.Lock()
 	delete(harness.store.items, ui.ID)
 	harness.store.mu.Unlock()
@@ -353,6 +391,58 @@ func TestWorkGraphReportOmitsWhatWasNotRecorded(t *testing.T) {
 	if lost := reportedUnit(t, report, "ui"); measured.RunCount != 2 || measured.AttemptCount != 1 || measured.FailedAttempts != 0 ||
 		measured.MaxConcurrency != 1 || lost.Attempts != 0 || len(lost.Providers) != 0 || !slices.Equal(lost.RunIDs, []string{ui.ID}) {
 		t.Fatalf("report after a run was lost = %s", body)
+	}
+	if !slices.Contains(report.UnknownEvidence, "missing_run_records") {
+		t.Fatalf("missing run record is not identified as unknown evidence: %v", report.UnknownEvidence)
+	}
+	for _, missing := range []string{"attempt_count_for_some_runs", "failed_attempts_for_some_runs",
+		"max_concurrency_for_some_runs", "remediation_passes_for_some_runs"} {
+		if !slices.Contains(measured.Unknown, missing) {
+			t.Fatalf("missing run record did not mark %q unknown: %v", missing, measured.Unknown)
+		}
+	}
+}
+
+func TestWorkGraphReportMarksMissingApprovedPlanUnknown(t *testing.T) {
+	harness := newGraphHarness(t)
+	graph := harness.start(harness.reviewedPlan())
+	harness.store.graphs.mu.Lock()
+	delete(harness.store.graphs.plans, graph.ObjectiveID)
+	harness.store.graphs.mu.Unlock()
+
+	report, body := harness.deliveryReport(graph.ID)
+	if report.ApprovedPlan != nil || !slices.Contains(report.UnknownEvidence, "approved_plan") ||
+		report.Measurements.HumanActions != 0 || strings.Contains(body, `"approved_plan":`) {
+		t.Fatalf("missing plan source was reported as observed evidence: %s", body)
+	}
+}
+
+func TestWorkGraphReportPreservesHistoricalPlanApprovalAfterSupersession(t *testing.T) {
+	harness := newGraphHarness(t)
+	firstPlan, response := harness.propose(harness.twoProducerPlan())
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("propose first plan returned HTTP %d", response.StatusCode)
+	}
+	firstGraph, status := harness.approve(firstPlan.Revision)
+	if status != http.StatusCreated {
+		t.Fatalf("approve first plan returned HTTP %d", status)
+	}
+	if response := harness.call(http.MethodPost, "/api/v1/work-graphs/"+firstGraph.ID+"/cancel", ""); response.Code >= http.StatusBadRequest {
+		t.Fatalf("cancel first graph returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+	secondPlan, response := harness.propose(harness.twoProducerPlan())
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("propose second plan returned HTTP %d", response.StatusCode)
+	}
+	if _, status := harness.approve(secondPlan.Revision); status != http.StatusCreated {
+		t.Fatalf("approve second plan returned HTTP %d", status)
+	}
+
+	report, body := harness.deliveryReport(firstGraph.ID)
+	if report.ApprovedPlan == nil || report.ApprovedPlan.Revision != firstPlan.Revision ||
+		report.ApprovedPlan.Status != planSuperseded || report.ApprovedPlan.ApprovedBy == "" ||
+		report.ApprovedPlan.ApprovedAt == nil || report.Measurements.HumanActions != 1 {
+		t.Fatalf("historical plan approval was not preserved: %s", body)
 	}
 }
 
