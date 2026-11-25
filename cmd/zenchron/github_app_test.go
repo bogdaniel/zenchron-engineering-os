@@ -89,6 +89,56 @@ func TestGitHubAppAuthenticationMintsAndCachesInstallationToken(t *testing.T) {
 	}
 }
 
+func TestGitHubAppAuthenticationSeparatesMissingInstallationFromRepository404(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath := filepath.Join(t.TempDir(), "github-app.pem")
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
+	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name               string
+		installationStatus int
+		wantInstallation   bool
+	}{
+		{name: "installation token endpoint", installationStatus: http.StatusNotFound, wantInstallation: true},
+		{name: "repository endpoint", installationStatus: http.StatusCreated},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("ZENCHRON_GITHUB_TOKEN", "")
+			t.Setenv("ZENCHRON_GITHUB_APP_ID", "123")
+			t.Setenv("ZENCHRON_GITHUB_INSTALLATION_ID", "456")
+			t.Setenv("ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", keyPath)
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/app/installations/456/access_tokens" {
+					if test.installationStatus == http.StatusNotFound {
+						http.NotFound(w, r)
+						return
+					}
+					w.WriteHeader(http.StatusCreated)
+					_, _ = w.Write([]byte(`{"token":"ghs-installation-test","expires_at":"` +
+						time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`))
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			defer provider.Close()
+
+			client := newGitHubClient()
+			client.apiURL = provider.URL
+			_, err := client.requestBytes(context.Background(), http.MethodGet, "/repos/acme/platform/branches/main",
+				"application/vnd.github+json", nil, nil)
+			if err == nil || strings.Contains(err.Error(), "GitHub App installation not found") != test.wantInstallation {
+				t.Fatalf("repository request error = %v; installation diagnosis = %v", err, test.wantInstallation)
+			}
+		})
+	}
+}
+
 func TestGitHubAppAuthenticationRejectsIncompleteOrInvalidConfiguration(t *testing.T) {
 	t.Setenv("ZENCHRON_GITHUB_TOKEN", "")
 	t.Setenv("ZENCHRON_GITHUB_APP_ID", "123")

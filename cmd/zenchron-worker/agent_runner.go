@@ -43,20 +43,30 @@ type agentRunner struct {
 	checkout sync.Mutex
 }
 
-func (runner *agentRunner) providerStatuses() []workerapi.ProviderStatus {
-	statuses := make([]workerapi.ProviderStatus, 0, len(runner.providers))
+func (runner *agentRunner) providerStatuses(ctx context.Context) []workerapi.ProviderStatus {
+	providers := make([]*cliProvider, 0, len(runner.providers))
 	for _, provider := range runner.providers {
 		if provider.path != "" {
-			statuses = append(statuses, provider.status())
+			providers = append(providers, provider)
 		}
 	}
+	statuses := make([]workerapi.ProviderStatus, len(providers))
+	var checks sync.WaitGroup
+	for i, provider := range providers {
+		checks.Add(1)
+		go func(index int, provider *cliProvider) {
+			defer checks.Done()
+			statuses[index] = provider.status(ctx)
+		}(i, provider)
+	}
+	checks.Wait()
 	slices.SortFunc(statuses, func(a, b workerapi.ProviderStatus) int { return strings.Compare(a.ID, b.ID) })
 	return statuses
 }
 
 func (runner *agentRunner) canExecute() bool {
 	for _, provider := range runner.providers {
-		if provider.ready {
+		if provider.readyForRuns() {
 			return true
 		}
 	}
@@ -142,7 +152,7 @@ func (runner *agentRunner) run(
 			return failedRun(workerapi.TerminationWorkerError, "The agent profile's model name is not valid for a CLI provider."), true
 		}
 		provider = runner.providers[command.Profile.Provider]
-		if provider == nil || !provider.ready {
+		if provider == nil || !provider.readyForRuns() {
 			return failedRun(workerapi.TerminationWorkerError, "The agent provider is not ready on this worker."), true
 		}
 	}

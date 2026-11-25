@@ -8,8 +8,10 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -49,6 +51,18 @@ func (auth *gitHubAppAuth) configured() bool {
 	return auth.appID != "" && auth.installationID != "" && auth.privateKeyPath != ""
 }
 
+func (auth *gitHubAppAuth) configurationFingerprint() string {
+	if !auth.configured() {
+		return ""
+	}
+	key, err := loadGitHubAppPrivateKey(auth.privateKeyPath)
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256([]byte(auth.appID + "\x00" + auth.installationID + "\x00" + publicKeyFingerprint(key)))
+	return hex.EncodeToString(digest[:])
+}
+
 func (auth *gitHubAppAuth) accessToken(ctx context.Context, client gitHubClient) (string, error) {
 	auth.mu.Lock()
 	defer auth.mu.Unlock()
@@ -79,6 +93,10 @@ func (auth *gitHubAppAuth) accessToken(ctx context.Context, client gitHubClient)
 	body, err := client.requestBytesWithToken(ctx, http.MethodPost, path, "application/vnd.github+json", nil,
 		[]byte("{}"), jwt)
 	if err != nil {
+		var response gitHubHTTPError
+		if errors.As(err, &response) && response.statusCode == http.StatusNotFound {
+			return "", fmt.Errorf("GitHub App installation not found: %w", err)
+		}
 		return "", fmt.Errorf("create GitHub installation token: %w", err)
 	}
 	var response struct {
@@ -120,12 +138,12 @@ func (auth *gitHubAppAuth) jwt(now time.Time) (string, error) {
 func loadGitHubAppPrivateKey(path string) (*rsa.PrivateKey, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("open GitHub App private key: %w", err)
+		return nil, valueFreeGitHubAppError("GitHub App private key is unreadable", err)
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("inspect GitHub App private key: %w", err)
+		return nil, valueFreeGitHubAppError("GitHub App private key is unreadable", err)
 	}
 	if !info.Mode().IsRegular() || info.Size() > maxGitHubAppPrivateKeySize {
 		return nil, fmt.Errorf("GitHub App private key must be a regular file no larger than %d bytes", maxGitHubAppPrivateKeySize)
@@ -135,11 +153,15 @@ func loadGitHubAppPrivateKey(path string) (*rsa.PrivateKey, error) {
 	}
 	data, err := io.ReadAll(io.LimitReader(file, maxGitHubAppPrivateKeySize+1))
 	if err != nil {
-		return nil, fmt.Errorf("read GitHub App private key: %w", err)
+		return nil, valueFreeGitHubAppError("GitHub App private key is unreadable", err)
 	}
 	if len(data) > maxGitHubAppPrivateKeySize {
 		return nil, fmt.Errorf("GitHub App private key must be a regular file no larger than %d bytes", maxGitHubAppPrivateKeySize)
 	}
+	return parseGitHubAppPrivateKey(data)
+}
+
+func parseGitHubAppPrivateKey(data []byte) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode(data)
 	if block == nil {
 		return nil, fmt.Errorf("GitHub App private key is not PEM encoded")

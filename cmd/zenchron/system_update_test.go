@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +27,52 @@ func TestSystemUpdateStatusReadsPersistedManagerState(t *testing.T) {
 	var got updater.Status
 	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil || response.Code != http.StatusOK || got != want {
 		t.Fatalf("update status = %#v, decode error = %v, HTTP %d", got, err, response.Code)
+	}
+	if strings.Contains(response.Body.String(), "authentication_method") || strings.Contains(response.Body.String(), "app_config_fingerprint") {
+		t.Fatal("ordinary updater status exposed local authentication provenance")
+	}
+}
+
+func TestLocalUpdaterStatusReportsRuntimeGitHubAuthentication(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ZENCHRON_LOCAL_STATUS_TOKEN", "local-status-test-token")
+	t.Setenv("ZENCHRON_GITHUB_TOKEN", "")
+	path := filepath.Join(t.TempDir(), "update.json")
+	if err := updater.WriteStatus(path, updater.Status{State: "idle"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ZENCHRON_UPDATE_STATUS_FILE", path)
+	key := writeManagedAppTestKey(t, t.TempDir(), 0o600)
+	t.Setenv("ZENCHRON_GITHUB_APP_ID", "123")
+	t.Setenv("ZENCHRON_GITHUB_INSTALLATION_ID", "456")
+	t.Setenv("ZENCHRON_GITHUB_APP_PRIVATE_KEY_PATH", key)
+	handler := authHandler(newMux(), &authConfig{sessionKey: []byte("test-test-test-test-test-test-test-test")})
+	call := func() *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/system/update", nil)
+		request.RemoteAddr, request.Host = "127.0.0.1:1234", "127.0.0.1:8080"
+		request.Header.Set(localStatusCredentialHeader, "local-status-test-token")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+	response := call()
+	var appStatus map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &appStatus); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("local updater status response = %d %s, decode error %v", response.Code, response.Body.String(), err)
+	}
+	fingerprint, fingerprintIsString := appStatus["app_config_fingerprint"].(string)
+	if appStatus["authentication_method"] != gitHubAuthMethodApp || !fingerprintIsString || fingerprint == "" {
+		t.Fatal("local updater response omitted its GitHub App authentication fingerprint")
+	}
+
+	t.Setenv("ZENCHRON_GITHUB_TOKEN", "personal-token-test")
+	response = call()
+	appStatus = nil
+	if err := json.Unmarshal(response.Body.Bytes(), &appStatus); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("PAT updater status response = %d %s, decode error %v", response.Code, response.Body.String(), err)
+	}
+	if appStatus["authentication_method"] != gitHubAuthMethodPersonalToken || appStatus["app_config_fingerprint"] != nil {
+		t.Fatalf("PAT precedence evidence = %#v", appStatus)
 	}
 }
 

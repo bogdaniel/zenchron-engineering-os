@@ -83,6 +83,8 @@ Both modes:
 - The Share dialog's link includes the selected product ID, and opening it restores that product.
 - Tabs narrow the cards: Objectives (roadmap and all objectives), Repos (all repositories and workflows), Files,
   Decisions (decisions and stakeholders), Configuration (product revision history), Templates (workflow and agent templates, release streams).
+- At phone widths, section tabs use three columns and the workspace-focus selector occupies a full row so labels stay
+  readable and do not overlap.
 - The roadmap has Roadmap and Timeline views and a "Quarterly" menu that chooses the first quarter shown.
 - A card with no rows shows one line saying why; failed requests are announced with `role="alert"`.
 

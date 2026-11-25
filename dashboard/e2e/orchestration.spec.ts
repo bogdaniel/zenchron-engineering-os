@@ -68,6 +68,8 @@ async function mockOrchestration(page: Page, state: { graphs?: unknown[]; plans?
     description: 'The product.', repository_ids: [projectID], created_at: now, updated_at: now }])));
   await page.route('**/api/v1/agents', (route) => route.fulfill(json(agents)));
   await page.route('**/api/v1/projects', (route) => route.fulfill(json(projects)));
+  await page.route('**/api/v1/workers', (route) => route.fulfill(json([{ id: workerID, name: 'dev-laptop', status: 'online',
+    last_seen: now, providers: [] }])));
   await page.route('**/api/v1/work-graphs', (route) => state.graphsStatus
     ? route.fulfill({ status: state.graphsStatus, body: 'unavailable' }) : route.fulfill(json(state.graphs ?? [])));
   await page.route(`**/api/v1/objectives/${objectiveID}/plans`, (route) => route.request().method() === 'GET'
@@ -236,6 +238,24 @@ for (const viewport of viewports) {
     ]);
   });
 }
+
+test('proposed plan approval stays disabled while its repository worker is offline', async ({ page }) => {
+  await page.setViewportSize(viewports[0]);
+  const proposed = { ...plan, status: 'proposed', graph_id: undefined, approved_by: undefined };
+  await mockOrchestration(page, { plans: [proposed] });
+  await page.route('**/api/v1/workers', (route) => route.fulfill(json([{
+    id: workerID, name: 'dev-laptop', status: 'offline', last_seen: now, providers: [],
+  }])));
+  await page.route('**/api/v1/projects', (route) => route.fulfill(json(projects.map((project) => ({
+    ...project, worker_status: 'offline',
+  })))));
+  const panel = await openPlan(page);
+  const approval = panel.getByRole('button', { name: 'Approve plan and start' });
+  await expect(approval).toBeDisabled();
+  await expect(approval).toHaveAttribute('title',
+    'The plan’s repository worker is offline; bring it online before approval.');
+  await expect(panel).toContainText('Plan approval is unavailable');
+});
 
 test('plan revisions show planning, invalid problems, and a refused approval; proposing names a planner and workflow', async ({ page }) => {
   await page.setViewportSize(viewports[0]);
@@ -505,6 +525,14 @@ test('an objective plan approved in the dashboard runs through decision, review,
   const readiness = panel.getByRole('status', { name: 'CLI readiness for revision 1' });
   await expect(readiness).toContainText('codex-cli not ready');
   await expect(readiness).toContainText('runs wait until ready');
+  await page.goto('/?mode=live#overview');
+  const pendingPlan = page.getByRole('region', { name: 'Action Required' }).getByRole('link');
+  await expect(pendingPlan).toContainText('Plan revision 1 · Plan approval');
+  await expect(pendingPlan).toContainText('Plan subject');
+  await expect(pendingPlan).toContainText('WorkUnit not started · Run not started');
+  await expect(pendingPlan).toHaveAttribute('href', new RegExp(`objective=${created.objectiveID}.*tab=plan`));
+  await pendingPlan.click();
+  await expect(page.getByRole('button', { name: 'Approve plan and start' })).toBeVisible();
   await panel.getByRole('button', { name: 'Approve plan and start' }).click();
   const units = panel.getByRole('list', { name: 'Work units' });
   await expect(units.getByRole('listitem')).toHaveCount(4);
@@ -513,8 +541,18 @@ test('an objective plan approved in the dashboard runs through decision, review,
   // From here the worker must forward typed results: the producer asks, a person answers in the page.
   const decisionForm = panel.getByRole('form', { name: 'Decision for step-1' });
   await expect(decisionForm).toContainText('E2E: which format?', { timeout: 90_000 });
-  await decisionForm.getByRole('button', { name: 'CSV' }).click();
-  await decisionForm.getByRole('button', { name: 'Resolve decision' }).click();
+  await page.goto('/?mode=live#overview');
+  const actionRequired = page.getByRole('region', { name: 'Action Required' });
+  await expect(actionRequired).toContainText('1 waiting');
+  await expect(actionRequired).toContainText('Plan revision 1 · produce: API producer');
+  await expect(actionRequired).toContainText('E2E: which format?');
+  await expect(actionRequired).toContainText(/Run [a-f0-9]{32}/);
+  const exactDecision = actionRequired.getByRole('link');
+  await expect(exactDecision).toHaveAttribute('href', new RegExp(`objective=${created.objectiveID}.*graph_id=.*decision=`));
+  await exactDecision.click();
+  await expect(page.getByRole('form', { name: 'Decision for step-1' })).toContainText('E2E: which format?');
+  await page.getByRole('button', { name: 'CSV' }).click();
+  await page.getByRole('button', { name: 'Resolve decision' }).click();
   const messages = panel.getByRole('list', { name: 'Handoffs, findings, and decisions' });
   await expect(messages).toContainText('by local operator');
   await expect(messages).toContainText('E2E finding', { timeout: 120_000 });

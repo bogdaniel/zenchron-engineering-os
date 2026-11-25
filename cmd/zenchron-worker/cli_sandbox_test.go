@@ -3,13 +3,17 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
@@ -49,16 +53,335 @@ func TestConfinementSelfTestRejectsASandboxThatDoesNotConfine(t *testing.T) {
 	}
 }
 
-func TestProviderIsNotReadyWhenItsSandboxSelfTestFails(t *testing.T) {
+func TestConfinementSelfTestPreservesEscapeEvidenceWhenCommandFails(t *testing.T) {
+	leaksThenFails := fakeSandboxCLI(t, `while [ "$1" != "--" ]; do shift; done; shift; "$@"; exit 1`)
+	if err := verifyCodexConfinement(context.Background(), leaksThenFails); !errors.Is(err, errConfinementViolation) {
+		t.Fatalf("sandbox escape followed by a failed command was not latched as a confinement violation: %v", err)
+	}
+}
+
+func TestConfinementSelfTestStopsDescendantsOnCancellation(t *testing.T) {
+	directory := t.TempDir()
+	release := filepath.Join(directory, "release")
+	pidFile := filepath.Join(directory, "child.pid")
+	t.Cleanup(func() {
+		if err := os.WriteFile(release, nil, 0o600); err != nil {
+			t.Error(err)
+		}
+	})
+	script := "/bin/sh -c 'while [ ! -f \"$1\" ]; do sleep 0.01; done' sh " + strconv.Quote(release) +
+		" &\necho $! > " + strconv.Quote(pidFile) + "\nwait\n"
+	binary := fakeSandboxCLI(t, script)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- verifyCodexConfinement(ctx, binary) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(pidFile); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := os.Stat(pidFile); err != nil {
+		cancel()
+		t.Fatal("sandbox probe descendant did not start")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		if err := os.WriteFile(release, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("cancelled confinement probe waited on a descendant's inherited output pipes")
+		}
+		t.Fatal("cancelled confinement probe did not stop its descendant promptly")
+	}
+	contents, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var childPID int
+	if _, err := fmt.Sscanf(string(contents), "%d", &childPID); err != nil {
+		t.Fatal(err)
+	}
+	waitForProcessExit(t, childPID)
+}
+
+func TestProviderLatchesConfirmedSandboxEscapeAtContextExpiry(t *testing.T) {
+	directory := t.TempDir()
+	binary := filepath.Join(directory, "codex")
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	for _, phase := range []string{"startup", "heartbeat"} {
+		t.Run(phase, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			provider := newCLIProviders()[workerapi.ProviderCodex]
+			provider.confinement = func(context.Context, string) error {
+				cancel()
+				return errConfinementViolation
+			}
+			if phase == "startup" {
+				provider.detect(ctx)
+			} else {
+				provider.path = binary
+				provider.setReadiness(false, false, "sandbox verification pending")
+				provider.refreshReadiness(ctx)
+			}
+			provider.readinessMu.RLock()
+			ready, reason := provider.ready, provider.reason
+			provider.readinessMu.RUnlock()
+			if ready || reason != "sandbox self-test failed" {
+				t.Fatalf("confirmed sandbox escape at context expiry = ready %t, reason %q", ready, reason)
+			}
+		})
+	}
+}
+
+func TestRunnerChecksProviderReadinessConcurrently(t *testing.T) {
+	directory := t.TempDir()
+	startedPath := filepath.Join(directory, "started")
+	releasePath := filepath.Join(directory, "release")
+	providers := map[string]*cliProvider{}
+	for _, id := range []string{workerapi.ProviderCodex, workerapi.ProviderClaude} {
+		path := filepath.Join(directory, id)
+		script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' '%s' >> '%s'\nwhile [ ! -e '%s' ]; do sleep 0.01; done\nprintf '{\"loggedIn\":true}\n'\n", id, startedPath, releasePath)
+		if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		provider := &cliProvider{id: id, path: path,
+			isReady: func(output []byte, err error) bool { return err == nil && strings.Contains(string(output), "loggedIn") }}
+		provider.setReadiness(true, true, "")
+		providers[id] = provider
+	}
+	defer os.WriteFile(releasePath, nil, 0o600)
+	runner := &agentRunner{providers: providers}
+	done := make(chan []workerapi.ProviderStatus, 1)
+	go func() { done <- runner.providerStatuses(context.Background()) }()
+
+	deadline := time.Now().Add(3 * time.Second)
+	bothStarted := false
+	for time.Now().Before(deadline) {
+		started, _ := os.ReadFile(startedPath)
+		if strings.Contains(string(started), workerapi.ProviderCodex) &&
+			strings.Contains(string(started), workerapi.ProviderClaude) {
+			bothStarted = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := os.WriteFile(releasePath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case statuses := <-done:
+		if !bothStarted || len(statuses) != 2 || !statuses[0].Ready || !statuses[1].Ready {
+			t.Fatalf("provider readiness was not checked concurrently and successfully: started=%t statuses=%#v", bothStarted, statuses)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("provider readiness checks did not finish after release")
+	}
+}
+
+func TestProviderRetriesIncompleteSandboxSelfTest(t *testing.T) {
 	directory := t.TempDir()
 	if err := os.WriteFile(filepath.Join(directory, "codex"), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
 	provider := newCLIProviders()[workerapi.ProviderCodex]
+	attempts := 0
+	provider.confinement = func(context.Context, string) error {
+		attempts++
+		if attempts == 1 {
+			return errors.New("sandbox command did not finish")
+		}
+		return nil
+	}
 	provider.detect(context.Background())
-	if status := provider.status(); status.Ready || status.SandboxedCommands || status.Reason != "sandbox self-test failed" {
-		t.Fatalf("status of a signed-in provider with a failing sandbox = %#v", status)
+	if status := provider.status(context.Background()); !status.Ready || attempts != 2 {
+		t.Fatalf("status after incomplete then successful sandbox checks = %#v, attempts %d", status, attempts)
+	}
+}
+
+func TestSlowAuthProbeLeavesASeparateSandboxBudget(t *testing.T) {
+	provider := &cliProvider{id: workerapi.ProviderCodex, path: filepath.Join(t.TempDir(), "codex"),
+		isReady: func(_ []byte, err error) bool { return err == nil }}
+	if err := os.WriteFile(provider.path, []byte("#!/bin/sh\nsleep 2\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	provider.setReadiness(false, false, "sandbox verification pending")
+	var remaining time.Duration
+	provider.confinement = func(ctx context.Context, _ string) error {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal("sandbox check has no independent deadline")
+		}
+		remaining = time.Until(deadline)
+		return nil
+	}
+	if status := provider.status(context.Background()); !status.Ready || remaining < 4*time.Second {
+		t.Fatalf("status after slow auth probe = %#v, sandbox budget left %s", status, remaining)
+	}
+}
+
+func TestProviderLatchesRealSandboxEscape(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "codex"), []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	provider := newCLIProviders()[workerapi.ProviderCodex]
+	attempts := 0
+	provider.confinement = func(context.Context, string) error {
+		attempts++
+		return fmt.Errorf("%w: denied path was readable", errConfinementViolation)
+	}
+	provider.detect(context.Background())
+	if status := provider.status(context.Background()); status.Ready || status.SandboxedCommands ||
+		status.Reason != "sandbox self-test failed" || attempts != 1 {
+		t.Fatalf("status after a real sandbox escape = %#v, attempts %d", status, attempts)
+	}
+}
+
+func TestCodexSignedOutStatusUsesItsExitAndOutput(t *testing.T) {
+	directory := t.TempDir()
+	script := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo fake-codex; exit 0; fi\necho 'Not logged in'\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(directory, "codex"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	provider := newCLIProviders()[workerapi.ProviderCodex]
+	provider.detect(context.Background())
+	if status := provider.status(context.Background()); status.Ready || status.Reason != "not signed in" {
+		t.Fatalf("Codex sign-out status = %#v", status)
+	}
+}
+
+func TestClaudeSuccessfulMalformedAuthStatusIsUnavailable(t *testing.T) {
+	directory := t.TempDir()
+	script := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo fake-claude; exit 0; fi\necho not-json\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(directory, "claude"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	provider := newCLIProviders()[workerapi.ProviderClaude]
+	provider.detect(context.Background())
+	if status := provider.status(context.Background()); status.Ready || status.Reason != "auth status unavailable" {
+		t.Fatalf("Claude malformed auth status = %#v", status)
+	}
+}
+
+func TestProviderProbeStopsDescendantsWhenCancelled(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "path with spaces", "child.pid")
+	if err := os.MkdirAll(filepath.Dir(pidFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nsleep 30 &\necho $! > \"$1\"\nwait\n"
+	provider := &cliProvider{id: workerapi.ProviderClaude}
+	provider.path = filepath.Join(t.TempDir(), "probe")
+	if err := os.WriteFile(provider.path, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	finished := make(chan error, 1)
+	go func() {
+		_, err := provider.probe(ctx, []string{pidFile})
+		finished <- err
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	var childPID int
+	for time.Now().Before(deadline) {
+		if content, err := os.ReadFile(pidFile); err == nil {
+			if _, err := fmt.Sscanf(string(content), "%d", &childPID); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if childPID == 0 {
+		cancel()
+		t.Fatal("probe child did not start")
+	}
+	cancel()
+	select {
+	case err := <-finished:
+		if err == nil {
+			t.Fatal("cancelled probe succeeded")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancelled probe waited on a descendant's inherited output pipes")
+	}
+	waitForProcessExit(t, childPID)
+}
+
+func waitForProcessExit(t *testing.T, pid int) {
+	t.Helper()
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		err := syscall.Kill(pid, 0)
+		if errors.Is(err, syscall.ESRCH) {
+			return
+		}
+		if err != nil {
+			t.Fatalf("check descendant process %d: %v", pid, err)
+		}
+		select {
+		case <-timer.C:
+			t.Fatalf("cancelled probe descendant %d is still running", pid)
+		case <-ticker.C:
+		}
+	}
+}
+
+func TestProviderStatusRefreshesAuthenticationUnderWorkerEnvironment(t *testing.T) {
+	binDir, configDir := t.TempDir(), t.TempDir()
+	readyFile := filepath.Join(configDir, "readiness.json")
+	if err := os.WriteFile(readyFile, []byte(`{"loggedIn":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "claude"), []byte(
+		"#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo fake-claude; exit 0; fi\n"+
+			"status=$(cat \"$XDG_CONFIG_HOME/readiness.json\") || exit $?\n"+
+			"printf '%s\\n' \"$status\"\n"+
+			"case \"$status\" in *'\"loggedIn\":false'*) exit 1;; esac\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+	provider := newCLIProviders()[workerapi.ProviderClaude]
+	provider.detect(context.Background())
+	if status := provider.status(context.Background()); !status.Ready {
+		t.Fatalf("signed-in provider status = %#v", status)
+	}
+	if err := os.WriteFile(readyFile, []byte(`{"loggedIn":false}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if status := provider.status(context.Background()); status.Ready || status.Reason != "not signed in" {
+		t.Fatalf("signed-out provider status = %#v", status)
+	}
+	if err := os.Remove(readyFile); err != nil {
+		t.Fatal(err)
+	}
+	if status := provider.status(context.Background()); status.Ready || status.Reason != "auth status unavailable" {
+		t.Fatalf("unavailable authentication status = %#v", status)
+	}
+	if err := os.WriteFile(readyFile, []byte(`{"loggedIn":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if status := provider.status(context.Background()); !status.Ready {
+		t.Fatalf("re-authenticated provider status = %#v", status)
 	}
 }
 
