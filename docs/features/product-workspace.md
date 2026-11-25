@@ -1,10 +1,10 @@
 # Product workspace
 
 The Product Workspace manages durable products and links them to repositories reported by local workers. The approved
-layout has a product directory, a product heading with actions, four metric cards, six section tabs, and nine cards.
-**Mock** keeps that layout, fills it from fixtures, and keeps every change in the browser tab. **Live** adds a History
-tab and card for product-scoped WorkGraphs, fills data from the control plane, and says "Unavailable" where the
-control plane records nothing.
+layout has a product directory, a product heading with actions, four metric cards, and shared section tabs/cards.
+**Mock** keeps its browser-local fixture behavior. **Live** reads product-scoped WorkGraph and configuration history
+from the control plane and says "Unavailable" where that runtime has not recorded a fact.
+Mock does not show the Configuration tab; it does not fabricate durable revisions or actors.
 
 ## Feature diagram
 
@@ -41,15 +41,17 @@ flowchart LR
     Mock -->|"add or rename in fixture state"| Tab["This browser tab only"]
     CP --> Store[(products.json)]
     Page -->|"Objectives tab"| Execution["WorkspaceExecution · WorkGraphView"]
-    Live -->|"History tab · exact plan links and frozen revisions"| Environment
+    Live -->|"History and Configuration tabs · exact plan links and frozen revisions"| Environment
     Execution -->|"GET /api/v1/work-graphs"| CP
     Execution -->|"POST /api/v1/work-graphs/{id}/decisions/{messageID}"| CP
     Execution -->|"recorded workflow/profile IDs and versions"| Report
     Execution -->|"objective ID · Plan tab"| Plans
     Client["API client"] -->|"GET /api/v1/products/{id}/environment"| Environment["product_environment.go<br/>reference-only projection"]
     Environment --> Store
+    Environment -->|"configuration revision snapshots and recorded provenance"| Page
     Environment --> Graphs[(objectives.json · work-graphs.json)]
     Store -->|"read product context, revision and default workflow"| CP
+    Store -->|"append immutable configuration snapshot on change"| Store
     CP -->|"resolve default only for new plans; pin workflow version"| Graphs
     Graphs -->|"matching objective, revision and hash"| RunContext["planner / WorkUnit runContext"]
     Graphs -->|"durable planner-run link gates worker claim"| RunContext
@@ -80,7 +82,7 @@ Both modes:
 - "Open repository inventory" in the Product actions menu goes to the Projects page.
 - The Share dialog's link includes the selected product ID, and opening it restores that product.
 - Tabs narrow the cards: Objectives (roadmap and all objectives), Repos (all repositories and workflows), Files,
-  Decisions (decisions and stakeholders), Templates (workflow and agent templates, release streams).
+  Decisions (decisions and stakeholders), Configuration (product revision history), Templates (workflow and agent templates, release streams).
 - At phone widths, section tabs use three columns and the workspace-focus selector occupies a full row so labels stay
   readable and do not overlap.
 - The roadmap has Roadmap and Timeline views and a "Quarterly" menu that chooses the first quarter shown.
@@ -231,11 +233,21 @@ with the unit that asked, the question, and who resolved it.
 - Configuration revision advances when product name, description, default workflow, or repository links change. Each
   plan pins the revision alongside its product context and the environment projection associates that revision with
   the historical WorkGraph. Older product records without the field read as revision 1.
+- Product updates append immutable configuration snapshots to the existing `products.json` record. The Live
+  Configuration tab shows each recorded revision, its values, timestamp, and actor only when the request had a
+  recorded signed-in actor. Repository IDs outside the current caller's grants are redacted. Older records with no
+  history show the latest known snapshot and mark history incomplete when earlier revisions cannot be recovered;
+  their actor remains unrecorded.
+- Configuration history belongs to the product store; it is not a second environment or evidence store. Updating
+  current product values does not alter the product context or revision frozen into existing plans or WorkGraphs.
+- The history field is additive in `products.json`. A downgrade to a binary that predates the field can read the file,
+  but its next product write will discard the history; back up the data directory before downgrading across this
+  change.
 - Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
 - A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
-- Only the default workflow is currently product-scoped configuration. Other configuration, knowledge entries, promotion between
-  scopes, architecture/team references, and cross-product organization knowledge remain unimplemented because they
-  require established authority/context boundaries.
+- Only the default workflow and fields already owned by `productStore` are currently product-scoped configuration.
+  Provenance-aware knowledge, promotion between scopes, architecture/team references, and cross-product organization
+  knowledge remain unimplemented because they require established authority/context boundaries.
 
-Verified by `go test ./cmd/zenchron -run 'Test(ProductEnvironment|WorkUnitContextIncludesOnlyItsLinkedProduct|PlannerReceivesLinkedProductDescription)' -count=1`,
-including product isolation, historical context across a restart, and product context delivery to planner and WorkUnits.
+Verified by `go test ./cmd/zenchron -run 'Test(ProductEnvironment|ProductConfigurationHistorySurvivesRestartWithoutInventingActors|WorkUnitContextIncludesOnlyItsLinkedProduct|PlannerReceivesLinkedProductDescription)' -count=1`,
+including product isolation, configuration history across restart, honest actor provenance, and product context delivery to planner and WorkUnits. The Playwright E2E uses route fixtures to verify the Configuration view at desktop and mobile sizes, including unknown actors, empty product history, tab layout, and Mock/Live separation.

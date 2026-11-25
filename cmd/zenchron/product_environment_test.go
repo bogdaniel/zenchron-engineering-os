@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -102,5 +103,56 @@ func TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions(t *t
 	}
 	if _, status := environment(commit(7)[:32]); status != http.StatusNotFound {
 		t.Fatalf("unknown product returned HTTP %d", status)
+	}
+}
+
+func TestProductConfigurationHistorySurvivesRestartWithoutInventingActors(t *testing.T) {
+	dataDir := t.TempDir()
+	server, err := newPersistentMux(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := httptest.NewRecorder()
+	server.ServeHTTP(create, jsonRequest(http.MethodPost, "/api/v1/products",
+		strings.NewReader(`{"name":"Catalog","description":"Initial scope","repository_ids":[]}`)))
+	var productResponse map[string]json.RawMessage
+	if err := json.NewDecoder(create.Body).Decode(&productResponse); err != nil || create.Code != http.StatusCreated {
+		t.Fatalf("create product: HTTP %d, %v", create.Code, err)
+	}
+	var productID string
+	if err := json.Unmarshal(productResponse["id"], &productID); err != nil {
+		t.Fatalf("decode product id: %v", err)
+	}
+	if _, exposed := productResponse["configuration_history"]; exposed {
+		t.Fatal("product list/create response exposed internal configuration history")
+	}
+
+	update := httptest.NewRecorder()
+	server.ServeHTTP(update, jsonRequest(http.MethodPut, "/api/v1/products/"+productID,
+		strings.NewReader(`{"name":"Catalog v2","description":"Revised scope","repository_ids":[]}`)))
+	if update.Code != http.StatusOK {
+		t.Fatalf("update product: HTTP %d %s", update.Code, update.Body.String())
+	}
+
+	server, err = newPersistentMux(dataDir)
+	if err != nil {
+		t.Fatalf("restart control plane: %v", err)
+	}
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, jsonRequest(http.MethodGet, "/api/v1/products/"+productID+"/environment", nil))
+	var environment productEnvironment
+	if err := json.NewDecoder(response.Body).Decode(&environment); err != nil || response.Code != http.StatusOK {
+		t.Fatalf("read product environment after restart: HTTP %d, %v", response.Code, err)
+	}
+	if !environment.ConfigurationComplete || environment.ConfigurationRevision != 2 ||
+		len(environment.ConfigurationHistory) != 2 {
+		t.Fatalf("configuration history after restart = %#v, complete %t", environment.ConfigurationHistory,
+			environment.ConfigurationComplete)
+	}
+	first, second := environment.ConfigurationHistory[0], environment.ConfigurationHistory[1]
+	if first.Revision != 1 || first.Name != "Catalog" || first.Description != "Initial scope" ||
+		second.Revision != 2 || second.Name != "Catalog v2" || second.Description != "Revised scope" ||
+		first.ChangedBy != "" || second.ChangedBy != "" || first.ChangedAt.IsZero() || second.ChangedAt.IsZero() {
+		t.Fatalf("configuration history invented or lost provenance: %#v", environment.ConfigurationHistory)
 	}
 }

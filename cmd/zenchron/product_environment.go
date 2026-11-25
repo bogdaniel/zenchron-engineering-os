@@ -11,14 +11,27 @@ import (
 // objectives, plans, work graphs, decisions, and pull requests that belong to it. It is a projection of
 // records owned elsewhere and stores nothing of its own, so one product can never carry another's work.
 type productEnvironment struct {
-	ProductID             string                 `json:"product_id"`
-	Name                  string                 `json:"name"`
-	Description           string                 `json:"description"`
-	ConfigurationRevision int                    `json:"configuration_revision"`
-	RepositoryIDs         []string               `json:"repository_ids"`
-	Objectives            []environmentObjective `json:"objectives"`
-	Decisions             []environmentDecision  `json:"decisions"`
-	History               []environmentGraph     `json:"history"`
+	ProductID             string                             `json:"product_id"`
+	Name                  string                             `json:"name"`
+	Description           string                             `json:"description"`
+	ConfigurationRevision int                                `json:"configuration_revision"`
+	ConfigurationHistory  []productConfigurationRevisionView `json:"configuration_history"`
+	ConfigurationComplete bool                               `json:"configuration_history_complete"`
+	RepositoryIDs         []string                           `json:"repository_ids"`
+	Objectives            []environmentObjective             `json:"objectives"`
+	Decisions             []environmentDecision              `json:"decisions"`
+	History               []environmentGraph                 `json:"history"`
+}
+
+type productConfigurationRevisionView struct {
+	Revision             int       `json:"revision"`
+	Name                 string    `json:"name"`
+	Description          string    `json:"description"`
+	RepositoryIDs        []string  `json:"repository_ids"`
+	DefaultWorkflowID    string    `json:"default_workflow_id,omitempty"`
+	ChangedBy            string    `json:"changed_by,omitempty"`
+	ChangedAt            time.Time `json:"changed_at"`
+	RepositoriesRedacted bool      `json:"repositories_redacted,omitempty"`
 }
 
 // environmentGraph is a product-scoped reference to a durable execution record, without copying its evidence.
@@ -86,8 +99,10 @@ func (store *workGraphStore) environment(w http.ResponseWriter, r *http.Request)
 		http.NotFound(w, r)
 		return
 	}
+	configurationHistory, configurationComplete := item.configurationHistoryFor(access)
 	environment := productEnvironment{ProductID: item.ID, Name: item.Name, Description: item.Description,
-		ConfigurationRevision: item.configurationRevision(),
+		ConfigurationRevision: item.configurationRevision(), ConfigurationHistory: configurationHistory,
+		ConfigurationComplete: configurationComplete,
 		RepositoryIDs:         item.RepositoryIDs, Objectives: []environmentObjective{}, Decisions: []environmentDecision{},
 		History: []environmentGraph{}}
 	objectives := store.objectives.ofProduct(item.ID)

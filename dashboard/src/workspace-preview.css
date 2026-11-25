@@ -183,6 +183,11 @@
 .workspace-mock-list.history-list b { overflow: visible; white-space: normal; overflow-wrap: anywhere; }
 .workspace-mock-list.history-list b small { font-size: 9px; line-height: 1.35; overflow-wrap: anywhere; white-space: normal; }
 .workspace-mock-list.history-list > div > svg { flex: 0 0 auto; }
+.workspace-mock-list.configuration-history-list { gap: 6px; }
+.workspace-mock-list.configuration-history-list > div { align-items: flex-start; }
+.workspace-mock-list.configuration-history-list b { overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+.workspace-mock-list.configuration-history-list b small { display: block; font-size: 9px; line-height: 1.35; overflow-wrap: anywhere; white-space: normal; }
+.workspace-mock-list.configuration-history-list > div > svg { flex: 0 0 auto; }
 .workspace-mock-bottom.history { grid-auto-rows: auto; }
 .workspace-mock-bottom.history > .workspace-mock-card.history { grid-column: 1 / -1; height: auto; min-height: 220px; }
 .workspace-mock-state { min-height: 15px; padding: 0 5px; border: 0; border-radius: 8px; color: #3cdaa1; background: #14392e; font-size: 8px; text-transform: none; }
@@ -238,8 +243,9 @@
   .workspace-mock-bottom > .workspace-mock-card { height: auto; min-height: 166px; }
   .workspace-mock-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .workspace-mock-metric { height: auto; min-height: 76px; }
-  .workspace-mock-tabs button { min-width: 0; flex: 1; padding: 0 5px; }
-  .workspace-mock-focus { flex-basis: 150px; }
+  .workspace-mock-tabs { width: 100%; min-width: 0; flex-wrap: wrap; }
+  .workspace-mock-tabs button { min-width: 103px; flex: 1 1 103px; padding: 0 8px; }
+  .workspace-mock-focus { flex: 1 0 100%; margin-left: 0; }
   .workspace-mock-focus span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
   .workspace-mock-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; }
   .workspace-mock-grid > .workspace-mock-card { height: auto; grid-column: auto; min-height: 166px; }
@@ -264,6 +270,9 @@
   .workspace-mock-card.repositories, .workspace-mock-card.linked-workflows, .workspace-mock-card.files, .workspace-mock-card.people,
   .workspace-mock-card.release, .workspace-mock-card.decisions, .workspace-mock-card.analytics { min-height: 145px; grid-column: auto; }
   .workspace-mock-card.roadmap { min-height: 185px; }
+}
+@media (max-width: 350px) {
+  .workspace-mock-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .workspace-mock-grid:not(.overview) { grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: auto; }
