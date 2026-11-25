@@ -16,6 +16,8 @@ flowchart LR
     UI -->|proxy API requests| API[Go control plane<br/>127.0.0.1:8080]
     Worker[Go local worker] -->|PUT /api/v1/workers/{id}/heartbeat<br/>scan local root; names, branch, IDs, sanitized origin locator, derived CLI status and reason| API
     Worker -->|bounded auth probe in worker process environment| CLIs[Installed Codex / Claude CLIs]
+    Worker -->|Codex sandbox self-test| Sandbox[Installed Codex sandbox]
+    Sandbox -->|escape evidence: latched failure<br/>incomplete check: pending| Worker
     CLIs -->|probe output and exit status| Worker
     Worker -->|absolute paths stay local| LocalRepos[Git checkouts]
     API --> Registry[(In-memory worker registry)]

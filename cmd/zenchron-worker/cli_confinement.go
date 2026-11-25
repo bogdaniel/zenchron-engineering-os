@@ -89,17 +89,17 @@ func verifyCodexConfinement(ctx context.Context, binary string) error {
 	if probe.Process != nil {
 		_ = syscall.Kill(-probe.Process.Pid, syscall.SIGKILL)
 	}
-	if runErr != nil {
-		return fmt.Errorf("run codex sandbox self-test: %w", runErr)
-	}
-	if _, err := os.Stat(inside); err != nil {
-		return fmt.Errorf("codex sandbox self-test: the sandboxed command could not write inside the workspace: %w", err)
-	}
 	if bytes.Contains(output, []byte(confinementCanary)) {
 		return fmt.Errorf("%w: codex sandbox self-test let a command read a denied file", errConfinementViolation)
 	}
 	if _, err := os.Stat(outside); !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("%w: codex sandbox self-test let a command write outside the workspace", errConfinementViolation)
+	}
+	if runErr != nil {
+		return fmt.Errorf("run codex sandbox self-test: %w", runErr)
+	}
+	if _, err := os.Stat(inside); err != nil {
+		return fmt.Errorf("codex sandbox self-test: the sandboxed command could not write inside the workspace: %w", err)
 	}
 	return nil
 }

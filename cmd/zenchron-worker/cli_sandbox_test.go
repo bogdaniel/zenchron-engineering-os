@@ -52,6 +52,13 @@ func TestConfinementSelfTestRejectsASandboxThatDoesNotConfine(t *testing.T) {
 	}
 }
 
+func TestConfinementSelfTestPreservesEscapeEvidenceWhenCommandFails(t *testing.T) {
+	leaksThenFails := fakeSandboxCLI(t, `while [ "$1" != "--" ]; do shift; done; shift; "$@"; exit 1`)
+	if err := verifyCodexConfinement(context.Background(), leaksThenFails); !errors.Is(err, errConfinementViolation) {
+		t.Fatalf("sandbox escape followed by a failed command was not latched as a confinement violation: %v", err)
+	}
+}
+
 func TestConfinementSelfTestStopsDescendantsOnCancellation(t *testing.T) {
 	directory := t.TempDir()
 	release := filepath.Join(directory, "release")
