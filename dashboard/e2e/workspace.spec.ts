@@ -29,6 +29,7 @@ async function useLiveFixtures(
   page: Page, products: ProductFixture[] = [nova, orion], objectivesUnavailable = false, historyCount = 1,
 ) {
   const writes: { method: string; path: string; body: unknown }[] = [];
+  let configurationRevision = 2;
   await page.route('**/api/v1/**', (route) => route.fulfill(json([])));
   await page.route('**/api/v1/auth/session', (route) => route.fulfill(json({ authenticated: true, local: true, login: 'Local workspace' })));
   await page.route('**/api/v1/products**', async (route) => {
@@ -37,12 +38,20 @@ async function useLiveFixtures(
     const body = request.postDataJSON() as { name: string; description: string; repository_ids: string[] };
     writes.push({ method: request.method(), path: new URL(request.url()).pathname, body });
     const saved = { ...nova, ...body };
+    if (request.method() === 'PUT') configurationRevision++;
     products.splice(0, 1, saved);
     return route.fulfill(json(saved));
   });
   await page.route('**/api/v1/products/*/environment', (route) => route.fulfill(json({
     product_id: route.request().url().includes(novaID) ? novaID : orionID,
-    configuration_revision: 7,
+    configuration_revision: route.request().url().includes(novaID) ? configurationRevision : 1,
+    configuration_history_complete: route.request().url().includes(novaID),
+    configuration_history: route.request().url().includes(novaID) ? [
+      { revision: 1, name: 'Nova Platform', description: 'Previous product scope', repository_ids: [projectID],
+        changed_at: createdAt },
+        { revision: configurationRevision, name: products[0]?.name ?? 'Nova Platform',
+          description: products[0]?.description ?? 'Developer platform', repository_ids: [projectID], changed_at: createdAt },
+    ] : [],
     objectives: route.request().url().includes(novaID) ? [{
       graph_id: 'f'.repeat(32), graph_status: 'running', findings: 2, handoffs: 1,
       pull_request_url: 'https://github.com/zenchron/nova-platform/pull/42',
@@ -208,6 +217,13 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(page.locator('.workspace-mock-card.decisions')).toContainText('Publish the revised export?');
   await expect(page.locator('.workspace-mock-card.analytics')).toContainText('WorkGraphs1 current');
   await expect(page.locator('.workspace-mock-card.analytics')).toContainText('Findings2 recorded');
+  const configurationHistory = page.locator('.workspace-mock-card.configuration-history');
+  await expect(configurationHistory).toContainText('Configuration History (2)');
+  await expect(configurationHistory.locator('.configuration-history-list > div')).toHaveCount(2);
+  await expect(configurationHistory).toContainText('Revision 1');
+  await expect(configurationHistory).toContainText('Previous product scope');
+  await expect(configurationHistory).toContainText('Actor unrecorded');
+  await expect(configurationHistory).toContainText('Current');
   await expect(page.locator('.workspace-mock-card.decisions').getByRole('link', { name: 'Publish the revised export?' }))
     .toHaveAttribute('href', `/?objective=${'1'.repeat(32)}&tab=plan&graph_id=${'f'.repeat(32)}&decision=decision-1&mode=live#objectives`);
   const workGraph = page.locator('.workspace-mock-card.history');
@@ -224,8 +240,23 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await page.screenshot({ path: testInfo.outputPath('workspace-history-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await expect(configurationHistory).toContainText('Configuration History (2)');
   expect(await workGraph.evaluate((card) => card.scrollHeight <= card.clientHeight + 1)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('workspace-history-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Configuration' }).click();
+  await expect(configurationHistory).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('workspace-configuration-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  const sectionTabs = page.getByRole('navigation', { name: 'Product sections' });
+  await expect(sectionTabs.getByRole('button', { name: 'Configuration' })).toBeVisible();
+  expect(await sectionTabs.evaluate((tabs) => [...tabs.querySelectorAll('button')].every((button, index, buttons) =>
+    buttons.slice(index + 1).every((other) => button.getBoundingClientRect().right <= other.getBoundingClientRect().left ||
+      other.getBoundingClientRect().right <= button.getBoundingClientRect().left ||
+      button.getBoundingClientRect().bottom <= other.getBoundingClientRect().top ||
+      other.getBoundingClientRect().bottom <= button.getBoundingClientRect().top)))).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('workspace-configuration-mobile.png'), fullPage: true });
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Overview' }).click();
   await page.screenshot({ path: testInfo.outputPath('workspace-environment-desktop.png'), fullPage: true });
@@ -280,6 +311,8 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await dialog.getByLabel('Product name').fill('Nova Core');
   await dialog.getByRole('button', { name: 'Save product' }).click();
   await expect(page.locator('.workspace-mock-heading h1')).toHaveText('Nova Core');
+  await expect(configurationHistory).toContainText('Revision 3');
+  await expect(configurationHistory).toContainText('Nova Core');
   expect(writes).toEqual([{ method: 'PUT', path: `/api/v1/products/${novaID}`,
     body: { name: 'Nova Core', description: 'Developer platform', repository_ids: [projectID],
       default_workflow_id: 'release' } }]);
@@ -292,6 +325,9 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(page.locator('.workspace-mock-card.repositories')).toContainText('No repositories linked yet.');
   await expect(page.locator('.workspace-mock-card.history')).toContainText('No WorkGraph history is recorded for this product.');
   await expect(page.locator('.workspace-mock-card.history')).not.toContainText('run-1');
+  await expect(page.locator('.workspace-mock-card.configuration-history'))
+    .toContainText('No product configuration history is recorded.');
+  await expect(page.locator('.workspace-mock-card.configuration-history')).not.toContainText('Previous product scope');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
@@ -306,21 +342,22 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
   await focus.selectOption('Product owner');
   await expect(card('objectives')).toBeVisible();
   await expect(card('decisions')).toBeVisible();
+  await expect(tabs.getByRole('button', { name: 'Configuration' })).toBeVisible();
   await expect(card('repositories')).toBeHidden();
   await focus.selectOption('Engineer');
-  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Objectives', 'Repos', 'Templates']);
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Objectives', 'Repos', 'Configuration', 'Templates']);
   await expect(card('repositories')).toBeVisible();
   await expect(card('linked-workflows')).toBeVisible();
   await expect(card('decisions')).toBeHidden();
 
   await focus.selectOption('Designer');
-  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Objectives', 'Files']);
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Objectives', 'Files', 'Configuration']);
   await expect(card('files')).toContainText('Unavailable: files and evidence');
   await expect(card('decisions')).toBeHidden();
 
   await focus.selectOption('Security reviewer');
   await expect(focus).toHaveValue('Security reviewer');
-  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Objectives', 'Decisions']);
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Objectives', 'Decisions', 'Configuration']);
   await expect(page.getByRole('heading', { name: 'Objectives (3)' })).toBeVisible();
   await tabs.getByRole('button', { name: 'Decisions' }).click();
   await expect(page.locator('.workspace-mock-grid')).toBeHidden();
@@ -329,7 +366,7 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
   await page.screenshot({ path: testInfo.outputPath('workspace-security-reviewer-desktop.png'), fullPage: true });
 
   await focus.selectOption('Platform operator');
-  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Repos', 'Templates', 'Decisions']);
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Repos', 'Templates', 'Decisions', 'Configuration']);
   await tabs.getByRole('button', { name: 'Overview' }).click();
   await expect(card('linked-workflows')).toBeVisible();
   await expect(card('analytics')).toBeVisible();
@@ -346,7 +383,7 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
       overflowing: buttons.filter((button) => button.scrollWidth > button.clientWidth).length,
     };
   });
-  expect(mobileTabLayout).toEqual({ count: 7, overflowing: 0 });
+  expect(mobileTabLayout).toEqual({ count: 8, overflowing: 0 });
   await page.screenshot({ path: testInfo.outputPath('workspace-all-sections-mobile.png'), fullPage: true });
 
   await page.setViewportSize({ width: 310, height: 844 });
@@ -361,7 +398,7 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
         Math.abs(left.top - right.top) < 1 && left.right > right.left)),
     };
   });
-  expect(narrowTabLayout).toEqual({ count: 7, overflowing: 0, undersized: 0, overlapping: false });
+  expect(narrowTabLayout).toEqual({ count: 8, overflowing: 0, undersized: 0, overlapping: false });
 
 });
 

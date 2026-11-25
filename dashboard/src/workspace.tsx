@@ -23,19 +23,19 @@ interface WorkspacePageProps extends WorkspaceFacts {
   designPreview?: boolean;
 }
 
-const tabs = ['Overview', 'Objectives', 'Repos', 'Files', 'Decisions', 'History', 'Templates'] as const;
+const tabs = ['Overview', 'Objectives', 'Repos', 'Files', 'Decisions', 'History', 'Configuration', 'Templates'] as const;
 type WorkspaceTab = typeof tabs[number];
 const workspaceFoci = {
   'All sections': {
     tabs,
-    overview: ['roadmap', 'objectives', 'repositories', 'linked-workflows', 'files', 'people', 'release', 'decisions', 'analytics'],
+    overview: ['roadmap', 'objectives', 'repositories', 'linked-workflows', 'files', 'people', 'release', 'decisions', 'analytics', 'configuration-history'],
   },
-  'Product owner': { tabs: ['Overview', 'Objectives', 'Decisions'], overview: ['roadmap', 'objectives', 'decisions', 'analytics'] },
-  Engineer: { tabs: ['Overview', 'Objectives', 'Repos', 'Templates'], overview: ['roadmap', 'objectives', 'repositories', 'linked-workflows'] },
-  Designer: { tabs: ['Overview', 'Objectives', 'Files'], overview: ['roadmap', 'objectives', 'files'] },
-  'Security reviewer': { tabs: ['Objectives', 'Decisions'], overview: ['objectives', 'decisions'] },
+  'Product owner': { tabs: ['Overview', 'Objectives', 'Decisions', 'Configuration'], overview: ['roadmap', 'objectives', 'decisions', 'analytics', 'configuration-history'] },
+  Engineer: { tabs: ['Overview', 'Objectives', 'Repos', 'Configuration', 'Templates'], overview: ['roadmap', 'objectives', 'repositories', 'linked-workflows', 'configuration-history'] },
+  Designer: { tabs: ['Overview', 'Objectives', 'Files', 'Configuration'], overview: ['roadmap', 'objectives', 'files', 'configuration-history'] },
+  'Security reviewer': { tabs: ['Objectives', 'Decisions', 'Configuration'], overview: ['objectives', 'decisions', 'configuration-history'] },
   'Platform operator': {
-    tabs: ['Overview', 'Repos', 'Templates', 'Decisions'], overview: ['repositories', 'linked-workflows', 'decisions', 'analytics'],
+    tabs: ['Overview', 'Repos', 'Templates', 'Decisions', 'Configuration'], overview: ['repositories', 'linked-workflows', 'decisions', 'analytics', 'configuration-history'],
   },
 } as const;
 type WorkspaceFocus = keyof typeof workspaceFoci;
@@ -104,8 +104,10 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
   const shareURL = new URL(window.location.href);
   if (selected) shareURL.searchParams.set('product', selected.id);
   const view = source.view(selected?.id, roadmapQuarter);
-  const { metrics, roadmap, objectives, repositories, workflows, files, stakeholders, releases, decisions, history, delivery } = view;
-  const visibleTabs = (workspaceFoci[focus].tabs as readonly WorkspaceTab[]).filter((tab) => !designPreview || tab !== 'History');
+  const { metrics, roadmap, objectives, repositories, workflows, files, stakeholders, releases, decisions, history,
+    configurationHistory, delivery } = view;
+  const visibleTabs = (workspaceFoci[focus].tabs as readonly WorkspaceTab[])
+    .filter((tab) => !designPreview || tab !== 'History' && tab !== 'Configuration');
   const visibleProducts = products.filter((product) => product.name.toLowerCase().includes(search.trim().toLowerCase())
     && (statusFilter === 'All' || product.state === statusFilter));
   const isFavorite = Boolean(selected && source.favorites.includes(selected.id));
@@ -224,8 +226,9 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
         {visibleTabs.map((tab) => <button key={tab} type="button" aria-current={activeTab === tab ? 'page' : undefined}
           onClick={() => setActiveTab(tab)} className={activeTab === tab ? 'active' : ''}>
           {tab === 'Overview' ? <IconHome size={13} /> : tab === 'Objectives' ? <IconTarget size={13} />
-            : tab === 'Repos' ? <IconCode size={13} /> : tab === 'Files' ? <IconFolder size={13} />
+              : tab === 'Repos' ? <IconCode size={13} /> : tab === 'Files' ? <IconFolder size={13} />
               : tab === 'Decisions' ? <IconGitBranch size={13} /> : tab === 'History' ? <IconHistory size={13} />
+                : tab === 'Configuration' ? <IconStack2 size={13} />
                 : <IconStack2 size={13} />}{tab}
         </button>)}
         <label className="workspace-mock-focus"><span>Workspace focus</span>
@@ -328,6 +331,22 @@ export function WorkspacePage({ designPreview = false, ...facts }: WorkspacePage
             <IconHistory size={13} aria-hidden="true" />
             <b><a href={item.href}>{item.title}</a><small>{item.id}</small><small>{item.detail}</small></b>
             <Badge className={`workspace-mock-state ${stateClass(item.state)}`} variant="light">{item.state}</Badge>
+          </div>)}
+        </div>}
+      </Card>}
+      {!designPreview && <Card className="configuration-history" title={`Configuration History (${configurationHistory.rows.length})`}
+        icon={<IconStack2 size={15} />} action="View All" onAction={() => setActiveTab('Configuration')}
+        hidden={cardIsHidden('configuration-history', ['Overview', 'Configuration'])}>
+        {configurationHistory.note && <Note note={configurationHistory.note} />}
+        {configurationHistory.rows.length > 0 && <div className="workspace-mock-list configuration-history-list">
+          {configurationHistory.rows.map((item) => <div key={item.revision}>
+            <IconHistory size={13} aria-hidden="true" />
+            <b>Revision {item.revision}<small>{item.name} · {item.description || 'No description'}</small>
+              <small>{item.repositories} repositories · {item.workflow}</small>
+              <small>Changed {item.changedAt} · {item.changedBy}</small></b>
+            <Badge className={`workspace-mock-state ${item.current ? 'completed' : 'unknown'}`} variant="light">
+              {item.current ? 'Current' : 'Recorded'}
+            </Badge>
           </div>)}
         </div>}
       </Card>}
