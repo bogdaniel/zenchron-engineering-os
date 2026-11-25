@@ -352,19 +352,25 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
   await expect(tabs.getByRole('button', { name: 'Configuration' })).toBeVisible();
   await expect(card('repositories')).toBeHidden();
   await focus.selectOption('Engineer');
-  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Objectives', 'Repos', 'Configuration', 'Templates']);
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual([
+    'Overview', 'Objectives', 'Repos', 'Knowledge', 'Configuration', 'Templates',
+  ]);
   await expect(card('repositories')).toBeVisible();
   await expect(card('linked-workflows')).toBeVisible();
   await expect(card('decisions')).toBeHidden();
 
   await focus.selectOption('Designer');
-  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Objectives', 'Files', 'Configuration']);
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual([
+    'Overview', 'Objectives', 'Files', 'Knowledge', 'Configuration',
+  ]);
   await expect(card('files')).toContainText('Unavailable: files and evidence');
   await expect(card('decisions')).toBeHidden();
 
   await focus.selectOption('Security reviewer');
   await expect(focus).toHaveValue('Security reviewer');
-  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Objectives', 'Decisions', 'Configuration']);
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual([
+    'Objectives', 'Decisions', 'Knowledge', 'Configuration',
+  ]);
   await expect(page.getByRole('heading', { name: 'Objectives (3)' })).toBeVisible();
   await tabs.getByRole('button', { name: 'Decisions' }).click();
   await expect(page.locator('.workspace-mock-grid')).toBeHidden();
@@ -373,11 +379,24 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
   await page.screenshot({ path: testInfo.outputPath('workspace-security-reviewer-desktop.png'), fullPage: true });
 
   await focus.selectOption('Platform operator');
-  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual(['Overview', 'Repos', 'Templates', 'Decisions', 'Configuration']);
+  await expect(tabs.getByRole('button').allTextContents()).resolves.toEqual([
+    'Overview', 'Repos', 'Templates', 'Decisions', 'Knowledge', 'Configuration',
+  ]);
   await tabs.getByRole('button', { name: 'Overview' }).click();
   await expect(card('linked-workflows')).toBeVisible();
   await expect(card('analytics')).toBeVisible();
   await expect(card('files')).toBeHidden();
+
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await focus.selectOption('All sections');
+  const desktopTabLayout = await tabs.evaluate((element) => {
+    const buttons = [...element.querySelectorAll('button')];
+    return {
+      count: buttons.length,
+      overflowing: buttons.filter((button) => button.scrollWidth > button.clientWidth).length,
+    };
+  });
+  expect(desktopTabLayout).toEqual({ count: 9, overflowing: 0 });
 
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
@@ -390,7 +409,7 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
       overflowing: buttons.filter((button) => button.scrollWidth > button.clientWidth).length,
     };
   });
-  expect(mobileTabLayout).toEqual({ count: 8, overflowing: 0 });
+  expect(mobileTabLayout).toEqual({ count: 9, overflowing: 0 });
   await page.screenshot({ path: testInfo.outputPath('workspace-all-sections-mobile.png'), fullPage: true });
 
   await page.setViewportSize({ width: 310, height: 844 });
@@ -405,7 +424,7 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
         Math.abs(left.top - right.top) < 1 && left.right > right.left)),
     };
   });
-  expect(narrowTabLayout).toEqual({ count: 8, overflowing: 0, undersized: 0, overlapping: false });
+  expect(narrowTabLayout).toEqual({ count: 9, overflowing: 0, undersized: 0, overlapping: false });
 
 });
 
