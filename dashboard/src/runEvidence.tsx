@@ -10,8 +10,9 @@ export const runEvidenceFields = {
   issue_url: z.string().optional(), base_commit: z.string().optional(), provider: z.string().optional(),
   provider_version: z.string().optional(), termination_reason: z.string().optional(),
   verification: z.string().optional(), publication: z.string().optional(),
-  publication_authorizations: z.array(z.object({ commit_sha: z.string(), by: z.string(), at: z.string(), attempt: z.number() }))
-    .optional(),
+  publication_authorizations: z.array(z.object({ commit_sha: z.string(), graph_id: z.string().optional(),
+    graph_revision: z.number().optional(), plan_revision: z.number().optional(), plan_hash: z.string().optional(),
+    by: z.string(), at: z.string(), attempt: z.number() })).optional(),
   usage: z.object({ input_tokens: z.number(), output_tokens: z.number(), cost_usd: z.number().optional() }).optional(),
   attempt_log: z.array(z.object({
     attempt: z.number(), worker_id: z.string(), started_at: z.string(), finished_at: z.string().optional(),
@@ -139,7 +140,8 @@ export function RunEvidence({ run }: { run: EvidenceRun }) {
   if (pullRequest.data?.review_stage) facts.push(['Human review', reviewStageLabels[pullRequest.data.review_stage]]);
   if (pullRequest.data?.merge_blocked_by_review) facts.push(['Merge status', 'Blocked by an outstanding change request']);
   if (run.pull_request_number !== undefined) facts.push(['Review and CI', outstanding(checks, reviews)]);
-  const publicationAuthorization = run.publication_authorizations?.find((item) => item.commit_sha === run.commit_sha);
+  const publicationAuthorization = run.publication_authorizations?.find((item) => item.commit_sha === run.commit_sha &&
+    !run.graph_id && !item.graph_id);
   if (publicationAuthorization) facts.push(['Publication authorized',
     `${publicationAuthorization.by} · ${new Date(publicationAuthorization.at).toLocaleString()} · ${shortCommit(publicationAuthorization.commit_sha)}`]);
   const queryClient = useQueryClient();

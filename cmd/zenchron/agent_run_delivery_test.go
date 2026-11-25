@@ -319,6 +319,65 @@ func TestPullRequestPublicationRetriesWithoutDuplicates(t *testing.T) {
 	}
 }
 
+func TestPublishOnlyResultMustMatchAuthorizedCandidate(t *testing.T) {
+	harness := newDeliveryHarness(t, workerapi.ProviderCodex)
+	run := harness.createIssueRun()
+	harness.claim()
+	withoutPush := strings.Replace(pushedResult, `"branch_pushed":true`, `"branch_pushed":false`, 1)
+	if _, status := harness.finish(run.ID, withoutPush); status != http.StatusOK {
+		t.Fatalf("candidate result returned HTTP %d", status)
+	}
+	if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusAccepted {
+		t.Fatalf("authorize candidate returned HTTP %d", response.Code)
+	}
+	harness.claim()
+	wrongCandidate := strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1)
+	wrongCandidate = strings.Replace(wrongCandidate, testCommit, strings.Repeat("c", 40), 1)
+	if _, status := harness.finish(run.ID, wrongCandidate); status != http.StatusConflict {
+		t.Fatalf("mismatched publish-only result returned HTTP %d, want %d", status, http.StatusConflict)
+	}
+	stored, exists := harness.store.get(run.ID)
+	if !exists || stored.Status != "running" || stored.CommitSHA != testCommit || !stored.publicationAuthorized(testCommit) {
+		t.Fatalf("mismatched result changed authorized run state: %#v", stored)
+	}
+}
+
+func TestPublishOnlyResultPreservesExecutionEvidenceWhenFieldsAreMissing(t *testing.T) {
+	harness := newDeliveryHarness(t, workerapi.ProviderCodex)
+	run := harness.createIssueRun()
+	harness.claim()
+	treeSHA := strings.Repeat("d", 40)
+	initial := strings.Replace(pushedResult, `"branch_pushed":true`, `"branch_pushed":false`, 1)
+	initial = strings.Replace(initial, `"provider_version":"1.2.3"`, `"commit_tree_sha":"`+treeSHA+`","provider_version":"1.2.3"`, 1)
+	initial = strings.Replace(initial, `"provider_version":"1.2.3"`, `"result":"{\"summary\":\"initial\"}","provider_version":"1.2.3"`, 1)
+	finished, status := harness.finish(run.ID, initial)
+	if status != http.StatusOK || finished.Result == "" || finished.Usage == nil || finished.ProviderVersion != "1.2.3" {
+		t.Fatalf("initial execution evidence = %#v, HTTP %d", finished, status)
+	}
+	if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusAccepted {
+		t.Fatalf("authorize candidate returned HTTP %d", response.Code)
+	}
+	harness.claim()
+	publication := `{"status":"succeeded","attempts":2,"commit_sha":"` + testCommit +
+		`","branch_pushed":true,"verification":"passed"}`
+	harness.failPullCreate = true
+	finished, status = harness.finish(run.ID, publication)
+	if status != http.StatusOK || finished.Publication != publicationPullRequestFailed || finished.Result != `{"summary":"initial"}` ||
+		finished.ResultAttempt != 1 || finished.Usage == nil || finished.Usage.InputTokens != 120 ||
+		finished.Usage.OutputTokens != 30 || finished.ProviderVersion != "1.2.3" || finished.CommitTreeSHA != treeSHA {
+		t.Fatalf("publication lost execution evidence: %#v, HTTP %d", finished, status)
+	}
+	harness.failPullCreate = false
+	response := harness.call(http.MethodPost, "/api/v1/agent-runs/"+run.ID+"/publish", `{"candidate_sha":"`+testCommit+`"}`)
+	var published agentRun
+	if err := json.NewDecoder(response.Body).Decode(&published); err != nil || response.Code != http.StatusOK ||
+		published.Publication != publicationPublished || published.Result != `{"summary":"initial"}` ||
+		published.ResultAttempt != 1 || published.Usage == nil || published.Usage.InputTokens != 120 ||
+		published.Usage.OutputTokens != 30 || published.ProviderVersion != "1.2.3" || published.CommitTreeSHA != treeSHA {
+		t.Fatalf("publication retry lost execution evidence: %#v, HTTP %d, %v", published, response.Code, err)
+	}
+}
+
 func TestPullRequestPublicationBlocksConcurrentRequestChanges(t *testing.T) {
 	for _, path := range []string{"worker result", "manual retry"} {
 		t.Run(path, func(t *testing.T) {

@@ -146,7 +146,10 @@ that exits successfully is therefore not reported as delivered work unless verif
   that exact commit. A failed verification keeps the commit on the local branch and publishes nothing. The publish-only
   pass requires a clean worktree, checks out and rechecks the exact candidate SHA, and runs configured verification
   before pushing it. Without configured commands verification is `not_configured`; the person sees that recorded state
-  before authorizing publication.
+  before authorizing publication. If a publish-only result omits execution result, usage, or provider version, the
+  control plane preserves the values already recorded for the execution instead of replacing them with empty data.
+  When it checks out a different authorized SHA, the worker restores the run branch after verification and before push;
+  failed verification attempts restoration without resetting or discarding changed files.
 - Before a later attempt on a pull-request run, the worker fetches the published run branch. If verification left a
   divergent local commit, it preserves that commit on a local recovery branch before resetting the run branch to the
   published tip. A dirty worktree fails closed, so recovery never discards uncommitted changes. Reconciliation acquires
@@ -154,10 +157,10 @@ that exits successfully is therefore not reported as delivered work unless verif
   without exposing provider API keys or worker bearer credentials.
 - The control plane creates the pull request with its GitHub credential only after a person authorized and the worker
   pushed the exact candidate. It is titled after the issue and ends with `Closes #<issue>`. Creation reuses an existing
-  pull request for the same branch and base, including closed pull requests, so an uncertain GitHub response does not
-  create a duplicate. Reuse is accepted only when GitHub reports the human-authorized candidate SHA as the PR head;
-  a stale or missing SHA leaves publication failed. If GitHub fails after the push,
-  `POST /api/v1/agent-runs/{id}/publish` retries without creating a duplicate or reopening a closed pull request.
+  pull request for the same branch and base only when GitHub reports the human-authorized candidate SHA as its head.
+  An open PR with another head fails closed; a closed PR for an older candidate is skipped so the current candidate can
+  receive a new PR. A same-candidate PR remains reusable after an uncertain GitHub response. If GitHub fails after the
+  push, `POST /api/v1/agent-runs/{id}/publish` retries without duplicating the matching PR or reopening a closed PR.
 - A change request from the dashboard, one delivered by a [GitHub webhook](github-webhooks.md), or one imported
   from GitHub with `sync-reviews`, queues another attempt on the
   same branch and worktree. The new candidate remains local until a person authorizes its exact SHA; the next
@@ -188,6 +191,8 @@ in Live.
 - **Reviews > Local branches > Evidence.** For the selected run: issue link, provider and version, worker, branch,
   base and result commits, execution result, verification, publication, pull-request link, reported usage, the pull
   request's check runs, every attempt, and the event log, which refreshes every two seconds while the run is active.
+  This view labels authorization only for direct runs; graph-bound publication authority is shown with its exact
+  candidate, graph revision, and plan contract in the Objective Delivery Report.
   Loading, failure, and empty states are shown per section. At desktop width the evidence scrolls inside the detail
   pane's tab area. On a phone-sized screen (760px wide or less) the evidence is laid out at its full length and the
   whole detail pane scrolls instead, so the pane's full height (about 630px at 390×844) shows evidence; the event log

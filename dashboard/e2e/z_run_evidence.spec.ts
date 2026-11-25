@@ -252,6 +252,28 @@ for (const viewport of viewports) {
   });
 }
 
+test('Review run evidence only labels direct-run publication authorization', async ({ page }) => {
+  await mockWorkspace(page, { providerReady: true });
+  const authorization = { commit_sha: 'a'.repeat(40), by: 'maintainer', at: now, attempt: 2 };
+  let run: Record<string, unknown> = { ...evidenceRun, pull_request_number: undefined, pull_request_url: undefined,
+    publication_authorizations: [authorization] };
+  await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([run])));
+  await page.route(`**/api/v1/agent-runs/${runID}/diff`, (route) => route.fulfill(json({ run_id: runID, diff: '', truncated: false })));
+  await page.route(`**/api/v1/agent-runs/${runID}/events`, (route) => route.fulfill(json([])));
+  await page.goto('/#reviews');
+  await page.getByRole('button', { name: 'Local branches' }).click();
+  await page.getByRole('group', { name: 'Review detail sections' }).getByRole('button', { name: 'Evidence' }).click();
+  const summary = page.getByLabel('Run evidence summary');
+  await expect(summary).toContainText('Publication authorized');
+
+  run = { ...run, graph_id: 'f'.repeat(32), publication_authorizations: [{ ...authorization,
+    graph_id: 'f'.repeat(32), graph_revision: 4, plan_revision: 1, plan_hash: 'plan-hash' }] };
+  await page.reload();
+  await page.getByRole('button', { name: 'Local branches' }).click();
+  await page.getByRole('group', { name: 'Review detail sections' }).getByRole('button', { name: 'Evidence' }).click();
+  await expect(page.getByLabel('Run evidence summary')).not.toContainText('Publication authorized');
+});
+
 test('Reviews distinguishes every human re-review stage reported by the control plane', async ({ page }) => {
   await mockWorkspace(page, { providerReady: true });
   await page.route('**/api/v1/agent-runs', (route) => route.fulfill(json([{ ...evidenceRun, github_reviews: [] }])));

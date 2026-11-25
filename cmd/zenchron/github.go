@@ -211,7 +211,9 @@ func (client gitHubClient) updateIssueState(ctx context.Context, owner, reposito
 	return err
 }
 
-func (client gitHubClient) createPullRequest(ctx context.Context, owner, repository, head, base, title, body string) (gitHubPullRequest, error) {
+func (client gitHubClient) createPullRequest(
+	ctx context.Context, owner, repository, head, base, candidateSHA, title, body string,
+) (gitHubPullRequest, error) {
 	query := make(url.Values)
 	query.Set("state", "all")
 	query.Set("head", owner+":"+head)
@@ -230,9 +232,12 @@ func (client gitHubClient) createPullRequest(ctx context.Context, owner, reposit
 		pull := &existing[index]
 		if pull.Head.Ref == head && pull.Base.Ref == base {
 			if pull.State == "open" {
+				if pull.Head.SHA != candidateSHA {
+					return gitHubPullRequest{}, fmt.Errorf("open pull request head does not match candidate")
+				}
 				return *pull, nil
 			}
-			if closed == nil {
+			if pull.Head.SHA == candidateSHA && closed == nil {
 				closed = pull
 			}
 		}

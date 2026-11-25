@@ -140,6 +140,7 @@ export function useLiveOrchestration(enabled: boolean, objectiveID?: string, pro
     await send(path, body);
     await Promise.all([queryClient.invalidateQueries({ queryKey: ['work-graphs'] }),
       queryClient.invalidateQueries({ queryKey: ['objective-plans'] }),
+      queryClient.invalidateQueries({ queryKey: ['work-graph-report'] }),
       queryClient.invalidateQueries({ queryKey: ['action-required'] }),
       queryClient.invalidateQueries({ queryKey: ['agent-runs'] })]);
   };
