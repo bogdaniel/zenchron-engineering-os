@@ -329,7 +329,7 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 		problem = "this objective already has a plan executing; cancel its work graph before approving a changed plan"
 	case len(store.graphs) >= maxWorkGraphs:
 		problem = "work graph history is full"
-	case online && project.GitRemote != plan.Repository:
+	case online && !sameRepository(project.GitRemote, plan.Repository):
 		problem = "the plan's checkout repository changed; propose the plan again"
 	case !online || !access.allows(project.GitRemote) || !access.mayDispatchTo(project.WorkerID):
 		problem = "the plan's project is offline or you may not dispatch work to its worker"
