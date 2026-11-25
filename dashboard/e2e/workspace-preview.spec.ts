@@ -18,6 +18,8 @@ test('local Product Workspace mock matches the supplied overview without protect
 
   await expect(page.getByRole('heading', { name: 'Good morning, Alex' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Nova Platform', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Product sections' }).getByRole('button', { name: 'Configuration' }))
+    .toHaveCount(0);
   await expect(page.getByText('Product Health')).toBeVisible();
   await expect(page.getByText('Release Streams', { exact: true })).toBeVisible();
   const directoryBounds = await page.locator('.workspace-mock-directory').boundingBox();

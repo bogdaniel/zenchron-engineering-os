@@ -21,6 +21,10 @@ export type WorkspaceObjectiveRow = { title: string; detail?: string; progress: 
 export type WorkspaceRepositoryRow = { name: string; detail?: string; branch: string };
 export type WorkspaceStatusRow = { name: string; state: string; detail?: string; href?: string; note?: string };
 export type WorkspaceHistoryRow = { id: string; title: string; state: string; detail: string; href: string };
+export type WorkspaceConfigurationRow = {
+  revision: number; name: string; description: string; repositories: string; workflow: string;
+  changedBy: string; changedAt: string; current: boolean; redacted: boolean;
+};
 
 /** Display values for the selected product, in the same shape for Mock and Live. */
 export type WorkspaceView = {
@@ -61,6 +65,7 @@ export type WorkspaceView = {
   releases: { rows: { name: string; state: string; version: string; progress: number; tone: string }[]; note?: WorkspaceNote };
   decisions: { rows: { name: string; state: string; time?: string; href?: string }[]; note?: WorkspaceNote };
   history: { rows: WorkspaceHistoryRow[]; note?: WorkspaceNote };
+  configurationHistory: { rows: WorkspaceConfigurationRow[]; complete: boolean; note?: WorkspaceNote };
   delivery: {
     ranges: string[];
     metrics: (range: string) => [label: string, value: string, delta: string][];
@@ -117,6 +122,10 @@ const failed = (text: string): WorkspaceNote => ({ text, alert: true });
 const environmentSchema = z.object({
   product_id: z.string(),
   configuration_revision: z.number().int().nonnegative().optional(),
+  configuration_history_complete: z.boolean().optional(),
+  configuration_history: z.array(z.object({ revision: z.number().int().positive(), name: z.string(), description: z.string(),
+    repository_ids: z.array(z.string()), default_workflow_id: z.string().optional(), changed_by: z.string().optional(),
+    changed_at: z.string().datetime(), repositories_redacted: z.boolean().optional() })).optional(),
   objectives: z.array(z.object({ graph_id: z.string().optional(), graph_status: z.string().optional(),
     findings: z.number().int().nonnegative().optional(), handoffs: z.number().int().nonnegative().optional(),
     pull_request_url: z.string().optional() })),
@@ -303,6 +312,19 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
           (assignments ? ` · ${assignments}` : ''),
         href: livePageHref('objectives', { objective: item.objective_id, tab: 'plan', graph_id: item.id }) };
     }) ?? [], note: environmentNote ?? (environment?.history.length ? undefined : { text: 'No WorkGraph history is recorded for this product.' }) },
+    configurationHistory: {
+      rows: environment?.configuration_history?.map((item) => ({ revision: item.revision, name: item.name,
+        description: item.description, repositories: item.repositories_redacted ? `${item.repository_ids.length} visible; others hidden`
+          : `${item.repository_ids.length} linked`, workflow: item.default_workflow_id || 'No default workflow',
+        changedBy: item.changed_by || 'Actor unrecorded',
+        changedAt: new Date(item.changed_at).toLocaleString(), current: item.revision === environment.configuration_revision,
+        redacted: item.repositories_redacted ?? false })) ?? [],
+      complete: environment?.configuration_history_complete ?? false,
+      note: environmentNote ?? (environment?.configuration_history === undefined
+        ? { text: 'Configuration revision history is not available from this runtime.' }
+        : !environment.configuration_history.length ? { text: 'No product configuration history is recorded.' }
+          : environment.configuration_history_complete ? undefined : { text: 'Earlier configuration revisions were not recorded.' }),
+    },
     delivery: { ranges: [], metrics: () => [
       ['WorkGraphs', String(graphCount), 'current'], ['PR links', String(pullRequestCount), 'observed'],
       ['Findings', String(findingCount), 'recorded'], ['Handoffs', String(handoffCount), 'recorded'],
@@ -333,7 +355,10 @@ export function useLiveWorkspace(enabled: boolean, facts: WorkspaceFacts, select
       if (!response.ok) throw new Error(await response.text());
       return productSchema.parse(await response.json());
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
+    onSuccess: async (_product, { productID }) => {
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
+      if (productID) await queryClient.invalidateQueries({ queryKey: ['product-environment', productID] });
+    },
   });
   const definitions = {
     workflows: workflows.data?.map((workflow) => ({ name: workflow.name, state: workflow.status,

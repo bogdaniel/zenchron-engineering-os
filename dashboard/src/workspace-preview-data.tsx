@@ -118,6 +118,8 @@ function mockView(selected: MockProduct | undefined, quarter = defaultQuarter): 
         `Use feature flags for ${name}`, `Defer custom permissions for ${name}`][row], state, time,
     })) },
     history: { rows: [], note: { text: 'WorkGraph history is unavailable in this preview fixture.' } },
+    configurationHistory: { rows: [], complete: false,
+      note: { text: 'Configuration history is unavailable in this preview fixture.' } },
     delivery: {
       ranges: Object.keys(deliveryMetrics),
       metrics: (range) => deliveryRows.map(([label, delta], row) => [label, (deliveryMetrics[range] ?? deliveryMetrics['Last 8 weeks'])[row], delta]),
