@@ -190,9 +190,11 @@ func (runner *agentRunner) attempt(
 	ctx context.Context, command workerapi.AgentRunCommand, project discoveredProject, root string,
 	workspace runWorkspace, provider *cliProvider, reporter *progressReporter,
 ) workerapi.AgentRunResult {
-	result := workerapi.AgentRunResult{ProviderVersion: "git merge"}
+	result := workerapi.AgentRunResult{}
 	if provider != nil {
 		result.ProviderVersion = provider.version
+	} else if len(command.Merge) > 0 {
+		result.ProviderVersion = "git merge"
 	}
 	worktree := workspace.path
 	lifecycleLock, err := lockWorktreeLifecycle(ctx, root, project.ID)
@@ -379,7 +381,7 @@ func (runner *agentRunner) publishCandidate(
 		result.BranchPushed = true
 		reporter.emit("status", "Pushed the human-authorized candidate.")
 	}
-	result.ProviderVersion, result.Status = "git publication", "succeeded"
+	result.Status = "succeeded"
 	result.TerminationReason = workerapi.TerminationCompleted
 	return result
 }

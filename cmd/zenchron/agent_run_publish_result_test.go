@@ -45,6 +45,7 @@ func TestPublishOnlyFailureWithoutCandidateSHAIsPersistedAndReplayIsIdempotent(t
 	}
 	stored, exists := restarted.get(run.ID)
 	if !exists || stored.Status != "failed" || stored.CommitSHA != testCommit || stored.Attempts != command.Attempts ||
+		stored.ProviderVersion != "1.2.3" ||
 		stored.AttemptLog[len(stored.AttemptLog)-1].Status != "failed" || harness.pullCreates != 0 {
 		t.Fatalf("failed publish-only result or replay state = %#v, PR creates %d", stored, harness.pullCreates)
 	}
