@@ -68,6 +68,8 @@ async function mockOrchestration(page: Page, state: { graphs?: unknown[]; plans?
     description: 'The product.', repository_ids: [projectID], created_at: now, updated_at: now }])));
   await page.route('**/api/v1/agents', (route) => route.fulfill(json(agents)));
   await page.route('**/api/v1/projects', (route) => route.fulfill(json(projects)));
+  await page.route('**/api/v1/workers', (route) => route.fulfill(json([{ id: workerID, name: 'dev-laptop', status: 'online',
+    last_seen: now, providers: [] }])));
   await page.route('**/api/v1/work-graphs', (route) => state.graphsStatus
     ? route.fulfill({ status: state.graphsStatus, body: 'unavailable' }) : route.fulfill(json(state.graphs ?? [])));
   await page.route(`**/api/v1/objectives/${objectiveID}/plans`, (route) => route.request().method() === 'GET'
@@ -281,6 +283,24 @@ for (const viewport of viewports) {
     ]);
   });
 }
+
+test('proposed plan approval stays disabled while its repository worker is offline', async ({ page }) => {
+  await page.setViewportSize(viewports[0]);
+  const proposed = { ...plan, status: 'proposed', graph_id: undefined, approved_by: undefined };
+  await mockOrchestration(page, { plans: [proposed] });
+  await page.route('**/api/v1/workers', (route) => route.fulfill(json([{
+    id: workerID, name: 'dev-laptop', status: 'offline', last_seen: now, providers: [],
+  }])));
+  await page.route('**/api/v1/projects', (route) => route.fulfill(json(projects.map((project) => ({
+    ...project, worker_status: 'offline',
+  })))));
+  const panel = await openPlan(page);
+  const approval = panel.getByRole('button', { name: 'Approve plan and start' });
+  await expect(approval).toBeDisabled();
+  await expect(approval).toHaveAttribute('title',
+    'The plan’s repository worker is offline; bring it online before approval.');
+  await expect(panel).toContainText('Plan approval is unavailable');
+});
 
 test('plan revisions show planning, invalid problems, and a refused approval; proposing names a planner and workflow', async ({ page }) => {
   await page.setViewportSize(viewports[0]);

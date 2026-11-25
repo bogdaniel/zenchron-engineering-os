@@ -119,6 +119,9 @@ func (store *agentRunStore) recordReviewLocked(
 	if !reviewableAgentRun(*item) {
 		return http.StatusConflict, "only completed agent runs can be reviewed"
 	}
+	if requestChanges && item.Publishing {
+		return http.StatusConflict, "pull request publication is in progress"
+	}
 	if len(item.ReviewComments) >= maxAgentRunComments {
 		return http.StatusConflict, "agent run review history is full"
 	}

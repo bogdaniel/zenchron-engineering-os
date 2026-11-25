@@ -58,13 +58,18 @@ sequenceDiagram
   end
   UI->>API: Read run history and selected branch diff
   API-->>UI: Current status and local diff
-  Reviewer->>API: Submit PR comment or request changes from dashboard
-  API->>GH: Read PR head and submit review
-  API->>Store: Find the run by its stored pull-request number and persist feedback
-  opt Request changes and worker can accept another pass
-    API->>Store: Requeue the same run and branch
-    Note over Store: A new candidate does not inherit the old publish-only intent
-    Worker->>API: Claim feedback-updated run
+  alt Request changes while PR creation is in progress
+    Reviewer->>API: Request changes from dashboard
+    API-->>Reviewer: 409; no review is queued or recorded
+  else PR comment or request changes after publication
+    Reviewer->>API: Submit PR comment or request changes from dashboard
+    API->>GH: Read PR head and submit review
+    API->>Store: Find the run by its stored pull-request number and persist feedback
+    opt Request changes and worker can accept another pass
+      API->>Store: Requeue the same run and branch
+      Note over Store: A new candidate does not inherit the old publish-only intent
+      Worker->>API: Claim feedback-updated run
+    end
   end
   Reviewer->>API: Cancel queued or running run
   API->>Store: Cancel queued run or flag active lease
