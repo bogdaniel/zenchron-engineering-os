@@ -2,10 +2,11 @@
 
 The Live Overview lists unresolved typed WorkGraph decision requests from the existing control plane. It omits
 cancelled graphs, reports loading, empty, and unavailable states, and links each row to the specific objective, graph,
-and decision. The destination focuses the existing authorized resolution field; no second authority model or queue is
-stored. A successful replacement-plan approval clears the old graph and decision from the deep link so the refreshed
-plan view follows the newly approved graph. Product Workspace decision links use the same exact deep link and label
-decisions in cancelled graphs as cancelled.
+and decision. Rows show the plan revision, unit stage, exact question, recorded waiting reason, options, and run ID;
+missing fields stay explicitly unrecorded. The destination focuses the existing authorized resolution field; no second
+authority model or queue is stored. A successful replacement-plan approval clears the old graph and decision from the
+deep link so the refreshed plan view follows the newly approved graph. Product Workspace decision links use the same
+exact deep link and label decisions in cancelled graphs as cancelled.
 
 ## Feature diagram
 
@@ -27,6 +28,7 @@ flowchart LR
 ## Verification
 
 `cd dashboard && npm run test:e2e -- e2e/action-required.spec.ts e2e/workspace.spec.ts` checks the exact graph and
-decision deep link at desktop and phone sizes, focused resolution UI, cancelled-graph filtering, empty and error
-states, and Product Workspace links. `go test ./cmd/zenchron -run 'TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions' -count=1`
+decision context and deep link at desktop and phone sizes, focused resolution UI, cancelled-graph filtering, empty and
+error states, and Product Workspace links. `cd dashboard && npm run test:e2e -- e2e/orchestration.spec.ts --grep 'an objective plan approved in the dashboard runs through decision'`
+checks the same queue against the real control plane and worker. `go test ./cmd/zenchron -run 'TestProductEnvironmentReferencesOnlyItsOwnObjectivesGraphsAndDecisions' -count=1`
 checks the typed graph status in the product projection.

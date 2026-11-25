@@ -513,8 +513,18 @@ test('an objective plan approved in the dashboard runs through decision, review,
   // From here the worker must forward typed results: the producer asks, a person answers in the page.
   const decisionForm = panel.getByRole('form', { name: 'Decision for step-1' });
   await expect(decisionForm).toContainText('E2E: which format?', { timeout: 90_000 });
-  await decisionForm.getByRole('button', { name: 'CSV' }).click();
-  await decisionForm.getByRole('button', { name: 'Resolve decision' }).click();
+  await page.goto('/?mode=live#overview');
+  const actionRequired = page.getByRole('region', { name: 'Action Required' });
+  await expect(actionRequired).toContainText('1 waiting');
+  await expect(actionRequired).toContainText('Plan revision 1 · produce: API producer');
+  await expect(actionRequired).toContainText('E2E: which format?');
+  await expect(actionRequired).toContainText(/Run [a-f0-9]{32}/);
+  const exactDecision = actionRequired.getByRole('link');
+  await expect(exactDecision).toHaveAttribute('href', new RegExp(`objective=${created.objectiveID}.*graph_id=.*decision=`));
+  await exactDecision.click();
+  await expect(page.getByRole('form', { name: 'Decision for step-1' })).toContainText('E2E: which format?');
+  await page.getByRole('button', { name: 'CSV' }).click();
+  await page.getByRole('button', { name: 'Resolve decision' }).click();
   const messages = panel.getByRole('list', { name: 'Handoffs, findings, and decisions' });
   await expect(messages).toContainText('by local operator');
   await expect(messages).toContainText('E2E finding', { timeout: 120_000 });
