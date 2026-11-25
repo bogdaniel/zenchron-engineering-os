@@ -349,6 +349,19 @@ test('Product Workspace focuses durable cards for each operator role', async ({ 
   expect(mobileTabLayout).toEqual({ count: 7, overflowing: 0 });
   await page.screenshot({ path: testInfo.outputPath('workspace-all-sections-mobile.png'), fullPage: true });
 
+  await page.setViewportSize({ width: 310, height: 844 });
+  const narrowTabLayout = await tabs.evaluate((element) => {
+    const buttons = [...element.querySelectorAll('button')];
+    const bounds = buttons.map((button) => button.getBoundingClientRect());
+    return {
+      count: buttons.length,
+      overflowing: buttons.filter((button) => button.scrollWidth > button.clientWidth).length,
+      overlapping: bounds.some((left, index) => bounds.slice(index + 1).some((right) =>
+        Math.abs(left.top - right.top) < 1 && left.right > right.left)),
+    };
+  });
+  expect(narrowTabLayout).toEqual({ count: 7, overflowing: 0, overlapping: false });
+
 });
 
 test('Live Product Workspace saves a default workflow and carries it into objective creation', async ({ page }) => {
