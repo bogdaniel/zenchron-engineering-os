@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,10 +18,18 @@ func TestPublicationRequestsDoNotOverlapWithinSameAttempt(t *testing.T) {
 			harness := newDeliveryHarness(t, workerapi.ProviderCodex)
 			run := harness.createIssueRun()
 			harness.claim()
-			path := "/api/v1/agent-runs/" + run.ID + "/publish"
+			if _, status := harness.finish(run.ID, strings.Replace(pushedResult, `"branch_pushed":true`, `"branch_pushed":false`, 1)); status != http.StatusOK {
+				t.Fatalf("finish before authorization returned HTTP %d", status)
+			}
+			if response := harness.authorizePublication(run.ID, testCommit); response.Code != http.StatusAccepted {
+				t.Fatalf("authorize candidate: HTTP %d %s", response.Code, response.Body.String())
+			}
+			if command := harness.claim(); command.Attempts != 2 || !command.PublishPullRequest || command.PublishCommit != testCommit {
+				t.Fatalf("authorized publication command = %#v", command)
+			}
 			if mode == "manual retry" {
 				harness.failPullCreate = true
-				if _, status := harness.finish(run.ID, pushedResult); status != http.StatusOK {
+				if _, status := harness.finish(run.ID, strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1)); status != http.StatusOK {
 					t.Fatalf("initial failed publication returned HTTP %d", status)
 				}
 				harness.failPullCreate = false
@@ -41,11 +50,11 @@ func TestPublicationRequestsDoNotOverlapWithinSameAttempt(t *testing.T) {
 			firstStatus := make(chan int, 1)
 			go func() {
 				if mode == "finish" {
-					_, status := harness.finish(run.ID, pushedResult)
+					_, status := harness.finish(run.ID, strings.Replace(pushedResult, `"attempts":1`, `"attempts":2`, 1))
 					firstStatus <- status
 					return
 				}
-				firstStatus <- harness.call(http.MethodPost, path, "").Code
+				firstStatus <- harness.authorizePublication(run.ID, testCommit).Code
 			}()
 			select {
 			case <-entered:
@@ -57,7 +66,7 @@ func TestPublicationRequestsDoNotOverlapWithinSameAttempt(t *testing.T) {
 			}
 			duplicateStatus := make(chan int, 1)
 			go func() {
-				duplicateStatus <- harness.call(http.MethodPost, path, "").Code
+				duplicateStatus <- harness.authorizePublication(run.ID, testCommit).Code
 			}()
 			select {
 			case status := <-duplicateStatus:

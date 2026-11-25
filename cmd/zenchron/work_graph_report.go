@@ -17,24 +17,37 @@ const supervisionMinutes = "supervision_minutes"
 
 // deliveryReport says what one WorkGraph's run actually did, from durable records only.
 type deliveryReport struct {
-	GraphID         string               `json:"graph_id"`
-	GraphRevision   int                  `json:"graph_revision"`
-	ObjectiveID     string               `json:"objective_id"`
-	ObjectiveTitle  string               `json:"objective_title"`
-	PlanRevision    int                  `json:"plan_revision"`
-	WorkflowID      string               `json:"workflow_id,omitempty"`
-	WorkflowVersion int                  `json:"workflow_version,omitempty"`
-	WorkflowMode    string               `json:"workflow_mode,omitempty"`
-	Status          string               `json:"status"`
-	ApprovedPlan    reportPlan           `json:"approved_plan"`
-	Units           []reportUnit         `json:"units"`
-	Handoffs        []reportHandoff      `json:"handoffs"`
-	Decisions       []reportDecision     `json:"decisions"`
-	Outstanding     []reportOutstanding  `json:"outstanding_steps"`
-	Measurements    deliveryMeasurements `json:"measurements"`
-	UnknownEvidence []string             `json:"unknown_evidence"`
-	PullRequestURL  string               `json:"pull_request_url,omitempty"`
-	PullRequest     *reportPullRequest   `json:"pull_request_external_state,omitempty"`
+	GraphID              string                      `json:"graph_id"`
+	GraphRevision        int                         `json:"graph_revision"`
+	ObjectiveID          string                      `json:"objective_id"`
+	ObjectiveTitle       string                      `json:"objective_title"`
+	PlanRevision         int                         `json:"plan_revision"`
+	WorkflowID           string                      `json:"workflow_id,omitempty"`
+	WorkflowVersion      int                         `json:"workflow_version,omitempty"`
+	WorkflowMode         string                      `json:"workflow_mode,omitempty"`
+	Status               string                      `json:"status"`
+	ApprovedPlan         reportPlan                  `json:"approved_plan"`
+	Units                []reportUnit                `json:"units"`
+	Handoffs             []reportHandoff             `json:"handoffs"`
+	Decisions            []reportDecision            `json:"decisions"`
+	Outstanding          []reportOutstanding         `json:"outstanding_steps"`
+	Measurements         deliveryMeasurements        `json:"measurements"`
+	UnknownEvidence      []string                    `json:"unknown_evidence"`
+	PullRequestURL       string                      `json:"pull_request_url,omitempty"`
+	PullRequest          *reportPullRequest          `json:"pull_request_external_state,omitempty"`
+	PublicationAuthority *reportPublicationAuthority `json:"publication_authority,omitempty"`
+}
+
+type reportPublicationAuthority struct {
+	SourceRunID   string    `json:"source_run_id"`
+	GraphID       string    `json:"graph_id"`
+	GraphRevision int       `json:"graph_revision"`
+	PlanRevision  int       `json:"plan_revision"`
+	PlanHash      string    `json:"plan_hash"`
+	CommitSHA     string    `json:"commit_sha"`
+	By            string    `json:"by"`
+	At            time.Time `json:"at"`
+	Attempt       int       `json:"attempt"`
 }
 
 type reportPullRequest struct {
@@ -299,6 +312,24 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 				return evidence == "candidate_tree_sha"
 			})
 		}
+		if unit.Kind == unitIntegrate && len(unit.RunIDs) > 0 && unit.Candidate != "" && graph.reviewed(&unit, runs) &&
+			len(graph.reviewersOf(unit.Key)) > 0 {
+			run := runs[unit.RunIDs[len(unit.RunIDs)-1]]
+			for _, authorization := range run.PublicationAuthorizations {
+				if authorization.CommitSHA != unit.Candidate || authorization.GraphID != graph.ID ||
+					authorization.PlanRevision != graph.PlanRevision || authorization.PlanHash != graph.PlanHash {
+					continue
+				}
+				report.PublicationAuthority = &reportPublicationAuthority{SourceRunID: run.ID, GraphID: graph.ID,
+					GraphRevision: authorization.GraphRevision, PlanRevision: authorization.PlanRevision,
+					PlanHash: authorization.PlanHash, CommitSHA: authorization.CommitSHA,
+					By: authorization.By, At: authorization.At, Attempt: authorization.Attempt}
+				report.UnknownEvidence = slices.DeleteFunc(report.UnknownEvidence, func(evidence string) bool {
+					return evidence == "publication_authority"
+				})
+				break
+			}
+		}
 		report.Units = append(report.Units, summary)
 		if unit.State != unitCompleted {
 			report.Outstanding = append(report.Outstanding, reportOutstanding{Key: unit.Key, State: unit.State,
@@ -325,8 +356,14 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	measured.Findings = countMessages(graph.Messages, messageFinding)
 	measured.DecisionsRequested = countMessages(graph.Messages, messageDecisionRequest)
 	measured.DecisionsResolved = countMessages(graph.Messages, messageDecisionResolution)
-	// The plan approval that created the graph is the one human action every graph has.
-	measured.HumanActions = measured.DecisionsResolved + 1
+	publicationAuthorizations := 0
+	for _, run := range runs {
+		if run.GraphID == graph.ID {
+			publicationAuthorizations += len(run.PublicationAuthorizations)
+		}
+	}
+	// Plan approval, resolved graph decisions, and recorded publication authorizations are durable human actions.
+	measured.HumanActions = measured.DecisionsResolved + publicationAuthorizations + 1
 	measured.HumanActionsComplete = false
 	measured.Unknown = []string{supervisionMinutes}
 	measured.Unknown = append(measured.Unknown, "unrecorded_human_actions")

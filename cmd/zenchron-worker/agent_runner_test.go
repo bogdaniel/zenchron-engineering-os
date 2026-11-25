@@ -243,7 +243,6 @@ func TestCLIRunCommitsVerifiedChangeAndReportsRedactedEvidence(t *testing.T) {
 
 func TestCLIRunVerificationFailureKeepsCommitAndDoesNotPublish(t *testing.T) {
 	harness := newRunHarness(t, fakeChangeScript, [][]string{{"sh", "-c", "echo boom-detail; exit 3"}})
-	harness.command.PublishPullRequest = true
 	if err := harness.process(); err != nil {
 		t.Fatalf("process run: %v", err)
 	}
@@ -258,7 +257,7 @@ func TestCLIRunVerificationFailureKeepsCommitAndDoesNotPublish(t *testing.T) {
 	}
 }
 
-func TestCLIRunPushesVerifiedCommitWhenVerificationMovesBranch(t *testing.T) {
+func TestPublishOnlyRunPushesAuthorizedCandidateEvenWhenVerificationMovesWorktreeHead(t *testing.T) {
 	bare := filepath.Join(t.TempDir(), "origin.git")
 	if err := os.MkdirAll(bare, 0o700); err != nil {
 		t.Fatal(err)
@@ -273,9 +272,10 @@ func TestCLIRunPushesVerifiedCommitWhenVerificationMovesBranch(t *testing.T) {
 	harness.gitRemote = "github.com/test/repository"
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
 	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
-	harness.command.PublishPullRequest = true
 	var headAtPush string
+	var pushCalls int
 	harness.runner.push = func(ctx context.Context, worktree, _, branch, commitSHA string) error {
+		pushCalls++
 		head, err := gitOutput(ctx, "-C", worktree, "rev-parse", "HEAD")
 		if err != nil {
 			return err
@@ -284,49 +284,74 @@ func TestCLIRunPushesVerifiedCommitWhenVerificationMovesBranch(t *testing.T) {
 		return gitCommand(ctx, "-C", worktree, "push", bare, commitSHA+":refs/heads/"+branch).Run()
 	}
 	if err := harness.process(); err != nil {
-		t.Fatalf("process run: %v", err)
+		t.Fatalf("create candidate: %v", err)
 	}
-	result := harness.result()
+	candidate := harness.results[0]
+	if candidate.Status != "succeeded" || candidate.BranchPushed || candidate.CommitSHA == "" {
+		t.Fatalf("candidate result = %#v", candidate)
+	}
+	runGit(t, harness.worktree, "reset", "--hard", candidate.CommitSHA)
+	if head := strings.TrimSpace(runGit(t, harness.worktree, "rev-parse", "HEAD")); head != candidate.CommitSHA {
+		t.Fatalf("candidate checkout HEAD = %s, want authorized candidate %s", head, candidate.CommitSHA)
+	}
+	if err := os.WriteFile(filepath.Join(harness.worktree, "unreviewed.txt"), []byte("unreviewed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	harness.queue = []workerapi.AgentRunCommand{{
+		ID: harness.command.ID, ProjectID: harness.command.ProjectID, Branch: harness.command.Branch,
+		BaseBranch: harness.command.BaseBranch, Attempts: 2, PublishPullRequest: true, PublishOnly: true,
+		PublishCommit: candidate.CommitSHA,
+	}}
+	if err := harness.process(); err != nil {
+		t.Fatalf("reject dirty candidate checkout: %v", err)
+	}
+	dirtyResult := harness.results[1]
+	if dirtyResult.Status != "failed" || dirtyResult.BranchPushed || pushCalls != 0 {
+		t.Fatalf("dirty candidate checkout was published: %#v after %d pushes", dirtyResult, pushCalls)
+	}
+	if err := os.Remove(filepath.Join(harness.worktree, "unreviewed.txt")); err != nil {
+		t.Fatal(err)
+	}
+	harness.queue = []workerapi.AgentRunCommand{{
+		ID: harness.command.ID, ProjectID: harness.command.ProjectID, Branch: harness.command.Branch,
+		BaseBranch: harness.command.BaseBranch, Attempts: 3, PublishPullRequest: true, PublishOnly: true,
+		PublishCommit: candidate.CommitSHA,
+	}}
+	if err := harness.process(); err != nil {
+		t.Fatalf("publish clean authorized candidate: %v", err)
+	}
+	result := harness.results[2]
 	remoteCommit := strings.TrimSpace(runGit(t, bare, "rev-parse", "refs/heads/"+harness.command.Branch))
-	if headAtPush == result.CommitSHA || result.Status != "succeeded" || result.Verification != workerapi.VerificationPassed || !result.BranchPushed ||
-		remoteCommit != result.CommitSHA {
-		t.Fatalf("result = %#v; remote branch points to %q, want verified commit %q", result, remoteCommit, result.CommitSHA)
+	if result.Status != "succeeded" || !result.BranchPushed || pushCalls != 1 || headAtPush == candidate.CommitSHA ||
+		remoteCommit != candidate.CommitSHA || result.CommitSHA != candidate.CommitSHA {
+		t.Fatalf("publication did not push only the authorized commit: %#v; remote %q; pushed head %q",
+			result, remoteCommit, headAtPush)
 	}
 }
 
-func TestCLIRunRetryReconcilesPublishedBranchAfterWorktreeCleanup(t *testing.T) {
+func TestCLIPublishOnlyRunFindsExactCandidateAfterWorktreeCleanup(t *testing.T) {
 	bare := filepath.Join(t.TempDir(), "origin.git")
 	if err := os.MkdirAll(bare, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	runGit(t, bare, "init", "--bare")
-	harness := newRunHarness(t, fakeChangeScript, [][]string{{
-		"git", "-c", "user.name=Verification", "-c", "user.email=verification@example.invalid",
-		"commit", "--amend", "--allow-empty", "-m", "verification moved branch",
-	}})
+	harness := newRunHarness(t, fakeChangeScript, nil)
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	harness.gitRemote = "github.com/test/repository"
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
 	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
 	first := harness.command
-	first.PublishPullRequest = true
-	second := first
-	second.Attempts = 2
-	second.Prompt = "Apply the reviewer change."
 	harness.command = first
 	harness.runner.push = func(ctx context.Context, worktree, _, branch, commitSHA string) error {
 		return gitCommand(ctx, "-C", worktree, "push", bare, commitSHA+":refs/heads/"+branch).Run()
 	}
-	harness.queue = []workerapi.AgentRunCommand{first, second}
 	if err := harness.process(); err != nil {
 		t.Fatalf("first attempt: %v", err)
 	}
 	firstResult := harness.results[0]
-	localRecovery := strings.TrimSpace(runGit(t, harness.repository, "rev-parse", "refs/heads/"+first.Branch))
-	if firstResult.Status != "succeeded" || localRecovery == firstResult.CommitSHA {
-		t.Fatalf("first result = %#v; local branch %q should have moved past published %q",
-			firstResult, localRecovery, firstResult.CommitSHA)
+	if firstResult.Status != "succeeded" || firstResult.BranchPushed || firstResult.CommitSHA == "" {
+		t.Fatalf("first candidate result = %#v", firstResult)
 	}
 	root := filepath.Dir(filepath.Dir(harness.worktree))
 	removed, kept, err := cleanupWorktrees(context.Background(), root,
@@ -334,25 +359,17 @@ func TestCLIRunRetryReconcilesPublishedBranchAfterWorktreeCleanup(t *testing.T) 
 	if err != nil || len(removed) != 1 || len(kept) != 0 {
 		t.Fatalf("cleanup removed %v and kept %v, error %v", removed, kept, err)
 	}
-	secondScript := `echo "second attempt" >> README.md
-echo '{"type":"item.completed","item":{"id":"m2","type":"agent_message","text":"reviewer change applied"}}'
-echo '{"type":"turn.completed","usage":{"input_tokens":2,"output_tokens":1}}'
-`
-	if err := os.WriteFile(harness.runner.providers[workerapi.ProviderCodex].path,
-		[]byte("#!/bin/sh\n"+secondScript), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	publish := first
+	publish.Attempts, publish.PublishPullRequest, publish.PublishOnly, publish.PublishCommit = 2, true, true, firstResult.CommitSHA
+	harness.queue = []workerapi.AgentRunCommand{publish}
 	if err := harness.process(); err != nil {
-		t.Fatalf("second attempt: %v", err)
+		t.Fatalf("publish exact candidate after cleanup: %v", err)
 	}
 	secondResult := harness.results[1]
 	remoteCommit := strings.TrimSpace(runGit(t, bare, "rev-parse", "refs/heads/"+first.Branch))
-	recovery := strings.TrimSpace(runGit(t, harness.repository, "rev-parse",
-		"refs/heads/zenchron/recovery/"+first.ID+"/2-"+localRecovery))
 	if secondResult.Status != "succeeded" || secondResult.Attempts != 2 || !secondResult.BranchPushed ||
-		remoteCommit != secondResult.CommitSHA || recovery != localRecovery ||
-		!strings.Contains(strings.TrimSpace(runGit(t, bare, "show", "refs/heads/"+first.Branch+":README.md")), "second attempt") {
-		t.Fatalf("second result = %#v; remote %q; recovery %q, want %q", secondResult, remoteCommit, recovery, localRecovery)
+		secondResult.CommitSHA != firstResult.CommitSHA || remoteCommit != firstResult.CommitSHA {
+		t.Fatalf("publication result = %#v; remote %q; candidate %q", secondResult, remoteCommit, firstResult.CommitSHA)
 	}
 }
 
@@ -452,10 +469,26 @@ func TestGitStageDeadlineStartsAfterProviderFinishes(t *testing.T) {
 }
 
 func TestPushGetsFreshDeadlineAfterVerification(t *testing.T) {
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	if err := os.MkdirAll(bare, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, bare, "init", "--bare")
 	harness := newRunHarness(t, fakeChangeScript, [][]string{{"sh", "-c", "sleep 2.5"}})
+	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
+	harness.gitRemote = "github.com/test/repository"
+	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
+	harness.runner.config.Repositories[harness.gitRemote] = harness.runner.config.Repositories[""]
 	harness.runner.limits.gitStage = 2 * time.Second
 	harness.runner.limits.verification = 5 * time.Second
-	harness.command.PublishPullRequest = true
+	if err := harness.process(); err != nil {
+		t.Fatalf("create candidate: %v", err)
+	}
+	candidate := harness.results[0]
+	publish := harness.command
+	publish.Attempts, publish.PublishPullRequest, publish.PublishOnly, publish.PublishCommit = 2, true, true, candidate.CommitSHA
+	harness.queue = []workerapi.AgentRunCommand{publish}
 	pushed := false
 	harness.runner.push = func(ctx context.Context, _, _, _, _ string) error {
 		deadline, ok := ctx.Deadline()
@@ -466,9 +499,9 @@ func TestPushGetsFreshDeadlineAfterVerification(t *testing.T) {
 		return ctx.Err()
 	}
 	if err := harness.process(); err != nil {
-		t.Fatalf("process run: %v", err)
+		t.Fatalf("publish candidate: %v", err)
 	}
-	if result := harness.result(); result.Status != "succeeded" || !result.BranchPushed || !pushed ||
+	if result := harness.results[1]; result.Status != "succeeded" || !result.BranchPushed || !pushed ||
 		result.Verification != workerapi.VerificationPassed {
 		t.Fatalf("run after verification exceeded the staging deadline = %#v; pushed %t", result, pushed)
 	}
@@ -580,25 +613,25 @@ func TestBoundedDiffStaysValidAndWithinLimitWhenCutMidCharacter(t *testing.T) {
 	}
 }
 
-func TestAttemptThatLosesItsLeaseAfterCommittingDoesNotPush(t *testing.T) {
+func TestAgentRunCandidatesDoNotPushWithoutAuthorization(t *testing.T) {
 	pushes := 0
 	countPush := func(context.Context, string, string, string, string) error {
 		pushes++
 		return nil
 	}
 	published := newRunHarness(t, fakeChangeScript, nil)
-	published.command.PublishPullRequest, published.runner.push = true, countPush
+	published.runner.push = countPush
 	if err := published.process(); err != nil {
 		t.Fatalf("process run: %v", err)
 	}
-	if result := published.result(); !result.BranchPushed || pushes != 1 {
-		t.Fatalf("current attempt result = %#v after %d pushes", result, pushes)
+	if result := published.result(); result.BranchPushed || pushes != 0 || result.CommitSHA == "" {
+		t.Fatalf("unauthorized candidate result = %#v after %d pushes", result, pushes)
 	}
 
 	// The same delivery stage, entered by an attempt whose lease was lost while the provider ran.
 	pushes = 0
 	stale := newRunHarness(t, fakeChangeScript, nil)
-	stale.command.PublishPullRequest, stale.runner.push = true, countPush
+	stale.runner.push = countPush
 	project := discoveredProject{ID: stale.command.ProjectID, Name: "repository", Path: stale.repository}
 	root := filepath.Dir(filepath.Dir(stale.worktree))
 	if err := prepareWorktree(context.Background(), root, project, stale.command.ID, stale.command.Branch, "main"); err != nil {

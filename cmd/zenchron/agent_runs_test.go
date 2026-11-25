@@ -275,7 +275,7 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 			t.Errorf("pull request input = %#v, decode error = %v", input, err)
 		}
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"number":23,"title":"Add review flow","state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":"` + workerapi.AgentRunBranch(runID) + `"},"base":{"ref":"main"}}`))
+		_, _ = w.Write([]byte(`{"number":23,"title":"Add review flow","state":"open","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":"` + workerapi.AgentRunBranch(runID) + `","sha":"` + strings.Repeat("a", 40) + `"},"base":{"ref":"main"}}`))
 	}))
 	defer provider.Close()
 	registry := newWorkerRegistry()
@@ -287,9 +287,12 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 	item := agentRun{ID: runID, AgentID: profile.ID, AgentName: profile.Name, ProjectID: testProjectID,
 		Repository:  "github.com/acme/platform",
 		ProjectName: "platform", WorkerID: testWorkerID, WorkerName: "worker", Branch: workerapi.AgentRunBranch(runID),
-		BaseBranch: "main", Prompt: "Add review flow", Output: "Agent summary.", Status: "running", Attempts: 1,
+		BaseBranch: "main", Prompt: "Add review flow", Output: "Agent summary.", CommitSHA: strings.Repeat("a", 40),
+		Status: "running", Attempts: 1,
 		LeaseUntil: time.Now().Add(time.Minute), CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
-		Profile: &profile, PullRequestEnabled: true}
+		Profile: &profile, PullRequestEnabled: true, PublishOnly: true, PublicationAuthorizations: []publicationAuthorization{{
+			CommitSHA: strings.Repeat("a", 40), By: "test operator", At: time.Now().UTC(), Attempt: 1,
+		}}}
 	store.items[item.ID] = item
 	request := jsonRequest(http.MethodPut, "/api/v1/workers/"+testWorkerID+"/agent-runs/"+item.ID,
 		strings.NewReader(`{"status":"succeeded","output":"Agent summary.","attempts":1,"commit_sha":"`+
@@ -298,14 +301,15 @@ func TestAgentRunFinishCreatesPullRequestAfterWorkerPush(t *testing.T) {
 	request.SetPathValue("requestID", item.ID)
 	response := httptest.NewRecorder()
 	store.finish(response, request)
+	responseBody := response.Body.String()
 	var result agentRun
-	if err := json.NewDecoder(response.Body).Decode(&result); err != nil || response.Code != http.StatusOK ||
+	if err := json.NewDecoder(strings.NewReader(responseBody)).Decode(&result); err != nil || response.Code != http.StatusOK ||
 		result.PullRequestNumber != 23 || result.PullRequestURL != "https://github.com/acme/platform/pull/23" || result.PullRequestError != "" {
-		t.Fatalf("finished run = %#v, decode error = %v, HTTP %d: %s", result, err, response.Code, response.Body.String())
+		t.Fatalf("finished run = %#v, decode error = %v, HTTP %d: %s", result, err, response.Code, responseBody)
 	}
 }
 
-func TestAgentRunClaimEnablesPullRequestForGitHubProjectWithToken(t *testing.T) {
+func TestAgentRunClaimDoesNotAuthorizePullRequestForGitHubProjectWithToken(t *testing.T) {
 	t.Setenv("ZENCHRON_GITHUB_TOKEN", "test-token")
 	registry := newWorkerRegistry()
 	registry.workers[testWorkerID] = workerRecord{ID: testWorkerID, Name: "worker", LastSeen: time.Now().UTC(),
@@ -322,7 +326,7 @@ func TestAgentRunClaimEnablesPullRequestForGitHubProjectWithToken(t *testing.T) 
 		strings.NewReader(`{"agent_id":"`+profile.ID+`","project_id":"`+testProjectID+`","prompt":"Add a feature"}`))
 	store.create(response, request)
 	var queued agentRun
-	if err := json.NewDecoder(response.Body).Decode(&queued); err != nil || response.Code != http.StatusAccepted || !queued.PullRequestEnabled {
+	if err := json.NewDecoder(response.Body).Decode(&queued); err != nil || response.Code != http.StatusAccepted || queued.PullRequestEnabled {
 		t.Fatalf("queued run = %#v, decode error = %v, HTTP %d", queued, err, response.Code)
 	}
 	response = httptest.NewRecorder()
@@ -330,7 +334,7 @@ func TestAgentRunClaimEnablesPullRequestForGitHubProjectWithToken(t *testing.T) 
 	request.SetPathValue("id", testWorkerID)
 	store.claim(response, request)
 	var command workerapi.AgentRunCommand
-	if err := json.NewDecoder(response.Body).Decode(&command); err != nil || response.Code != http.StatusOK || !command.PublishPullRequest {
+	if err := json.NewDecoder(response.Body).Decode(&command); err != nil || response.Code != http.StatusOK || command.PublishPullRequest {
 		t.Fatalf("claimed run = %#v, decode error = %v, HTTP %d", command, err, response.Code)
 	}
 }

@@ -61,6 +61,51 @@ func TestPrepareWorktreeCreatesIsolatedBranchAndReusesItAfterCleanup(t *testing.
 	}
 }
 
+func TestPrepareWorktreeRecoversAuthorizedDetachedCheckout(t *testing.T) {
+	repository := filepath.Join(t.TempDir(), "repository")
+	if err := os.MkdirAll(repository, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, repository, "init", "-b", "main")
+	runGit(t, repository, "config", "user.name", "Zenchron Test")
+	runGit(t, repository, "config", "user.email", "zenchron-test@example.invalid")
+	if err := os.WriteFile(filepath.Join(repository, "README.md"), []byte("base\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, repository, "add", "README.md")
+	runGit(t, repository, "commit", "-m", "initial commit")
+	project := projectAt(repository, workerTestID)
+	const branch = "zenchron/review-fix"
+	root := filepath.Join(t.TempDir(), "worker-checkouts")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main"); err != nil {
+		t.Fatal(err)
+	}
+	worktree := filepath.Join(root, project.ID, workerTestID)
+	if err := os.WriteFile(filepath.Join(worktree, "README.md"), []byte("candidate\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, worktree, "add", "README.md")
+	runGit(t, worktree, "commit", "-m", "candidate")
+	candidate := strings.TrimSpace(runGit(t, worktree, "rev-parse", "HEAD"))
+	runGit(t, worktree, "checkout", "--detach", candidate)
+
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main"); err != nil {
+		t.Fatalf("prepareWorktree() did not recover detached authorized candidate: %v", err)
+	}
+	if current := strings.TrimSpace(runGit(t, worktree, "branch", "--show-current")); current != branch {
+		t.Fatalf("recovered worktree branch = %q, want %q", current, branch)
+	}
+	if current := strings.TrimSpace(runGit(t, worktree, "rev-parse", "HEAD")); current != candidate {
+		t.Fatalf("recovery changed candidate from %q to %q", candidate, current)
+	}
+	runGit(t, worktree, "checkout", "--detach", "main")
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main"); err == nil {
+		t.Fatal("prepareWorktree() accepted a detached checkout that differs from its run branch")
+	}
+}
+
 func TestPushAgentBranchRestrictsOriginAndPushesOnlyTheRunBranch(t *testing.T) {
 	root := t.TempDir()
 	repository := filepath.Join(root, "repository")

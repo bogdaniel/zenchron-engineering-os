@@ -61,6 +61,18 @@ type gitHubPullRequest struct {
 	MergeableState string `json:"mergeable_state"`
 }
 
+type gitHubPullRequestCleanupError struct {
+	Number int
+	Err    error
+}
+
+func (err *gitHubPullRequestCleanupError) Error() string {
+	return fmt.Sprintf("GitHub created pull request #%d for a different candidate and closing it failed: %v",
+		err.Number, err.Err)
+}
+
+func (err *gitHubPullRequestCleanupError) Unwrap() error { return err.Err }
+
 type gitHubIssue struct {
 	Number      int            `json:"number"`
 	Comments    int            `json:"comments"`
@@ -211,9 +223,11 @@ func (client gitHubClient) updateIssueState(ctx context.Context, owner, reposito
 	return err
 }
 
-func (client gitHubClient) createPullRequest(ctx context.Context, owner, repository, head, base, title, body string) (gitHubPullRequest, error) {
+func (client gitHubClient) createPullRequest(
+	ctx context.Context, owner, repository, head, base, candidateSHA, title, body string,
+) (gitHubPullRequest, error) {
 	query := make(url.Values)
-	query.Set("state", "open")
+	query.Set("state", "all")
 	query.Set("head", owner+":"+head)
 	query.Set("base", base)
 	query.Set("per_page", "100")
@@ -225,10 +239,23 @@ func (client gitHubClient) createPullRequest(ctx context.Context, owner, reposit
 	if err := json.Unmarshal(response, &existing); err != nil {
 		return gitHubPullRequest{}, err
 	}
-	for _, pull := range existing {
+	var closed *gitHubPullRequest
+	for index := range existing {
+		pull := &existing[index]
 		if pull.Head.Ref == head && pull.Base.Ref == base {
-			return pull, nil
+			if pull.State == "open" {
+				if pull.Head.SHA != candidateSHA {
+					return gitHubPullRequest{}, fmt.Errorf("open pull request head does not match candidate")
+				}
+				return *pull, nil
+			}
+			if pull.Head.SHA == candidateSHA && closed == nil {
+				closed = pull
+			}
 		}
+	}
+	if closed != nil {
+		return *closed, nil
 	}
 	payload, err := json.Marshal(struct {
 		Title string `json:"title"`
@@ -247,7 +274,33 @@ func (client gitHubClient) createPullRequest(ctx context.Context, owner, reposit
 	if err := json.Unmarshal(response, &pull); err != nil {
 		return gitHubPullRequest{}, err
 	}
+	if pull.Head.SHA != candidateSHA {
+		if pull.Number < 1 {
+			return gitHubPullRequest{}, fmt.Errorf("GitHub created a mismatched pull request without a valid number to close it")
+		}
+		// The pull request exists, so caller cancellation must not skip cleanup.
+		if err := client.closePullRequest(context.WithoutCancel(ctx), owner, repository, pull.Number); err != nil {
+			return gitHubPullRequest{}, &gitHubPullRequestCleanupError{Number: pull.Number, Err: err}
+		}
+		return gitHubPullRequest{}, fmt.Errorf("GitHub created pull request #%d for a different candidate; it was closed",
+			pull.Number)
+	}
 	return pull, nil
+}
+
+func (client gitHubClient) closePullRequest(ctx context.Context, owner, repository string, number int) error {
+	if number < 1 {
+		return fmt.Errorf("pull request number is invalid")
+	}
+	payload, err := json.Marshal(struct {
+		State string `json:"state"`
+	}{State: "closed"})
+	if err != nil {
+		return err
+	}
+	path := "/repos/" + owner + "/" + repository + "/pulls/" + strconv.Itoa(number)
+	_, err = client.requestBytes(ctx, http.MethodPatch, path, "application/vnd.github+json", nil, payload)
+	return err
 }
 
 // localOrAuthorizedClient gates GitHub writes made with the control plane's own credentials. A remote

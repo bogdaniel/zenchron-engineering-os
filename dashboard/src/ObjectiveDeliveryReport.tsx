@@ -36,6 +36,8 @@ const reportSchema = z.object({
     input_tokens: z.number().optional(), output_tokens: z.number().optional(), cost_usd: z.number().optional(),
     runs_with_usage: z.number(), runs_with_cost: z.number(), unknown: z.array(z.string()) }),
   unknown_evidence: z.array(z.string()).default([]),
+  publication_authority: z.object({ source_run_id: z.string(), graph_id: z.string(), graph_revision: z.number(),
+    plan_revision: z.number(), plan_hash: z.string(), commit_sha: z.string(), by: z.string(), at: z.string(), attempt: z.number() }).optional(),
   pull_request_url: z.string().optional(),
   pull_request_external_state: z.object({ number: z.number(), state: z.enum(['open', 'closed']), draft: z.boolean(),
     merged: z.boolean(), head_sha: z.string(), candidate_matches_head: z.boolean().optional(), observed_at: z.string(),
@@ -71,7 +73,7 @@ function downloadReport(report: Report) {
 export function ObjectiveDeliveryReport({ graphID }: { graphID: string }) {
   const [expanded, setExpanded] = useState(false);
   const query = useQuery({ queryKey: ['work-graph-report', graphID], queryFn: () => loadReport(graphID),
-    enabled: expanded, retry: false });
+    enabled: expanded, refetchInterval: expanded ? 5_000 : false, retry: false });
   return <section className="objective-delivery-report" aria-label="Objective delivery report">
     <div className="objective-delivery-heading">
       <div><h4>Delivery evidence</h4><p>Recorded execution and publication facts for this WorkGraph.</p></div>
@@ -133,6 +135,14 @@ function ReportDetails({ report }: { report: Report }) {
       ? <a href={report.pull_request_url} target="_blank" rel="noreferrer">{report.pull_request_url}</a>
       : <>{report.units.find((unit) => unit.kind === 'integrate')?.reason || 'No pull-request URL was recorded.'}
         {' WorkGraph completion does not establish publication.'}</>}</p>
+    {report.publication_authority && <p aria-label="Recorded publication authorization">
+      Human authorized PR creation for candidate <code>{report.publication_authority.commit_sha}</code> ·{' '}
+      {report.publication_authority.by} · {new Date(report.publication_authority.at).toLocaleString()} ·{' '}
+      WorkGraph revision {report.publication_authority.graph_revision} · plan revision {report.publication_authority.plan_revision} ·{' '}
+      plan hash <code>{report.publication_authority.plan_hash}</code> · run{' '}
+      <a href={livePageHref('reviews', { run: report.publication_authority.source_run_id })}>
+        {report.publication_authority.source_run_id}</a>
+    </p>}
     {report.pull_request_external_state && <p aria-label="Observed GitHub pull request state">
       GitHub reports pull request #{report.pull_request_external_state.number} {report.pull_request_external_state.state}
       {report.pull_request_external_state.merged ? ' and merged' : ''}{report.pull_request_external_state.draft ? ' as a draft' : ''} · head{' '}

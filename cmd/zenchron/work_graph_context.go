@@ -87,13 +87,10 @@ func (store *workGraphStore) publishCommit(run agentRun) string {
 	if store == nil || run.GraphID == "" || len(run.Merge) == 0 {
 		return ""
 	}
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	graph := store.graphs[run.GraphID]
-	if graph == nil || graph.unit(run.UnitKey) == nil {
+	if !store.publicationReady(run, run.CommitSHA) {
 		return ""
 	}
-	return graph.unit(run.UnitKey).Candidate
+	return run.CommitSHA
 }
 
 // inbox renders the admitted messages a unit must act on: the latest handoff of each unit it depends
