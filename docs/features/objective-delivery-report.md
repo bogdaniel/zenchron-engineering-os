@@ -27,6 +27,7 @@ flowchart LR
   ChecksAPI -->|Checks bound to the integrated SHA| Compute
   Compute --> Response[JSON response]
   Response --> ReportUI[ObjectiveDeliveryReport.tsx]
+  ReportUI -->|While expanded: refresh every 5 seconds; governed actions invalidate| Handler
   ReportUI -->|Export JSON; revoke blob URL after download dispatch| Download[Typed report download]
   Compute -.->|no writes| ReadOnly[Stores unchanged]
 ```
@@ -66,6 +67,8 @@ flowchart LR
   time, and whether the PR head matches the integrated candidate when one is recorded. GitHub checks are read by the
   exact integrated candidate SHA and include their own observation time; unavailable or mismatched check results stay
   unknown. This read does not change stored graph or run state.
+- The browser fetches the report when opened and refreshes it every five seconds while expanded. Objective actions
+  invalidate the same report query, so decisions and plan changes appear without presenting a stale snapshot.
 - Top-level `measurements` contains:
   - `unit_count`: number of units.
   - `run_count`: number of all run ids, including ids without a stored run.

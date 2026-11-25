@@ -596,8 +596,16 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(exactDecision).toHaveAttribute('href', new RegExp(`objective=${created.objectiveID}.*graph_id=.*decision=`));
   await exactDecision.click();
   await expect(page.getByRole('form', { name: 'Decision for step-1' })).toContainText('E2E: which format?');
+  const deliveryReport = panel.getByRole('region', { name: 'Objective delivery report' });
+  const initialReport = page.waitForResponse((response) => response.request().method() === 'GET'
+    && /\/api\/v1\/work-graphs\/[a-f0-9]{32}\/report$/.test(new URL(response.url()).pathname));
+  await deliveryReport.getByRole('button', { name: 'View delivery report' }).click();
+  expect((await initialReport).ok()).toBe(true);
   await page.getByRole('button', { name: 'CSV' }).click();
+  const refreshedReport = page.waitForResponse((response) => response.request().method() === 'GET'
+    && /\/api\/v1\/work-graphs\/[a-f0-9]{32}\/report$/.test(new URL(response.url()).pathname));
   await page.getByRole('button', { name: 'Resolve decision' }).click();
+  expect((await refreshedReport).ok()).toBe(true);
   const messages = panel.getByRole('list', { name: 'Handoffs, findings, and decisions' });
   await expect(messages).toContainText('by local operator');
   await expect(messages).toContainText('E2E finding', { timeout: 120_000 });
@@ -607,7 +615,6 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(units.getByRole('listitem').nth(2)).toContainText('verdict: accept');
   await expect(units.getByRole('listitem').nth(3)).toContainText('GitHub publication is not configured');
   const report = panel.getByRole('region', { name: 'Objective delivery report' });
-  await report.getByRole('button', { name: 'View delivery report' }).click();
   await expect(report).toContainText('Approved plan revision 1');
   await expect(report.getByRole('heading', { name: 'Execution and publication' })).toBeVisible();
   await expect(report).toContainText(/WorkGraph execution: (active|blocked|completed|failed|cancelled)/);

@@ -82,7 +82,7 @@ function downloadReport(report: Report) {
 export function ObjectiveDeliveryReport({ graphID }: { graphID: string }) {
   const [expanded, setExpanded] = useState(false);
   const query = useQuery({ queryKey: ['work-graph-report', graphID], queryFn: () => loadReport(graphID),
-    enabled: expanded, retry: false });
+    enabled: expanded, refetchInterval: expanded ? 5_000 : false, retry: false });
   return <section className="objective-delivery-report" aria-label="Objective delivery report">
     <div className="objective-delivery-heading">
       <div><h4>Delivery evidence</h4><p>Recorded execution and publication facts for this WorkGraph.</p></div>

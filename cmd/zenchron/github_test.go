@@ -441,7 +441,8 @@ func TestGitHubCreatesPullRequestFromPublishedBranch(t *testing.T) {
 	t.Setenv("ZENCHRON_GITHUB_TOKEN", "test-token")
 	client := newGitHubClient()
 	client.apiURL = provider.URL
-	pull, err := client.createPullRequest(context.Background(), "acme", "platform", "zenchron/agent-run/123", "main", "Add review flow", "Agent summary.")
+	pull, err := client.createPullRequest(context.Background(), "acme", "platform", "zenchron/agent-run/123", "main",
+		testCommit, "Add review flow", "Agent summary.")
 	if err != nil || pull.Number != 23 || pull.HTMLURL != "https://github.com/acme/platform/pull/23" {
 		t.Fatalf("created pull request = %#v, error = %v", pull, err)
 	}
@@ -452,15 +453,40 @@ func TestGitHubPullRequestCreationReusesClosedPullRequestAfterAnUncertainResult(
 		if r.Method != http.MethodGet || r.URL.Query().Get("state") != "all" {
 			t.Errorf("pull request lookup = %s %s", r.Method, r.URL.String())
 		}
-		_, _ = w.Write([]byte(`[{"number":23,"title":"Add review flow","state":"closed","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":"zenchron/agent-run/123"},"base":{"ref":"main"}}]`))
+		_, _ = w.Write([]byte(`[{"number":23,"title":"Add review flow","state":"closed","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":"zenchron/agent-run/123","sha":"` + testCommit + `"},"base":{"ref":"main"}}]`))
 	}))
 	defer provider.Close()
 	t.Setenv("ZENCHRON_GITHUB_TOKEN", "test-token")
 	client := newGitHubClient()
 	client.apiURL = provider.URL
-	pull, err := client.createPullRequest(context.Background(), "acme", "platform", "zenchron/agent-run/123", "main", "Add review flow", "Agent summary.")
+	pull, err := client.createPullRequest(context.Background(), "acme", "platform", "zenchron/agent-run/123", "main",
+		testCommit, "Add review flow", "Agent summary.")
 	if err != nil || pull.Number != 23 || pull.State != "closed" || pull.HTMLURL != "https://github.com/acme/platform/pull/23" {
 		t.Fatalf("reused closed pull request = %#v, error = %v", pull, err)
+	}
+}
+
+func TestGitHubPullRequestCreationDoesNotReuseClosedPullRequestForAnotherCandidate(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/repos/acme/platform/pulls" {
+			_, _ = w.Write([]byte(`[{"number":23,"state":"closed","html_url":"https://github.com/acme/platform/pull/23","head":{"ref":"zenchron/agent-run/123","sha":"` + strings.Repeat("b", 40) + `"},"base":{"ref":"main"}}]`))
+			return
+		}
+		if r.Method != http.MethodPost || r.URL.Path != "/repos/acme/platform/pulls" {
+			t.Errorf("pull request request = %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"number":24,"state":"open","html_url":"https://github.com/acme/platform/pull/24","head":{"ref":"zenchron/agent-run/123","sha":"` + testCommit + `"},"base":{"ref":"main"}}`))
+	}))
+	defer provider.Close()
+	t.Setenv("ZENCHRON_GITHUB_TOKEN", "test-token")
+	client := newGitHubClient()
+	client.apiURL = provider.URL
+	pull, err := client.createPullRequest(context.Background(), "acme", "platform", "zenchron/agent-run/123", "main",
+		testCommit, "Add review flow", "Agent summary.")
+	if err != nil || pull.Number != 24 {
+		t.Fatalf("created pull request for current candidate = %#v, error = %v", pull, err)
 	}
 }
 

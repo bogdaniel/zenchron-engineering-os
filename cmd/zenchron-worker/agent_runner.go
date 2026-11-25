@@ -309,7 +309,16 @@ func (runner *agentRunner) attempt(
 func (runner *agentRunner) publishCandidate(
 	ctx, gitCtx context.Context, command workerapi.AgentRunCommand, project discoveredProject,
 	workspace runWorkspace, result workerapi.AgentRunResult, reporter *progressReporter,
-) workerapi.AgentRunResult {
+) (output workerapi.AgentRunResult) {
+	output = result
+	result.CommitSHA = command.PublishCommit
+	candidateCheckout := false
+	defer func() {
+		if candidateCheckout && gitCommand(gitCtx, "-C", workspace.path, "checkout", command.Branch).Run() != nil {
+			output = failed(output, workerapi.TerminationWorkerError,
+				"Could not restore the run branch after checking the authorized candidate.")
+		}
+	}()
 	head, err := gitOutput(gitCtx, "-C", workspace.path, "rev-parse", "HEAD")
 	if err != nil {
 		return failed(result, workerapi.TerminationWorkerError, "Could not read the human-authorized candidate checkout.")
@@ -322,12 +331,12 @@ func (runner *agentRunner) publishCandidate(
 		if gitCommand(gitCtx, "-C", workspace.path, "checkout", "--detach", command.PublishCommit).Run() != nil {
 			return failed(result, workerapi.TerminationWorkerError, "The worktree cannot safely check out the exact human-authorized candidate.")
 		}
+		candidateCheckout = true
 		head, err = gitOutput(gitCtx, "-C", workspace.path, "rev-parse", "HEAD")
 		if err != nil || strings.TrimSpace(head) != command.PublishCommit {
 			return failed(result, workerapi.TerminationWorkerError, "The worktree does not match the exact human-authorized candidate.")
 		}
 	}
-	result.CommitSHA = command.PublishCommit
 	tree, err := gitOutput(gitCtx, "-C", workspace.path, "rev-parse", "--verify", result.CommitSHA+"^{tree}")
 	if err != nil {
 		return failed(result, workerapi.TerminationWorkerError, "Could not read the authorized candidate tree.")
@@ -348,6 +357,14 @@ func (runner *agentRunner) publishCandidate(
 	if statusErr != nil || dirty != "" || diffErr != nil {
 		return failed(result, workerapi.TerminationWorkerError,
 			"Could not confirm the worktree still matches the human-authorized candidate after verification.")
+	}
+	if candidateCheckout {
+		if err := gitCommand(checkCtx, "-C", workspace.path, "checkout", command.Branch).Run(); err != nil {
+			candidateCheckout = false
+			return failed(result, workerapi.TerminationWorkerError,
+				"Could not restore the run branch after verifying the authorized candidate.")
+		}
+		candidateCheckout = false
 	}
 	push := runner.push
 	if push == nil {
