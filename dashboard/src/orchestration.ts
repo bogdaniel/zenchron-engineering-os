@@ -22,6 +22,7 @@ const unitSchema = planUnitSchema.extend({
   state: z.enum(['waiting', 'queued', 'running', 'blocked', 'completed', 'failed', 'cancelled']),
   reason: z.string().optional(), failure: z.string().optional(), run_ids: list(z.string()),
   candidate: z.string().optional(), verdict: z.string().optional(), pull_request_url: z.string().optional(),
+  publication_authorization_required: z.boolean().optional(),
 });
 const messageSchema = z.object({
   id: z.string(),
@@ -89,6 +90,7 @@ export type OrchestrationSource = {
   cancel?: (graphID: string) => Promise<void>;
   retryUnit?: (graphID: string, key: string) => Promise<void>;
   resolve?: (graphID: string, messageID: string, resolution: string) => Promise<void>;
+  authorizePublication?: (runID: string, candidateSHA: string) => Promise<void>;
 };
 
 /** The newest graph of an objective; the control plane lists graphs newest first. */
@@ -137,7 +139,10 @@ export function useLiveOrchestration(enabled: boolean, objectiveID?: string, pro
   const change = async (path: string, body?: unknown) => {
     await send(path, body);
     await Promise.all([queryClient.invalidateQueries({ queryKey: ['work-graphs'] }),
-      queryClient.invalidateQueries({ queryKey: ['objective-plans'] })]);
+      queryClient.invalidateQueries({ queryKey: ['objective-plans'] }),
+      queryClient.invalidateQueries({ queryKey: ['work-graph-report'] }),
+      queryClient.invalidateQueries({ queryKey: ['action-required'] }),
+      queryClient.invalidateQueries({ queryKey: ['agent-runs'] })]);
   };
   const cliProviders = ['codex-cli', 'claude-code'];
   const product = products.data?.find((item) => item.id === productID);
@@ -187,5 +192,7 @@ export function useLiveOrchestration(enabled: boolean, objectiveID?: string, pro
     retryUnit: (graphID, key) => change(`/api/v1/work-graphs/${graphID}/units/${key}/retry`),
     resolve: (graphID, messageID, resolution) =>
       change(`/api/v1/work-graphs/${graphID}/decisions/${messageID}`, { resolution }),
+    authorizePublication: (runID, candidateSHA) =>
+      change(`/api/v1/agent-runs/${runID}/publish`, { candidate_sha: candidateSHA }),
   };
 }

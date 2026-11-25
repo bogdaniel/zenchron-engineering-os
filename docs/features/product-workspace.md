@@ -151,7 +151,9 @@ Live:
 - The Objectives tab projects each linked objective's current WorkGraph, pending decisions, findings, review and
   integration states, and observed pull-request link from existing product-environment records. Its WorkGraph view
   resolves a pending decision against that exact graph and request through the existing governed API action. Opening
-  an objective shows its plan and delivery report. Unrecorded measurements remain unknown in that report.
+  an objective shows its plan and delivery report. A reviewed, publishable integration candidate appears in Action
+  Required and the exact WorkGraph unit; its existing publish action requires a person to authorize that candidate
+  SHA before the worker pushes. Unrecorded measurements remain unknown in that report.
 - The Knowledge tab reads the selected product's revisioned entries from the existing product environment. Product
   entries link to their exact source graph and objective when visible; hidden provenance is identified as unavailable.
   A finding can be curated into a bounded product note only after a user writes its content. The server validates the
@@ -272,9 +274,9 @@ with the unit that asked, the question, and who resolved it.
   their actor remains unrecorded.
 - Configuration history belongs to the product store; it is not a second environment or evidence store. Updating
   current product values does not alter the product context or revision frozen into existing plans or WorkGraphs.
-- The history field is additive in `products.json`. A downgrade to a binary that predates the field can read the file,
-  but its next product write will discard the history; back up the data directory before downgrading across this
-  change.
+- Configuration and knowledge fields are additive in `products.json`. A downgrade to a binary that predates these
+  fields can read the file, but its next product write will discard configuration history, product and organization
+  knowledge, and promotion provenance; back up the data directory before downgrading across this change.
 - Only objectives whose `product_id` is this product appear, so two products that share a repository share no work.
 - A product the caller may not see answers 404. Objectives, plans, and graphs the caller may not see are left out.
 - Product and organization knowledge are appended to the existing `products.json` store; old files load with empty

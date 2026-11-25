@@ -35,8 +35,11 @@ func (store *agentRunStore) cancelRun(runID string) (agentRun, int, string) {
 		switch item.Status {
 		case "cancelled":
 		case "queued":
-			item.Status, item.Error, item.UpdatedAt = "cancelled", "Cancelled before worker claim.", time.Now().UTC()
+			item.Status, item.Error, item.UpdatedAt, item.PublishOnly = "cancelled", "Cancelled before worker claim.", time.Now().UTC(), false
 		case "running":
+			if item.PublishOnly {
+				return http.StatusConflict, "an authorized publication pass is in progress and cannot be cancelled"
+			}
 			item.CancelRequested, item.UpdatedAt = true, time.Now().UTC()
 		default:
 			return http.StatusConflict, "only queued or running agent runs can be cancelled"
@@ -49,6 +52,11 @@ func (store *agentRunStore) cancelRun(runID string) (agentRun, int, string) {
 func (store *agentRunStore) cancelGraphRuns(graphID string) (int, string) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	for _, item := range store.items {
+		if item.GraphID == graphID && item.Status == "running" && item.PublishOnly {
+			return http.StatusConflict, "an authorized publication pass is in progress and cannot be cancelled"
+		}
+	}
 	previous := make(map[string]agentRun)
 	now := time.Now().UTC()
 	for id, item := range store.items {
@@ -58,7 +66,7 @@ func (store *agentRunStore) cancelGraphRuns(graphID string) (int, string) {
 		switch item.Status {
 		case "queued":
 			previous[id] = item
-			item.Status, item.Error, item.UpdatedAt = "cancelled", "Cancelled before worker claim.", now
+			item.Status, item.Error, item.UpdatedAt, item.PublishOnly = "cancelled", "Cancelled before worker claim.", now, false
 		case "running":
 			if item.CancelRequested {
 				continue

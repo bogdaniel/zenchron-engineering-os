@@ -17,24 +17,37 @@ const supervisionMinutes = "supervision_minutes"
 
 // deliveryReport says what one WorkGraph's run actually did, from durable records only.
 type deliveryReport struct {
-	GraphID         string               `json:"graph_id"`
-	GraphRevision   int                  `json:"graph_revision"`
-	ObjectiveID     string               `json:"objective_id"`
-	ObjectiveTitle  string               `json:"objective_title"`
-	PlanRevision    int                  `json:"plan_revision"`
-	WorkflowID      string               `json:"workflow_id,omitempty"`
-	WorkflowVersion int                  `json:"workflow_version,omitempty"`
-	WorkflowMode    string               `json:"workflow_mode,omitempty"`
-	Status          string               `json:"status"`
-	ApprovedPlan    reportPlan           `json:"approved_plan"`
-	Units           []reportUnit         `json:"units"`
-	Handoffs        []reportHandoff      `json:"handoffs"`
-	Decisions       []reportDecision     `json:"decisions"`
-	Outstanding     []reportOutstanding  `json:"outstanding_steps"`
-	Measurements    deliveryMeasurements `json:"measurements"`
-	UnknownEvidence []string             `json:"unknown_evidence"`
-	PullRequestURL  string               `json:"pull_request_url,omitempty"`
-	PullRequest     *reportPullRequest   `json:"pull_request_external_state,omitempty"`
+	GraphID              string                      `json:"graph_id"`
+	GraphRevision        int                         `json:"graph_revision"`
+	ObjectiveID          string                      `json:"objective_id"`
+	ObjectiveTitle       string                      `json:"objective_title"`
+	PlanRevision         int                         `json:"plan_revision"`
+	WorkflowID           string                      `json:"workflow_id,omitempty"`
+	WorkflowVersion      int                         `json:"workflow_version,omitempty"`
+	WorkflowMode         string                      `json:"workflow_mode,omitempty"`
+	Status               string                      `json:"status"`
+	ApprovedPlan         *reportPlan                 `json:"approved_plan,omitempty"`
+	Units                []reportUnit                `json:"units"`
+	Handoffs             []reportHandoff             `json:"handoffs"`
+	Decisions            []reportDecision            `json:"decisions"`
+	Outstanding          []reportOutstanding         `json:"outstanding_steps"`
+	Measurements         deliveryMeasurements        `json:"measurements"`
+	UnknownEvidence      []string                    `json:"unknown_evidence"`
+	PullRequestURL       string                      `json:"pull_request_url,omitempty"`
+	PullRequest          *reportPullRequest          `json:"pull_request_external_state,omitempty"`
+	PublicationAuthority *reportPublicationAuthority `json:"publication_authority,omitempty"`
+}
+
+type reportPublicationAuthority struct {
+	SourceRunID   string    `json:"source_run_id"`
+	GraphID       string    `json:"graph_id"`
+	GraphRevision int       `json:"graph_revision"`
+	PlanRevision  int       `json:"plan_revision"`
+	PlanHash      string    `json:"plan_hash"`
+	CommitSHA     string    `json:"commit_sha"`
+	By            string    `json:"by"`
+	At            time.Time `json:"at"`
+	Attempt       int       `json:"attempt"`
 }
 
 type reportPullRequest struct {
@@ -206,6 +219,7 @@ type reportExecution struct {
 	ProfileID       string    `json:"profile_id,omitempty"`
 	ProfileName     string    `json:"profile_name,omitempty"`
 	ProfileVersion  int       `json:"profile_version,omitempty"`
+	Model           string    `json:"model,omitempty"`
 	PersonaID       string    `json:"persona_id,omitempty"`
 	PersonaName     string    `json:"persona_name,omitempty"`
 	PersonaVersion  int       `json:"persona_version,omitempty"`
@@ -271,8 +285,8 @@ type deliveryMeasurements struct {
 	Unknown              []string `json:"unknown"`
 }
 
-// buildDeliveryReport computes the report of a graph from the graph and its stored runs. A run id
-// whose run is no longer stored still counts as a run but contributes nothing else.
+// buildDeliveryReport computes the report from durable graph and run records. Missing run records retain their graph
+// references and mark the details and derived measurements they would have supplied as unknown.
 func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *objectivePlan) deliveryReport {
 	report := deliveryReport{GraphID: graph.ID, GraphRevision: graph.Revision, ObjectiveID: graph.ObjectiveID,
 		ObjectiveTitle: graph.ObjectiveTitle,
@@ -283,13 +297,25 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 		UnknownEvidence: []string{"candidate_tree_sha", "candidate_checks", "policy_backed_assurance", "publication_authority",
 			"pull_request_external_state"}}
 	if plan != nil {
-		report.ApprovedPlan = reportPlan{Revision: plan.Revision, Status: plan.Status, Hash: plan.Hash, Summary: plan.Summary,
+		report.ApprovedPlan = &reportPlan{Revision: plan.Revision, Status: plan.Status, Hash: plan.Hash, Summary: plan.Summary,
 			ApprovedBy: plan.ApprovedBy, ApprovedAt: plan.ApprovedAt}
+	} else {
+		report.UnknownEvidence = append(report.UnknownEvidence, "approved_plan")
 	}
 	measured := &report.Measurements
 	measured.UnitCount = len(graph.Units)
 	var attempts []agentRunAttempt
+	missingRunRecords, missingProduceRunRecords := false, false
 	for _, unit := range graph.Units {
+		for _, runID := range unit.RunIDs {
+			if _, exists := runs[runID]; exists {
+				continue
+			}
+			missingRunRecords = true
+			if unit.Kind == unitProduce {
+				missingProduceRunRecords = true
+			}
+		}
 		unitAttempts := unitAttemptLog(unit, runs)
 		attempts = append(attempts, unitAttempts...)
 		summary := summarizeUnit(unit, runs)
@@ -298,6 +324,24 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 			report.UnknownEvidence = slices.DeleteFunc(report.UnknownEvidence, func(evidence string) bool {
 				return evidence == "candidate_tree_sha"
 			})
+		}
+		if unit.Kind == unitIntegrate && len(unit.RunIDs) > 0 && unit.Candidate != "" && graph.reviewed(&unit, runs) &&
+			len(graph.reviewersOf(unit.Key)) > 0 {
+			run := runs[unit.RunIDs[len(unit.RunIDs)-1]]
+			for _, authorization := range run.PublicationAuthorizations {
+				if authorization.CommitSHA != unit.Candidate || authorization.GraphID != graph.ID ||
+					authorization.PlanRevision != graph.PlanRevision || authorization.PlanHash != graph.PlanHash {
+					continue
+				}
+				report.PublicationAuthority = &reportPublicationAuthority{SourceRunID: run.ID, GraphID: graph.ID,
+					GraphRevision: authorization.GraphRevision, PlanRevision: authorization.PlanRevision,
+					PlanHash: authorization.PlanHash, CommitSHA: authorization.CommitSHA,
+					By: authorization.By, At: authorization.At, Attempt: authorization.Attempt}
+				report.UnknownEvidence = slices.DeleteFunc(report.UnknownEvidence, func(evidence string) bool {
+					return evidence == "publication_authority"
+				})
+				break
+			}
 		}
 		report.Units = append(report.Units, summary)
 		if unit.State != unitCompleted {
@@ -322,14 +366,34 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 		}
 	}
 	measured.MaxConcurrency = maxConcurrency(attempts)
+	if missingRunRecords {
+		report.UnknownEvidence = append(report.UnknownEvidence, "missing_run_records")
+	}
 	measured.Findings = countMessages(graph.Messages, messageFinding)
 	measured.DecisionsRequested = countMessages(graph.Messages, messageDecisionRequest)
 	measured.DecisionsResolved = countMessages(graph.Messages, messageDecisionResolution)
-	// The plan approval that created the graph is the one human action every graph has.
-	measured.HumanActions = measured.DecisionsResolved + 1
+	publicationAuthorizations := 0
+	for _, run := range runs {
+		if run.GraphID == graph.ID {
+			publicationAuthorizations += len(run.PublicationAuthorizations)
+		}
+	}
+	// Plan approval, resolved graph decisions, and recorded publication authorizations are durable human actions.
+	planApprovals := 0
+	if plan != nil && plan.Revision == graph.PlanRevision && plan.GraphID == graph.ID &&
+		plan.ApprovedBy != "" && plan.ApprovedAt != nil {
+		planApprovals = 1
+	}
+	measured.HumanActions = measured.DecisionsResolved + publicationAuthorizations + planApprovals
 	measured.HumanActionsComplete = false
-	measured.Unknown = []string{supervisionMinutes}
-	measured.Unknown = append(measured.Unknown, "unrecorded_human_actions")
+	measured.Unknown = []string{supervisionMinutes, "unrecorded_human_actions"}
+	if missingRunRecords {
+		measured.Unknown = append(measured.Unknown, "attempt_count_for_some_runs", "failed_attempts_for_some_runs",
+			"max_concurrency_for_some_runs")
+	}
+	if missingProduceRunRecords {
+		measured.Unknown = append(measured.Unknown, "remediation_passes_for_some_runs")
+	}
 	if graph.Status == graphCompleted {
 		seconds := graph.UpdatedAt.Sub(graph.CreatedAt).Seconds()
 		measured.WallClockSeconds = &seconds
@@ -366,6 +430,7 @@ func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecut
 			FailureRecorded: run.Error != ""}
 		if run.Profile != nil {
 			execution.ProfileID, execution.ProfileName, execution.ProfileVersion = run.Profile.ID, run.Profile.Name, run.Profile.Version
+			execution.Model = run.Profile.Model
 			if persona := run.Profile.PersonaSnapshot; persona != nil {
 				execution.PersonaID, execution.PersonaName, execution.PersonaVersion = persona.ID, persona.Name, persona.Version
 			}

@@ -51,6 +51,12 @@ function Unit({ graph, unit, source, showRunLinks }: {
         aria-label={`Open run ${runID} in Reviews`} title={runID}>Review run {shortCommit(runID)} ↗</a>)}
       {unit.pull_request_url && <a href={unit.pull_request_url} target="_blank" rel="noreferrer">
         <IconGitPullRequest size={12} aria-hidden="true" /> Open pull request ↗</a>}
+      {unit.publication_authorization_required && unit.run_ids.length > 0 && <Button id={`authorize-publication-${graph.id}`}
+        size="compact-xs" color="violet" disabled={!source.authorizePublication} title={source.readOnlyReason || undefined}
+        onClick={() => { setError(''); source.authorizePublication?.(unit.run_ids.at(-1)!, unit.candidate ?? '')
+          .catch((cause: Error) => setError(cause.message)); }}>
+        Authorize PR creation for {shortCommit(unit.candidate)}
+      </Button>}
       {unit.state === 'failed' && <Button size="compact-xs" variant="default" disabled={!source.retryUnit}
         title={source.readOnlyReason || undefined}
         onClick={() => { setError(''); source.retryUnit?.(graph.id, unit.key).catch((cause: Error) => setError(cause.message)); }}>
@@ -115,6 +121,10 @@ export function WorkGraphView({ graph, source, showRunLinks = false }: {
   graph: WorkGraph; source: OrchestrationSource; showRunLinks?: boolean;
 }) {
   const [error, setError] = useState('');
+  const requestedPublication = new URLSearchParams(window.location.search).get('publication_graph') === graph.id;
+  useEffect(() => {
+    if (requestedPublication) document.getElementById(`authorize-publication-${graph.id}`)?.focus();
+  }, [graph.id, requestedPublication]);
   const finished = graph.status === 'completed' || graph.status === 'cancelled';
   const done = graph.units.filter((unit) => unit.state === 'completed').length;
   return <section className="work-graph" aria-label={`Work graph for ${graph.objective_title}`}>

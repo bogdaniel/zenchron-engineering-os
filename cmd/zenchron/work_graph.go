@@ -71,8 +71,9 @@ type workUnit struct {
 	AdmittedRun     string `json:"admitted_run,omitempty"`
 	AdmittedAttempt int    `json:"admitted_attempt,omitzero"`
 	// Inputs are the exact candidates the integrate unit last combined.
-	Inputs         []workerapi.MergeInput `json:"inputs,omitempty"`
-	PullRequestURL string                 `json:"pull_request_url,omitempty"`
+	Inputs                           []workerapi.MergeInput `json:"inputs,omitempty"`
+	PullRequestURL                   string                 `json:"pull_request_url,omitempty"`
+	PublicationAuthorizationRequired bool                   `json:"publication_authorization_required,omitempty"`
 	// Restart asks for a fresh run after an operator retried a failed unit.
 	Restart      bool `json:"restart,omitzero"`
 	RecoveryUsed bool `json:"recovery_used,omitzero"`

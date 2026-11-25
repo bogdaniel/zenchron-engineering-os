@@ -286,6 +286,10 @@ func TestCancelGraphReportsRunCancellationPersistenceFailure(t *testing.T) {
 		t.Fatalf("claim while cancellation persistence is failing returned HTTP %d", claim.Code)
 	}
 	harness.store.path = runPath
+	harness.report(api, workerapi.AgentRunResult{CommitSHA: commit(1), BaseCommit: commit(9), Output: "Late result."})
+	if run, exists := harness.store.get(api.ID); !exists || run.Status != "cancelled" || run.Publishing {
+		t.Fatalf("late result after durable graph cancellation = %#v", run)
+	}
 	harness.restart()
 	if !harness.store.graphs.reconcileAll() {
 		t.Fatal("cancelled graph did not recover its run cancellations after restart")

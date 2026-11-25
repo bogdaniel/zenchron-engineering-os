@@ -96,13 +96,18 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	access := accessFor(r)
+	project, online := store.runs.registry.onlineProject(strings.ToLower(input.ProjectID))
+	if !online || !access.allows(project.GitRemote) || !access.mayDispatchTo(project.WorkerID) {
+		http.Error(w, "project_id does not identify an online checkout you may dispatch work to", http.StatusConflict)
+		return
+	}
 	var linkedProduct product
 	productContext := ""
 	productKnowledgeRevision, organizationKnowledgeRevision := 0, 0
 	if item.ProductID != "" {
 		var exists bool
 		linkedProduct, productContext, productKnowledgeRevision, organizationKnowledgeRevision, exists =
-			store.productContext(item.ProductID, access)
+			store.productContext(item.ProductID, access, project.GitRemote)
 		if !exists {
 			http.Error(w, "the objective's linked product is unavailable", http.StatusConflict)
 			return
@@ -110,11 +115,6 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 	}
 	if input.Plan == nil && input.WorkflowID == "" && item.ProductID != "" {
 		input.WorkflowID = linkedProduct.DefaultWorkflowID
-	}
-	project, online := store.runs.registry.onlineProject(strings.ToLower(input.ProjectID))
-	if !online || !access.allows(project.GitRemote) || !access.mayDispatchTo(project.WorkerID) {
-		http.Error(w, "project_id does not identify an online checkout you may dispatch work to", http.StatusConflict)
-		return
 	}
 	var definition *workflow
 	if input.WorkflowID != "" {
@@ -490,13 +490,15 @@ func (store *workGraphStore) changeAfterCommit(
 		http.Error(w, "could not persist work graph", http.StatusInternalServerError)
 		return
 	}
-	store.mu.Unlock()
+	// Persist run cancellation before result acceptance can observe the cancelled graph.
 	if afterCommit != nil {
 		if status, message := afterCommit(updated.ID); status != 0 {
+			store.mu.Unlock()
 			http.Error(w, message, status)
 			return
 		}
 	}
+	store.mu.Unlock()
 	store.reconcileAll()
 	store.writeGraph(w, http.StatusOK, updated.ID)
 }
@@ -506,6 +508,9 @@ func (store *workGraphStore) cancelGraph(w http.ResponseWriter, r *http.Request)
 	store.changeAfterCommit(w, r, func(graph *workGraph) (int, string) {
 		if graph.Status == graphCompleted || graph.Status == graphCancelled {
 			return http.StatusConflict, "the work graph has already finished"
+		}
+		if store.runs.graphPublicationInProgress(graph.ID) {
+			return http.StatusConflict, "an authorized publication pass or pull request is in progress or already exists"
 		}
 		graph.Status = graphCancelled
 		return 0, ""

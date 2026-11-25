@@ -1,9 +1,9 @@
 # Issue to pull request
 
 A user picks a GitHub issue and an agent profile; Zenchron runs the installed Codex CLI or Claude Code CLI in an
-isolated Git worktree on the project's worker, verifies the result with the operator's commands, commits it, pushes
-only the run branch, and opens a pull request that closes the issue. Progress, evidence, and the final state are read
-from the control plane; nobody copies prompts or results between tools.
+isolated Git worktree on the project's worker, verifies and commits a candidate, then waits for a person to authorize
+publishing that exact commit. Only the authorized publish-only pass pushes the run branch; the control plane then
+opens a pull request that closes the issue. Execution completion never implies publication.
 
 ## Feature diagram
 
@@ -44,15 +44,28 @@ sequenceDiagram
   Worker->>Tree: Collect bounded diff with worker-safe Git environment
   Worker->>Tree: git add + commit on the run branch
   Worker->>Tree: Run configured verification commands
-  Worker->>Remote: git push {verified commit SHA}:refs/heads/zenchron/agent-run/{run}
-  Worker->>API: PUT .../agent-runs/{run} (result, commits, verification, usage)
-  API->>GH: Find or create pull request "Closes #issue"
-  API->>Store: Persist publication and pull-request identity
+  Worker->>API: PUT .../agent-runs/{run} (candidate, commits, verification, usage)
+  API->>Store: Persist candidate and await human authorization
+  User->>UI: Review exact candidate and authorize publication
+  UI->>API: POST .../agent-runs/{run}/publish {candidate_sha}
+  API->>Store: Persist actor, time, attempt and exact authorized SHA
+  API->>Worker: Queue publish-only pass bound to authorized SHA
+  Worker->>Tree: Recheck candidate and run configured verification
+  Worker->>Remote: Push the exact authorized commit
+  Worker->>API: PUT .../agent-runs/{run} (branch-pushed evidence)
+  API->>GH: Find or create pull request for exact candidate SHA
+  GH-->>API: Return pull-request head SHA
+  alt Returned head matches the authorized candidate
+    API->>Store: Persist publication and pull-request identity
+  else Newly created head mismatches
+    API->>GH: PATCH /repos/{owner}/{repo}/pulls/{number} {state: closed}
+    API->>Store: Record pull-request creation failure
+  end
   User->>UI: Reviews > Local branches > Evidence, Code changes
   UI->>API: GET /api/v1/agent-runs, .../events, .../diff, .../pull-request
-  User->>UI: Retry publication or import change requests
-  alt Retry publication
-    UI->>API: POST .../publish
+  User->>UI: Retry failed PR creation or import change requests
+  alt Retry failed PR creation
+    UI->>API: POST .../publish {candidate_sha}
     API-->>UI: 2xx; show success without parsing a body
   else Import change requests
     UI->>API: POST .../sync-reviews
@@ -78,6 +91,7 @@ stateDiagram-v2
   succeeded --> queued: change request (attempts < 3)
   failed --> queued: change request on a run with a diff (attempts < 3)
   cancelled --> queued: change request on a run with a diff (attempts < 3)
+  succeeded --> queued: human authorizes exact candidate; publish-only pass
   succeeded --> [*]
   failed --> [*]
   cancelled --> [*]
@@ -87,7 +101,8 @@ Three values are kept apart on every run:
 
 - `status` is the lifecycle state above.
 - `verification` is `passed`, `failed`, `not_configured`, or empty when verification did not run.
-- `publication` is `published`, `push_failed`, `pull_request_failed`, `no_changes`, or empty when nothing was published.
+- `publication` is `awaiting_authorization`, `published`, `push_failed`, `pull_request_failed`, `no_changes`, or empty
+  when publication is not configured or no publication outcome is recorded.
 
 `termination_reason` says why the last attempt ended: `completed`, `provider_exit`, `wall_clock_timeout`,
 `inactivity_timeout`, `tool_timeout`, `cancelled`, `lease_lost`, `verification_failed`, or `worker_error`. A provider
@@ -131,21 +146,34 @@ that exits successfully is therefore not reported as delivered work unless verif
   and bounded: 1,000 bytes per event, 300 stored events per run, 20,000 bytes of final output. The worker buffers at
   most 200 progress events; while a batch is being sent, overflow drops only the oldest events waiting behind it, so
   a failed report can retry its intact batch.
-- A successful execution with changes is committed, then verified. A failed verification keeps the commit on the local
-  branch, marks the run `failed`, and publishes nothing. Without configured commands verification is `not_configured`
-  and publication proceeds; the pull request states that. After verification, the worker pushes the exact commit SHA
-  it verified, even if a verification command moves the local branch.
+- A successful execution with changes is committed and verified, then remains a candidate until a person authorizes
+  that exact commit. A failed verification keeps the commit on the local branch and publishes nothing. The publish-only
+  pass requires a clean worktree, checks out and rechecks the exact candidate SHA, and runs configured verification
+  before pushing it. Without configured commands verification is `not_configured`; the person sees that recorded state
+  before authorizing publication. If a publish-only result omits execution result, usage, or provider version, the
+  control plane preserves the values already recorded for the execution instead of replacing them with empty data.
+  When it checks out a different authorized SHA, the worker restores the run branch after verification and before push;
+  failed verification attempts restoration without resetting or discarding changed files.
 - Before a later attempt on a pull-request run, the worker fetches the published run branch. If verification left a
   divergent local commit, it preserves that commit on a local recovery branch before resetting the run branch to the
   published tip. A dirty worktree fails closed, so recovery never discards uncommitted changes. Reconciliation acquires
   the Git worktree lock first, bounds remote operations by the Git-stage deadline, and can use the owner's SSH agent
   without exposing provider API keys or worker bearer credentials.
-- The pull request is created with the control plane's GitHub credential, titled after the issue, and ends with
-  `Closes #<issue>`. Creation reuses an open pull request for the same branch. If GitHub fails after the push,
-  `POST /api/v1/agent-runs/{id}/publish` retries without creating a duplicate.
+- The control plane creates the pull request with its GitHub credential only after a person authorized and the worker
+  pushed the exact candidate. It is titled after the issue and ends with `Closes #<issue>`. Creation reuses an existing
+  pull request for the same branch and base only when GitHub reports the human-authorized candidate SHA as its head.
+  An open PR with another head fails closed; a closed PR for an older candidate is skipped so the current candidate can
+  receive a new PR. If branch movement causes a newly created PR to return another head, the control plane closes it
+  through the Pull Requests API and reports creation failure; if closing fails, it records that failure instead of
+  treating the mismatched PR as delivered. The run evidence identifies the possibly open PR and tells the operator to
+  close it before retrying. A same-candidate PR remains reusable after an uncertain GitHub response. If GitHub fails
+  after the push, `POST /api/v1/agent-runs/{id}/publish` retries without duplicating the matching PR or reopening a
+  closed PR.
 - A change request from the dashboard, one delivered by a [GitHub webhook](github-webhooks.md), or one imported
   from GitHub with `sync-reviews`, queues another attempt on the
-  same branch and worktree; the new commit lands on the same pull request. A run has at most three attempts. When
+  same branch and worktree. The new candidate remains local until a person authorizes its exact SHA; the next
+  publish-only pass updates the existing pull request. A run has at most three execution attempts; a run with an
+  existing PR can use one additional publish-only claim after a changed candidate is explicitly authorized. When
   several change requests are imported at once, all are kept and the newest queues the attempt.
 - Evidence actions validate the `sync-reviews` response before showing the imported count. Publication retry is a
   success on any 2xx response and does not depend on a response body.
@@ -171,6 +199,8 @@ in Live.
 - **Reviews > Local branches > Evidence.** For the selected run: issue link, provider and version, worker, branch,
   base and result commits, execution result, verification, publication, pull-request link, reported usage, the pull
   request's check runs, every attempt, and the event log, which refreshes every two seconds while the run is active.
+  This view labels authorization only for direct runs; graph-bound publication authority is shown with its exact
+  candidate, graph revision, and plan contract in the Objective Delivery Report.
   Loading, failure, and empty states are shown per section. At desktop width the evidence scrolls inside the detail
   pane's tab area. On a phone-sized screen (760px wide or less) the evidence is laid out at its full length and the
   whole detail pane scrolls instead, so the pane's full height (about 630px at 390×844) shows evidence; the event log
@@ -200,7 +230,7 @@ in Live.
 | `POST /api/v1/agent-runs/{id}/request-changes` | Queue a follow-up attempt with feedback |
 | `POST /api/v1/agent-runs/{id}/sync-reviews` | Import change requests submitted on GitHub |
 | `POST /api/v1/github/webhook` | Signed GitHub deliveries for reviews and check runs |
-| `POST /api/v1/agent-runs/{id}/publish` | Retry pull-request creation after a GitHub failure |
+| `POST /api/v1/agent-runs/{id}/publish` | Authorize the exact candidate SHA for publication or retry PR creation after a GitHub failure |
 
 Agent profiles select a CLI with `provider` set to `codex-cli` or `claude-code`. A profile with any other provider
 value can be saved but not run: `POST /api/v1/agent-runs` refuses it with `409`. The CLI process runner is the only
@@ -258,8 +288,9 @@ modified or untracked files. Run branches and their commits stay.
 | Run stays `queued` | The assigned worker is offline or does not report the provider as ready. Check `GET /api/v1/workers`; sign in to the CLI and restart the worker. |
 | `failed` with `inactivity_timeout` or `tool_timeout` | The provider was silent past the limit. Raise the limit or request changes; the partial work is in the worktree. |
 | `failed` with `verification_failed` | Read the `verification` events for the failing command's output. Request changes to let the agent fix it. |
-| `publication` is `push_failed` | The workstation could not push to `origin`. Fix Git credentials, then request changes or push the run branch manually. |
-| `publication` is `pull_request_failed` | The branch is on GitHub. Call `POST /api/v1/agent-runs/{id}/publish`. |
+| `publication` is `awaiting_authorization` | Review the exact candidate SHA and verification evidence in Reviews or Objective Workspace, then authorize it from the dashboard. |
+| `publication` is `push_failed` | The workstation could not push the authorized candidate to `origin`. Fix Git credentials, then retry the exact authorized publication. |
+| `publication` is `pull_request_failed` | The branch is on GitHub and prior human authority is recorded. Retry PR creation from the dashboard or with the same candidate SHA. |
 | Attempt log shows `lease_expired` | The worker or control plane stopped mid-run. The run was queued again automatically. |
 | Sandboxed Claude Code cannot run the build tool | The tool's cache is in the home directory. Set its cache variable under `environment` in the worker configuration to a path in the temporary directory. |
 | Old state file rejected at startup | Run records gained fields; a binary from before this change cannot read new state. Restore a backup before rolling back. |
@@ -364,7 +395,9 @@ panel. The other dashboard rows in the table above were driven by a script actin
   neither CLI, so there only the arguments, the self-test logic, and the process control are tested.
 - A webhook delivery from GitHub itself to a deployed control plane, and a change request submitted by a second
   GitHub account, have not been exercised; see the note under the 2026-11-14 table.
-- Between a worker's result and the pull request being created or found, a run reports `pull_request_failed` for
-  about a second before it reports `published`.
+- A successful execution with a GitHub repository remains `awaiting_authorization` until a person authorizes its exact
+  candidate. The record captures the run, candidate, WorkGraph revision at authorization, and approved plan revision/hash.
+  Before each publish-only pass, the control plane rechecks the current candidate, producer inputs, and accepted reviews;
+  it does not require the whole graph revision to remain unchanged as publication status advances.
 - Usage is whatever the CLI reports. Codex reports tokens without cost; Claude Code reports a cost figure even under
-  a subscription. No budget is enforced beyond the time limits and the three-attempt cap.
+  a subscription. No budget is enforced beyond the time limits and the four-claim cap.

@@ -155,6 +155,8 @@ type AgentRunCommand struct {
 	PublishPullRequest bool         `json:"publish_pull_request,omitempty"`
 	// PublishCommit, when set, is the only commit this attempt may push: the reviewed candidate.
 	PublishCommit string `json:"publish_commit,omitempty"`
+	// PublishOnly pushes the previously completed candidate without re-running its agent or integration.
+	PublishOnly bool `json:"publish_only,omitempty"`
 	// Merge makes this an integration run: the worker combines these local branches in order instead of
 	// starting a provider. Each branch must still point at the commit named here.
 	Merge []MergeInput `json:"merge,omitempty"`

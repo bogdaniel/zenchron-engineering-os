@@ -161,7 +161,7 @@ function App() {
     const page = href.slice(1);
     if (!pageIDs.includes(page)) return;
     const oneShotParams: Record<string, string[]> = {
-      objectives: ['create', 'product_id', 'objective', 'tab', 'workflow', 'project', 'graph_id', 'decision'],
+      objectives: ['create', 'product_id', 'objective', 'tab', 'workflow', 'project', 'graph_id', 'decision', 'publication_graph'],
       agents: ['profile'],
       reviews: ['run'],
       workflows: ['workflow'],

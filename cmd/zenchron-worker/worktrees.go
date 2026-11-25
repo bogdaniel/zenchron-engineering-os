@@ -47,7 +47,20 @@ func prepareWorktree(ctx context.Context, root string, project discoveredProject
 			return errors.New("worktree destination is not a directory")
 		}
 		currentBranch, err := gitOutput(ctx, "-C", path, "branch", "--show-current")
-		if err != nil || strings.TrimSpace(currentBranch) != branch {
+		if err != nil {
+			return errors.New("worktree destination belongs to a different branch")
+		}
+		currentBranch = strings.TrimSpace(currentBranch)
+		if currentBranch == "" {
+			head, headErr := gitOutput(ctx, "-C", path, "rev-parse", "HEAD")
+			branchHead, branchErr := gitOutput(ctx, "-C", project.Path, "rev-parse", "--verify", "refs/heads/"+branch)
+			if headErr != nil || branchErr != nil || strings.TrimSpace(head) != strings.TrimSpace(branchHead) {
+				return errors.New("detached worktree does not match its run branch")
+			}
+			if err := gitCommand(ctx, "-C", path, "checkout", branch).Run(); err != nil {
+				return fmt.Errorf("restore detached run branch: %w", err)
+			}
+		} else if currentBranch != branch {
 			return errors.New("worktree destination belongs to a different branch")
 		}
 		return nil
