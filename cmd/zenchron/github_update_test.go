@@ -124,6 +124,33 @@ func TestTrustedMainExplainsUnreadableClassicProtection(t *testing.T) {
 	}
 }
 
+// GitHub reports a ruleset-protected branch as protected while its classic protection endpoint answers 404.
+func TestTrustedMainAcceptsRulesetOnlyProtection(t *testing.T) {
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+	const tree = "abcdef0123456789abcdef0123456789abcdef01"
+	client := updateTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/owner/repo/branches/main":
+			w.Write([]byte(`{"name":"main","protected":true,"commit":{"sha":"` + commit + `","commit":{"tree":{"sha":"` + tree + `"}}}}`))
+		case "/repos/owner/repo/commits/" + commit:
+			w.Write([]byte(`{"sha":"` + commit + `","commit":{"tree":{"sha":"` + tree + `"},"verification":{"verified":true}}}`))
+		case "/repos/owner/repo/rules/branches/main":
+			w.Write([]byte(`[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"build","integration_id":17}]}}]`))
+		case "/repos/owner/repo/commits/" + commit + "/statuses":
+			w.Write([]byte(`[]`))
+		case "/repos/owner/repo/commits/" + commit + "/check-runs":
+			w.Write([]byte(`{"check_runs":[{"name":"build","status":"completed","conclusion":"success","app":{"id":17}}]}`))
+		case "/repos/owner/repo/commits/" + commit + "/pulls":
+			w.Write([]byte(`[{"merged_at":"2026-11-17T00:00:00Z","base":{"ref":"main"}}]`))
+		default:
+			http.NotFound(w, r) // includes /branches/main/protection: no classic protection
+		}
+	}))
+	if _, err := client.trustedMain(context.Background(), "owner/repo"); err != nil {
+		t.Fatalf("trustedMain() rejected a ruleset-only protected main: %v", err)
+	}
+}
+
 func TestTrustedMainAcceptsEffectiveRulesetChecksAndRejectsUnsignedCommit(t *testing.T) {
 	const commit = "0123456789abcdef0123456789abcdef01234567"
 	const tree = "abcdef0123456789abcdef0123456789abcdef01"

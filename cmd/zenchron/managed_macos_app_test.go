@@ -6,6 +6,54 @@ import (
 	"testing"
 )
 
+// Sealed releases are read-only; the staged copy must still move into place and be cleaned up.
+func TestStableMenuBarInstallFromSealedRelease(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "release", "Zenchron Menu Bar.app")
+	destination := filepath.Join(root, "Applications", "Zenchron Menu Bar.app")
+	for _, bundle := range []string{source, destination} {
+		contents := filepath.Join(bundle, "Contents")
+		if err := os.MkdirAll(filepath.Join(contents, "MacOS"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		plist := "<plist><dict><key>CFBundleIdentifier</key><string>" + managedMenuBarBundleID + "</string></dict></plist>"
+		if err := os.WriteFile(filepath.Join(contents, "Info.plist"), []byte(plist), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(contents, "MacOS", "zenchron-menubar"), []byte(bundle), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seal := func(mode os.FileMode) {
+		_ = filepath.WalkDir(source, func(path string, entry os.DirEntry, _ error) error {
+			if entry.IsDir() || entry.Name() == "zenchron-menubar" {
+				return os.Chmod(path, mode|0o111)
+			}
+			return os.Chmod(path, mode)
+		})
+	}
+	seal(0o444)
+	t.Cleanup(func() { seal(0o644) })
+	tools := filepath.Join(root, "tools")
+	if err := os.MkdirAll(tools, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tools, "ditto"), []byte("#!/bin/sh\ncp -R \"$1\" \"$2\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := installStableMenuBarApp(source, destination); err != nil {
+		t.Fatalf("install from sealed release: %v", err)
+	}
+	if installed, err := os.ReadFile(filepath.Join(destination, "Contents", "MacOS", "zenchron-menubar")); err != nil || string(installed) != source {
+		t.Fatalf("installed executable = %q, %v", installed, err)
+	}
+	leftovers, err := filepath.Glob(filepath.Join(filepath.Dir(destination), ".zenchron-menu-bar-*"))
+	if err != nil || len(leftovers) != 0 {
+		t.Fatalf("staging directories left behind: %v, %v", leftovers, err)
+	}
+}
+
 func TestStableMenuBarInstallIsIdempotentAndUpdatesInPlace(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "release", "Zenchron Menu Bar.app")

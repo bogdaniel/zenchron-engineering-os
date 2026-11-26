@@ -148,6 +148,7 @@ func TestLocalSystemStatusOmitsUnknownProviderReadiness(t *testing.T) {
 }
 
 func TestLocalSystemStatusAcceptsCredentialAddedAfterSupervisorStarted(t *testing.T) {
+	request := localStatusTestRequest(t)
 	userHome := t.TempDir()
 	t.Setenv("HOME", userHome)
 	statusToken := strings.Repeat("s", 43)
@@ -161,7 +162,6 @@ func TestLocalSystemStatusAcceptsCredentialAddedAfterSupervisorStarted(t *testin
 	if err := os.WriteFile(plist, contents, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	request := localStatusTestRequest(t)
 	request.Header.Set("X-Zenchron-Local-Status-Token", statusToken)
 	t.Setenv("ZENCHRON_LOCAL_STATUS_TOKEN", "")
 	response := httptest.NewRecorder()
@@ -351,6 +351,8 @@ func TestLocalSystemStatusRequiresSessionAndAdministratorWithAccessPolicy(t *tes
 func localStatusTestRequest(t *testing.T) *http.Request {
 	t.Helper()
 	token := "test-local-status-token"
+	// A managed LaunchAgent in the developer's real home would otherwise replace the test credential.
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ZENCHRON_LOCAL_STATUS_TOKEN", token)
 	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/system/status", nil)
 	request.RemoteAddr = "127.0.0.1:4000"

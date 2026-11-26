@@ -487,8 +487,7 @@
 .agents-design-preview .agents-list { gap: 5px; padding: 8px; }
 .agents-design-preview .agent-row { min-height: 104px; gap: 7px; padding: 6px; }
 .agents-design-preview .agent-row-select { padding-right: 23px; }
-.agents-design-preview .agent-status { position: absolute; top: 9px; right: 31px; }
-.agents-design-preview .agent-row-icon { width: 36px; height: 36px; }
+.agents-design-preview .agent-row .agent-status { position: absolute; top: 9px; right: 31px; }.agents-design-preview .agent-row-icon { width: 36px; height: 36px; }
 .agents-design-preview .agent-status.active { border-color: #246448; color: #51dba5; background: #143327; }
 .agents-design-preview .agent-row:nth-child(2) .agent-row-icon { border-color: #245e53; color: #4bd9af; background: #14332d; }
 .agents-design-preview .agent-row:nth-child(3) .agent-row-icon { border-color: #493363; color: #bd8cff; background: #241b33; }

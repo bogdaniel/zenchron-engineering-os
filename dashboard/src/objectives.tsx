@@ -241,7 +241,7 @@ export function ObjectivesPage({ sampleData = false, operator = '' }: { sampleDa
   const listUnavailable = source.loading || (source.failed && !items.length);
   const showsTable = !listUnavailable && section === 'objectives' && view === 'table';
   const count = (status: Objective['status']) => source.loading ? '…' : listUnavailable ? '—'
-    : items.filter((item) => item.status === status).length;
+    : filteredItems.filter((item) => item.status === status).length;
   const cardProps = (item: Objective) => ({ item, selected: selected?.id === item.id, onSelect: selectObjective });
 
   return (
@@ -285,8 +285,8 @@ export function ObjectivesPage({ sampleData = false, operator = '' }: { sampleDa
           value={sourceView.successRate.value} icon={<IconTargetArrow size={18} />}
           trend={sourceView.successRate.points && <span className="objective-metric-trend"><Badge>{sourceView.successRate.change}</Badge>
             <Sparkline data={sourceView.successRate.points} color="teal.4" w={54} h={24} withGradient={false} /></span>} />
-        <MetricCard className="objective-metric" label="Total objectives" value={source.loading ? '…' : listUnavailable ? '—' : items.length}
-          detail="Across this workspace" icon={<IconTarget size={18} />} />
+        <MetricCard className="objective-metric" label="Total objectives" value={source.loading ? '…' : listUnavailable ? '—' : filteredItems.length}
+          detail="Matching the filters" icon={<IconTarget size={18} />} />
         <MetricCard className="objective-metric green" label="On track" value={count('on_track')} detail="Objectives" icon={<IconCircleCheck size={18} />} />
         <MetricCard className="objective-metric amber" label="At risk" value={count('at_risk')} detail="Objectives" icon={<IconAlertTriangle size={18} />} />
         <MetricCard className="objective-metric red" label="Blocked" value={count('blocked')} detail="Objectives" icon={<IconCircleMinus size={18} />} />

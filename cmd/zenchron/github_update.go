@@ -125,7 +125,8 @@ func (client gitHubClient) trustedMain(ctx context.Context, repository string) (
 	if protectionErr != nil && !githubNotFound(protectionErr) {
 		return updater.Candidate{}, fmt.Errorf("verify main branch protection: %w", protectionErr)
 	}
-	if protectionErr != nil && branch.Protected {
+	// Ruleset-only protection has no classic record (404); its required checks were read above.
+	if protectionErr != nil && branch.Protected && len(checks.Checks) == 0 {
 		return updater.Candidate{}, errors.New("main is protected but its branch-protection checks are unreadable; grant the GitHub App Administration: read permission")
 	}
 	checks.Contexts = append(checks.Contexts, protection.Required.Contexts...)
