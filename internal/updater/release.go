@@ -656,10 +656,12 @@ func makeReadOnly(root string) error {
 		if walkErr != nil {
 			return walkErr
 		}
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("inspect %s: %w", path, err)
+		}
 		mode := os.FileMode(0o444)
-		if entry.IsDir() {
-			mode = 0o555
-		} else if strings.HasPrefix(filepath.ToSlash(path), filepath.ToSlash(filepath.Join(root, "bin"))+"/") {
+		if entry.IsDir() || info.Mode().Perm()&0o111 != 0 {
 			mode = 0o555
 		}
 		if err := os.Chmod(path, mode); err != nil {

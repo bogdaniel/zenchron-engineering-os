@@ -88,6 +88,19 @@ func installStableMenuBarApp(source, destination string) error {
 	if output, err := exec.Command("ditto", source, stagedApp).CombinedOutput(); err != nil {
 		return fmt.Errorf("stage menu-bar app: %w: %s", err, strings.TrimSpace(string(output)))
 	}
+	// Sealed releases are read-only; moving a directory and removing staging both need owner write access.
+	if err := filepath.WalkDir(stagedApp, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		return os.Chmod(path, info.Mode().Perm()|0o200)
+	}); err != nil {
+		return fmt.Errorf("make staged menu-bar app writable: %w", err)
+	}
 	if err := validateManagedMenuBarApp(stagedApp); err != nil {
 		return fmt.Errorf("verify staged menu-bar app: %w", err)
 	}
