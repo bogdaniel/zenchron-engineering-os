@@ -112,7 +112,8 @@ test('objectives can be created and updated from the dashboard', async ({ page }
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Objective title').fill(title);
   await dialog.getByLabel('Description').fill('Make objective progress visible to the team.');
-  await dialog.getByLabel('Owner').fill('Platform team');
+  // A fresh local workspace has no suggested owners. Creating without an owner remains supported.
+  await expect(dialog.getByRole('combobox', { name: 'Owner', exact: true })).toHaveValue('');
   await dialog.getByRole('button', { name: 'Create objective', exact: true }).click();
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   await expect(page.locator('.objective-detail-head h3')).toHaveCSS('font-size', '18px');

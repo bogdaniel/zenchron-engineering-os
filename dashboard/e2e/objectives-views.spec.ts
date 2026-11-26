@@ -494,6 +494,63 @@ test('objective plan options stay available while WorkGraph history is loading',
     .toBeVisible();
 });
 
+test('new objective defaults to the signed-in owner and the filtered product', async ({ page }) => {
+  await useLocalSession(page);
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: false, login: 'bogdaniel' }) }));
+  const productID = 'b'.repeat(32);
+  await page.route('**/api/v1/products', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify([{ id: productID, name: 'Spec Vault', description: '', repository_ids: [], created_at: '', updated_at: '' }]) }));
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+  await page.getByRole('combobox', { name: 'Filter by product' }).click();
+  await page.getByRole('option', { name: 'Spec Vault' }).click();
+  await page.getByRole('button', { name: 'New Objective' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New objective' });
+  await expect(dialog.getByRole('combobox', { name: 'Owner' })).toHaveValue('bogdaniel');
+  await expect(dialog.getByRole('combobox', { name: 'Product', exact: true })).toHaveValue('Spec Vault');
+});
+
+test('empty-state creation respects product filter and allows a cleared owner', async ({ page }) => {
+  await useLocalSession(page);
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: false, login: 'bogdaniel' }),
+  }));
+  const productID = 'b'.repeat(32);
+  let created: { title: string; owner: string; product_id: string } | undefined;
+  await page.route('**/api/v1/objectives', async (route) => {
+    if (route.request().method() === 'POST') {
+      created = route.request().postDataJSON();
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({
+        ...created, id: 'e'.repeat(32), status: 'on_track', progress: 0,
+        created_at: '2026-11-26T00:00:00Z', updated_at: '2026-11-26T00:00:00Z',
+      }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.route('**/api/v1/products', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([{
+      id: productID, name: 'Spec Vault', description: '', repository_ids: [], created_at: '', updated_at: '',
+    }]),
+  }));
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+  await page.getByRole('combobox', { name: 'Filter by product' }).click();
+  await page.getByRole('option', { name: 'Spec Vault' }).click();
+  await page.locator('.objective-detail-empty').getByRole('button', { name: 'Create objective' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New objective' });
+  await expect(dialog.getByRole('combobox', { name: 'Product', exact: true })).toHaveValue('Spec Vault');
+  const owner = dialog.getByRole('combobox', { name: 'Owner', exact: true });
+  await expect(owner).toHaveValue('bogdaniel');
+  await dialog.getByRole('button', { name: 'Clear owner' }).click();
+  await expect(owner).toHaveValue('');
+  await dialog.getByRole('textbox', { name: 'Objective title' }).fill('Validate ownerless product objective');
+  await dialog.getByRole('button', { name: 'Create objective' }).click();
+  await expect.poll(() => created).toMatchObject({
+    title: 'Validate ownerless product objective', owner: '', product_id: productID,
+  });
+});
+
 test('objective create and edit submit the expected API payloads', async ({ page }) => {
   await useLocalSession(page);
   const productID = 'a'.repeat(32);
@@ -533,14 +590,18 @@ test('objective create and edit submit the expected API payloads', async ({ page
   await page.getByRole('button', { name: 'New Objective' }).click();
   await page.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability testing');
   await page.getByRole('textbox', { name: 'Description' }).fill('Add coverage for critical paths.');
-  await page.getByRole('textbox', { name: 'Owner' }).fill('Sam Rivera');
+  await page.getByRole('dialog', { name: 'New objective' }).getByRole('combobox', { name: 'Owner', exact: true }).click();
+  await page.getByRole('option', { name: 'Alex Chen' }).click();
   await page.getByLabel('Due date').fill('2026-12-10');
   await page.getByRole('button', { name: 'Create objective' }).click();
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability testing55555555');
+  const notice = await page.locator('.objective-action-notice').boundingBox();
+  const summary = await page.locator('.detail-summary').boundingBox();
+  expect(notice && summary && notice.y + notice.height <= summary.y).toBe(true);
   await expect(page.locator('.objective-grid-wrap [role="row"].ag-row-selected'))
     .toContainText('Expand reliability testing');
   expect(createdPayloads).toEqual([{
-    title: 'Expand reliability testing', description: 'Add coverage for critical paths.', owner: 'Sam Rivera',
+    title: 'Expand reliability testing', description: 'Add coverage for critical paths.', owner: 'Alex Chen',
     product_id: '', due_date: '2026-12-10',
   }]);
 
@@ -549,7 +610,8 @@ test('objective create and edit submit the expected API payloads', async ({ page
   const editForm = page.locator('.detail-edit-grid');
   await editForm.getByRole('textbox', { name: 'Objective title' }).fill('Expand reliability review');
   await editForm.getByRole('textbox', { name: 'Description' }).fill('Expand critical-path coverage.');
-  await editForm.getByRole('textbox', { name: 'Owner' }).fill('Sam Rivera');
+  await editForm.getByRole('combobox', { name: 'Owner', exact: true }).click();
+  await page.getByRole('option', { name: 'Alex Chen' }).click();
   await editForm.getByLabel('Due date').fill('2027-01-15');
   await editForm.getByRole('combobox', { name: 'Product', exact: true }).click();
   await page.getByRole('option', { name: 'Core Product' }).click();
@@ -559,7 +621,7 @@ test('objective create and edit submit the expected API payloads', async ({ page
   await page.getByRole('button', { name: 'Save updates' }).click();
   await expect.poll(() => updatedPayloads.length).toBe(1);
   expect(updatedPayloads).toEqual([{
-    title: 'Expand reliability review', description: 'Expand critical-path coverage.', owner: 'Sam Rivera',
+    title: 'Expand reliability review', description: 'Expand critical-path coverage.', owner: 'Alex Chen',
     due_date: '2027-01-15', status: 'completed', progress: 100, product_id: productID,
   }]);
   expect(updatedRecords).toEqual([{
@@ -569,7 +631,7 @@ test('objective create and edit submit the expected API payloads', async ({ page
   await expect(page.locator('.detail-edit-grid')).toHaveCount(0);
   await expect(page.locator('.detail-summary')).toContainText('100% complete');
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability review55555555');
-  await expect(page.locator('.detail-meta-grid')).toContainText('Sam Rivera');
+  await expect(page.locator('.detail-meta-grid')).toContainText('Alex Chen');
   await expect(page.locator('.objective-detail-due-date')).toHaveText('Due Jan 15, 2027');
   await expect(page.locator('.objective-action-notice')).toHaveText('Objective updated');
 });
