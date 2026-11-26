@@ -504,6 +504,47 @@ test('new objective defaults to the signed-in owner and the filtered product', a
   await expect(dialog.getByRole('combobox', { name: 'Product', exact: true })).toHaveValue('Spec Vault');
 });
 
+test('empty-state creation respects product filter and allows a cleared owner', async ({ page }) => {
+  await useLocalSession(page);
+  await page.route('**/api/v1/auth/session', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ authenticated: true, local: false, login: 'bogdaniel' }),
+  }));
+  const productID = 'b'.repeat(32);
+  let created: { title: string; owner: string; product_id: string } | undefined;
+  await page.route('**/api/v1/objectives', async (route) => {
+    if (route.request().method() === 'POST') {
+      created = route.request().postDataJSON();
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({
+        ...created, id: 'e'.repeat(32), status: 'on_track', progress: 0,
+        created_at: '2026-11-26T00:00:00Z', updated_at: '2026-11-26T00:00:00Z',
+      }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.route('**/api/v1/products', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify([{
+      id: productID, name: 'Spec Vault', description: '', repository_ids: [], created_at: '', updated_at: '',
+    }]),
+  }));
+  await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+  await page.getByRole('combobox', { name: 'Filter by product' }).click();
+  await page.getByRole('option', { name: 'Spec Vault' }).click();
+  await page.locator('.objective-detail-empty').getByRole('button', { name: 'Create objective' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New objective' });
+  await expect(dialog.getByRole('combobox', { name: 'Product', exact: true })).toHaveValue('Spec Vault');
+  const owner = dialog.getByRole('combobox', { name: 'Owner', exact: true });
+  await expect(owner).toHaveValue('bogdaniel');
+  await dialog.getByRole('button', { name: 'Clear input' }).first().click();
+  await expect(owner).toHaveValue('');
+  await dialog.getByRole('textbox', { name: 'Objective title' }).fill('Validate ownerless product objective');
+  await dialog.getByRole('button', { name: 'Create objective' }).click();
+  await expect.poll(() => created).toMatchObject({
+    title: 'Validate ownerless product objective', owner: '', product_id: productID,
+  });
+});
+
 test('objective create and edit submit the expected API payloads', async ({ page }) => {
   await useLocalSession(page);
   const productID = 'a'.repeat(32);
