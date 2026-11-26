@@ -33,7 +33,7 @@ const reportSchema = z.object({
   measurements: z.object({ unit_count: z.number(), run_count: z.number(), attempt_count: z.number(),
     failed_attempts: z.number(), review_rounds: z.number(), findings: z.number(), remediation_passes: z.number(),
     decisions_requested: z.number(), decisions_resolved: z.number(), human_actions: z.number(),
-    human_actions_complete: z.boolean(), max_concurrency: z.number(), wall_clock_seconds: z.number().optional(),
+    human_actions_complete: z.boolean(), required_approvals_complete: z.boolean().optional(), max_concurrency: z.number(), wall_clock_seconds: z.number().optional(),
     input_tokens: z.number().optional(), output_tokens: z.number().optional(), cost_usd: z.number().optional(),
     runs_with_usage: z.number(), runs_with_cost: z.number(), unknown: z.array(z.string()) }),
   unknown_evidence: z.array(z.string()).default([]),
@@ -62,14 +62,18 @@ const unknownMeasurementLabels: Record<string, string> = {
   remediation_passes_for_some_runs: 'remediation totals for some runs',
 };
 
-async function loadReport(graphID: string): Promise<Report> {
+// The export is the server's record exactly as served; parsing only validates what this view renders.
+type LoadedReport = { report: Report; served: unknown };
+
+async function loadReport(graphID: string): Promise<LoadedReport> {
   const response = await fetch(`/api/v1/work-graphs/${graphID}/report`);
   if (!response.ok) throw new Error((await response.text()).trim() || `Report request failed (${response.status})`);
-  return reportSchema.parse(await response.json());
+  const served: unknown = await response.json();
+  return { report: reportSchema.parse(served), served };
 }
 
-function downloadReport(report: Report) {
-  const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+function downloadReport({ report, served }: LoadedReport) {
+  const blob = new Blob([JSON.stringify(served, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   try {
     const link = document.createElement('a');
@@ -93,17 +97,18 @@ export function ObjectiveDeliveryReport({ graphID }: { graphID: string }) {
     {!expanded ? null : query.isLoading ? <p role="status">Loading delivery report…</p>
       : query.isError ? <div><p role="alert">Could not load delivery report: {query.error.message}</p>
         <Button size="xs" variant="default" onClick={() => void query.refetch()}>Retry</Button></div>
-        : query.data && <ReportDetails report={query.data} />}
+        : query.data && <ReportDetails loaded={query.data} />}
   </section>;
 }
 
-function ReportDetails({ report }: { report: Report }) {
+function ReportDetails({ loaded }: { loaded: LoadedReport }) {
+  const { report } = loaded;
   const metrics = report.measurements;
   const unknown = new Set(metrics.unknown);
   return <div className="objective-delivery-content">
     <div className="objective-delivery-actions">
       <Badge variant="light">{report.status}</Badge>
-      <Button size="xs" variant="default" onClick={() => downloadReport(report)}>Export JSON</Button>
+      <Button size="xs" variant="default" onClick={() => downloadReport(loaded)}>Export JSON</Button>
     </div>
     <p>WorkGraph <code>{report.graph_id}</code> · revision {report.graph_revision ?? 'unknown'}</p>
     <h5>{report.objective_title}</h5>
@@ -204,6 +209,8 @@ function ReportDetails({ report }: { report: Report }) {
         {unknown.has('max_concurrency_for_some_runs') ? ' (incomplete)' : ''}</dd>
       <dt>Reviews / findings / remediation passes</dt><dd>{metrics.review_rounds} / {metrics.findings} / {metrics.remediation_passes}
         {unknown.has('remediation_passes_for_some_runs') ? ' (incomplete)' : ''}</dd>
+      <dt>Required approvals</dt><dd>{metrics.required_approvals_complete === undefined ? 'Not reported'
+        : metrics.required_approvals_complete ? 'All recorded' : 'Not all recorded'}</dd>
       <dt>Recorded human actions</dt><dd>{metrics.human_actions} recorded; complete total unknown</dd>
       <dt>Provider reported tokens</dt><dd>{metrics.input_tokens === undefined ? 'Unknown' : `${metrics.input_tokens} input / ${metrics.output_tokens ?? 'unknown'} output`}
         {` · usage on ${metrics.runs_with_usage}/${metrics.run_count} runs`}</dd>
