@@ -275,8 +275,9 @@ type deliveryMeasurements struct {
 	DecisionsResolved    int  `json:"decisions_resolved"`
 	HumanActions         int  `json:"human_actions"`
 	HumanActionsComplete bool `json:"human_actions_complete"`
-	// RequiredApprovalsComplete is derived from recorded evidence: the approved plan, every requested decision
-	// resolved, and a completed graph with no outstanding step. HumanActionsComplete instead measures coverage.
+	// RequiredApprovalsComplete is derived only from recorded approvals: the approved plan, a resolution for every
+	// decision request by ID, and a publication authorization bound to the reviewed integrated candidate. It says
+	// nothing about delivery; HumanActionsComplete measures coverage.
 	RequiredApprovalsComplete bool     `json:"required_approvals_complete"`
 	MaxConcurrency            int      `json:"max_concurrency"`
 	WallClockSeconds          *float64 `json:"wall_clock_seconds,omitempty"`
@@ -308,6 +309,7 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	measured := &report.Measurements
 	measured.UnitCount = len(graph.Units)
 	var attempts []agentRunAttempt
+	candidateAuthorized := false
 	missingRunRecords, missingProduceRunRecords := false, false
 	for _, unit := range graph.Units {
 		for _, runID := range unit.RunIDs {
@@ -327,6 +329,15 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 			report.UnknownEvidence = slices.DeleteFunc(report.UnknownEvidence, func(evidence string) bool {
 				return evidence == "candidate_tree_sha"
 			})
+		}
+		if unit.Kind == unitIntegrate && len(unit.RunIDs) > 0 && unit.Candidate != "" {
+			// The authorization endpoint required the reviewed candidate when it recorded this; the unit may since have
+			// been requeued to publish, which resets its review state.
+			candidateAuthorized = slices.ContainsFunc(runs[unit.RunIDs[len(unit.RunIDs)-1]].PublicationAuthorizations,
+				func(authorization publicationAuthorization) bool {
+					return authorization.CommitSHA == unit.Candidate && authorization.GraphID == graph.ID &&
+						authorization.PlanRevision == graph.PlanRevision && authorization.PlanHash == graph.PlanHash
+				})
 		}
 		if unit.Kind == unitIntegrate && len(unit.RunIDs) > 0 && unit.Candidate != "" && graph.reviewed(&unit, runs) &&
 			len(graph.reviewersOf(unit.Key)) > 0 {
@@ -391,8 +402,8 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	}
 	measured.HumanActions = measured.DecisionsResolved + publicationAuthorizations + planApprovals
 	measured.HumanActionsComplete = false
-	measured.RequiredApprovalsComplete = planApprovals == 1 && measured.DecisionsResolved >= measured.DecisionsRequested &&
-		graph.Status == graphCompleted && len(report.Outstanding) == 0
+	measured.RequiredApprovalsComplete = planApprovals == 1 && everyDecisionResolved(graph.Messages) &&
+		candidateAuthorized
 	measured.Unknown = []string{supervisionMinutes, "unrecorded_human_actions"}
 	if missingRunRecords {
 		measured.Unknown = append(measured.Unknown, "attempt_count_for_some_runs", "failed_attempts_for_some_runs",
@@ -420,6 +431,21 @@ func hasCandidateTree(unit workUnit, runs map[string]agentRun) bool {
 		}
 	}
 	return false
+}
+
+// everyDecisionResolved matches resolutions to requests by ID, so an orphan resolution cannot stand in for a missing one.
+func everyDecisionResolved(messages []graphMessage) bool {
+	for _, request := range messages {
+		if request.Type != messageDecisionRequest {
+			continue
+		}
+		if !slices.ContainsFunc(messages, func(message graphMessage) bool {
+			return message.Type == messageDecisionResolution && message.Resolves == request.ID
+		}) {
+			return false
+		}
+	}
+	return true
 }
 
 func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecution {

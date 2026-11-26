@@ -86,9 +86,11 @@ flowchart LR
     binding, and explicit publication authorizations. A later superseded status does not erase an earlier approval.
     `human_actions_complete` is false because
     the system does not record every human action. It measures coverage, not whether required approvals happened.
-  - `required_approvals_complete`: true only when the plan approval is recorded, every requested decision is
-    resolved, the graph is completed, and no step is outstanding (including a publication still awaiting
-    authorization).
+  - `required_approvals_complete`: derived only from recorded approvals. It is true when the plan approval is
+    recorded, every decision request has a resolution with its ID, and the integrate unit holds a publication
+    authorization for its exact candidate, graph, plan revision and plan hash. It says nothing about delivery: an
+    authorized candidate whose publication is pending or failed still counts, and delivery is read from `status`,
+    `outstanding_steps` and `pull_request_url`.
   - `remediation_passes`: for each produce unit, each attempt after its first when a finding addressed to that unit
     was created between the previous attempt's start and its own start.
   - `input_tokens` and `output_tokens`: sums from runs that have usage; `runs_with_usage` shows coverage. Missing
