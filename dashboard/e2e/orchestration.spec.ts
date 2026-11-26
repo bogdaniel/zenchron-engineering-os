@@ -76,6 +76,15 @@ async function mockOrchestration(page: Page, state: { graphs?: unknown[]; plans?
     ? route.fulfill(json(state.plans ?? [])) : route.fallback());
 }
 
+test('plan tab shows the work graph of the latest plan revision when older graphs exist', async ({ page }) => {
+  const older = { ...graph, id: '55'.repeat(16), plan_revision: 1, status: 'completed' };
+  const newer = { ...graph, id: '66'.repeat(16), plan_revision: 2, status: 'active' };
+  await mockOrchestration(page, { graphs: [older, newer], plans: [plan, { ...plan, revision: 2, graph_id: newer.id }] });
+  const panel = await openPlan(page);
+  await expect(panel).toContainText('plan revision 2');
+  await expect(panel).not.toContainText('plan revision 1 ·');
+});
+
 async function openPlan(page: Page) {
   await page.goto(`/?objective=${objectiveID}#objectives`);
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
