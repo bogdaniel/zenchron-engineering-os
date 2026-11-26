@@ -211,6 +211,7 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	}
 	if measured.InputTokens == nil || *measured.InputTokens != 150 || measured.OutputTokens == nil || *measured.OutputTokens != 25 ||
 		measured.CostUSD == nil || *measured.CostUSD != 0.5 || measured.HumanActionsComplete ||
+		!measured.RequiredApprovalsComplete ||
 		!slices.Equal(measured.Unknown, []string{"cost_usd_for_some_runs", "input_tokens_for_some_runs",
 			"output_tokens_for_some_runs", supervisionMinutes, "unrecorded_human_actions"}) {
 		t.Fatalf("usage and unknown measurements = %s", body)
@@ -504,5 +505,8 @@ func TestWorkGraphReportListsUnpublishableIntegrationAsOutstanding(t *testing.T)
 		return step.Key == "integrate" && strings.Contains(step.Reason, "publication is unavailable")
 	}) {
 		t.Fatalf("unpublishable integration is missing from outstanding steps: %s", body)
+	}
+	if report.Measurements.RequiredApprovalsComplete {
+		t.Fatalf("required approvals are complete while a step is outstanding: %s", body)
 	}
 }

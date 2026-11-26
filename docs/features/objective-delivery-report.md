@@ -85,7 +85,10 @@ flowchart LR
   - `human_actions`: resolved decisions, plan approvals proven by durable approver/time and graph/revision
     binding, and explicit publication authorizations. A later superseded status does not erase an earlier approval.
     `human_actions_complete` is false because
-    the system does not record every human action.
+    the system does not record every human action. It measures coverage, not whether required approvals happened.
+  - `required_approvals_complete`: true only when the plan approval is recorded, every requested decision is
+    resolved, the graph is completed, and no step is outstanding (including a publication still awaiting
+    authorization).
   - `remediation_passes`: for each produce unit, each attempt after its first when a finding addressed to that unit
     was created between the previous attempt's start and its own start.
   - `input_tokens` and `output_tokens`: sums from runs that have usage; `runs_with_usage` shows coverage. Missing
