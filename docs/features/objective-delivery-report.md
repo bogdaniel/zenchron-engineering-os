@@ -59,6 +59,9 @@ flowchart LR
   includes the graph revision, actor, time, attempt, and source run. Worker verification and green checks do not create or imply
   either fact. The Objective Workspace shows the authorization attempt beside its source run and revision binding.
   Handoffs, decisions and unresolved steps are shown from immutable WorkGraph messages and state.
+- `outstanding_steps` lists every unit that is not completed, and also a completed integrate unit that has not
+  published (no pull request) with its recorded reason, for example "No independent reviewer is assigned; publication is
+  unavailable." Completed work is never presented as published work.
 - `unknown_evidence` names evidence the available sources cannot establish. Candidate tree SHA remains unknown until a
   successful integration run records it for the selected candidate. Publication authority remains unknown until an
   exact candidate-bound authorization is durably recorded. Current PR

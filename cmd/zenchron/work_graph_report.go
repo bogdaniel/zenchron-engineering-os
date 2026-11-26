@@ -344,7 +344,9 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 			}
 		}
 		report.Units = append(report.Units, summary)
-		if unit.State != unitCompleted {
+		// A completed integration with a reason has not published; publication is still outstanding.
+		unpublished := unit.Kind == unitIntegrate && unit.PullRequestURL == "" && unit.Reason != ""
+		if unit.State != unitCompleted || unpublished {
 			report.Outstanding = append(report.Outstanding, reportOutstanding{Key: unit.Key, State: unit.State,
 				Reason: firstNonEmpty(unit.Failure, unit.Reason)})
 		}
