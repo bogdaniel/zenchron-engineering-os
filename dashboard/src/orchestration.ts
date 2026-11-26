@@ -94,8 +94,11 @@ export type OrchestrationSource = {
 };
 
 /** The newest graph of an objective; the control plane lists graphs newest first. */
+/** The objective's current work graph: the one for its latest approved plan revision. */
 export function graphOfObjective(graphs: WorkGraph[], objectiveID: string) {
-  return graphs.find((graph) => graph.objective_id === objectiveID);
+  return graphs.filter((graph) => graph.objective_id === objectiveID).reduce<WorkGraph | undefined>((latest, graph) =>
+    !latest || graph.plan_revision > latest.plan_revision
+      || (graph.plan_revision === latest.plan_revision && graph.created_at > latest.created_at) ? graph : latest, undefined);
 }
 
 /** Decision requests nobody has answered yet. */
