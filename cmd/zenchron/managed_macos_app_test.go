@@ -33,6 +33,17 @@ func TestStableMenuBarInstallFromSealedRelease(t *testing.T) {
 		})
 	}
 	seal(0o444)
+	// A release sealed before #530 lost the executable's exec bit too.
+	if err := os.Chmod(filepath.Join(source, "Contents", "MacOS", "zenchron-menubar"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	// An app installed from such a release is read-only as well.
+	if err := os.Chmod(filepath.Join(destination, "Contents", "MacOS", "zenchron-menubar"), 0o555); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(destination, "Contents", "MacOS"), 0o555); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { seal(0o644) })
 	tools := filepath.Join(root, "tools")
 	if err := os.MkdirAll(tools, 0o700); err != nil {
