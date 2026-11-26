@@ -309,7 +309,6 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	measured := &report.Measurements
 	measured.UnitCount = len(graph.Units)
 	var attempts []agentRunAttempt
-	candidateAuthorized := false
 	missingRunRecords, missingProduceRunRecords := false, false
 	for _, unit := range graph.Units {
 		for _, runID := range unit.RunIDs {
@@ -331,22 +330,14 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 			})
 		}
 		if unit.Kind == unitIntegrate && len(unit.RunIDs) > 0 && unit.Candidate != "" {
-			// The authorization endpoint required the reviewed candidate when it recorded this; the unit may since have
-			// been requeued to publish, which resets its review state.
-			candidateAuthorized = slices.ContainsFunc(runs[unit.RunIDs[len(unit.RunIDs)-1]].PublicationAuthorizations,
-				func(authorization publicationAuthorization) bool {
-					return authorization.CommitSHA == unit.Candidate && authorization.GraphID == graph.ID &&
-						authorization.PlanRevision == graph.PlanRevision && authorization.PlanHash == graph.PlanHash
-				})
-		}
-		if unit.Kind == unitIntegrate && len(unit.RunIDs) > 0 && unit.Candidate != "" && graph.reviewed(&unit, runs) &&
-			len(graph.reviewersOf(unit.Key)) > 0 {
 			run := runs[unit.RunIDs[len(unit.RunIDs)-1]]
 			for _, authorization := range run.PublicationAuthorizations {
 				if authorization.CommitSHA != unit.Candidate || authorization.GraphID != graph.ID ||
 					authorization.PlanRevision != graph.PlanRevision || authorization.PlanHash != graph.PlanHash {
 					continue
 				}
+				// Authorization was admitted only after exact-candidate review. Report that durable fact even
+				// while a later publish-only attempt temporarily makes the reviewer appear unsettled.
 				report.PublicationAuthority = &reportPublicationAuthority{SourceRunID: run.ID, GraphID: graph.ID,
 					GraphRevision: authorization.GraphRevision, PlanRevision: authorization.PlanRevision,
 					PlanHash: authorization.PlanHash, CommitSHA: authorization.CommitSHA,
@@ -403,7 +394,7 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	measured.HumanActions = measured.DecisionsResolved + publicationAuthorizations + planApprovals
 	measured.HumanActionsComplete = false
 	measured.RequiredApprovalsComplete = planApprovals == 1 && everyDecisionResolved(graph.Messages) &&
-		candidateAuthorized
+		report.PublicationAuthority != nil
 	measured.Unknown = []string{supervisionMinutes, "unrecorded_human_actions"}
 	if missingRunRecords {
 		measured.Unknown = append(measured.Unknown, "attempt_count_for_some_runs", "failed_attempts_for_some_runs",
