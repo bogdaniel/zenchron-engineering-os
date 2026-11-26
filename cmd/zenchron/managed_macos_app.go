@@ -72,7 +72,7 @@ func launchManagedMenuBarApp() error {
 }
 
 func installStableMenuBarApp(source, destination string) error {
-	if err := validateManagedMenuBarApp(source); err != nil {
+	if err := validateManagedMenuBarApp(source); err != nil && !errors.Is(err, errBundleNotExecutable) {
 		return fmt.Errorf("validate release menu-bar app: %w", err)
 	}
 	parent := filepath.Dir(destination)
@@ -88,17 +88,7 @@ func installStableMenuBarApp(source, destination string) error {
 	if output, err := exec.Command("ditto", source, stagedApp).CombinedOutput(); err != nil {
 		return fmt.Errorf("stage menu-bar app: %w: %s", err, strings.TrimSpace(string(output)))
 	}
-	// Sealed releases are read-only; moving a directory and removing staging both need owner write access.
-	if err := filepath.WalkDir(stagedApp, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		return os.Chmod(path, info.Mode().Perm()|0o200)
-	}); err != nil {
+	if err := makeMenuBarAppOwnerWritable(stagedApp); err != nil {
 		return fmt.Errorf("make staged menu-bar app writable: %w", err)
 	}
 	if err := validateManagedMenuBarApp(stagedApp); err != nil {
@@ -123,10 +113,32 @@ func installStableMenuBarApp(source, destination string) error {
 		}
 		return fmt.Errorf("activate menu-bar app: %w", err)
 	}
-	if err := os.RemoveAll(backup); err != nil {
+	// An app installed by an older release may itself be read-only.
+	if err := errors.Join(makeMenuBarAppOwnerWritable(backup), os.RemoveAll(backup)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove replaced menu-bar app: %w", err)
 	}
 	return nil
+}
+
+var errBundleNotExecutable = errors.New("bundle executable is missing or not executable")
+
+// makeMenuBarAppOwnerWritable lets a sealed, read-only bundle be moved and removed. Releases sealed before #530 also
+// dropped the exec bit, so files under Contents/MacOS regain it; the bundle's own executables must run.
+func makeMenuBarAppOwnerWritable(app string) error {
+	return filepath.WalkDir(app, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		perm := info.Mode().Perm() | 0o200
+		if !entry.IsDir() && filepath.Base(filepath.Dir(path)) == "MacOS" {
+			perm |= 0o555
+		}
+		return os.Chmod(path, perm)
+	})
 }
 
 func validateManagedMenuBarApp(path string) error {
@@ -157,7 +169,7 @@ func validateManagedMenuBarApp(path string) error {
 	executable := filepath.Join(path, "Contents", "MacOS", "zenchron-menubar")
 	executableInfo, err := os.Lstat(executable)
 	if err != nil || !executableInfo.Mode().IsRegular() || executableInfo.Mode().Perm()&0o111 == 0 {
-		return errors.New("bundle executable is missing or not executable")
+		return errBundleNotExecutable
 	}
 	return nil
 }
