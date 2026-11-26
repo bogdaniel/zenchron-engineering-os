@@ -548,6 +548,9 @@ test('objective create and edit submit the expected API payloads', async ({ page
   await page.getByLabel('Due date').fill('2026-12-10');
   await page.getByRole('button', { name: 'Create objective' }).click();
   await expect(page.locator('.objective-detail-head h3')).toHaveText('Expand reliability testing55555555');
+  const notice = await page.locator('.objective-action-notice').boundingBox();
+  const summary = await page.locator('.detail-summary').boundingBox();
+  expect(notice && summary && notice.y + notice.height <= summary.y).toBe(true);
   await expect(page.locator('.objective-grid-wrap [role="row"].ag-row-selected'))
     .toContainText('Expand reliability testing');
   expect(createdPayloads).toEqual([{
