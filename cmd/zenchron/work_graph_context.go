@@ -206,9 +206,11 @@ Rules, checked by Zenchron before anything runs:
   risk justifies them.
 - kind "integrate": exactly one; no agent_id and an empty "capabilities" list. Zenchron merges every produced candidate, runs verification on
   the combined result, and opens the pull request. Every produce unit must be reachable through its
-  dependencies; depend on a review to integrate only reviewed work.
+  dependencies; depend on a review to integrate only reviewed work. A pull request is published only for a
+  reviewed integrated candidate, so add one review unit whose only dependency is the integrate unit.
 - keys are lowercase letters, digits, and dashes; at most 8 units; "capabilities" lists tools the unit needs
-  from: code.search, code.write, docs.search, git.diff, git.read, tests.run.
+  from: code.search, code.write, docs.search, git.diff, git.read, tests.run. Every listed capability must be
+  among the tools of the unit's agent_id; choose an agent that offers them all.
 - instructions must be specific enough for an agent that sees nothing but its own unit: name the files and
   the behavior. acceptance lists checkable outcomes. Every unit also receives the objective text, so do not
   repeat it.
