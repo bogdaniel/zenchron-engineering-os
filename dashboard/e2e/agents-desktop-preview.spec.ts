@@ -37,6 +37,12 @@ test('Agents desktop preview can edit and save prompt cards in the local fixture
     items.every((item) => item.scrollWidth <= item.clientWidth)), 'no metadata segment is clipped').toBe(true);
   expect((await selectedProfile.boundingBox())?.height).toBeGreaterThanOrEqual(100);
   await expect(selectedProfile.locator('.agent-status')).toHaveCSS('position', 'absolute');
+  const detailStatus = page.locator('.agents-detail-actions .agent-status');
+  await expect(detailStatus).toHaveCSS('position', 'static');
+  const statusBox = await detailStatus.boundingBox();
+  const runBox = await page.locator('.agents-detail-actions').getByRole('button', { name: 'Run Agent', exact: true }).boundingBox();
+  expect(statusBox && runBox && statusBox.x + statusBox.width <= runBox.x,
+    'the detail status badge stays clear of the action buttons').toBe(true);
   const detailActions = page.locator('.agents-detail-actions');
   for (const name of ['Run Agent', 'Duplicate Profile', 'Disable', 'Compare Versions']) {
     const action = detailActions.getByRole('button', { name, exact: true });
