@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
@@ -26,8 +27,19 @@ func TestRequiredApprovalsCompleteBeforePublicationFinishes(t *testing.T) {
 	harness.authorizePublication(integration.ID, commit(4))
 	// Publication has not run yet; the approvals are nevertheless all recorded.
 	report, body := harness.deliveryReport(started.ID)
-	if !report.Measurements.RequiredApprovalsComplete || report.Status == graphCompleted || report.PullRequestURL != "" {
+	if !report.Measurements.RequiredApprovalsComplete || report.Status == graphCompleted || report.PullRequestURL != "" ||
+		report.PublicationAuthority == nil || report.PublicationAuthority.CommitSHA != commit(4) {
 		t.Fatalf("authorized but unpublished candidate: %s", body)
+	}
+
+	// A publish-only requeue makes the integrate run active, temporarily unsettling its dependent reviewer.
+	// The historical exact-candidate authorization remains durable and must remain visible in the report.
+	harness.claimUnit("integrate")
+	publishing, publishingBody := harness.deliveryReport(started.ID)
+	if !publishing.Measurements.RequiredApprovalsComplete || publishing.PublicationAuthority == nil ||
+		publishing.PublicationAuthority.CommitSHA != commit(4) ||
+		slices.Contains(publishing.UnknownEvidence, "publication_authority") {
+		t.Fatalf("publishing candidate lost its recorded authorization: %s", publishingBody)
 	}
 }
 
