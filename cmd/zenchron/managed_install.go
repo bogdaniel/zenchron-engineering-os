@@ -575,18 +575,10 @@ func writeInstallFile(path string, contents []byte, mode os.FileMode) error {
 	return nil
 }
 
-func showManagedStatus() error {
-	response, err := (&http.Client{Timeout: 5 * time.Second}).Get("http://127.0.0.1:8080/api/v1/system/update")
+func showManagedStatus(client *http.Client) error {
+	status, _, _, err := readManagedUpdaterStatus(client)
 	if err != nil {
 		return printPersistedManagedStatus("managed update API is unavailable: " + err.Error())
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return printPersistedManagedStatus(fmt.Sprintf("managed update API returned HTTP %d", response.StatusCode))
-	}
-	var status updater.Status
-	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
-		return fmt.Errorf("decode managed status: %w", err)
 	}
 	encoded, err := json.MarshalIndent(status, "", "  ")
 	if err != nil {
