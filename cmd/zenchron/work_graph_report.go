@@ -430,6 +430,10 @@ func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecut
 			Provider: run.Provider, ProviderVersion: run.ProviderVersion,
 			Verification: run.Verification, Publication: run.Publication, PullRequestURL: run.PullRequestURL,
 			FailureRecorded: run.Error != ""}
+		if unit.Kind != unitIntegrate {
+			// Only the integrate unit publishes in a graph; another unit's run-level state would claim a pending publication.
+			execution.Publication = ""
+		}
 		if run.Profile != nil {
 			execution.ProfileID, execution.ProfileName, execution.ProfileVersion = run.Profile.ID, run.Profile.Name, run.Profile.Version
 			execution.Model = run.Profile.Model
