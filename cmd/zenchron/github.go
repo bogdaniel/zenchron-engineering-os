@@ -267,6 +267,9 @@ func (client gitHubClient) createPullRequest(
 		return gitHubPullRequest{}, err
 	}
 	response, err = client.requestBytes(ctx, http.MethodPost, "/repos/"+owner+"/"+repository+"/pulls", "application/vnd.github+json", nil, payload)
+	if errors.Is(err, errGitHubUnprocessableEntity) {
+		return gitHubPullRequest{}, client.explainPullRequestRejection(ctx, owner, repository, head, base, err)
+	}
 	if err != nil {
 		return gitHubPullRequest{}, err
 	}
@@ -286,6 +289,25 @@ func (client gitHubClient) createPullRequest(
 			pull.Number)
 	}
 	return pull, nil
+}
+
+// explainPullRequestRejection names the usual cause of a 422: the candidate branch and the base share no history,
+// as when a product folder's origin points at an unrelated repository.
+func (client gitHubClient) explainPullRequestRejection(ctx context.Context, owner, repository, head, base string, rejection error) error {
+	// Compare answers 404 both for a missing branch and for unrelated histories, so both branches must exist first.
+	for _, branch := range []string{base, head} {
+		if _, err := client.requestBytes(ctx, http.MethodGet, "/repos/"+owner+"/"+repository+"/branches/"+branch,
+			"application/vnd.github+json", nil, nil); err != nil {
+			return fmt.Errorf("%w: GitHub rejected the pull request from %s into %s", rejection, head, base)
+		}
+	}
+	_, err := client.requestBytes(ctx, http.MethodGet, "/repos/"+owner+"/"+repository+"/compare/"+base+"..."+head, "application/vnd.github+json", nil, nil)
+	var httpErr gitHubHTTPError
+	if errors.As(err, &httpErr) && httpErr.statusCode == http.StatusNotFound {
+		return fmt.Errorf("%w: branch %s shares no history with %s/%s %s; check that the product folder is a clone of that repository",
+			rejection, head, owner, repository, base)
+	}
+	return fmt.Errorf("%w: GitHub rejected the pull request from %s into %s", rejection, head, base)
 }
 
 func (client gitHubClient) closePullRequest(ctx context.Context, owner, repository string, number int) error {
