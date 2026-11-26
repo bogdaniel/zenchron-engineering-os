@@ -259,7 +259,9 @@ test('Objectives in Mock renders the supplied screen and keeps create and edit l
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('.objective-detail-head h3')).toContainText('Preview-only objective');
   await expect(page.locator('.objective-action-notice')).toHaveText('Objective created in this preview only');
-  await expect(page.locator('.objective-metric').nth(2)).toContainText('43');
+  const listed = (await page.getByText(/^Showing \d+–\d+ of \d+ objectives$/).textContent())?.match(/of (\d+)/)?.[1];
+  expect(listed).toBeTruthy();
+  await expect(page.locator('.objective-metric').nth(2)).toContainText(listed!);
   await page.getByRole('button', { name: 'More objective actions' }).click();
   await page.getByRole('menuitem', { name: 'Edit objective' }).click();
   await page.locator('.detail-edit-grid').getByRole('textbox', { name: 'Progress' }).fill('40');
@@ -374,9 +376,13 @@ test('filtered objective table distinguishes no matches from an empty workspace'
   }));
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto(`http://zenchron.test:${dashboardPort}/#objectives`);
+  const totalCard = page.locator('.objective-metric').filter({ hasText: 'Total objectives' });
+  await expect(totalCard).toContainText(String(objectives.length));
   await page.getByRole('textbox', { name: 'Search objectives' }).fill('missing objective');
 
   await expect(page.locator('.ag-overlay-no-rows-center')).toHaveText('No objectives match these filters.');
+  await expect(totalCard).toContainText('0');
+  await expect(totalCard).not.toContainText(String(objectives.length));
   await expect(page.locator('.objective-grid-toolbar')).toContainText('No objectives match these filters.');
   await expect(page.locator('.objective-grid-toolbar')).not.toContainText('Select an objective to inspect details');
 });
