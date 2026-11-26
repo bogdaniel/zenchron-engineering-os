@@ -64,6 +64,8 @@ test('Live connected journey: persona and CLI profile configure an executable ob
   await dialog.getByRole('button', { name: 'Create workflow' }).click();
   const workflow = await (await createResponse).json();
   await expect(page.getByRole('heading', { name: 'Workflow Builder — Builder compiled plan' })).toBeVisible();
+  // The closing dialog keeps its own Description field mounted until its transition ends.
+  await expect(dialog).toBeHidden();
 
   const task = page.getByRole('group', { name: 'Implement objective', exact: true });
   await expect(task).toBeVisible();
