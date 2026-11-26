@@ -536,7 +536,7 @@ test('empty-state creation respects product filter and allows a cleared owner', 
   await expect(dialog.getByRole('combobox', { name: 'Product', exact: true })).toHaveValue('Spec Vault');
   const owner = dialog.getByRole('combobox', { name: 'Owner', exact: true });
   await expect(owner).toHaveValue('bogdaniel');
-  await dialog.getByRole('button', { name: 'Clear input' }).first().click();
+  await dialog.getByRole('button', { name: 'Clear owner' }).click();
   await expect(owner).toHaveValue('');
   await dialog.getByRole('textbox', { name: 'Objective title' }).fill('Validate ownerless product objective');
   await dialog.getByRole('button', { name: 'Create objective' }).click();

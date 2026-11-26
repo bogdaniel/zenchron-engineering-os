@@ -427,7 +427,8 @@ export function ObjectivesPage({ sampleData = false, operator = '' }: { sampleDa
           <TextInput label="Objective title" placeholder="e.g. Improve review velocity" required {...createForm.getInputProps('title')} />
           <Textarea label="Description" placeholder="Describe the outcome and why it matters" minRows={3} {...createForm.getInputProps('description')} />
           <div className="objective-form-row">
-            <Select label="Owner" data={ownerOptions} searchable clearable allowDeselect={false} {...createForm.getInputProps('owner')}
+            <Select label="Owner" data={ownerOptions} searchable clearable allowDeselect={false}
+              clearButtonProps={{ 'aria-label': 'Clear owner', 'aria-hidden': false }} {...createForm.getInputProps('owner')}
               onChange={(value) => createForm.setFieldValue('owner', value ?? '')} />
             <Select label="Product" data={source.products}
               disabled={source.productsLoading || source.productsFailed} clearable {...createForm.getInputProps('product_id')} />
