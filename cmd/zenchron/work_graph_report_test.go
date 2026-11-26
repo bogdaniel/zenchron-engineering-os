@@ -224,7 +224,7 @@ func TestWorkGraphReportMeasuresACompletedRun(t *testing.T) {
 	}
 	if len(apiUnit.Executions) != 1 || apiUnit.Executions[0].ProfileID != harness.profile.ID ||
 		apiUnit.Executions[0].ProfileVersion != harness.profile.Version || apiUnit.Executions[0].Model != harness.profile.Model ||
-		apiUnit.Executions[0].CandidateCommit != commit(3) ||
+		apiUnit.Executions[0].CandidateCommit != commit(3) || apiUnit.Executions[0].Publication != "" ||
 		apiUnit.Executions[0].ResultAttempt != 2 || apiUnit.Executions[0].UpdatedAt.IsZero() ||
 		len(report.Handoffs) == 0 || report.Handoffs[0].MessageID == "" || len(report.Outstanding) != 0 {
 		t.Fatalf("execution provenance, handoffs, or outstanding steps = report unit %#v, handoffs %#v, outstanding %#v",

@@ -48,7 +48,7 @@ flowchart LR
   not display a zero revision. Workflow identity
   and version come from the compiled plan and graph. Each execution reports the recorded profile and persona IDs,
   names and versions, model from the frozen profile snapshot, provider, candidate commit and its Git tree SHA when
-  reported, worker-reported verification, review verdict, publication state, PR link, attempts, and failures. Tree
+  reported, worker-reported verification, review verdict, publication state (integrate unit only, since no other unit publishes), PR link, attempts, and failures. Tree
   evidence is considered known only when the successful integration run's tree accompanies the selected candidate
   commit. Reviewer runs expose the exact base commit they inspected. Each run also names its accepted result attempt and
   last persisted update time; handoffs carry
