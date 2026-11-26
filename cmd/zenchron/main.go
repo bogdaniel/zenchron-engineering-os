@@ -43,7 +43,7 @@ func run() error {
 	case "serve":
 		return runControlPlane()
 	case "status":
-		return showManagedStatus()
+		return showManagedStatus(&http.Client{Timeout: 5 * time.Second})
 	case "doctor":
 		return showManagedDoctor()
 	case "auth":
