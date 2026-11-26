@@ -208,7 +208,8 @@ Rules, checked by Zenchron before anything runs:
   the combined result, and opens the pull request. Every produce unit must be reachable through its
   dependencies; depend on a review to integrate only reviewed work.
 - keys are lowercase letters, digits, and dashes; at most 8 units; "capabilities" lists tools the unit needs
-  from: code.search, code.write, docs.search, git.diff, git.read, tests.run.
+  from: code.search, code.write, docs.search, git.diff, git.read, tests.run. Every listed capability must be
+  among the tools of the unit's agent_id; choose an agent that offers them all.
 - instructions must be specific enough for an agent that sees nothing but its own unit: name the files and
   the behavior. acceptance lists checkable outcomes. Every unit also receives the objective text, so do not
   repeat it.
