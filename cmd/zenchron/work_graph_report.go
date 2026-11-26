@@ -264,25 +264,29 @@ type reportOutstanding struct {
 // deliveryMeasurements holds counts that are always known and, as pointers, values that are present
 // only when something recorded them. Every absent one is named in Unknown.
 type deliveryMeasurements struct {
-	UnitCount            int      `json:"unit_count"`
-	RunCount             int      `json:"run_count"`
-	AttemptCount         int      `json:"attempt_count"`
-	FailedAttempts       int      `json:"failed_attempts"`
-	ReviewRounds         int      `json:"review_rounds"`
-	Findings             int      `json:"findings"`
-	RemediationPasses    int      `json:"remediation_passes"`
-	DecisionsRequested   int      `json:"decisions_requested"`
-	DecisionsResolved    int      `json:"decisions_resolved"`
-	HumanActions         int      `json:"human_actions"`
-	HumanActionsComplete bool     `json:"human_actions_complete"`
-	MaxConcurrency       int      `json:"max_concurrency"`
-	WallClockSeconds     *float64 `json:"wall_clock_seconds,omitempty"`
-	InputTokens          *int64   `json:"input_tokens,omitempty"`
-	OutputTokens         *int64   `json:"output_tokens,omitempty"`
-	CostUSD              *float64 `json:"cost_usd,omitempty"`
-	RunsWithUsage        int      `json:"runs_with_usage"`
-	RunsWithCost         int      `json:"runs_with_cost"`
-	Unknown              []string `json:"unknown"`
+	UnitCount            int  `json:"unit_count"`
+	RunCount             int  `json:"run_count"`
+	AttemptCount         int  `json:"attempt_count"`
+	FailedAttempts       int  `json:"failed_attempts"`
+	ReviewRounds         int  `json:"review_rounds"`
+	Findings             int  `json:"findings"`
+	RemediationPasses    int  `json:"remediation_passes"`
+	DecisionsRequested   int  `json:"decisions_requested"`
+	DecisionsResolved    int  `json:"decisions_resolved"`
+	HumanActions         int  `json:"human_actions"`
+	HumanActionsComplete bool `json:"human_actions_complete"`
+	// RequiredApprovalsComplete is derived only from recorded approvals: the approved plan, a resolution for every
+	// decision request by ID, and a publication authorization bound to the reviewed integrated candidate. It says
+	// nothing about delivery; HumanActionsComplete measures coverage.
+	RequiredApprovalsComplete bool     `json:"required_approvals_complete"`
+	MaxConcurrency            int      `json:"max_concurrency"`
+	WallClockSeconds          *float64 `json:"wall_clock_seconds,omitempty"`
+	InputTokens               *int64   `json:"input_tokens,omitempty"`
+	OutputTokens              *int64   `json:"output_tokens,omitempty"`
+	CostUSD                   *float64 `json:"cost_usd,omitempty"`
+	RunsWithUsage             int      `json:"runs_with_usage"`
+	RunsWithCost              int      `json:"runs_with_cost"`
+	Unknown                   []string `json:"unknown"`
 }
 
 // buildDeliveryReport computes the report from durable graph and run records. Missing run records retain their graph
@@ -325,14 +329,15 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 				return evidence == "candidate_tree_sha"
 			})
 		}
-		if unit.Kind == unitIntegrate && len(unit.RunIDs) > 0 && unit.Candidate != "" && graph.reviewed(&unit, runs) &&
-			len(graph.reviewersOf(unit.Key)) > 0 {
+		if unit.Kind == unitIntegrate && len(unit.RunIDs) > 0 && unit.Candidate != "" {
 			run := runs[unit.RunIDs[len(unit.RunIDs)-1]]
 			for _, authorization := range run.PublicationAuthorizations {
 				if authorization.CommitSHA != unit.Candidate || authorization.GraphID != graph.ID ||
 					authorization.PlanRevision != graph.PlanRevision || authorization.PlanHash != graph.PlanHash {
 					continue
 				}
+				// Authorization was admitted only after exact-candidate review. Report that durable fact even
+				// while a later publish-only attempt temporarily makes the reviewer appear unsettled.
 				report.PublicationAuthority = &reportPublicationAuthority{SourceRunID: run.ID, GraphID: graph.ID,
 					GraphRevision: authorization.GraphRevision, PlanRevision: authorization.PlanRevision,
 					PlanHash: authorization.PlanHash, CommitSHA: authorization.CommitSHA,
@@ -388,6 +393,8 @@ func buildDeliveryReport(graph workGraph, runs map[string]agentRun, plan *object
 	}
 	measured.HumanActions = measured.DecisionsResolved + publicationAuthorizations + planApprovals
 	measured.HumanActionsComplete = false
+	measured.RequiredApprovalsComplete = planApprovals == 1 && everyDecisionResolved(graph.Messages) &&
+		report.PublicationAuthority != nil
 	measured.Unknown = []string{supervisionMinutes, "unrecorded_human_actions"}
 	if missingRunRecords {
 		measured.Unknown = append(measured.Unknown, "attempt_count_for_some_runs", "failed_attempts_for_some_runs",
@@ -415,6 +422,21 @@ func hasCandidateTree(unit workUnit, runs map[string]agentRun) bool {
 		}
 	}
 	return false
+}
+
+// everyDecisionResolved matches resolutions to requests by ID, so an orphan resolution cannot stand in for a missing one.
+func everyDecisionResolved(messages []graphMessage) bool {
+	for _, request := range messages {
+		if request.Type != messageDecisionRequest {
+			continue
+		}
+		if !slices.ContainsFunc(messages, func(message graphMessage) bool {
+			return message.Type == messageDecisionResolution && message.Resolves == request.ID
+		}) {
+			return false
+		}
+	}
+	return true
 }
 
 func summarizeExecutions(unit workUnit, runs map[string]agentRun) []reportExecution {
