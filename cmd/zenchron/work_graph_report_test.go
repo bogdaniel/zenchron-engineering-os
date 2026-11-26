@@ -485,3 +485,24 @@ func TestWorkGraphReportIsHiddenFromOtherCallers(t *testing.T) {
 		t.Fatalf("report with a worker credential returned HTTP %d", response.Code)
 	}
 }
+
+// An integration that cannot be published is still outstanding work: the report must not show it as finished.
+func TestWorkGraphReportListsUnpublishableIntegrationAsOutstanding(t *testing.T) {
+	harness := newGraphHarness(t)
+	started := harness.start(harness.planBody(unitJSON("api", unitProduce, harness.profile.ID),
+		unitJSON("review-api", unitReview, harness.reviewer.ID, "api"),
+		unitJSON("integrate", unitIntegrate, "", "review-api")))
+	harness.handOff(harness.claimUnit("api"), commit(1), "api")
+	harness.verdict(harness.claimUnit("review-api"), commit(1), `{"review":{"verdict":"accept"}}`)
+	integration := harness.claimUnit("integrate")
+	merged, _ := json.Marshal(map[string]any{"integration": workerapi.MergeResult{Merged: integration.Merge}})
+	harness.report(integration, workerapi.AgentRunResult{CommitSHA: commit(4), BaseCommit: commit(9), Output: "Merged.",
+		Verification: workerapi.VerificationNotConfigured, Result: string(merged)})
+
+	report, body := harness.deliveryReport(started.ID)
+	if !slices.ContainsFunc(report.Outstanding, func(step reportOutstanding) bool {
+		return step.Key == "integrate" && strings.Contains(step.Reason, "publication is unavailable")
+	}) {
+		t.Fatalf("unpublishable integration is missing from outstanding steps: %s", body)
+	}
+}
