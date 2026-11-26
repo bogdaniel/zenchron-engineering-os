@@ -52,8 +52,8 @@ function UnavailablePanel({ title, what }: { title: string; what: string }) {
   return <section className="objective-detail-unavailable" role="tabpanel"><b>{title}</b><p>{notRecorded(what)}</p></section>;
 }
 
-function ObjectiveEditForm({ item, source, onSaved, onCancel }: {
-  item: Objective; source: ObjectivesSource; onSaved: () => void; onCancel: () => void;
+function ObjectiveEditForm({ item, source, ownerOptions, onSaved, onCancel }: {
+  item: Objective; source: ObjectivesSource; ownerOptions: string[]; onSaved: () => void; onCancel: () => void;
 }) {
   // Seeded once from the saved record when editing starts; the rest of the panel keeps reading the record itself.
   const form = useForm<ObjectiveEdit>({
@@ -80,7 +80,8 @@ function ObjectiveEditForm({ item, source, onSaved, onCancel }: {
   return <form className="detail-edit-grid" onSubmit={form.onSubmit((values) => void save(values))}>
     <TextInput label="Objective title" required {...form.getInputProps('title')} />
     <Textarea label="Description" minRows={2} {...form.getInputProps('description')} />
-    <TextInput label="Owner" {...form.getInputProps('owner')} />
+    <Select label="Owner" data={Array.from(new Set([item.owner, ...ownerOptions].filter(Boolean)))} searchable clearable allowDeselect={false}
+      value={form.values.owner || null} onChange={(value) => form.setFieldValue('owner', value ?? '')} />
     <TextInput label="Due date" type="date" {...form.getInputProps('due_date')} />
     <Select label="Status" data={objectiveStatusOptions} value={form.values.status}
       onChange={(value) => { if (value) form.setFieldValue('status', value as Objective['status']); }} />
@@ -162,9 +163,10 @@ function ObjectiveTabPanel({ tab, details }: { tab: Exclude<ObjectiveDetailTab, 
 }
 
 /** The selected objective: header actions, summary, tabs, and the editor that replaces the tab body while editing. */
-export function ObjectiveDetail({ item, source, sampleData, tab, editing, notice, onTab, onEditing, onNotice }: {
+export function ObjectiveDetail({ item, source, ownerOptions, sampleData, tab, editing, notice, onTab, onEditing, onNotice }: {
   item: Objective;
   source: ObjectivesSource;
+  ownerOptions: string[];
   sampleData: boolean;
   tab: ObjectiveDetailTab;
   editing: boolean;
@@ -228,7 +230,7 @@ export function ObjectiveDetail({ item, source, sampleData, tab, editing, notice
         className={tab === id ? 'active' : ''} onClick={() => { onEditing(false); onTab(id); }}>
         <Icon size={13} aria-hidden="true" />{label}</button>)}
     </div>
-    {editing ? <ObjectiveEditForm item={item} source={source} onCancel={() => onEditing(false)} onSaved={() => {
+    {editing ? <ObjectiveEditForm item={item} source={source} ownerOptions={ownerOptions} onCancel={() => onEditing(false)} onSaved={() => {
       onEditing(false);
       onNotice(`Objective updated${source.savedSuffix}`);
     }} /> : tab === 'overview' ? <ObjectiveOverview item={item} details={details} onTab={onTab} />

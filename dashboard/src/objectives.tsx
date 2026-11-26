@@ -86,7 +86,7 @@ function objectivePageNumbers(current: number, total: number) {
     .filter((page) => page > 0 && page < total - 1), total - 1])];
 }
 
-export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean }) {
+export function ObjectivesPage({ sampleData = false, operator = '' }: { sampleData?: boolean; operator?: string }) {
   const mock = useMockObjectives();
   const live = useLiveObjectives(!sampleData);
   const source = sampleData ? mock : live;
@@ -120,7 +120,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     activeRow.setSelected(true);
   }, [items, objectiveGridApi, selectedID]);
   const createForm = useForm<ObjectiveInput>({
-    initialValues: { title: '', description: '', owner: '', product_id: workspaceProductID, due_date: '' },
+    initialValues: { title: '', description: '', owner: operator, product_id: workspaceProductID, due_date: '' },
     validate: (values) => objectiveFormErrors(objectiveInputSchema, values),
   });
 
@@ -175,6 +175,15 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
     createForm.setFieldValue('product_id', '');
     setCreateOpen(false);
     clearWorkspaceCreateContext();
+  }
+
+  const ownerOptions = useMemo(() => Array.from(new Set([operator, ...items.map((item) => item.owner)].filter(Boolean))), [items, operator]);
+
+  function openCreateDialog() {
+    setSubmitError('');
+    const filteredProduct = source.products.some((product) => product.value === productFilter) ? productFilter : '';
+    createForm.setFieldValue('product_id', createForm.values.product_id || filteredProduct);
+    setCreateOpen(true);
   }
 
   const columns = useMemo<ColDef<Objective>[]>(() => [
@@ -262,7 +271,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
               { value: 'all', label: 'All due dates' },
             ]} value={dueQuarter} onChange={(value) => setDueQuarter(value ?? 'this')} />
           </div>
-          <Button className="new-objective-button" leftSection={<IconPlus size={16} />} onClick={() => { setSubmitError(''); setCreateOpen(true); }}>New Objective</Button>
+          <Button className="new-objective-button" leftSection={<IconPlus size={16} />} onClick={openCreateDialog}>New Objective</Button>
         </div>
       </div>
 
@@ -404,7 +413,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
         </div>
         <div className="objective-detail-stack">
         <PanelCard className="objective-detail-panel" withBorder>
-          {selected ? <ObjectiveDetail item={selected} source={source} sampleData={sampleData} tab={detailTab} editing={editing} notice={actionNotice}
+          {selected ? <ObjectiveDetail item={selected} source={source} ownerOptions={ownerOptions} sampleData={sampleData} tab={detailTab} editing={editing} notice={actionNotice}
             onTab={setDetailTab} onEditing={setEditing} onNotice={setActionNotice} /> : (
             <div className="objective-detail-empty"><span className="detail-objective-icon"><IconTarget size={19} /></span><h3>Objective details</h3><p>Select an objective to see its plan and progress, or create the first objective for this workspace.</p><Button className="new-objective-button" onClick={() => setCreateOpen(true)}>Create objective</Button></div>
           )}
@@ -418,7 +427,7 @@ export function ObjectivesPage({ sampleData = false }: { sampleData?: boolean })
           <TextInput label="Objective title" placeholder="e.g. Improve review velocity" required {...createForm.getInputProps('title')} />
           <Textarea label="Description" placeholder="Describe the outcome and why it matters" minRows={3} {...createForm.getInputProps('description')} />
           <div className="objective-form-row">
-            <TextInput label="Owner" placeholder="Name" {...createForm.getInputProps('owner')} />
+            <Select label="Owner" data={ownerOptions} searchable clearable allowDeselect={false} {...createForm.getInputProps('owner')} />
             <Select label="Product" data={source.products}
               disabled={source.productsLoading || source.productsFailed} clearable {...createForm.getInputProps('product_id')} />
           </div>

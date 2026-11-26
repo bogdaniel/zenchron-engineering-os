@@ -357,7 +357,7 @@ function App() {
               agentRunsLoading={agentRuns.isLoading}
               agentRunsError={agentRuns.isError}
             />
-          ) : activePage === 'objectives' ? <ObjectivesPage sampleData={previewPage} /> : ['integrations', 'settings'].includes(activePage) ? (
+          ) : activePage === 'objectives' ? <ObjectivesPage sampleData={previewPage} operator={auth.data?.local === false ? auth.data.login : ''} /> : ['integrations', 'settings'].includes(activePage) ? (
             <SystemPage
               section={activePage === 'settings' ? 'settings' : 'integrations'}
               designPreview={previewPage}
