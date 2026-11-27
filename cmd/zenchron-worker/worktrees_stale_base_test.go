@@ -116,8 +116,12 @@ func TestPrepareWorktreeStartsAtThePinnedGraphBaseEvenAfterOriginAdvances(t *tes
 	defer cancel()
 	project := projectAt(checkout, workerTestID)
 	// origin is ahead of the checkout, which would refuse an unpinned run; the pinned base is used as is.
+	var foreign baseVerificationError
 	if err := prepareWorktree(ctx, root, project, workerTestID, "zenchron/agent-run/"+workerTestID, "main", pinned,
-		"github.com/acme/platform"); err != nil {
+		"github.com/acme/other"); !errors.As(err, &foreign) || !strings.Contains(err.Error(), "origin is not github.com/acme/other") {
+		t.Fatalf("pinned run with another repository's origin: error = %v", err)
+	}
+	if err := prepareWorktree(ctx, root, project, workerTestID, "zenchron/agent-run/"+workerTestID, "main", pinned, ""); err != nil {
 		t.Fatalf("pinned run: error = %v", err)
 	}
 	worktree := filepath.Join(root, project.ID, workerTestID)
@@ -130,6 +134,22 @@ func TestPrepareWorktreeStartsAtThePinnedGraphBaseEvenAfterOriginAdvances(t *tes
 	err := prepareWorktree(ctx, root, project, other, "zenchron/agent-run/"+other, "main", missing, "")
 	if !errors.As(err, &unverified) || !strings.Contains(err.Error(), "pinned graph base") {
 		t.Fatalf("missing pinned base: error = %v", err)
+	}
+}
+
+func TestReusedWorktreeMustDescendFromThePinnedBase(t *testing.T) {
+	_, checkout, commit := staleBaseFixture(t)
+	pinned := strings.TrimSpace(runGit(t, checkout, "rev-parse", "main"))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := verifyDescendsFromPinnedBase(ctx, checkout, pinned); err != nil {
+		t.Fatalf("HEAD at the pinned base: error = %v", err)
+	}
+	runGit(t, checkout, "checkout", "--quiet", "--orphan", "unrelated")
+	commit(checkout, "unrelated", false)
+	var unverified baseVerificationError
+	if err := verifyDescendsFromPinnedBase(ctx, checkout, pinned); !errors.As(err, &unverified) {
+		t.Fatalf("HEAD unrelated to the pinned base: error = %v", err)
 	}
 }
 

@@ -191,7 +191,7 @@ func openWorkGraphStore(
 func validStoredWorkGraph(graph workGraph) bool {
 	if !validHexID(graph.ObjectiveID) || !validHexID(graph.ProjectID) || !validHexID(graph.WorkerID) ||
 		graph.MaxParallel < 1 || graph.MaxParallel > maxPlanParallel || len(graph.Units) == 0 ||
-		len(graph.Units) > maxPlanUnits || graph.CreatedAt.IsZero() ||
+		len(graph.Units) > maxPlanUnits || graph.CreatedAt.IsZero() || !validCommitSHA(graph.BaseCommit) ||
 		!slices.Contains([]string{graphActive, graphBlocked, graphCompleted, graphFailed, graphCancelled}, graph.Status) {
 		return false
 	}

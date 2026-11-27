@@ -31,6 +31,19 @@ func TestWorkGraphPinsTheFirstVerifiedBaseForLaterRootRuns(t *testing.T) {
 	}
 }
 
+func TestStoredWorkGraphRejectsAMalformedBaseCommit(t *testing.T) {
+	harness := newGraphHarness(t)
+	harness.start(harness.reviewedPlan())
+	graph := harness.graph()
+	if !validStoredWorkGraph(graph) {
+		t.Fatal("a fresh graph is invalid")
+	}
+	graph.BaseCommit = "not-a-commit"
+	if validStoredWorkGraph(graph) {
+		t.Fatal("a graph with a malformed base commit was accepted")
+	}
+}
+
 func TestWorkGraphFailsARootRunFromAnotherBase(t *testing.T) {
 	harness := newGraphHarness(t)
 	harness.start(harness.reviewedPlan())

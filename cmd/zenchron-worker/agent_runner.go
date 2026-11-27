@@ -269,6 +269,10 @@ func (runner *agentRunner) attempt(
 		reporter.emit("status", "Stopped processes left in the worktree by an earlier attempt.")
 	}
 	if command.StartCommit != "" {
+		// A reused worktree (a retry) must still descend from the pinned base before it may report it.
+		if err := verifyDescendsFromPinnedBase(ctx, worktree, command.StartCommit); err != nil {
+			return failed(result, workerapi.TerminationWorkerError, "Refused to start: the run branch does not descend from the graph's pinned base "+command.StartCommit+".")
+		}
 		result.BaseCommit = command.StartCommit
 	} else if base, err := gitOutput(ctx, "-C", worktree, "merge-base", command.BaseBranch, "HEAD"); err == nil {
 		result.BaseCommit = strings.TrimSpace(base)
