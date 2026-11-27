@@ -165,7 +165,9 @@ Live:
   configuration). It is reporting only and never enforced. Delivery Metrics shows "Spent this month": the sum of
   provider-reported cost for the product's WorkGraph runs created in the current UTC calendar month, against the budget
   when one is set, with run coverage. Runs without reported cost are counted as unknown, never as zero; when no run
-  reports cost the amount is Unknown, and when run records cannot be loaded it says so.
+  reports cost the amount is Unknown. Missing product history or run records make the total Unknown rather than
+  fabricating a zero. If the bounded run inventory omits linked records, or some recorded runs have unknown
+  cost, any reported subtotal is marked partial (at least the recorded amount) and incomplete coverage is shown.
 - The selected product's environment projection supplies the pending-decision count, decision links, current
   WorkGraph/handoff/finding counts, observed PR-link count, and a newest-first list of its historical WorkGraphs.
   History entries reference the durable graph, plan hash/revision, product configuration revision, graph revision, run IDs, status and timestamps;

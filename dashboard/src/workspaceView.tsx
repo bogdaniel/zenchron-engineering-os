@@ -358,7 +358,8 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
     delivery: { ranges: [], metrics: () => [
       ['WorkGraphs', String(graphCount), 'current'], ['PR links', String(pullRequestCount), 'observed'],
       ['Findings', String(findingCount), 'recorded'], ['Handoffs', String(handoffCount), 'recorded'],
-      monthlyBudgetMetric(product?.monthly_budget_cents, new Set(environment?.history.flatMap((item) => item.run_ids)),
+      monthlyBudgetMetric(product?.monthly_budget_cents,
+        environment ? new Set(environment.history.flatMap((item) => item.run_ids)) : undefined,
         facts.agentRunsError || facts.agentRunsLoading ? undefined : facts.agentRuns, new Date()),
     ], note: environmentNote },
   };
