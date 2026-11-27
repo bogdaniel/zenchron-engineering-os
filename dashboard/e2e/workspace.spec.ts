@@ -320,7 +320,7 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await dialog.getByRole('button', { name: 'Save product' }).click();
   await expect(page.locator('.workspace-mock-heading h1')).toHaveText('Nova Core');
   const deliveryMetrics = page.locator('.workspace-mock-card.analytics');
-  await expect(deliveryMetrics).toContainText('Spent this month$0.00 of $75.00 budget, reporting only; no runs');
+  await expect(deliveryMetrics).toContainText('Spent this monthUnknown of $75.00 budget, reporting only; no dated runs this month, 2 linked run records unavailable');
   await expect(configurationHistory).toContainText('Revision 3');
   await expect(configurationHistory).toContainText('Nova Core');
   expect(writes).toEqual([{ method: 'PUT', path: `/api/v1/products/${novaID}`,
