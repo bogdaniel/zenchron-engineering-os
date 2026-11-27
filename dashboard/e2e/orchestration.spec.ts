@@ -690,6 +690,9 @@ test('an objective plan approved in the dashboard runs through decision, review,
     units: { kind: string; executions: { verification?: string; candidate_commit?: string; candidate_tree_sha?: string }[] }[] };
   expect(delivery.workflow_id).toBe(created.workflowID);
   expect(delivery.workflow_mode).toBe('compiled');
+  // The export is the served record, including fields this view does not render.
+  expect(typeof (delivery as unknown as { measurements: { required_approvals_complete?: unknown } })
+    .measurements.required_approvals_complete).toBe('boolean');
   expect(delivery.unknown_evidence).not.toContain('candidate_tree_sha');
   expect(delivery.units.filter((unit) => unit.kind === 'integrate').flatMap((unit) => unit.executions)
     .some((run) => run.candidate_commit && run.candidate_tree_sha)).toBe(true);
