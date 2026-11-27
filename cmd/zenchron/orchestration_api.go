@@ -271,7 +271,8 @@ func (store *workGraphStore) admitPlansLocked() bool {
 			result, err := parseUnitResult(run.Result)
 			switch {
 			case !exists || run.Status != "succeeded":
-				plan.Status, plan.Problems = planInvalid, []string{"The planning run did not finish: " + cmp.Or(run.Error, run.Status, "it no longer exists") + "."}
+				plan.Status, plan.Problems = planInvalid, []string{"The planning run did not finish: " +
+					strings.TrimSuffix(cmp.Or(run.Error, run.Status, "it no longer exists"), ".") + "."}
 			case err != nil || result.Plan == nil:
 				plan.Status, plan.Problems = planInvalid, []string{"The planner reported no plan: " + cmp.Or(errorText(err), "the result carried none") + "."}
 			default:

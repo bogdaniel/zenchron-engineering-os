@@ -105,6 +105,20 @@ func TestPlanApprovalRefusesAPlanWithoutASourceBaseline(t *testing.T) {
 	}
 }
 
+func TestRefusedPlannerRunReadsAsOneSentence(t *testing.T) {
+	harness := newGraphHarness(t)
+	harness.propose(`{"project_id":"` + testProjectID + `","planner_agent_id":"` + harness.reviewer.ID + `"}`)
+	command := harness.claim()
+	harness.report(command, workerapi.AgentRunResult{Status: "failed", TerminationReason: workerapi.TerminationWorkerError,
+		Error: "Refused to start: local main differs from origin/main; fast-forward or reconcile the checkout, then retry."})
+	plans := decodeList[objectivePlan](t, harness.call(http.MethodGet, "/api/v1/objectives/"+harness.objectiveID+"/plans", ""))
+	want := "The planning run did not finish: Refused to start: local main differs from origin/main; " +
+		"fast-forward or reconcile the checkout, then retry."
+	if len(plans) != 1 || plans[0].Status != planInvalid || len(plans[0].Problems) != 1 || plans[0].Problems[0] != want {
+		t.Fatalf("refused planner problem = %#v, want %q", plans, want)
+	}
+}
+
 func TestJudgeSourceRequiresAFreshBoundMatchingCheck(t *testing.T) {
 	now := time.Date(2026, time.November, 27, 12, 0, 0, 0, time.UTC)
 	project := projectRecord{ID: testProjectID, WorkerID: testWorkerID, Branch: "main"}
