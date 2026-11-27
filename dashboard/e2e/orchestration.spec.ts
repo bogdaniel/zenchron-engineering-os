@@ -589,7 +589,8 @@ test('an objective plan approved in the dashboard runs through decision, review,
   await expect(page.getByRole('button', { name: 'Approve plan and start' })).toBeVisible();
   await panel.getByRole('button', { name: 'Approve plan and start' }).click();
   const units = panel.getByRole('list', { name: 'Work units' });
-  await expect(units.getByRole('listitem')).toHaveCount(4);
+  // Approval first waits for the worker to claim and finish the source check, on its own poll interval.
+  await expect(units.getByRole('listitem')).toHaveCount(4, { timeout: 90_000 });
   await expect(units.getByRole('listitem').nth(3)).toContainText('waiting');
 
   // From here the worker must forward typed results: the producer asks, a person answers in the page.

@@ -166,7 +166,7 @@ func TestVerifySourceReportsTheVerifiedCommitOrRefuses(t *testing.T) {
 	project := projectAt(checkout, workerTestID)
 	command := workerapi.AgentRunCommand{ID: workerTestID, VerifySource: true, BaseBranch: "main"}
 	if result := runner.verifySource(context.Background(), command, project); result.Status != "failed" ||
-		!strings.Contains(result.Error, "Source check failed: local main is at") {
+		!strings.Contains(result.Error, "Source check failed: local main ") || !strings.Contains(result.Error, "differs from origin/main") {
 		t.Fatalf("behind checkout: %#v", result)
 	}
 	runGit(t, checkout, "pull", "--quiet", "--ff-only")

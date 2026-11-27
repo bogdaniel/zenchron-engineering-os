@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 )
 
 func worktreeRoot() (string, error) {
@@ -113,10 +114,23 @@ type staleBaseError struct {
 	branch, local, remoteBranch, remote string
 }
 
+// branchLabelForError caps variable-length branch names before formatting the refusal so neither
+// full commit SHA can be pushed past the control plane's bounded error field.
+func branchLabelForError(name string) string {
+	const maxBytes = 32
+	if len(name) <= maxBytes {
+		return name
+	}
+	cut := maxBytes - len("…")
+	for cut > 0 && !utf8.RuneStart(name[cut]) {
+		cut--
+	}
+	return name[:cut] + "…"
+}
+
 func (err staleBaseError) Error() string {
-	return fmt.Sprintf("local %s is at %s but origin/%s is at %s; update the checkout so they match "+
-		"(git fetch origin, then git merge --ff-only origin/%s, or resolve local commits) and start the run again",
-		err.branch, err.local, err.remoteBranch, err.remote, err.remoteBranch)
+	return fmt.Sprintf("local %s %s differs from origin/%s %s; fast-forward or reconcile the checkout, then retry",
+		branchLabelForError(err.branch), err.local, branchLabelForError(err.remoteBranch), err.remote)
 }
 
 // baseVerificationError reports that the base could not be compared with GitHub, so it is not trusted.

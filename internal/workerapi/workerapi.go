@@ -146,6 +146,9 @@ type AgentPersona struct {
 	Version              int      `json:"version"`
 }
 
+// MaxRunErrorSize is the longest failure message the control plane accepts in a run result.
+const MaxRunErrorSize = 255
+
 type AgentRunCommand struct {
 	ID                 string       `json:"id"`
 	ProjectID          string       `json:"project_id"`

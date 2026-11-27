@@ -15,7 +15,7 @@ import (
 
 func validAgentRunResult(input workerapi.AgentRunResult) bool {
 	return (input.Status == "succeeded" || input.Status == "failed" || input.Status == "cancelled") &&
-		len(input.Output) <= 20000 && len(input.Error) <= 255 &&
+		len(input.Output) <= 20000 && len(input.Error) <= workerapi.MaxRunErrorSize &&
 		(input.Diff == nil || len(*input.Diff) <= maxAgentRunDiffSize) &&
 		input.Attempts >= 1 && input.Attempts <= maxAgentRunAttempts+1 &&
 		validCommitSHA(input.CommitSHA) && validCommitSHA(input.CommitTreeSHA) && validCommitSHA(input.BaseCommit) &&
