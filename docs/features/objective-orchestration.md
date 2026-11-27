@@ -17,7 +17,9 @@ flowchart LR
   Plan -->|"GET, POST /api/v1/objectives/{id}/plans"| Plans[orchestration_api.go]
   Plan -->|"GET /api/v1/workers<br/>current CLI readiness"| Readiness[Linked worker provider status]
   Plan -->|"planned workflow and profile links"| Records[Workflows, Agents]
-  Plan -->|"POST .../plans/{revision}/approve"| Plans
+  Plan -->|"POST .../plans/{revision}/approve<br/>202 while the source check runs, then 201 or 409"| Plans
+  Plans -->|"approval: reserve and enqueue verify_source run<br/>bound to plan revision, hash, project, worker, branch"| Runs
+  Plans -->|"approve only if check is fresh and origin == plan source_commit;<br/>create graph with base_commit pinned"| Graphs
   Plan -->|"POST /api/v1/work-graphs/{id}/cancel<br/>.../units/{key}/retry<br/>.../decisions/{message}"| Plans
   Views -->|"GET /api/v1/work-graphs"| Plans
   Views -->|"GET /api/v1/work-graphs/{id}/report"| DeliveryReport[ObjectiveDeliveryReport<br/>recorded provenance + unknown evidence]
@@ -34,6 +36,7 @@ flowchart LR
   subgraph Worker["zenchron-worker (ZENCHRON_WORKER_CONCURRENCY slots)"]
     Dispatch[dispatch] --> Agent["agent run<br/>worktree + Codex or Claude Code"]
     Dispatch --> Merge["integration run<br/>worktree + git merge"]
+    Dispatch --> SourceCheck["source check<br/>fetch origin default; local base == origin?<br/>no provider, no worktree"]
     Agent --> Verify[verification]
     Merge --> Verify
   end
