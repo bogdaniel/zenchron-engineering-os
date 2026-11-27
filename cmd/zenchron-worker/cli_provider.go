@@ -419,7 +419,7 @@ func (session *cliSession) result(ctx context.Context, waitErr error, stderr str
 		return result, ctx.Err()
 	case session.failure != "":
 		result.reason = workerapi.TerminationProviderExit
-		return result, fmt.Errorf("provider reported failure: %s", session.failure)
+		return result, providerFailure{message: session.failure}
 	case waitErr != nil:
 		result.reason = workerapi.TerminationProviderExit
 		return result, fmt.Errorf("provider exited: %w: %s", waitErr, stderr)
@@ -485,3 +485,9 @@ func truncateText(value string, limit int) string {
 	}
 	return strings.ToValidUTF8(value[:limit], "")
 }
+
+// providerFailure is a failure the provider itself reported, such as an exhausted usage limit; its message is what the
+// operator needs to see on the run, not only in the event log.
+type providerFailure struct{ message string }
+
+func (failure providerFailure) Error() string { return "provider reported failure: " + failure.message }
