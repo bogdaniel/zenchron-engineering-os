@@ -341,6 +341,9 @@ func (runner *agentRunner) attempt(
 	if runErr != nil {
 		log.Printf("agent run %s attempt %d: %v", command.ID, command.Attempts, reporter.redactor.clean(runErr.Error()))
 		reporter.emit("error", runErr.Error())
+		if reported := (providerFailure{}); errors.As(runErr, &reported) {
+			return failed(result, execution.reason, "The provider reported: "+reporter.redactor.clean(reported.message))
+		}
 		return failed(result, execution.reason, executionFailureMessage(execution.reason))
 	}
 	result.Output = truncateText(reporter.redactor.clean(execution.output), maxAgentRunOutputSize)
