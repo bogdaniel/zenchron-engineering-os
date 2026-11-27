@@ -126,6 +126,21 @@ func failedRun(reason, message string) workerapi.AgentRunResult {
 	return failed(workerapi.AgentRunResult{}, reason, message)
 }
 
+// verifySource checks the project's base branch against origin for plan approval and reports the verified commit.
+func (runner *agentRunner) verifySource(ctx context.Context, command workerapi.AgentRunCommand, project discoveredProject) workerapi.AgentRunResult {
+	runner.checkout.Lock()
+	commit, err := verifyBaseMatchesOrigin(ctx, project.Path, command.BaseBranch, command.Repository)
+	runner.checkout.Unlock()
+	if err != nil {
+		return failedRun(workerapi.TerminationWorkerError, "Source check failed: "+err.Error()+".")
+	}
+	if commit == "" {
+		return failedRun(workerapi.TerminationWorkerError, "Source check failed: the checkout has no origin to verify against.")
+	}
+	return workerapi.AgentRunResult{Status: "succeeded", BaseCommit: commit, Verification: workerapi.VerificationNotConfigured,
+		Output: "Verified " + command.BaseBranch + " at " + commit + " against origin."}
+}
+
 // failed marks a result as failed while keeping the evidence already collected in it.
 func failed(result workerapi.AgentRunResult, reason, message string) workerapi.AgentRunResult {
 	result.Status, result.Error, result.TerminationReason = "failed", message, reason
@@ -142,6 +157,9 @@ func (runner *agentRunner) run(
 		return failedRun(workerapi.TerminationWorkerError, "Project checkout is unavailable."), true
 	}
 	project := projects[index]
+	if command.VerifySource {
+		return runner.verifySource(ctx, command, project), true
+	}
 	if command.PublishPullRequest && command.PublishCommit == "" {
 		return failedRun(workerapi.TerminationWorkerError, "Pull request publication has no human-authorized candidate commit."), true
 	}

@@ -305,6 +305,7 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 	}
 	access := accessFor(r)
 	profiles := store.agentProfiles()
+	check, planner := store.sourceRuns(item.ID, revision)
 	store.mu.Lock()
 	plans := store.plans[item.ID]
 	if revision < 1 || revision > len(plans) {
@@ -341,12 +342,22 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 		http.Error(w, problem, http.StatusConflict)
 		return
 	}
+	baseCommit := ""
+	if plan.Repository != "" {
+		var verdict sourceVerdict
+		baseCommit, verdict = plan.judgeSource(check, planner, time.Now())
+		if verdict != sourceVerified {
+			store.mu.Unlock()
+			store.answerSourceCheck(w, item.ID, revision, plan.Repository, project, access.user, verdict, check, planner)
+			return
+		}
+	}
 	now := time.Now().UTC()
 	previousPlans := slices.Clone(plans)
 	graph := &workGraph{ID: graphID, ObjectiveID: item.ID, ObjectiveTitle: item.Title, PlanRevision: plan.Revision,
 		PlanHash: plan.Hash, Revision: 1, Status: graphActive, ProjectID: project.ID, ProjectName: project.Name,
 		Repository: project.GitRemote, WorkerID: project.WorkerID, WorkerName: project.WorkerName, BaseBranch: project.Branch,
-		WorkflowID: plan.WorkflowID, WorkflowVersion: plan.WorkflowVersion, WorkflowMode: plan.WorkflowMode,
+		BaseCommit: baseCommit, WorkflowID: plan.WorkflowID, WorkflowVersion: plan.WorkflowVersion, WorkflowMode: plan.WorkflowMode,
 		MaxParallel: plan.MaxParallel, Messages: []graphMessage{},
 		CreatedBy: access.user, CreatedAt: now, UpdatedAt: now}
 	for _, unit := range plan.Units {
@@ -359,6 +370,7 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	plan.Status, plan.GraphID, plan.ApprovedBy, plan.ApprovedAt = planApproved, graph.ID, cmp.Or(access.user, localOperator), &now
+	plan.SourceCheckRunID, plan.SourceCheckError = "", ""
 	store.graphs[graph.ID] = graph
 	if err := store.persistLocked(); err != nil {
 		delete(store.graphs, graph.ID)

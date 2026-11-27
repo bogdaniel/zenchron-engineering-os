@@ -33,7 +33,13 @@ func (harness *graphHarness) restart() {
 func (harness *graphHarness) runCount() int {
 	harness.store.mu.Lock()
 	defer harness.store.mu.Unlock()
-	return len(harness.store.items)
+	count := 0
+	for _, item := range harness.store.items {
+		if !item.VerifySource {
+			count++
+		}
+	}
+	return count
 }
 
 func TestWorkGraphRecoversAfterRestartWithoutQueueingWorkTwice(t *testing.T) {
@@ -433,7 +439,7 @@ func TestOnlyAnAuthorizedPersonCanResolveADecision(t *testing.T) {
 		t.Fatalf("propose returned HTTP %d: %s", response.Code, response.Body.String())
 	}
 	var graph workGraph
-	response = harness.user("alice", http.MethodPost, plans+"/1/approve", "")
+	response = harness.approve("alice", plans+"/1/approve", aliceWorkerID, aliceToken, commit(9))
 	if err := json.NewDecoder(response.Body).Decode(&graph); err != nil || response.Code != http.StatusCreated || graph.CreatedBy != "alice" {
 		t.Fatalf("approve: HTTP %d, %v, %#v", response.Code, err, graph)
 	}

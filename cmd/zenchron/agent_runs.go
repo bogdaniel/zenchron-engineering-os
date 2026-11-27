@@ -64,6 +64,8 @@ type agentRun struct {
 	IssueURL                  string                     `json:"issue_url,omitempty"`
 	IssueContext              string                     `json:"issue_context,omitempty"`
 	BaseCommit                string                     `json:"base_commit,omitempty"`
+	// VerifySource marks a plan-approval source check: the worker verifies BaseBranch against origin only.
+	VerifySource bool `json:"verify_source,omitempty"`
 	// StartCommit is the WorkGraph's pinned base this run must start from; empty starts from BaseBranch.
 	StartCommit       string            `json:"start_commit,omitempty"`
 	Provider          string            `json:"provider,omitempty"`
@@ -467,7 +469,7 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 	profile := selected.Profile
 	writeJSON(w, http.StatusOK, workerapi.AgentRunCommand{
 		ID: selected.ID, ProjectID: selected.ProjectID, Branch: selected.Branch, BaseBranch: selected.BaseBranch,
-		Repository: selected.Repository, StartCommit: selected.StartCommit,
+		Repository: selected.Repository, StartCommit: selected.StartCommit, VerifySource: selected.VerifySource,
 		Prompt: agentRunPrompt(selected) + store.graphs.runContext(selected), Attempts: selected.Attempts,
 		PublishPullRequest: selected.PublishOnly, Merge: selected.Merge,
 		PublishCommit: store.publicationCommit(selected),
@@ -520,7 +522,7 @@ func (store *agentRunStore) lease(worker workerRecord, access requestAccess, pla
 		// integration run starts no provider.
 		_, plannerLinked := plannerRunIDs[item.ID]
 		if item.WorkerID == worker.ID && item.Status == "queued" && (!item.ObjectivePlanner || plannerLinked) &&
-			(len(item.Merge) > 0 || workerRunsProfile(worker, *item.Profile)) &&
+			(len(item.Merge) > 0 || item.VerifySource || workerRunsProfile(worker, *item.Profile)) &&
 			access.allows(item.Repository) &&
 			(selected.ID == "" || item.CreatedAt.Before(selected.CreatedAt)) {
 			selected = item

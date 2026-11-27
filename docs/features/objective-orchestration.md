@@ -49,6 +49,14 @@ flowchart LR
 
 ### Plans
 
+- **Source check at approval.** Approving a plan for a GitHub repository first queues a source-check run on the
+  plan's worker (`verify_source`; no provider, no worktree). The approve request answers 202 while it runs, and the
+  dashboard asks again until it finishes. Approval then proceeds only on a check that succeeded within the last two
+  minutes, and only when its commit equals the commit the plan's planner run read. The graph is created with that
+  commit pinned as `base_commit` before any unit is dispatched. A failed check (stale, ahead, diverged, or origin
+  unreachable) or a source that moved since planning refuses approval with both commits, and approving again starts a
+  fresh check; a plan whose source moved must be proposed again. Plans for checkouts without a GitHub repository are
+  not checked.
 - **One base per graph.** The graph pins `base_commit` from its first successful root run, which the worker verified
   equals origin's default branch. Later root runs and integration start from that commit (see
   [Isolated worktrees](isolated-worktrees.md)), and a root run from another base fails its unit.

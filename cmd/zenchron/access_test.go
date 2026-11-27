@@ -454,3 +454,23 @@ func TestAccessFileRejectsMalformedGrants(t *testing.T) {
 		t.Fatalf("valid policy = %#v, %v", file, err)
 	}
 }
+
+// approve approves a plan as login; when the control plane first asks the worker to verify the plan's source,
+// the worker identified by workerID and token answers with base as the verified origin commit.
+func (harness *accessHarness) approve(login, path, workerID, token, base string) *httptest.ResponseRecorder {
+	harness.t.Helper()
+	response := harness.user(login, http.MethodPost, path, "")
+	if response.Code != http.StatusAccepted {
+		return response
+	}
+	var command workerapi.AgentRunCommand
+	claim := harness.worker(http.MethodPost, "/api/v1/workers/"+workerID+"/agent-runs/claim", token, "")
+	if err := json.NewDecoder(claim.Body).Decode(&command); err != nil || !command.VerifySource {
+		harness.t.Fatalf("source check claim: HTTP %d, %v, %#v", claim.Code, err, command)
+	}
+	result, _ := json.Marshal(workerapi.AgentRunResult{Status: "succeeded", BaseCommit: base, Output: "Verified.", Attempts: command.Attempts})
+	if put := harness.worker(http.MethodPut, "/api/v1/workers/"+workerID+"/agent-runs/"+command.ID, token, string(result)); put.Code != http.StatusOK {
+		harness.t.Fatalf("source check report: HTTP %d %s", put.Code, put.Body.String())
+	}
+	return harness.user(login, http.MethodPost, path, "")
+}
