@@ -73,11 +73,10 @@ func (runner *agentRunner) canExecute() bool {
 	return false
 }
 
+// Run claiming is provider-aware on the control plane. Source verification and integration runs
+// need no coding provider, so workers must poll even when all local providers are unavailable.
 // process claims one run and executes it before returning.
 func (runner *agentRunner) process(ctx context.Context, projects []discoveredProject) error {
-	if !runner.canExecute() {
-		return nil
-	}
 	command, found, err := claimAgentRun(ctx, runner.client, runner.baseURL, runner.workerID)
 	if err != nil || !found {
 		return err
@@ -88,9 +87,6 @@ func (runner *agentRunner) process(ctx context.Context, projects []discoveredPro
 // dispatch claims runs for as long as a slot is free and executes each in its own goroutine, in its own
 // worktree. It returns as soon as nothing more can start; wait blocks until the started runs are done.
 func (runner *agentRunner) dispatch(ctx context.Context, projects []discoveredProject) error {
-	if !runner.canExecute() {
-		return nil
-	}
 	for {
 		select {
 		case runner.slots <- struct{}{}:
