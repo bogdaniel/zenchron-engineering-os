@@ -14,12 +14,14 @@ import (
 )
 
 type product struct {
-	ID                    string   `json:"id"`
-	Name                  string   `json:"name"`
-	Description           string   `json:"description"`
-	ConfigurationRevision int      `json:"configuration_revision"`
-	DefaultWorkflowID     string   `json:"default_workflow_id,omitempty"`
-	RepositoryIDs         []string `json:"repository_ids"`
+	ID                    string `json:"id"`
+	Name                  string `json:"name"`
+	Description           string `json:"description"`
+	ConfigurationRevision int    `json:"configuration_revision"`
+	DefaultWorkflowID     string `json:"default_workflow_id,omitempty"`
+	// MonthlyBudgetCents is a reporting-only monthly spending budget in US cents; zero means none. Nothing enforces it.
+	MonthlyBudgetCents int64    `json:"monthly_budget_cents,omitempty"`
+	RepositoryIDs      []string `json:"repository_ids"`
 	// ponytail: history is bounded by maxStateFileSize; add archival only if product edits approach that limit.
 	ConfigurationHistory []productConfigurationRevision `json:"configuration_history,omitempty"`
 	CreatedAt            time.Time                      `json:"created_at"`
@@ -41,6 +43,7 @@ type productConfigurationRevision struct {
 	Description        string            `json:"description"`
 	RepositoryIDs      []string          `json:"repository_ids"`
 	DefaultWorkflowID  string            `json:"default_workflow_id,omitempty"`
+	MonthlyBudgetCents int64             `json:"monthly_budget_cents,omitempty"`
 	ChangedBy          string            `json:"changed_by,omitempty"`
 	ChangedAt          time.Time         `json:"changed_at"`
 	AccessRepositories map[string]string `json:"access_repositories,omitempty"`
@@ -177,7 +180,8 @@ func validStoredProduct(item product) bool {
 	id, err := hex.DecodeString(item.ID)
 	if err != nil || len(id) != 16 || item.ID != strings.ToLower(item.ID) ||
 		strings.TrimSpace(item.Name) == "" || len(item.Name) > 100 || len(item.Description) > 2000 ||
-		item.RepositoryIDs == nil || item.ConfigurationRevision < 0 || item.CreatedAt.IsZero() || item.UpdatedAt.IsZero() {
+		item.RepositoryIDs == nil || item.ConfigurationRevision < 0 || item.CreatedAt.IsZero() || item.UpdatedAt.IsZero() ||
+		!validMonthlyBudget(item.MonthlyBudgetCents) {
 		return false
 	}
 	if item.DefaultWorkflowID != "" {
@@ -207,7 +211,7 @@ func validStoredProduct(item product) bool {
 		if previousRevision > 0 && revision.Revision != previousRevision+1 ||
 			revision.Revision < 1 || revision.Revision > item.configurationRevision() ||
 			strings.TrimSpace(revision.Name) == "" || len(revision.Name) > 100 || len(revision.Description) > 2000 ||
-			len(revision.ChangedBy) > 100 || revision.ChangedAt.IsZero() {
+			len(revision.ChangedBy) > 100 || revision.ChangedAt.IsZero() || !validMonthlyBudget(revision.MonthlyBudgetCents) {
 			return false
 		}
 		if revision.DefaultWorkflowID != "" && (len(revision.DefaultWorkflowID) > 100 ||
@@ -230,12 +234,20 @@ func validStoredProduct(item product) bool {
 	if len(item.ConfigurationHistory) > 0 {
 		latest := item.ConfigurationHistory[len(item.ConfigurationHistory)-1]
 		if latest.Name != item.Name || latest.Description != item.Description ||
-			latest.DefaultWorkflowID != item.DefaultWorkflowID || !slices.Equal(latest.RepositoryIDs, item.RepositoryIDs) {
+			latest.DefaultWorkflowID != item.DefaultWorkflowID || latest.MonthlyBudgetCents != item.MonthlyBudgetCents ||
+			!slices.Equal(latest.RepositoryIDs, item.RepositoryIDs) {
 			return false
 		}
 	}
 	return true
 }
+
+// maxMonthlyBudgetCents bounds a product's reporting budget at US$10 million a month.
+const maxMonthlyBudgetCents = 1_000_000_000
+
+const monthlyBudgetProblem = "monthly_budget_cents must be between 0 and 1000000000 (US$10 million)"
+
+func validMonthlyBudget(cents int64) bool { return cents >= 0 && cents <= maxMonthlyBudgetCents }
 
 func validProductRepositoryIDs(ids []string) bool {
 	seen := make(map[string]struct{}, len(ids))
@@ -254,7 +266,8 @@ func validProductRepositoryIDs(ids []string) bool {
 
 func (item product) configurationSnapshot(actor string, changedAt time.Time) productConfigurationRevision {
 	return productConfigurationRevision{Revision: item.configurationRevision(), Name: item.Name, Description: item.Description,
-		RepositoryIDs: slices.Clone(item.RepositoryIDs), DefaultWorkflowID: item.DefaultWorkflowID, ChangedBy: actor,
+		RepositoryIDs: slices.Clone(item.RepositoryIDs), DefaultWorkflowID: item.DefaultWorkflowID,
+		MonthlyBudgetCents: item.MonthlyBudgetCents, ChangedBy: actor,
 		ChangedAt: changedAt, AccessRepositories: maps.Clone(item.AccessRepositories)}
 }
 
@@ -283,7 +296,8 @@ func (item product) configurationHistoryFor(access requestAccess) ([]productConf
 		}
 		result = append(result, productConfigurationRevisionView{Revision: revision.Revision, Name: revision.Name,
 			Description: revision.Description, RepositoryIDs: visibleIDs, DefaultWorkflowID: revision.DefaultWorkflowID,
-			ChangedBy: revision.ChangedBy, ChangedAt: revision.ChangedAt, RepositoriesRedacted: redacted})
+			MonthlyBudgetCents: revision.MonthlyBudgetCents,
+			ChangedBy:          revision.ChangedBy, ChangedAt: revision.ChangedAt, RepositoriesRedacted: redacted})
 	}
 	return result, complete
 }
@@ -311,10 +325,11 @@ func (store *productStore) get(id string) (product, bool) {
 
 func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Name              string   `json:"name"`
-		Description       string   `json:"description"`
-		RepositoryIDs     []string `json:"repository_ids"`
-		DefaultWorkflowID string   `json:"default_workflow_id"`
+		Name               string   `json:"name"`
+		Description        string   `json:"description"`
+		RepositoryIDs      []string `json:"repository_ids"`
+		DefaultWorkflowID  string   `json:"default_workflow_id"`
+		MonthlyBudgetCents int64    `json:"monthly_budget_cents"`
 	}
 	if !decodeJSONBody(w, r, &input) {
 		return
@@ -335,6 +350,10 @@ func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "default_workflow_id must identify a saved workflow", http.StatusBadRequest)
 		return
 	}
+	if !validMonthlyBudget(input.MonthlyBudgetCents) {
+		http.Error(w, monthlyBudgetProblem, http.StatusBadRequest)
+		return
+	}
 	access := accessFor(r)
 	accessRepositories, permitted := store.accessRepositories(access, repositoryIDs, nil)
 	if !permitted {
@@ -350,7 +369,8 @@ func (store *productStore) create(w http.ResponseWriter, r *http.Request) {
 	item := product{
 		ID: hex.EncodeToString(idBytes), Name: input.Name, Description: input.Description,
 		ConfigurationRevision: 1, RepositoryIDs: repositoryIDs, DefaultWorkflowID: input.DefaultWorkflowID,
-		CreatedAt: now, UpdatedAt: now,
+		MonthlyBudgetCents: input.MonthlyBudgetCents,
+		CreatedAt:          now, UpdatedAt: now,
 		CreatedBy: access.user, AccessRepositories: accessRepositories,
 	}
 	item.ConfigurationHistory = []productConfigurationRevision{item.configurationSnapshot(access.user, now)}
@@ -379,10 +399,11 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Name              string   `json:"name"`
-		Description       string   `json:"description"`
-		RepositoryIDs     []string `json:"repository_ids"`
-		DefaultWorkflowID *string  `json:"default_workflow_id"`
+		Name               string   `json:"name"`
+		Description        string   `json:"description"`
+		RepositoryIDs      []string `json:"repository_ids"`
+		DefaultWorkflowID  *string  `json:"default_workflow_id"`
+		MonthlyBudgetCents *int64   `json:"monthly_budget_cents"`
 	}
 	if !decodeJSONBody(w, r, &input) {
 		return
@@ -404,6 +425,10 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "default_workflow_id must identify a saved workflow", http.StatusBadRequest)
 			return
 		}
+	}
+	if input.MonthlyBudgetCents != nil && !validMonthlyBudget(*input.MonthlyBudgetCents) {
+		http.Error(w, monthlyBudgetProblem, http.StatusBadRequest)
+		return
 	}
 	access := accessFor(r)
 	store.mu.Lock()
@@ -430,10 +455,14 @@ func (store *productStore) update(w http.ResponseWriter, r *http.Request) {
 	if input.DefaultWorkflowID != nil {
 		item.DefaultWorkflowID = *input.DefaultWorkflowID
 	}
+	if input.MonthlyBudgetCents != nil {
+		item.MonthlyBudgetCents = *input.MonthlyBudgetCents
+	}
 	item.AccessRepositories = accessRepositories
 	item.ConfigurationRevision = previous.configurationRevision()
 	configurationChanged := item.Name != previous.Name || item.Description != previous.Description ||
-		item.DefaultWorkflowID != previous.DefaultWorkflowID || !slices.Equal(item.RepositoryIDs, previous.RepositoryIDs)
+		item.DefaultWorkflowID != previous.DefaultWorkflowID || item.MonthlyBudgetCents != previous.MonthlyBudgetCents ||
+		!slices.Equal(item.RepositoryIDs, previous.RepositoryIDs)
 	if configurationChanged {
 		item.ConfigurationRevision++
 	}
