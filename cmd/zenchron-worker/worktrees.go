@@ -28,7 +28,7 @@ func worktreeRoot() (string, error) {
 
 // prepareWorktree creates the worktree of one run at root/<project id>/<run id>, on a new branch from
 // baseBranch. A worktree that already exists on that branch is reused, so a later attempt continues in it.
-func prepareWorktree(ctx context.Context, root string, project discoveredProject, runID, branch, baseBranch, repository string) error {
+func prepareWorktree(ctx context.Context, root string, project discoveredProject, runID, branch, baseBranch, startCommit, repository string) error {
 	if root == "" || !validID(project.ID) || !validID(runID) || !isGitCheckout(project.Path) {
 		return errors.New("invalid worktree target")
 	}
@@ -36,6 +36,10 @@ func prepareWorktree(ctx context.Context, root string, project discoveredProject
 		return err
 	}
 	if err := validateGitBranch(ctx, project.Path, baseBranch); err != nil {
+		return err
+	}
+	// Every path below, including a reused worktree or a retained run branch, belongs to this repository.
+	if _, err := verifyOriginIdentity(ctx, project.Path, repository); err != nil {
 		return err
 	}
 	absoluteRoot, err := filepath.Abs(root)
@@ -78,6 +82,13 @@ func prepareWorktree(ctx context.Context, root string, project discoveredProject
 	args := []string{"-C", project.Path, "worktree", "add", "-b", branch, path, baseBranch}
 	if strings.TrimSpace(existingBranch) == branch {
 		args = []string{"-C", project.Path, "worktree", "add", path, branch}
+	} else if startCommit != "" {
+		// The graph pinned this verified base when its first run started; later runs start from exactly it even if
+		// origin has advanced since, so every unit of the graph shares one base.
+		if _, err := gitOutput(ctx, "-C", project.Path, "rev-parse", "--verify", "--quiet", startCommit+"^{commit}"); err != nil {
+			return baseVerificationError{fmt.Errorf("the pinned graph base %s is not in this checkout", startCommit)}
+		}
+		args[len(args)-1] = startCommit
 	} else if !strings.HasPrefix(baseBranch, workerapi.AgentRunBranch("")) {
 		// A run that starts from another run's branch inherits that parent's base without rechecking it; only a
 		// product base is compared with origin here.
@@ -117,6 +128,30 @@ func (err baseVerificationError) Error() string {
 
 func (err baseVerificationError) Unwrap() error { return err.err }
 
+// verifyOriginIdentity reports whether origin is configured, and fails closed when a run tied to a GitHub
+// repository finds origin missing or pointing at another repository.
+func verifyOriginIdentity(ctx context.Context, repository, wantRepository string) (bool, error) {
+	configured, err := gitOutput(ctx, "-C", repository, "config", "--get", "remote.origin.url")
+	if err != nil {
+		if wantRepository != "" {
+			return false, baseVerificationError{fmt.Errorf("origin is not configured for %s", wantRepository)}
+		}
+		return false, nil
+	}
+	if wantRepository != "" && repositoryLocator(configured) != wantRepository {
+		return true, baseVerificationError{fmt.Errorf("origin is not %s", wantRepository)}
+	}
+	return true, nil
+}
+
+// verifyDescendsFromPinnedBase proves a (possibly reused) run worktree's HEAD descends from the graph's pinned base.
+func verifyDescendsFromPinnedBase(ctx context.Context, worktree, startCommit string) error {
+	if _, err := gitOutput(ctx, "-C", worktree, "merge-base", "--is-ancestor", startCommit, "HEAD"); err != nil {
+		return baseVerificationError{fmt.Errorf("the run branch does not descend from the pinned graph base %s", startCommit)}
+	}
+	return nil
+}
+
 // baseVerificationTimeout bounds origin's default-branch lookup and fetch, which run while the checkout is locked.
 const baseVerificationTimeout = time.Minute
 
@@ -127,15 +162,9 @@ const baseVerificationTimeout = time.Minute
 func verifyBaseMatchesOrigin(ctx context.Context, repository, baseBranch, wantRepository string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, baseVerificationTimeout)
 	defer cancel()
-	configured, err := gitOutput(ctx, "-C", repository, "config", "--get", "remote.origin.url")
-	if err != nil {
-		if wantRepository != "" {
-			return "", baseVerificationError{fmt.Errorf("origin is not configured for %s", wantRepository)}
-		}
-		return "", nil
-	}
-	if wantRepository != "" && repositoryLocator(configured) != wantRepository {
-		return "", baseVerificationError{fmt.Errorf("origin is not %s", wantRepository)}
+	hasOrigin, err := verifyOriginIdentity(ctx, repository, wantRepository)
+	if err != nil || !hasOrigin {
+		return "", err
 	}
 	symref, err := gitOutput(ctx, "-C", repository, "ls-remote", "--symref", "origin", "HEAD")
 	if err != nil {
