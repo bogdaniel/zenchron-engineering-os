@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -18,37 +19,34 @@ var sourceCheckProfile = agentProfile{
 type sourceVerdict int
 
 const (
-	sourceVerified   sourceVerdict = iota // a fresh check matches the planned source; approval proceeds on it
-	sourceChecking                        // a check is queued or running
-	sourceNeedsCheck                      // no usable check: queue one
-	sourceRefused                         // the last check failed, or the source moved since planning
+	sourceVerified   sourceVerdict = iota // a fresh check bound to this plan found origin at the plan's source
+	sourceChecking                        // the plan's check is queued or running
+	sourceNeedsCheck                      // no usable check for this plan: queue one
+	sourceRefused                         // the check failed, or origin moved away from the plan's source
+	sourceNoBaseline                      // the plan records no source commit, so it cannot be bound to code
 )
 
-// sourceRuns returns the latest source-check run and the planner run of a plan revision, read without the
-// graph store lock held.
-func (store *workGraphStore) sourceRuns(objectiveID string, revision int) (check, planner agentRun) {
-	store.mu.Lock()
-	var checkID, plannerID string
-	if plans := store.plans[objectiveID]; revision >= 1 && revision <= len(plans) {
-		checkID, plannerID = plans[revision-1].SourceCheckRunID, plans[revision-1].PlannerRunID
-	}
-	store.mu.Unlock()
-	check, _ = store.runs.get(checkID)
-	planner, _ = store.runs.get(plannerID)
-	return check, planner
+// sourceCheckFor names the exact plan revision and content a source check verifies.
+func (plan objectivePlan) sourceCheckFor() string {
+	return fmt.Sprintf("%s:%d:%s", plan.ObjectiveID, plan.Revision, plan.Hash)
 }
 
-// judgeSource decides whether approval may proceed. A plan proposed by a planner run must still be on the
-// commit that run read; a check that failed, could not run, or is stale never counts as verification.
-func (plan objectivePlan) judgeSource(check, planner agentRun, now time.Time) (string, sourceVerdict) {
+// judgeSource decides whether approval may proceed. Only a fresh, successful check bound to this plan, its
+// project, worker, branch and repository counts, and only when origin is still at the commit the plan was
+// prepared against. A check that failed, could not run, is stale or belongs elsewhere never counts.
+func (plan objectivePlan) judgeSource(check agentRun, project projectRecord, now time.Time) (string, sourceVerdict) {
 	switch {
-	case plan.SourceCheckRunID == "" || check.ID != plan.SourceCheckRunID:
+	case plan.SourceCommit == "":
+		return "", sourceNoBaseline
+	case plan.SourceCheckRunID == "" || check.ID != plan.SourceCheckRunID || !check.VerifySource ||
+		check.SourceCheckFor != plan.sourceCheckFor() || check.ProjectID != plan.ProjectID ||
+		check.WorkerID != project.WorkerID || check.BaseBranch != project.Branch || check.Repository != plan.Repository:
 		return "", sourceNeedsCheck
 	case activeRun(check):
 		return "", sourceChecking
 	case check.Status != "succeeded" || check.BaseCommit == "":
 		return "", sourceRefused
-	case planner.ID != "" && planner.BaseCommit != "" && planner.BaseCommit != check.BaseCommit:
+	case check.BaseCommit != plan.SourceCommit:
 		return "", sourceRefused
 	case now.Sub(check.UpdatedAt) > sourceCheckFreshness:
 		return "", sourceNeedsCheck
@@ -56,56 +54,65 @@ func (plan objectivePlan) judgeSource(check, planner agentRun, now time.Time) (s
 	return check.BaseCommit, sourceVerified
 }
 
-// answerSourceCheck queues a source check, reports one in progress, or explains a refusal. A refusal clears the
-// check so that approving again starts a fresh one.
-func (store *workGraphStore) answerSourceCheck(w http.ResponseWriter, objectiveID string, revision int, repository string,
-	project projectRecord, user string, verdict sourceVerdict, check, planner agentRun,
+// answerSourceCheckLocked queues the plan's source check, reports one in progress, or explains a refusal. It is
+// called with the graph store locked and unlocks it. The check's run ID is reserved on the plan and the run queued
+// under that lock, so concurrent approvals share one check; a refusal clears the check so approving again starts a
+// fresh one.
+func (store *workGraphStore) answerSourceCheckLocked(w http.ResponseWriter, plan *objectivePlan, project projectRecord,
+	user string, verdict sourceVerdict, check agentRun,
 ) {
+	checking := map[string]string{"status": "checking_source",
+		"message": "Checking that the checkout still matches GitHub before approval."}
 	switch verdict {
 	case sourceChecking:
-		writeJSON(w, http.StatusAccepted, map[string]string{"status": "checking_source",
-			"message": "Checking that the checkout still matches GitHub before approval."})
+		store.mu.Unlock()
+		writeJSON(w, http.StatusAccepted, checking)
+		return
+	case sourceNoBaseline:
+		store.mu.Unlock()
+		http.Error(w, "Approval refused: this plan records no source commit, so it cannot be bound to the code it was "+
+			"prepared against. Propose the plan again.", http.StatusConflict)
 		return
 	case sourceRefused:
 		message := "Approval refused: " + check.Error
 		if check.Status == "succeeded" {
-			message = "Approval refused: the plan was made against " + planner.BaseCommit + ", but " + repository +
+			message = "Approval refused: the plan was prepared against " + plan.SourceCommit + ", but " + plan.Repository +
 				" is now at " + check.BaseCommit + ". Propose the plan again so it reflects the current code."
 		}
-		store.setSourceCheck(objectiveID, revision, "", message)
+		previous := *plan
+		plan.SourceCheckRunID, plan.SourceCheckError = "", message
+		if err := store.persistLocked(); err != nil {
+			*plan = previous
+		}
+		store.mu.Unlock()
 		http.Error(w, message, http.StatusConflict)
 		return
 	}
-	run, status, problem := store.runs.enqueue(agentRun{AgentID: sourceCheckProfile.ID, AgentName: sourceCheckProfile.Name,
-		ProjectID: project.ID, ProjectName: project.Name, Repository: repository, BaseBranch: project.Branch,
+	id, err := newHexID()
+	if err != nil {
+		store.mu.Unlock()
+		http.Error(w, "could not create the source check", http.StatusInternalServerError)
+		return
+	}
+	// Lock order is graph store, then run store, as elsewhere in this store.
+	_, status, problem := store.runs.enqueue(agentRun{ID: id, AgentID: sourceCheckProfile.ID, AgentName: sourceCheckProfile.Name,
+		ProjectID: project.ID, ProjectName: project.Name, Repository: plan.Repository, BaseBranch: project.Branch,
 		WorkerID: project.WorkerID, WorkerName: project.WorkerName, Provider: sourceCheckProfile.Provider,
-		Profile: &sourceCheckProfile, CreatedBy: user, VerifySource: true,
+		Profile: &sourceCheckProfile, CreatedBy: user, VerifySource: true, SourceCheckFor: plan.sourceCheckFor(),
 		Prompt: "Verify the plan's source against origin before approval."})
 	if status != 0 {
+		store.mu.Unlock()
 		http.Error(w, problem, status)
 		return
 	}
-	if !store.setSourceCheck(objectiveID, revision, run.ID, "") {
+	previous := *plan
+	plan.SourceCheckRunID, plan.SourceCheckError = id, ""
+	if err := store.persistLocked(); err != nil {
+		*plan = previous
+		store.mu.Unlock()
 		http.Error(w, "could not record the source check", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]string{"status": "checking_source",
-		"message": "Checking that the checkout still matches GitHub before approval."})
-}
-
-// setSourceCheck records the current source check and refusal of a plan revision.
-func (store *workGraphStore) setSourceCheck(objectiveID string, revision int, runID, refusal string) bool {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	plans := store.plans[objectiveID]
-	if revision < 1 || revision > len(plans) {
-		return false
-	}
-	previous := plans[revision-1]
-	plans[revision-1].SourceCheckRunID, plans[revision-1].SourceCheckError = runID, refusal
-	if err := store.persistLocked(); err != nil {
-		plans[revision-1] = previous
-		return false
-	}
-	return true
+	store.mu.Unlock()
+	writeJSON(w, http.StatusAccepted, checking)
 }

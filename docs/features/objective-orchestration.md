@@ -52,7 +52,10 @@ flowchart LR
 - **Source check at approval.** Approving a plan for a GitHub repository first queues a source-check run on the
   plan's worker (`verify_source`; no provider, no worktree). The approve request answers 202 while it runs, and the
   dashboard asks again until it finishes. Approval then proceeds only on a check that succeeded within the last two
-  minutes, and only when its commit equals the commit the plan's planner run read. The graph is created with that
+  minutes, is bound to this plan revision and hash, its project, worker, branch and repository, and found origin at
+  the plan's `source_commit`: the commit its planner run read, or the checkout commit the worker reported when an
+  operator or workflow proposed it. A plan without a source commit cannot be approved. Concurrent approvals share one
+  check, reserved on the plan under the store lock; a check lost in a restart is queued again. The graph is created with that
   commit pinned as `base_commit` before any unit is dispatched. A failed check (stale, ahead, diverged, or origin
   unreachable) or a source that moved since planning refuses approval with both commits, and approving again starts a
   fresh check; a plan whose source moved must be proposed again. Plans for checkouts without a GitHub repository are

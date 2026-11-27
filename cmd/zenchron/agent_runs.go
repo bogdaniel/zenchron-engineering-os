@@ -64,6 +64,8 @@ type agentRun struct {
 	IssueURL                  string                     `json:"issue_url,omitempty"`
 	IssueContext              string                     `json:"issue_context,omitempty"`
 	BaseCommit                string                     `json:"base_commit,omitempty"`
+	// SourceCheckFor binds a source check to the plan it verifies: objective, revision and plan hash.
+	SourceCheckFor string `json:"source_check_for,omitempty"`
 	// VerifySource marks a plan-approval source check: the worker verifies BaseBranch against origin only.
 	VerifySource bool `json:"verify_source,omitempty"`
 	// StartCommit is the WorkGraph's pinned base this run must start from; empty starts from BaseBranch.
@@ -396,12 +398,15 @@ func (store *agentRunStore) publishable(repository string) bool {
 
 // enqueue gives a run its identity and branch and adds it to the queue. It is the only way a run is created.
 func (store *agentRunStore) enqueue(item agentRun) (agentRun, int, string) {
-	id := make([]byte, 16)
-	if _, err := rand.Read(id); err != nil {
-		return agentRun{}, http.StatusInternalServerError, "could not create agent run id"
+	if item.ID == "" {
+		id := make([]byte, 16)
+		if _, err := rand.Read(id); err != nil {
+			return agentRun{}, http.StatusInternalServerError, "could not create agent run id"
+		}
+		item.ID = hex.EncodeToString(id)
 	}
 	now := time.Now().UTC()
-	item.ID, item.Status, item.CreatedAt, item.UpdatedAt = hex.EncodeToString(id), "queued", now, now
+	item.Status, item.CreatedAt, item.UpdatedAt = "queued", now, now
 	item.Branch = workerapi.AgentRunBranch(item.ID)
 	store.mu.Lock()
 	defer store.mu.Unlock()
@@ -410,6 +415,9 @@ func (store *agentRunStore) enqueue(item agentRun) (agentRun, int, string) {
 	}
 	if len(store.items) >= maxAgentRuns {
 		return agentRun{}, http.StatusInsufficientStorage, "agent run history is full"
+	}
+	if _, exists := store.items[item.ID]; exists {
+		return agentRun{}, http.StatusConflict, "agent run id already exists"
 	}
 	store.items[item.ID] = item
 	if err := store.persistLocked(); err != nil {

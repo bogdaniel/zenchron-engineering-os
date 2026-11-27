@@ -136,8 +136,9 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "this objective reached its limit of plan revisions", http.StatusConflict)
 		return
 	}
-	plan := objectivePlan{ObjectiveID: item.ID, ProjectID: project.ID, Repository: project.GitRemote, WorkflowID: input.WorkflowID,
-		Status: planProposed, CreatedBy: access.user, CreatedAt: time.Now().UTC()}
+	plan := objectivePlan{ObjectiveID: item.ID, ProjectID: project.ID, Repository: project.GitRemote, SourceCommit: project.Head,
+		WorkflowID: input.WorkflowID,
+		Status:     planProposed, CreatedBy: access.user, CreatedAt: time.Now().UTC()}
 	if item.ProductID != "" {
 		plan.ProductContext = productContext
 		plan.ProductConfigurationRevision = linkedProduct.configurationRevision()
@@ -274,7 +275,7 @@ func (store *workGraphStore) admitPlansLocked() bool {
 			case err != nil || result.Plan == nil:
 				plan.Status, plan.Problems = planInvalid, []string{"The planner reported no plan: " + cmp.Or(errorText(err), "the result carried none") + "."}
 			default:
-				plan.planProposal, plan.Status = *result.Plan, planProposed
+				plan.planProposal, plan.Status, plan.SourceCommit = *result.Plan, planProposed, run.BaseCommit
 				profiles := store.agentProfiles()
 				plan.ProfileSnapshots, plan.Problems = pinPlanProfiles(&plan.planProposal, profiles)
 				plan.Problems = append(plan.Problems, plan.planProposal.problems(profiles)...)
@@ -305,7 +306,6 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 	}
 	access := accessFor(r)
 	profiles := store.agentProfiles()
-	check, planner := store.sourceRuns(item.ID, revision)
 	store.mu.Lock()
 	plans := store.plans[item.ID]
 	if revision < 1 || revision > len(plans) {
@@ -345,10 +345,10 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 	baseCommit := ""
 	if plan.Repository != "" {
 		var verdict sourceVerdict
-		baseCommit, verdict = plan.judgeSource(check, planner, time.Now())
+		check, _ := store.runs.get(plan.SourceCheckRunID)
+		baseCommit, verdict = plan.judgeSource(check, project, time.Now())
 		if verdict != sourceVerified {
-			store.mu.Unlock()
-			store.answerSourceCheck(w, item.ID, revision, plan.Repository, project, access.user, verdict, check, planner)
+			store.answerSourceCheckLocked(w, plan, project, access.user, verdict, check)
 			return
 		}
 	}

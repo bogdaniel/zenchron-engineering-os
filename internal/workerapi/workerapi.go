@@ -100,6 +100,8 @@ type Project struct {
 	Name   string `json:"name"`
 	Branch string `json:"branch"`
 	Remote string `json:"git_remote,omitempty"`
+	// Head is the checkout's current commit.
+	Head string `json:"head,omitempty"`
 }
 
 type Heartbeat struct {

@@ -114,7 +114,7 @@ func (harness *accessHarness) heartbeat(workerID, token, projects string) int {
 }
 
 func projectJSON(id, repository string) string {
-	return fmt.Sprintf(`{"id":%q,"name":"repo","branch":"main","git_remote":%q}`, id, repository)
+	return fmt.Sprintf(`{"id":%q,"name":"repo","branch":"main","git_remote":%q,"head":%q}`, id, repository, commit(9))
 }
 
 func decodeList[T any](t *testing.T, response *httptest.ResponseRecorder) []T {

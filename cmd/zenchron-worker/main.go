@@ -193,7 +193,8 @@ func discoverServedProjects(root, workerID string, config *workerConfig) ([]disc
 func wireProjects(projects []discoveredProject) []workerapi.Project {
 	wire := make([]workerapi.Project, 0, len(projects))
 	for _, project := range projects {
-		wire = append(wire, workerapi.Project{ID: project.ID, Name: project.Name, Branch: project.Branch, Remote: project.Remote})
+		wire = append(wire, workerapi.Project{ID: project.ID, Name: project.Name, Branch: project.Branch, Remote: project.Remote,
+			Head: project.Head})
 	}
 	return wire
 }
