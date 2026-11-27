@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useForm } from '@mantine/form';
-import { Button, Modal, MultiSelect, Select, Text, TextInput, Textarea } from '@mantine/core';
+import { Button, Modal, MultiSelect, NumberInput, Select, Text, TextInput, Textarea } from '@mantine/core';
 import { z } from 'zod';
 import type { Project } from './projects';
 import { loadWorkflows } from './workflowModel';
@@ -12,6 +12,7 @@ export const productSchema = z.object({
   description: z.string(),
   configuration_revision: z.number().int().nonnegative().optional(),
   default_workflow_id: z.string().optional(),
+  monthly_budget_cents: z.number().int().nonnegative().optional(),
   repository_ids: z.array(z.string()),
   created_at: z.string(),
   updated_at: z.string(),
@@ -21,6 +22,7 @@ export const productInputSchema = z.object({
   name: z.string().trim().min(1, 'Add a product name').max(100),
   description: z.string().max(2000),
   default_workflow_id: z.string(),
+  monthly_budget_cents: z.number().int().min(0).max(1_000_000_000, 'Budget must be at most $10,000,000'),
   repository_ids: z.array(z.string()),
 });
 export type Product = z.infer<typeof productSchema>;
@@ -35,7 +37,8 @@ export async function loadProducts() {
 type ProductEditorProps = {
   opened: boolean;
   live: boolean;
-  product: Pick<Product, 'id' | 'name' | 'description' | 'repository_ids' | 'default_workflow_id'> | undefined;
+  product: Pick<Product, 'id' | 'name' | 'description' | 'repository_ids' | 'default_workflow_id'
+    | 'monthly_budget_cents'> | undefined;
   projects: Project[] | undefined;
   /** Why repositories cannot be linked here; the picker is disabled while it is set. */
   repositoryNote?: string;
@@ -50,7 +53,7 @@ export function ProductEditor({
 }: ProductEditorProps) {
   const workflows = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows, enabled: opened && live });
   const form = useForm<ProductInput>({
-    initialValues: { name: '', description: '', repository_ids: [], default_workflow_id: '' },
+    initialValues: { name: '', description: '', repository_ids: [], default_workflow_id: '', monthly_budget_cents: 0 },
     validate: (values) => {
       const result = productInputSchema.safeParse(values);
       return result.success
@@ -66,6 +69,7 @@ export function ProductEditor({
       description: product?.description ?? '',
       repository_ids: product?.repository_ids ?? [],
       default_workflow_id: product?.default_workflow_id ?? '',
+      monthly_budget_cents: product?.monthly_budget_cents ?? 0,
     });
   }, [opened, product?.id]);
 
@@ -90,6 +94,13 @@ export function ProductEditor({
             onChange={(value) => form.setFieldValue('default_workflow_id', value ?? '')}
             disabled={workflows.isLoading || workflows.isError} />
           {workflows.isError && <Text className="form-error" role="alert">Workflow definitions could not be loaded.</Text>}
+          <NumberInput label="Monthly budget (USD)" mt="sm" min={0} max={10_000_000} decimalScale={2}
+            placeholder="No budget"
+            description="Reporting only: shown against provider-reported cost, never enforced."
+            value={form.values.monthly_budget_cents ? form.values.monthly_budget_cents / 100 : ''}
+            onChange={(value) => form.setFieldValue('monthly_budget_cents',
+              typeof value === 'number' ? Math.round(value * 100) : 0)}
+            error={form.errors.monthly_budget_cents} />
         </>}
         <MultiSelect
           label="Repositories"

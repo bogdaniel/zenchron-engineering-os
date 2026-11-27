@@ -53,6 +53,7 @@ type productConfigurationRevisionView struct {
 	Description          string    `json:"description"`
 	RepositoryIDs        []string  `json:"repository_ids"`
 	DefaultWorkflowID    string    `json:"default_workflow_id,omitempty"`
+	MonthlyBudgetCents   int64     `json:"monthly_budget_cents,omitempty"`
 	ChangedBy            string    `json:"changed_by,omitempty"`
 	ChangedAt            time.Time `json:"changed_at"`
 	RepositoriesRedacted bool      `json:"repositories_redacted,omitempty"`
