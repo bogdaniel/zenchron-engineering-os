@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 	"log"
 	"os"
 	"os/exec"
@@ -27,7 +28,7 @@ func worktreeRoot() (string, error) {
 
 // prepareWorktree creates the worktree of one run at root/<project id>/<run id>, on a new branch from
 // baseBranch. A worktree that already exists on that branch is reused, so a later attempt continues in it.
-func prepareWorktree(ctx context.Context, root string, project discoveredProject, runID, branch, baseBranch string) error {
+func prepareWorktree(ctx context.Context, root string, project discoveredProject, runID, branch, baseBranch, repository string) error {
 	if root == "" || !validID(project.ID) || !validID(runID) || !isGitCheckout(project.Path) {
 		return errors.New("invalid worktree target")
 	}
@@ -77,11 +78,91 @@ func prepareWorktree(ctx context.Context, root string, project discoveredProject
 	args := []string{"-C", project.Path, "worktree", "add", "-b", branch, path, baseBranch}
 	if strings.TrimSpace(existingBranch) == branch {
 		args = []string{"-C", project.Path, "worktree", "add", path, branch}
+	} else if !strings.HasPrefix(baseBranch, workerapi.AgentRunBranch("")) {
+		// A run that starts from another run's branch inherits that parent's base without rechecking it; only a
+		// product base is compared with origin here.
+		start, err := verifyBaseMatchesOrigin(ctx, project.Path, baseBranch, repository)
+		if err != nil {
+			return err
+		}
+		if start != "" {
+			// Branch from the exact verified commit, not the mutable branch name, so the base cannot move in between.
+			args[len(args)-1] = start
+		}
 	}
 	if _, err := gitOutput(ctx, args...); err != nil {
 		return fmt.Errorf("create isolated worktree: %w", err)
 	}
 	return nil
+}
+
+// staleBaseError refuses a run whose local base is not exactly GitHub's default branch: behind, ahead, or diverged
+// all mean the run would build on code other than what the remote holds.
+type staleBaseError struct {
+	branch, local, remoteBranch, remote string
+}
+
+func (err staleBaseError) Error() string {
+	return fmt.Sprintf("local %s is at %s but origin/%s is at %s; update the checkout so they match "+
+		"(git fetch origin, then git merge --ff-only origin/%s, or resolve local commits) and start the run again",
+		err.branch, err.local, err.remoteBranch, err.remote, err.remoteBranch)
+}
+
+// baseVerificationError reports that the base could not be compared with GitHub, so it is not trusted.
+type baseVerificationError struct{ err error }
+
+func (err baseVerificationError) Error() string {
+	return "could not verify the base against origin: " + err.err.Error()
+}
+
+func (err baseVerificationError) Unwrap() error { return err.err }
+
+// baseVerificationTimeout bounds origin's default-branch lookup and fetch, which run while the checkout is locked.
+const baseVerificationTimeout = time.Minute
+
+// verifyBaseMatchesOrigin fetches origin's default branch and requires the local base commit to equal it, returning
+// that commit. Only remote-tracking metadata changes; local branches are never moved. A run tied to a GitHub
+// repository fails closed when origin is missing or is another repository. A checkout without origin that no
+// repository requires has nothing to compare against and returns no commit.
+func verifyBaseMatchesOrigin(ctx context.Context, repository, baseBranch, wantRepository string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, baseVerificationTimeout)
+	defer cancel()
+	configured, err := gitOutput(ctx, "-C", repository, "config", "--get", "remote.origin.url")
+	if err != nil {
+		if wantRepository != "" {
+			return "", baseVerificationError{fmt.Errorf("origin is not configured for %s", wantRepository)}
+		}
+		return "", nil
+	}
+	if wantRepository != "" && repositoryLocator(configured) != wantRepository {
+		return "", baseVerificationError{fmt.Errorf("origin is not %s", wantRepository)}
+	}
+	symref, err := gitOutput(ctx, "-C", repository, "ls-remote", "--symref", "origin", "HEAD")
+	if err != nil {
+		return "", baseVerificationError{fmt.Errorf("read origin's default branch: %w", err)}
+	}
+	// The first line is "ref: refs/heads/<default>\tHEAD".
+	target, _, _ := strings.Cut(strings.SplitN(symref, "\n", 2)[0], "\t")
+	remoteBranch, ok := strings.CutPrefix(strings.TrimPrefix(target, "ref: "), "refs/heads/")
+	if !ok || remoteBranch == "" {
+		return "", baseVerificationError{errors.New("origin did not report a default branch")}
+	}
+	if _, err := gitOutput(ctx, "-C", repository, "fetch", "--quiet", "--no-tags", "origin",
+		"+refs/heads/"+remoteBranch+":refs/remotes/origin/"+remoteBranch); err != nil {
+		return "", baseVerificationError{fmt.Errorf("fetch origin/%s: %w", remoteBranch, err)}
+	}
+	local, err := gitOutput(ctx, "-C", repository, "rev-parse", "--verify", "refs/heads/"+baseBranch+"^{commit}")
+	if err != nil {
+		return "", baseVerificationError{fmt.Errorf("resolve local %s: %w", baseBranch, err)}
+	}
+	remote, err := gitOutput(ctx, "-C", repository, "rev-parse", "--verify", "refs/remotes/origin/"+remoteBranch+"^{commit}")
+	if err != nil {
+		return "", baseVerificationError{fmt.Errorf("resolve origin/%s: %w", remoteBranch, err)}
+	}
+	if local, remote = strings.TrimSpace(local), strings.TrimSpace(remote); local != remote {
+		return "", staleBaseError{branch: baseBranch, local: local, remoteBranch: remoteBranch, remote: remote}
+	}
+	return local, nil
 }
 
 func validateGitBranch(ctx context.Context, repository, branch string) error {

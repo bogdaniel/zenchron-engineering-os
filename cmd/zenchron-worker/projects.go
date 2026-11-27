@@ -68,7 +68,8 @@ func projectAt(path, workerID string) discoveredProject {
 }
 
 func gitRemote(path string) string {
-	remote, err := gitOutput(context.Background(), "-C", path, "remote", "get-url", "origin")
+	// The configured URL is the repository's identity; url.<base>.insteadOf only changes transport.
+	remote, err := gitOutput(context.Background(), "-C", path, "config", "--get", "remote.origin.url")
 	if err != nil {
 		return ""
 	}

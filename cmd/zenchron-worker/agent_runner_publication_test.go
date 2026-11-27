@@ -18,6 +18,7 @@ func TestPublishOnlyRunDoesNotPublishWhenVerificationChangesCandidate(t *testing
 	}
 	runGit(t, bare, "init", "--bare")
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	seedOriginMain(t, harness.repository, bare)
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
 	harness.gitRemote = "github.com/test/repository"
@@ -63,6 +64,7 @@ func TestPublishOnlySuccessDoesNotReportSyntheticProviderVersion(t *testing.T) {
 	}
 	runGit(t, bare, "init", "--bare")
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	seedOriginMain(t, harness.repository, bare)
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
 	harness.gitRemote = "github.com/test/repository"

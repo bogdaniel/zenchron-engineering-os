@@ -268,6 +268,7 @@ func TestPublishOnlyRunPushesAuthorizedCandidateEvenWhenVerificationMovesWorktre
 		"commit", "--amend", "--allow-empty", "-m", "verification moved branch",
 	}})
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	seedOriginMain(t, harness.repository, bare)
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	harness.gitRemote = "github.com/test/repository"
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
@@ -337,6 +338,7 @@ func TestCLIPublishOnlyRunFindsExactCandidateAfterWorktreeCleanup(t *testing.T) 
 	runGit(t, bare, "init", "--bare")
 	harness := newRunHarness(t, fakeChangeScript, nil)
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	seedOriginMain(t, harness.repository, bare)
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	harness.gitRemote = "github.com/test/repository"
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
@@ -476,6 +478,7 @@ func TestPushGetsFreshDeadlineAfterVerification(t *testing.T) {
 	runGit(t, bare, "init", "--bare")
 	harness := newRunHarness(t, fakeChangeScript, [][]string{{"sh", "-c", "sleep 2.5"}})
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	seedOriginMain(t, harness.repository, bare)
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	harness.gitRemote = "github.com/test/repository"
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
@@ -634,7 +637,7 @@ func TestAgentRunCandidatesDoNotPushWithoutAuthorization(t *testing.T) {
 	stale.runner.push = countPush
 	project := discoveredProject{ID: stale.command.ProjectID, Name: "repository", Path: stale.repository}
 	root := filepath.Dir(filepath.Dir(stale.worktree))
-	if err := prepareWorktree(context.Background(), root, project, stale.command.ID, stale.command.Branch, "main"); err != nil {
+	if err := prepareWorktree(context.Background(), root, project, stale.command.ID, stale.command.Branch, "main", ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(stale.worktree, "README.md"), []byte("late change\n"), 0o600); err != nil {
@@ -708,7 +711,7 @@ func TestCleanupWorktreesKeepsLockedAndModifiedWorktrees(t *testing.T) {
 	projects := []discoveredProject{{ID: agentRunTestID, Name: "repository", Path: harness.repository}}
 	prepare := func(id string) string {
 		t.Helper()
-		if err := prepareWorktree(context.Background(), root, projects[0], id, workerapi.AgentRunBranch(id), "main"); err != nil {
+		if err := prepareWorktree(context.Background(), root, projects[0], id, workerapi.AgentRunBranch(id), "main", ""); err != nil {
 			t.Fatal(err)
 		}
 		worktree := filepath.Join(root, agentRunTestID, id)

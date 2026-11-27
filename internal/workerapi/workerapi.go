@@ -153,6 +153,8 @@ type AgentRunCommand struct {
 	Profile            AgentProfile `json:"profile"`
 	Attempts           int          `json:"attempts"`
 	PublishPullRequest bool         `json:"publish_pull_request,omitempty"`
+	// Repository, when set, is the GitHub repository this run belongs to; its base must be verified against it.
+	Repository string `json:"repository,omitempty"`
 	// PublishCommit, when set, is the only commit this attempt may push: the reviewed candidate.
 	PublishCommit string `json:"publish_commit,omitempty"`
 	// PublishOnly pushes the previously completed candidate without re-running its agent or integration.
