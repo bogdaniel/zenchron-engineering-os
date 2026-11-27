@@ -292,6 +292,9 @@ test('Objectives mock layout stays within desktop, tablet, and mobile viewports'
     await expect(page.getByRole('heading', { name: 'Objectives' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Objective' })).toBeVisible();
     await expect(page.locator('.objective-grid-wrap [role="row"]:has([role="gridcell"])')).toHaveCount(6);
+    const metricsBottom = await page.locator('.objective-metrics').evaluate((metrics) => metrics.getBoundingClientRect().bottom);
+    const contentTop = await page.locator('.objective-content-grid').evaluate((grid) => grid.getBoundingClientRect().top);
+    expect(contentTop - metricsBottom, `gap below the metric cards at ${width}x${height}`).toBeGreaterThanOrEqual(8);
     if (width === 390) {
       const tabButtonsFit = await page.locator('.objectives-tabs').evaluate((tabs) => {
         const bounds = tabs.getBoundingClientRect();
@@ -634,6 +637,9 @@ test('objective create and edit submit the expected API payloads', async ({ page
   await expect(page.locator('.detail-meta-grid')).toContainText('Alex Chen');
   await expect(page.locator('.objective-detail-due-date')).toHaveText('Due Jan 15, 2027');
   await expect(page.locator('.objective-action-notice')).toHaveText('Objective updated');
+  const updatedNotice = await page.locator('.objective-action-notice').boundingBox();
+  const updatedSummary = await page.locator('.detail-summary').boundingBox();
+  expect(updatedNotice && updatedSummary && updatedNotice.y + updatedNotice.height <= updatedSummary.y).toBe(true);
 });
 
 test('a new objective without a due date stays listed under the initial Live filter', async ({ page }) => {
