@@ -59,6 +59,10 @@ Open <http://127.0.0.1:4173>. The dashboard dev server rebuilds the React app on
 ## API
 
 - `GET /healthz` returns `{"status":"ok"}`.
+- The worker ID is stored once in `<UserConfigDir>/zenchron/worker-id` (mode 0600). The first start stores the
+  ID derived from the hostname and config directory, so existing project links keep resolving; afterwards a hostname
+  change (macOS renames the host with the network) changes neither the worker ID nor its project IDs. A corrupt file
+  stops the worker with a message to remove it.
 - `PUT /api/v1/workers/{id}/heartbeat` upserts a worker name, server timestamp, and accepted project snapshot. The response includes `skipped_projects` only when projects were skipped, with their IDs and reason (`repository_not_granted` or `project_id_registered_by_another_worker`). Worker IDs must be 32 hexadecimal characters; worker names are trimmed and limited to 128 bytes. Project IDs must be 32 hexadecimal characters; project names are trimmed and limited to 255 bytes. The project `git_remote` field is a sanitized host/repository path with URL credentials and query strings removed.
 - `GET /api/v1/workers` returns each worker and its current status.
 - `GET /api/v1/projects` returns each discovered checkout, its worker, and online/offline status. A worker is online when its last heartbeat is within 15 seconds.
