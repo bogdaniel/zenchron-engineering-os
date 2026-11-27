@@ -159,7 +159,7 @@ func TestPlansAndGraphsNeedTheRepositoryGrantNotOnlyTheObjective(t *testing.T) {
 	plan := `{"project_id":"` + projectA + `","plan":{"summary":"","max_parallel":1,"units":[` +
 		unitJSON("api", unitProduce, harness.profile.ID) + `,` + unitJSON("integrate", unitIntegrate, "", "api") + `]}}`
 	harness.user("alice", http.MethodPost, plans, plan)
-	if response := harness.user("alice", http.MethodPost, plans+"/1/approve", ""); response.Code != http.StatusCreated {
+	if response := harness.approve("alice", plans+"/1/approve", aliceWorkerID, aliceToken, commit(9)); response.Code != http.StatusCreated {
 		t.Fatalf("approve returned HTTP %d", response.Code)
 	}
 	// Alice keeps her objective but loses the repository.

@@ -464,7 +464,7 @@ func TestWorkGraphReportIsHiddenFromOtherCallers(t *testing.T) {
 		t.Fatalf("propose returned HTTP %d: %s", response.Code, response.Body.String())
 	}
 	var graph workGraph
-	response = harness.user("alice", http.MethodPost, plans+"/1/approve", "")
+	response = harness.approve("alice", plans+"/1/approve", aliceWorkerID, aliceToken, commit(9))
 	if err := json.NewDecoder(response.Body).Decode(&graph); err != nil || response.Code != http.StatusCreated {
 		t.Fatalf("approve: HTTP %d, %v", response.Code, err)
 	}

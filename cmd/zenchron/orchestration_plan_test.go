@@ -234,7 +234,7 @@ func TestPlannerRunOnlyProposesAndItsPlanIsValidatedLikeAnyOther(t *testing.T) {
 	command = harness.claim()
 	valid, _ := json.Marshal(map[string]any{"plan": json.RawMessage(`{"summary":"s","max_parallel":1,"units":[` +
 		unitJSON("api", unitProduce, harness.profile.ID) + `,` + unitJSON("integrate", unitIntegrate, "", "api") + `]}`)})
-	harness.report(command, workerapi.AgentRunResult{Output: "Planned.", Result: string(valid)})
+	harness.report(command, workerapi.AgentRunResult{Output: "Planned.", BaseCommit: commit(9), Result: string(valid)})
 	plans = decodeList[objectivePlan](t, harness.call(http.MethodGet, "/api/v1/objectives/"+harness.objectiveID+"/plans", ""))
 	if plans[0].Revision != 2 || plans[0].Status != planProposed || len(plans[0].Units) != 2 || plans[0].Hash == "" {
 		t.Fatalf("valid planner output = %#v", plans[0])
@@ -305,7 +305,7 @@ func TestPlannerReceivesVersionPinnedWorkflowGuidance(t *testing.T) {
 	valid, _ := json.Marshal(map[string]any{"plan": json.RawMessage(`{"summary":"guided plan","max_parallel":1,"units":[` +
 		unitJSON("api", unitProduce, harness.profile.ID) + `,` +
 		unitJSON("integrate", unitIntegrate, "", "api") + `]}`)})
-	harness.report(command, workerapi.AgentRunResult{Output: "Planned.", Result: string(valid)})
+	harness.report(command, workerapi.AgentRunResult{Output: "Planned.", BaseCommit: commit(9), Result: string(valid)})
 	plans := decodeList[objectivePlan](t, harness.call(http.MethodGet, "/api/v1/objectives/"+harness.objectiveID+"/plans", ""))
 	if len(plans) != 1 || plans[0].Status != planProposed || plans[0].WorkflowID != saved.ID ||
 		plans[0].WorkflowVersion != saved.Version || plans[0].WorkflowMode != workflowModeGuidance {

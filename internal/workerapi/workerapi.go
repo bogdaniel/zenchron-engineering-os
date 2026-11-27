@@ -100,6 +100,8 @@ type Project struct {
 	Name   string `json:"name"`
 	Branch string `json:"branch"`
 	Remote string `json:"git_remote,omitempty"`
+	// Head is the checkout's current commit.
+	Head string `json:"head,omitempty"`
 }
 
 type Heartbeat struct {
@@ -153,6 +155,9 @@ type AgentRunCommand struct {
 	Profile            AgentProfile `json:"profile"`
 	Attempts           int          `json:"attempts"`
 	PublishPullRequest bool         `json:"publish_pull_request,omitempty"`
+	// VerifySource asks the worker only to verify the base branch against origin and report its commit as
+	// base_commit; no provider runs and no worktree is created. Plan approval waits for it.
+	VerifySource bool `json:"verify_source,omitempty"`
 	// StartCommit, when set, is the WorkGraph's pinned base: the run branch starts from exactly this commit.
 	StartCommit string `json:"start_commit,omitempty"`
 	// Repository, when set, is the GitHub repository this run belongs to; its base must be verified against it.

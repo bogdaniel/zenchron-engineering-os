@@ -71,6 +71,8 @@ function PlanRevision({ plan, latest, source, live, requested }: {
         title={source.readOnlyReason || approvalBlocker || undefined} onClick={() => void approve()}>
         Approve plan and start</Button>}
     </div>
+    {approving && <p className="work-unit-reason" role="status">
+      Checking that the checkout still matches GitHub before the plan starts…</p>}
     {plan.status === 'planning' && <p className="work-unit-reason" role="status">
       A planning agent is reading the repository. The proposal appears here when it finishes.</p>}
     {plan.summary && <p>{plan.summary}</p>}

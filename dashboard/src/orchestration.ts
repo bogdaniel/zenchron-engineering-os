@@ -114,10 +114,14 @@ async function load<T>(path: string, schema: z.ZodType<T>, what: string) {
 }
 
 /** Sends a change. A rejected plan answers with its problems; any other refusal answers with its reason as text. */
-async function send(path: string, body?: unknown) {
+// The worker claims runs on its poll interval; the source check runs within about a minute.
+const sourceCheckPollMs = 2_000;
+const sourceCheckAttempts = 45;
+
+async function send(path: string, body?: unknown): Promise<number> {
   const response = await fetch(path, body === undefined ? { method: 'POST' }
     : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (response.ok) return;
+  if (response.ok) return response.status;
   const text = (await response.text()).trim();
   const problems = z.object({ problems: z.array(z.string()) }).safeParse(text.startsWith('{') ? JSON.parse(text) : null);
   throw new Error(problems.success ? problems.data.problems.join(' ') : text || `Request failed (${response.status})`);
@@ -139,8 +143,8 @@ export function useLiveOrchestration(enabled: boolean, objectiveID?: string, pro
   const workflows = useQuery({ queryKey: ['workflows'], queryFn: loadWorkflows, enabled });
   const workers = useQuery({ queryKey: ['local-workers'], enabled, refetchInterval: 5_000,
     queryFn: () => load('/api/v1/workers', workersSchema, 'local workers') });
-  const change = async (path: string, body?: unknown) => {
-    await send(path, body);
+  const change = async (path: string, body?: unknown, sent = false) => {
+    if (!sent) await send(path, body);
     await Promise.all([queryClient.invalidateQueries({ queryKey: ['work-graphs'] }),
       queryClient.invalidateQueries({ queryKey: ['objective-plans'] }),
       queryClient.invalidateQueries({ queryKey: ['work-graph-report'] }),
@@ -190,7 +194,16 @@ export function useLiveOrchestration(enabled: boolean, objectiveID?: string, pro
     })),
     readOnlyReason: '',
     propose: (input) => change(`/api/v1/objectives/${objectiveID}/plans`, input),
-    approve: (revision) => change(`/api/v1/objectives/${objectiveID}/plans/${revision}/approve`),
+    approve: async (revision) => {
+      // Approval first has the worker verify the plan's source against GitHub (202 while it runs); asking again
+      // completes the approval on a fresh verified commit or returns the refusal.
+      const path = `/api/v1/objectives/${objectiveID}/plans/${revision}/approve`;
+      for (let attempt = 0; attempt < sourceCheckAttempts; attempt++) {
+        if (await send(path) !== 202) return change(path, undefined, true);
+        await new Promise((resolve) => setTimeout(resolve, sourceCheckPollMs));
+      }
+      throw new Error('The source check did not finish in time. Approve again to start a new check.');
+    },
     cancel: (graphID) => change(`/api/v1/work-graphs/${graphID}/cancel`),
     retryUnit: (graphID, key) => change(`/api/v1/work-graphs/${graphID}/units/${key}/retry`),
     resolve: (graphID, messageID, resolution) =>

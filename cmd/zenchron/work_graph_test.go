@@ -82,10 +82,26 @@ func (harness *graphHarness) propose(body string) (objectivePlan, *http.Response
 }
 
 func (harness *graphHarness) approve(revision int) (workGraph, int) {
-	response := harness.call(http.MethodPost, fmt.Sprintf("/api/v1/objectives/%s/plans/%d/approve", harness.objectiveID, revision), "")
+	path := fmt.Sprintf("/api/v1/objectives/%s/plans/%d/approve", harness.objectiveID, revision)
+	response := harness.call(http.MethodPost, path, "")
+	if response.Code == http.StatusAccepted {
+		// The worker verifies the plan's source; the fake worker reports the base the harness runs use.
+		harness.answerSourceCheck(commit(9))
+		response = harness.call(http.MethodPost, path, "")
+	}
 	var graph workGraph
 	_ = json.NewDecoder(response.Body).Decode(&graph)
 	return graph, response.Code
+}
+
+// answerSourceCheck claims the queued source-check run and reports base as the verified origin commit.
+func (harness *graphHarness) answerSourceCheck(base string) {
+	harness.t.Helper()
+	command := harness.claim()
+	if !command.VerifySource {
+		harness.t.Fatalf("claimed run %s is not a source check", command.ID)
+	}
+	harness.report(command, workerapi.AgentRunResult{Status: "succeeded", BaseCommit: base, Output: "Verified."})
 }
 
 // start proposes and approves a plan and returns its graph.

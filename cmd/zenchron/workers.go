@@ -51,6 +51,7 @@ type projectRecord struct {
 	Name       string    `json:"name"`
 	Branch     string    `json:"branch"`
 	GitRemote  string    `json:"git_remote,omitempty"`
+	Head       string    `json:"head,omitempty"`
 	WorkerID   string    `json:"worker_id"`
 	WorkerName string    `json:"worker_name"`
 	LastSeen   time.Time `json:"last_seen"`
@@ -424,7 +425,7 @@ func (registry *workerRegistry) heartbeat(w http.ResponseWriter, r *http.Request
 		key := id + ":" + project.ID
 		registry.projects[key] = projectRecord{
 			ID: project.ID, Name: project.Name, Branch: project.Branch, GitRemote: project.Remote,
-			WorkerID: id, WorkerName: request.Name, LastSeen: now,
+			Head: reportedHead(project.Head), WorkerID: id, WorkerName: request.Name, LastSeen: now,
 		}
 	}
 	registry.mu.Unlock()
@@ -500,4 +501,12 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+// reportedHead keeps a worker-reported checkout commit only when it is a well-formed SHA.
+func reportedHead(head string) string {
+	if head == "" || !validCommitSHA(head) {
+		return ""
+	}
+	return head
 }

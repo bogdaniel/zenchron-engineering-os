@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
 
 // staleBaseFixture returns a checkout cloned from origin, plus a second clone used to advance origin.
@@ -155,6 +157,22 @@ func TestReusedWorktreeMustDescendFromThePinnedBase(t *testing.T) {
 	var unverified baseVerificationError
 	if err := verifyDescendsFromPinnedBase(ctx, checkout, pinned); !errors.As(err, &unverified) {
 		t.Fatalf("HEAD unrelated to the pinned base: error = %v", err)
+	}
+}
+
+func TestVerifySourceReportsTheVerifiedCommitOrRefuses(t *testing.T) {
+	_, checkout, _ := staleBaseFixture(t)
+	runner := &agentRunner{}
+	project := projectAt(checkout, workerTestID)
+	command := workerapi.AgentRunCommand{ID: workerTestID, VerifySource: true, BaseBranch: "main"}
+	if result := runner.verifySource(context.Background(), command, project); result.Status != "failed" ||
+		!strings.Contains(result.Error, "Source check failed: local main is at") {
+		t.Fatalf("behind checkout: %#v", result)
+	}
+	runGit(t, checkout, "pull", "--quiet", "--ff-only")
+	want := strings.TrimSpace(runGit(t, checkout, "rev-parse", "main"))
+	if result := runner.verifySource(context.Background(), command, project); result.Status != "succeeded" || result.BaseCommit != want {
+		t.Fatalf("matching checkout: %#v, want base %s", result, want)
 	}
 }
 

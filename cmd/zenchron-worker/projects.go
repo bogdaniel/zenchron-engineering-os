@@ -19,7 +19,9 @@ type discoveredProject struct {
 	Name   string `json:"name"`
 	Branch string `json:"branch"`
 	Remote string `json:"git_remote,omitempty"`
-	Path   string `json:"-"`
+	// Head is the checked-out commit, the source baseline a plan proposed against this checkout records.
+	Head string `json:"head,omitempty"`
+	Path string `json:"-"`
 }
 
 // ponytail: Git metadata is capped at 1 KiB; raise the bound if Git expands the HEAD format.
@@ -63,8 +65,16 @@ func isGitCheckout(path string) bool {
 func projectAt(path, workerID string) discoveredProject {
 	return discoveredProject{
 		ID: stableID(workerID + "\x00" + path), Name: filepath.Base(path),
-		Branch: currentBranch(path), Remote: gitRemote(path), Path: path,
+		Branch: currentBranch(path), Remote: gitRemote(path), Head: gitHead(path), Path: path,
 	}
+}
+
+func gitHead(path string) string {
+	head, err := gitOutput(context.Background(), "-C", path, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(head)
 }
 
 func gitRemote(path string) string {

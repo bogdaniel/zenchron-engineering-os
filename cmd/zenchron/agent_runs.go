@@ -64,6 +64,10 @@ type agentRun struct {
 	IssueURL                  string                     `json:"issue_url,omitempty"`
 	IssueContext              string                     `json:"issue_context,omitempty"`
 	BaseCommit                string                     `json:"base_commit,omitempty"`
+	// SourceCheckFor binds a source check to the plan it verifies: objective, revision and plan hash.
+	SourceCheckFor string `json:"source_check_for,omitempty"`
+	// VerifySource marks a plan-approval source check: the worker verifies BaseBranch against origin only.
+	VerifySource bool `json:"verify_source,omitempty"`
 	// StartCommit is the WorkGraph's pinned base this run must start from; empty starts from BaseBranch.
 	StartCommit       string            `json:"start_commit,omitempty"`
 	Provider          string            `json:"provider,omitempty"`
@@ -394,12 +398,15 @@ func (store *agentRunStore) publishable(repository string) bool {
 
 // enqueue gives a run its identity and branch and adds it to the queue. It is the only way a run is created.
 func (store *agentRunStore) enqueue(item agentRun) (agentRun, int, string) {
-	id := make([]byte, 16)
-	if _, err := rand.Read(id); err != nil {
-		return agentRun{}, http.StatusInternalServerError, "could not create agent run id"
+	if item.ID == "" {
+		id := make([]byte, 16)
+		if _, err := rand.Read(id); err != nil {
+			return agentRun{}, http.StatusInternalServerError, "could not create agent run id"
+		}
+		item.ID = hex.EncodeToString(id)
 	}
 	now := time.Now().UTC()
-	item.ID, item.Status, item.CreatedAt, item.UpdatedAt = hex.EncodeToString(id), "queued", now, now
+	item.Status, item.CreatedAt, item.UpdatedAt = "queued", now, now
 	item.Branch = workerapi.AgentRunBranch(item.ID)
 	store.mu.Lock()
 	defer store.mu.Unlock()
@@ -408,6 +415,9 @@ func (store *agentRunStore) enqueue(item agentRun) (agentRun, int, string) {
 	}
 	if len(store.items) >= maxAgentRuns {
 		return agentRun{}, http.StatusInsufficientStorage, "agent run history is full"
+	}
+	if _, exists := store.items[item.ID]; exists {
+		return agentRun{}, http.StatusConflict, "agent run id already exists"
 	}
 	store.items[item.ID] = item
 	if err := store.persistLocked(); err != nil {
@@ -467,7 +477,7 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 	profile := selected.Profile
 	writeJSON(w, http.StatusOK, workerapi.AgentRunCommand{
 		ID: selected.ID, ProjectID: selected.ProjectID, Branch: selected.Branch, BaseBranch: selected.BaseBranch,
-		Repository: selected.Repository, StartCommit: selected.StartCommit,
+		Repository: selected.Repository, StartCommit: selected.StartCommit, VerifySource: selected.VerifySource,
 		Prompt: agentRunPrompt(selected) + store.graphs.runContext(selected), Attempts: selected.Attempts,
 		PublishPullRequest: selected.PublishOnly, Merge: selected.Merge,
 		PublishCommit: store.publicationCommit(selected),
@@ -520,7 +530,7 @@ func (store *agentRunStore) lease(worker workerRecord, access requestAccess, pla
 		// integration run starts no provider.
 		_, plannerLinked := plannerRunIDs[item.ID]
 		if item.WorkerID == worker.ID && item.Status == "queued" && (!item.ObjectivePlanner || plannerLinked) &&
-			(len(item.Merge) > 0 || workerRunsProfile(worker, *item.Profile)) &&
+			(len(item.Merge) > 0 || item.VerifySource || workerRunsProfile(worker, *item.Profile)) &&
 			access.allows(item.Repository) &&
 			(selected.ID == "" || item.CreatedAt.Before(selected.CreatedAt)) {
 			selected = item

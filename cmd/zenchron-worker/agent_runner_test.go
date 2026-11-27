@@ -970,3 +970,24 @@ func TestClaimedRunBodyIsBounded(t *testing.T) {
 		t.Fatal("a valid claim padded past the limit was accepted")
 	}
 }
+
+func TestDispatchClaimsProviderFreeSourceCheck(t *testing.T) {
+	harness := newRunHarness(t, "exit 0", nil)
+	harness.runner.providers = map[string]*cliProvider{}
+	harness.runner.slots = make(chan struct{}, 1)
+	harness.command.VerifySource = true
+	harness.queue = []workerapi.AgentRunCommand{harness.command}
+
+	if err := harness.runner.dispatch(context.Background(), []discoveredProject{{
+		ID: harness.command.ProjectID, Name: "repository", Path: harness.repository,
+	}}); err != nil {
+		t.Fatalf("dispatch provider-free source check: %v", err)
+	}
+	harness.runner.running.Wait()
+	harness.mu.Lock()
+	defer harness.mu.Unlock()
+	if len(harness.results) != 1 || harness.results[0].Status != "failed" ||
+		!strings.Contains(harness.results[0].Error, "Source check failed") {
+		t.Fatalf("source check was not claimed and executed without providers: %#v", harness.results)
+	}
+}

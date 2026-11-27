@@ -136,8 +136,9 @@ func (store *workGraphStore) proposePlan(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "this objective reached its limit of plan revisions", http.StatusConflict)
 		return
 	}
-	plan := objectivePlan{ObjectiveID: item.ID, ProjectID: project.ID, Repository: project.GitRemote, WorkflowID: input.WorkflowID,
-		Status: planProposed, CreatedBy: access.user, CreatedAt: time.Now().UTC()}
+	plan := objectivePlan{ObjectiveID: item.ID, ProjectID: project.ID, Repository: project.GitRemote, SourceCommit: project.Head,
+		WorkflowID: input.WorkflowID,
+		Status:     planProposed, CreatedBy: access.user, CreatedAt: time.Now().UTC()}
 	if item.ProductID != "" {
 		plan.ProductContext = productContext
 		plan.ProductConfigurationRevision = linkedProduct.configurationRevision()
@@ -274,7 +275,7 @@ func (store *workGraphStore) admitPlansLocked() bool {
 			case err != nil || result.Plan == nil:
 				plan.Status, plan.Problems = planInvalid, []string{"The planner reported no plan: " + cmp.Or(errorText(err), "the result carried none") + "."}
 			default:
-				plan.planProposal, plan.Status = *result.Plan, planProposed
+				plan.planProposal, plan.Status, plan.SourceCommit = *result.Plan, planProposed, run.BaseCommit
 				profiles := store.agentProfiles()
 				plan.ProfileSnapshots, plan.Problems = pinPlanProfiles(&plan.planProposal, profiles)
 				plan.Problems = append(plan.Problems, plan.planProposal.problems(profiles)...)
@@ -341,12 +342,22 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 		http.Error(w, problem, http.StatusConflict)
 		return
 	}
+	baseCommit := ""
+	if plan.Repository != "" {
+		var verdict sourceVerdict
+		check, _ := store.runs.get(plan.SourceCheckRunID)
+		baseCommit, verdict = plan.judgeSource(check, project, time.Now())
+		if verdict != sourceVerified {
+			store.answerSourceCheckLocked(w, plan, project, access.user, verdict, check)
+			return
+		}
+	}
 	now := time.Now().UTC()
 	previousPlans := slices.Clone(plans)
 	graph := &workGraph{ID: graphID, ObjectiveID: item.ID, ObjectiveTitle: item.Title, PlanRevision: plan.Revision,
 		PlanHash: plan.Hash, Revision: 1, Status: graphActive, ProjectID: project.ID, ProjectName: project.Name,
 		Repository: project.GitRemote, WorkerID: project.WorkerID, WorkerName: project.WorkerName, BaseBranch: project.Branch,
-		WorkflowID: plan.WorkflowID, WorkflowVersion: plan.WorkflowVersion, WorkflowMode: plan.WorkflowMode,
+		BaseCommit: baseCommit, WorkflowID: plan.WorkflowID, WorkflowVersion: plan.WorkflowVersion, WorkflowMode: plan.WorkflowMode,
 		MaxParallel: plan.MaxParallel, Messages: []graphMessage{},
 		CreatedBy: access.user, CreatedAt: now, UpdatedAt: now}
 	for _, unit := range plan.Units {
@@ -359,6 +370,7 @@ func (store *workGraphStore) approvePlan(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	plan.Status, plan.GraphID, plan.ApprovedBy, plan.ApprovedAt = planApproved, graph.ID, cmp.Or(access.user, localOperator), &now
+	plan.SourceCheckRunID, plan.SourceCheckError = "", ""
 	store.graphs[graph.ID] = graph
 	if err := store.persistLocked(); err != nil {
 		delete(store.graphs, graph.ID)

@@ -90,13 +90,20 @@ type objectivePlan struct {
 	// Hash identifies the plan's content, so an unchanged plan is recognized and not approved twice.
 	Hash string `json:"hash,omitempty"`
 	// Problems says why a proposal is invalid.
-	Problems     []string   `json:"problems,omitempty"`
-	PlannerRunID string     `json:"planner_run_id,omitempty"`
-	GraphID      string     `json:"graph_id,omitempty"`
-	CreatedBy    string     `json:"created_by,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	ApprovedBy   string     `json:"approved_by,omitempty"`
-	ApprovedAt   *time.Time `json:"approved_at,omitempty"`
+	Problems     []string `json:"problems,omitempty"`
+	PlannerRunID string   `json:"planner_run_id,omitempty"`
+	// SourceCommit is the commit the plan was prepared against: the commit a planner run read, or the checkout's
+	// commit its worker reported when an operator or workflow proposed the plan. Approval requires origin still there.
+	SourceCommit string `json:"source_commit,omitempty"`
+	// SourceCheckRunID is the worker run verifying the plan's source against origin before approval.
+	SourceCheckRunID string `json:"source_check_run_id,omitempty"`
+	// SourceCheckError says why the last source check refused approval.
+	SourceCheckError string     `json:"source_check_error,omitempty"`
+	GraphID          string     `json:"graph_id,omitempty"`
+	CreatedBy        string     `json:"created_by,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ApprovedBy       string     `json:"approved_by,omitempty"`
+	ApprovedAt       *time.Time `json:"approved_at,omitempty"`
 }
 
 // problems normalizes a proposal and returns every reason it must not execute: malformed units, unknown

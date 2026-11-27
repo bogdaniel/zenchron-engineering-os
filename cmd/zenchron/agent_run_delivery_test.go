@@ -159,7 +159,7 @@ func (harness *deliveryHarness) callFrom(remoteAddr, method, path, body string) 
 func (harness *deliveryHarness) heartbeat(workerID, providers string) {
 	harness.t.Helper()
 	body := `{"name":"worker","providers":` + providers + `,"projects":[{"id":"` + testProjectID +
-		`","name":"platform","branch":"main","git_remote":"github.com/acme/platform"}]}`
+		`","name":"platform","branch":"main","git_remote":"github.com/acme/platform","head":"` + commit(9) + `"}]}`
 	if response := harness.call(http.MethodPut, "/api/v1/workers/"+workerID+"/heartbeat", body); response.Code != http.StatusOK {
 		harness.t.Fatalf("heartbeat returned HTTP %d: %s", response.Code, response.Body.String())
 	}
