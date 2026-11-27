@@ -65,7 +65,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("get user config directory: %w", err)
 	}
-	workerID := stableID(hostname + "\x00" + identity)
+	workerID, err := persistentWorkerID(identity, hostname)
+	if err != nil {
+		return err
+	}
 	projectsRoot := strings.TrimSpace(os.Getenv("ZENCHRON_PROJECTS_ROOT"))
 	if projectsRoot == "" {
 		projectsRoot = "."
