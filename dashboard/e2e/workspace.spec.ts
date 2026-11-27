@@ -316,13 +316,16 @@ test('Live Product Workspace shows real data, honest gaps, and saves product edi
   await expect(dialog).toContainText('Add a product name');
   expect(writes).toEqual([]);
   await dialog.getByLabel('Product name').fill('Nova Core');
+  await dialog.getByLabel('Monthly budget (USD)').fill('75');
   await dialog.getByRole('button', { name: 'Save product' }).click();
   await expect(page.locator('.workspace-mock-heading h1')).toHaveText('Nova Core');
+  const deliveryMetrics = page.locator('.workspace-mock-card.analytics');
+  await expect(deliveryMetrics).toContainText('Spent this month$0.00 of $75.00 budget, reporting only; no runs');
   await expect(configurationHistory).toContainText('Revision 3');
   await expect(configurationHistory).toContainText('Nova Core');
   expect(writes).toEqual([{ method: 'PUT', path: `/api/v1/products/${novaID}`,
     body: { name: 'Nova Core', description: 'Developer platform', repository_ids: [projectID],
-      default_workflow_id: 'release' } }]);
+      default_workflow_id: 'release', monthly_budget_cents: 7500 } }]);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.workspace-mock-directory')).toBeHidden();
@@ -442,7 +445,7 @@ test('Live Product Workspace saves a default workflow and carries it into object
   await dialog.getByRole('button', { name: 'Save product' }).click();
   expect(writes).toEqual([{ method: 'PUT', path: `/api/v1/products/${novaID}`,
     body: { name: 'Nova Platform', description: 'Developer platform', repository_ids: [projectID],
-      default_workflow_id: 'release' } }]);
+      default_workflow_id: 'release', monthly_budget_cents: 0 } }]);
 
   await page.getByRole('link', { name: 'Create objective for Nova Platform' }).click();
   await expect(page).toHaveURL(/workflow=release/);

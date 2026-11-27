@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { monthlyBudgetMetric } from './productBudget';
 import { z } from 'zod';
 import { loadAgents, loadPersonas } from './agentsData';
 import type { AgentRun } from './agentsData';
@@ -81,7 +82,8 @@ export type WorkspaceView = {
   };
 };
 
-export type WorkspaceEditable = Pick<Product, 'id' | 'name' | 'description' | 'repository_ids' | 'default_workflow_id'>;
+export type WorkspaceEditable = Pick<Product, 'id' | 'name' | 'description' | 'repository_ids' | 'default_workflow_id'
+  | 'monthly_budget_cents'>;
 
 /** Everything the Product Workspace layout needs. Operations a mode cannot perform are absent. */
 export type WorkspaceSource = {
@@ -131,7 +133,8 @@ const environmentSchema = z.object({
   configuration_revision: z.number().int().nonnegative().optional(),
   configuration_history_complete: z.boolean().optional(),
   configuration_history: z.array(z.object({ revision: z.number().int().positive(), name: z.string(), description: z.string(),
-    repository_ids: z.array(z.string()), default_workflow_id: z.string().optional(), changed_by: z.string().optional(),
+    repository_ids: z.array(z.string()), default_workflow_id: z.string().optional(),
+    monthly_budget_cents: z.number().int().nonnegative().optional(), changed_by: z.string().optional(),
     changed_at: z.string().datetime(), repositories_redacted: z.boolean().optional() })).optional(),
   knowledge_revision: z.number().int().nonnegative().optional(),
   organization_knowledge_revision: z.number().int().nonnegative().optional(),
@@ -355,6 +358,8 @@ function liveView(product: Product | undefined, quarter: string | undefined, fac
     delivery: { ranges: [], metrics: () => [
       ['WorkGraphs', String(graphCount), 'current'], ['PR links', String(pullRequestCount), 'observed'],
       ['Findings', String(findingCount), 'recorded'], ['Handoffs', String(handoffCount), 'recorded'],
+      monthlyBudgetMetric(product?.monthly_budget_cents, new Set(environment?.history.flatMap((item) => item.run_ids)),
+        facts.agentRunsError || facts.agentRunsLoading ? undefined : facts.agentRuns, new Date()),
     ], note: environmentNote },
   };
 }

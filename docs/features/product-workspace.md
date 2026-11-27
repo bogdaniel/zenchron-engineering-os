@@ -160,7 +160,12 @@ Live:
   graph, finding, product, and current access. Organization promotion is explicit; the UI reports the server's
   authorization result and does not infer a user's authority. Mock does not call these endpoints.
 - WorkGraph-linked run IDs are joined to the app shell's agent-run records to show provider-reported token totals and
-  cost with explicit run coverage. Providers that do not report cost remain unknown; budgets are not recorded here.
+  cost with explicit run coverage. Providers that do not report cost remain unknown.
+- A product may record a monthly budget in US dollars (stored as `monthly_budget_cents`, part of the versioned product
+  configuration). It is reporting only and never enforced. Delivery Metrics shows "Spent this month": the sum of
+  provider-reported cost for the product's WorkGraph runs created in the current UTC calendar month, against the budget
+  when one is set, with run coverage. Runs without reported cost are counted as unknown, never as zero; when no run
+  reports cost the amount is Unknown, and when run records cannot be loaded it says so.
 - The selected product's environment projection supplies the pending-decision count, decision links, current
   WorkGraph/handoff/finding counts, observed PR-link count, and a newest-first list of its historical WorkGraphs.
   History entries reference the durable graph, plan hash/revision, product configuration revision, graph revision, run IDs, status and timestamps;
