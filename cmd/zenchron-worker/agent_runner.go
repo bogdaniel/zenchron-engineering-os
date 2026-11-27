@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bogdaniel/zenchron-engineering-os/internal/workerapi"
 )
@@ -137,9 +138,22 @@ func (runner *agentRunner) verifySource(ctx context.Context, command workerapi.A
 		Output: "Verified " + command.BaseBranch + " at " + commit + " against origin."}
 }
 
+// fitRunError keeps a failure message within the control plane's error limit, cutting at a rune boundary, so a
+// long message can never make the control plane reject the result and leave the run to expire as a lost lease.
+func fitRunError(message string) string {
+	if len(message) <= workerapi.MaxRunErrorSize {
+		return message
+	}
+	cut := workerapi.MaxRunErrorSize - len("…")
+	for cut > 0 && !utf8.RuneStart(message[cut]) {
+		cut--
+	}
+	return message[:cut] + "…"
+}
+
 // failed marks a result as failed while keeping the evidence already collected in it.
 func failed(result workerapi.AgentRunResult, reason, message string) workerapi.AgentRunResult {
-	result.Status, result.Error, result.TerminationReason = "failed", message, reason
+	result.Status, result.Error, result.TerminationReason = "failed", fitRunError(message), reason
 	return result
 }
 

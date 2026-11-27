@@ -237,7 +237,7 @@ func validStoredAgentRun(item agentRun) bool {
 		item.AgentName != "" && item.ProjectName != "" && item.WorkerName != "" &&
 		validCommitSHA(item.CommitSHA) && validCommitSHA(item.CommitTreeSHA) &&
 		(item.CommitTreeSHA == "" || item.CommitSHA != "") &&
-		len(item.Prompt) > 0 && len(item.Prompt) <= 5000 && len(item.Output) <= 20000 && len(item.Error) <= 255 &&
+		len(item.Prompt) > 0 && len(item.Prompt) <= 5000 && len(item.Output) <= 20000 && len(item.Error) <= workerapi.MaxRunErrorSize &&
 		len(item.PullRequestURL) <= 2048 && len(item.PullRequestError) <= 255 && item.PullRequestNumber >= 0 &&
 		(item.PullRequestURL == "" || (strings.HasPrefix(item.PullRequestURL, "https://github.com/") && item.PullRequestNumber > 0)) &&
 		(item.Status == "queued" || item.Status == "running" || item.Status == "succeeded" || item.Status == "failed" ||
