@@ -637,7 +637,7 @@ func TestAgentRunCandidatesDoNotPushWithoutAuthorization(t *testing.T) {
 	stale.runner.push = countPush
 	project := discoveredProject{ID: stale.command.ProjectID, Name: "repository", Path: stale.repository}
 	root := filepath.Dir(filepath.Dir(stale.worktree))
-	if err := prepareWorktree(context.Background(), root, project, stale.command.ID, stale.command.Branch, "main"); err != nil {
+	if err := prepareWorktree(context.Background(), root, project, stale.command.ID, stale.command.Branch, "main", ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(stale.worktree, "README.md"), []byte("late change\n"), 0o600); err != nil {
@@ -711,7 +711,7 @@ func TestCleanupWorktreesKeepsLockedAndModifiedWorktrees(t *testing.T) {
 	projects := []discoveredProject{{ID: agentRunTestID, Name: "repository", Path: harness.repository}}
 	prepare := func(id string) string {
 		t.Helper()
-		if err := prepareWorktree(context.Background(), root, projects[0], id, workerapi.AgentRunBranch(id), "main"); err != nil {
+		if err := prepareWorktree(context.Background(), root, projects[0], id, workerapi.AgentRunBranch(id), "main", ""); err != nil {
 			t.Fatal(err)
 		}
 		worktree := filepath.Join(root, agentRunTestID, id)

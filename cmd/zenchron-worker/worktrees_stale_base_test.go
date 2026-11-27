@@ -41,7 +41,7 @@ func prepareFixtureRun(t *testing.T, root, checkout string) error {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return prepareWorktree(ctx, root, projectAt(checkout, workerTestID), workerTestID, "zenchron/agent-run/"+workerTestID, "main")
+	return prepareWorktree(ctx, root, projectAt(checkout, workerTestID), workerTestID, "zenchron/agent-run/"+workerTestID, "main", "")
 }
 
 func TestPrepareWorktreeRequiresTheBaseToEqualOrigin(t *testing.T) {
@@ -74,6 +74,37 @@ func TestPrepareWorktreeRequiresTheBaseToEqualOrigin(t *testing.T) {
 	runGit(t, checkout, "reset", "--quiet", "--hard", "origin/main")
 	if err := prepareFixtureRun(t, root, checkout); err != nil {
 		t.Fatalf("matching checkout: error = %v", err)
+	}
+}
+
+func TestPrepareWorktreeFailsClosedForAGitHubRunWithoutItsOrigin(t *testing.T) {
+	dir, checkout, _ := staleBaseFixture(t)
+	root := filepath.Join(dir, "worktrees")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	project := projectAt(checkout, workerTestID)
+	var unverified baseVerificationError
+	err := prepareWorktree(ctx, root, project, workerTestID, "zenchron/agent-run/"+workerTestID, "main", "github.com/acme/other")
+	if !errors.As(err, &unverified) || !strings.Contains(err.Error(), "origin is not github.com/acme/other") {
+		t.Fatalf("origin of another repository: error = %v", err)
+	}
+	runGit(t, checkout, "remote", "remove", "origin")
+	err = prepareWorktree(ctx, root, project, workerTestID, "zenchron/agent-run/"+workerTestID, "main", "github.com/acme/platform")
+	if !errors.As(err, &unverified) || !strings.Contains(err.Error(), "origin is not configured") {
+		t.Fatalf("missing origin for a GitHub run: error = %v", err)
+	}
+}
+
+func TestPrepareWorktreeStartsFromTheVerifiedCommit(t *testing.T) {
+	dir, checkout, _ := staleBaseFixture(t)
+	runGit(t, checkout, "pull", "--quiet", "--ff-only")
+	root := filepath.Join(dir, "worktrees")
+	if err := prepareFixtureRun(t, root, checkout); err != nil {
+		t.Fatal(err)
+	}
+	worktree := filepath.Join(root, projectAt(checkout, workerTestID).ID, workerTestID)
+	if got, want := runGit(t, worktree, "rev-parse", "HEAD"), runGit(t, checkout, "rev-parse", "origin/main"); got != want {
+		t.Fatalf("run started at %s, want the verified origin commit %s", got, want)
 	}
 }
 

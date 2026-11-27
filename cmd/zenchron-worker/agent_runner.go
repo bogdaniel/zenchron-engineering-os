@@ -206,7 +206,7 @@ func (runner *agentRunner) attempt(
 		return failed(result, workerapi.TerminationWorkerError, "Could not lock the run worktree lifecycle.")
 	}
 	runner.checkout.Lock()
-	err = prepareWorktree(ctx, root, project, command.ID, command.Branch, command.BaseBranch)
+	err = prepareWorktree(ctx, root, project, command.ID, command.Branch, command.BaseBranch, command.Repository)
 	runner.checkout.Unlock()
 	if cancelled, _ := reporter.state(); cancelled && err != nil {
 		if closeErr := lifecycleLock.Close(); closeErr != nil {

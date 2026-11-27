@@ -55,10 +55,12 @@ sequenceDiagram
   checkout, the worker reattaches the retained run branch; a destination on another branch is refused.
 - **Verified base.** Before creating a new run branch from the product's base branch, the worker reads origin's
   default branch (`git ls-remote --symref origin HEAD`), fetches it into `refs/remotes/origin/<default>`, and
-  refuses the run unless the local base commit equals it. Behind, ahead, and diverged all refuse, and so does a
-  failed fetch or lookup: an unverified base never proceeds. The refusal names both commits and the manual recovery.
-  Local branches are never moved. A run built on another run's branch inherits that run's verified base and is not
-  re-checked. A checkout without an `origin` remote has nothing to compare against and is not checked.
+  refuses the run unless the local base commit equals it. The new run branch starts from that exact commit, not the
+  branch name. Behind, ahead, and diverged all refuse, as does a lookup or fetch that fails or exceeds one minute: an
+  unverified base never proceeds. The refusal names both commits and the manual recovery. Local branches are never
+  moved. A run whose command names a GitHub repository fails closed when `origin` is missing or is another
+  repository; a checkout without `origin` that no repository requires is not checked. A run that starts from
+  another run's branch inherits that parent's base without rechecking it.
 - **Leases and fencing.** There is one implementation, the agent-run store: claim, three-minute lease renewed by
   progress reports, attempt number echoed by the result, expiry, attempt limit, and cancellation. See
   [Agent run queue](agent-run-queue.md).
