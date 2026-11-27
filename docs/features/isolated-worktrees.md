@@ -53,6 +53,12 @@ sequenceDiagram
   with `git check-ref-format`, then runs `git worktree add`. A worktree that already exists on the run branch is
   reused, so a follow-up attempt (retry, or request-changes) continues in the same checkout. If cleanup removed the
   checkout, the worker reattaches the retained run branch; a destination on another branch is refused.
+- **Verified base.** Before creating a new run branch from the product's base branch, the worker reads origin's
+  default branch (`git ls-remote --symref origin HEAD`), fetches it into `refs/remotes/origin/<default>`, and
+  refuses the run unless the local base commit equals it. Behind, ahead, and diverged all refuse, and so does a
+  failed fetch or lookup: an unverified base never proceeds. The refusal names both commits and the manual recovery.
+  Local branches are never moved. A run built on another run's branch inherits that run's verified base and is not
+  re-checked. A checkout without an `origin` remote has nothing to compare against and is not checked.
 - **Leases and fencing.** There is one implementation, the agent-run store: claim, three-minute lease renewed by
   progress reports, attempt number echoed by the result, expiry, attempt limit, and cancellation. See
   [Agent run queue](agent-run-queue.md).

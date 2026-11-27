@@ -268,6 +268,7 @@ func TestPublishOnlyRunPushesAuthorizedCandidateEvenWhenVerificationMovesWorktre
 		"commit", "--amend", "--allow-empty", "-m", "verification moved branch",
 	}})
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	seedOriginMain(t, harness.repository, bare)
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	harness.gitRemote = "github.com/test/repository"
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
@@ -337,6 +338,7 @@ func TestCLIPublishOnlyRunFindsExactCandidateAfterWorktreeCleanup(t *testing.T) 
 	runGit(t, bare, "init", "--bare")
 	harness := newRunHarness(t, fakeChangeScript, nil)
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	seedOriginMain(t, harness.repository, bare)
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	harness.gitRemote = "github.com/test/repository"
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")
@@ -476,6 +478,7 @@ func TestPushGetsFreshDeadlineAfterVerification(t *testing.T) {
 	runGit(t, bare, "init", "--bare")
 	harness := newRunHarness(t, fakeChangeScript, [][]string{{"sh", "-c", "sleep 2.5"}})
 	runGit(t, harness.repository, "remote", "add", "origin", "https://github.com/test/repository.git")
+	seedOriginMain(t, harness.repository, bare)
 	runGit(t, harness.repository, "config", "url.file://"+filepath.ToSlash(bare)+".insteadOf", "https://github.com/test/repository.git")
 	harness.gitRemote = "github.com/test/repository"
 	runGit(t, harness.repository, "config", "remote.origin.pushurl", "https://github.com/test/repository")

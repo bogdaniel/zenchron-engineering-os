@@ -217,6 +217,12 @@ func (runner *agentRunner) attempt(
 	if err != nil {
 		err = errors.Join(err, lifecycleLock.Close())
 		log.Printf("agent run %s attempt %d: %v", command.ID, command.Attempts, err)
+		if stale := (staleBaseError{}); errors.As(err, &stale) {
+			return failed(result, workerapi.TerminationWorkerError, "Refused to start: "+stale.Error()+".")
+		}
+		if unverified := (baseVerificationError{}); errors.As(err, &unverified) {
+			return failed(result, workerapi.TerminationWorkerError, "Refused to start: "+unverified.Error()+".")
+		}
 		return failed(result, workerapi.TerminationWorkerError, "Could not prepare an isolated branch.")
 	}
 	// No process of this attempt starts before every process of an earlier attempt is gone.
