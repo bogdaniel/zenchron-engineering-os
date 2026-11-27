@@ -128,6 +128,11 @@ func TestPrepareWorktreeStartsAtThePinnedGraphBaseEvenAfterOriginAdvances(t *tes
 	if got := strings.TrimSpace(runGit(t, worktree, "rev-parse", "HEAD")); got != pinned {
 		t.Fatalf("pinned run started at %s, want %s", got, pinned)
 	}
+	// A retry reuses this worktree; it is still refused when origin is now another repository.
+	if err := prepareWorktree(ctx, root, project, workerTestID, "zenchron/agent-run/"+workerTestID, "main", pinned,
+		"github.com/acme/other"); !errors.As(err, &foreign) {
+		t.Fatalf("reused pinned worktree with another repository's origin: error = %v", err)
+	}
 	var unverified baseVerificationError
 	missing := strings.Repeat("e", 40)
 	other := "ffffffffffffffffffffffffffffffff"

@@ -38,6 +38,10 @@ func prepareWorktree(ctx context.Context, root string, project discoveredProject
 	if err := validateGitBranch(ctx, project.Path, baseBranch); err != nil {
 		return err
 	}
+	// Every path below, including a reused worktree or a retained run branch, belongs to this repository.
+	if _, err := verifyOriginIdentity(ctx, project.Path, repository); err != nil {
+		return err
+	}
 	absoluteRoot, err := filepath.Abs(root)
 	if err != nil {
 		return fmt.Errorf("resolve worktree root: %w", err)
@@ -81,9 +85,6 @@ func prepareWorktree(ctx context.Context, root string, project discoveredProject
 	} else if startCommit != "" {
 		// The graph pinned this verified base when its first run started; later runs start from exactly it even if
 		// origin has advanced since, so every unit of the graph shares one base.
-		if _, err := verifyOriginIdentity(ctx, project.Path, repository); err != nil {
-			return err
-		}
 		if _, err := gitOutput(ctx, "-C", project.Path, "rev-parse", "--verify", "--quiet", startCommit+"^{commit}"); err != nil {
 			return baseVerificationError{fmt.Errorf("the pinned graph base %s is not in this checkout", startCommit)}
 		}

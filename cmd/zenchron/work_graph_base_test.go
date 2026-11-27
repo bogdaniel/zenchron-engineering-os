@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -56,5 +57,15 @@ func TestWorkGraphFailsARootRunFromAnotherBase(t *testing.T) {
 	graph := harness.graph()
 	if unit := graph.unit("ui"); unit.State != unitFailed || !strings.Contains(unit.Reason, "pinned to "+shortCommit(commit(9))) {
 		t.Fatalf("ui unit from another base = %s / %q, want failed against the pinned base", unit.State, unit.Reason)
+	}
+	// The retry must not continue the rejected branch: it starts over from the pinned base.
+	if response := harness.call(http.MethodPost, "/api/v1/work-graphs/"+graph.ID+"/units/ui/retry", ""); response.Code != http.StatusOK {
+		t.Fatalf("retry returned HTTP %d: %s", response.Code, response.Body.String())
+	}
+	harness.claimUnit("review-api")
+	retry := harness.claimUnit("ui")
+	if retry.BaseBranch != graph.BaseBranch || retry.StartCommit != commit(9) || retry.BaseBranch == ui.Branch {
+		t.Fatalf("retry after a base rejection = base %q start %q, want %q at the pinned %q",
+			retry.BaseBranch, retry.StartCommit, graph.BaseBranch, commit(9))
 	}
 }

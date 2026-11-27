@@ -139,6 +139,12 @@ func (store *workGraphStore) admit(graph *workGraph, unit *workUnit, runs map[st
 	}
 }
 
+// rejectsBase reports whether run started from the graph's base branch at a commit other than the pinned base.
+func (graph *workGraph) rejectsBase(run agentRun) bool {
+	return run.BaseBranch == graph.BaseBranch && run.BaseCommit != "" && graph.BaseCommit != "" &&
+		run.BaseCommit != graph.BaseCommit
+}
+
 // pinBase records the verified base of the first successful run that started from the graph's base branch, and
 // reports whether run agrees with the pinned base. Runs on another run's branch inherit and are not compared.
 func (graph *workGraph) pinBase(run agentRun) bool {

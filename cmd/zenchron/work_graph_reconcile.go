@@ -404,7 +404,10 @@ func (store *workGraphStore) newUnitRun(graph *workGraph, unit *workUnit, runs m
 				item.BaseBranch = run.Branch
 			}
 		}
-		if previous, exists := graph.current(unit, runs); exists && unit.Kind == unitProduce && previous.CommitSHA != "" {
+		// A producer's retry continues its previous branch, unless that run started from a base other than the
+		// graph's pinned one: its work was rejected for that, so the retry starts over from the pinned base.
+		if previous, exists := graph.current(unit, runs); exists && unit.Kind == unitProduce && previous.CommitSHA != "" &&
+			!graph.rejectsBase(previous) {
 			item.BaseBranch = previous.Branch
 		}
 	}

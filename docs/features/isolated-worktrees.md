@@ -24,12 +24,20 @@ sequenceDiagram
     D->>C: POST /api/v1/agent-runs (agent, project, prompt or issue)
     C->>C: Persist queued run with branch zenchron/agent-run/<run id>
     W->>C: POST /api/v1/workers/{id}/agent-runs/claim
-    C-->>W: Run command: id, project id, branch, base branch, attempt
+    C-->>W: Run command: id, project id, branch, base branch, repository, pinned start commit, attempt
     W->>T: Lock project lifecycle file for setup and owner claim
-    W->>R: Validate branch; create or reattach the run branch at <root>/<project id>/<run id>
+    W->>R: Validate branch; require origin to be the run's repository (every path, including reuse)
+    alt Pinned graph base
+        W->>R: Verify the pinned commit exists; start the run branch there
+    else New run from the product base
+        W->>R: ls-remote origin HEAD; fetch origin default (1 min limit); refuse unless local base == origin
+        W->>R: Start the run branch at the verified commit
+    end
+    W->>R: Create or reattach the run branch at <root>/<project id>/<run id>
     R->>T: Create the branch or checkout retained branch after cleanup
     W->>T: Claim exclusive ownership (<worktree>.owner lock), stop leftovers of an earlier attempt
     W->>T: Verify the locked file is still the owner path; release lifecycle lock
+    W->>T: For a pinned run, require HEAD to descend from the pinned commit before reporting it as the base
     W->>R: git worktree lock (run in progress)
     W->>T: Run the coding CLI, verification, and commit inside the worktree
     W->>R: git worktree unlock
@@ -65,7 +73,10 @@ sequenceDiagram
   (`base_commit`). Every later run on the graph's base branch, including integration, receives that commit as
   `start_commit` and starts from exactly it, without re-comparing with origin, even if origin has advanced since.
   The worker refuses when the pinned commit is missing from the checkout. A root run that reports a different base
-  (origin moved between two parallel root runs) fails its unit with the pinned and reported commits.
+  (origin moved between two parallel root runs) fails its unit with the pinned and reported commits; retrying that
+  unit starts over from the pinned base instead of continuing the rejected branch. Every run tied to a GitHub
+  repository, including a reused worktree or retained run branch, first requires origin to be that repository, and a
+  pinned run must still descend from the pinned commit before it reports that commit as its base.
 - **Leases and fencing.** There is one implementation, the agent-run store: claim, three-minute lease renewed by
   progress reports, attempt number echoed by the result, expiry, attempt limit, and cancellation. See
   [Agent run queue](agent-run-queue.md).
