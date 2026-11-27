@@ -28,7 +28,7 @@ func worktreeRoot() (string, error) {
 
 // prepareWorktree creates the worktree of one run at root/<project id>/<run id>, on a new branch from
 // baseBranch. A worktree that already exists on that branch is reused, so a later attempt continues in it.
-func prepareWorktree(ctx context.Context, root string, project discoveredProject, runID, branch, baseBranch, repository string) error {
+func prepareWorktree(ctx context.Context, root string, project discoveredProject, runID, branch, baseBranch, startCommit, repository string) error {
 	if root == "" || !validID(project.ID) || !validID(runID) || !isGitCheckout(project.Path) {
 		return errors.New("invalid worktree target")
 	}
@@ -78,6 +78,13 @@ func prepareWorktree(ctx context.Context, root string, project discoveredProject
 	args := []string{"-C", project.Path, "worktree", "add", "-b", branch, path, baseBranch}
 	if strings.TrimSpace(existingBranch) == branch {
 		args = []string{"-C", project.Path, "worktree", "add", path, branch}
+	} else if startCommit != "" {
+		// The graph pinned this verified base when its first run started; later runs start from exactly it even if
+		// origin has advanced since, so every unit of the graph shares one base.
+		if _, err := gitOutput(ctx, "-C", project.Path, "rev-parse", "--verify", "--quiet", startCommit+"^{commit}"); err != nil {
+			return baseVerificationError{fmt.Errorf("the pinned graph base %s is not in this checkout", startCommit)}
+		}
+		args[len(args)-1] = startCommit
 	} else if !strings.HasPrefix(baseBranch, workerapi.AgentRunBranch("")) {
 		// A run that starts from another run's branch inherits that parent's base without rechecking it; only a
 		// product base is compared with origin here.

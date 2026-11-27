@@ -153,6 +153,8 @@ type AgentRunCommand struct {
 	Profile            AgentProfile `json:"profile"`
 	Attempts           int          `json:"attempts"`
 	PublishPullRequest bool         `json:"publish_pull_request,omitempty"`
+	// StartCommit, when set, is the WorkGraph's pinned base: the run branch starts from exactly this commit.
+	StartCommit string `json:"start_commit,omitempty"`
 	// Repository, when set, is the GitHub repository this run belongs to; its base must be verified against it.
 	Repository string `json:"repository,omitempty"`
 	// PublishCommit, when set, is the only commit this attempt may push: the reviewed candidate.

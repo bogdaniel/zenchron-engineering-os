@@ -41,7 +41,7 @@ func prepareFixtureRun(t *testing.T, root, checkout string) error {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return prepareWorktree(ctx, root, projectAt(checkout, workerTestID), workerTestID, "zenchron/agent-run/"+workerTestID, "main", "")
+	return prepareWorktree(ctx, root, projectAt(checkout, workerTestID), workerTestID, "zenchron/agent-run/"+workerTestID, "main", "", "")
 }
 
 func TestPrepareWorktreeRequiresTheBaseToEqualOrigin(t *testing.T) {
@@ -84,12 +84,12 @@ func TestPrepareWorktreeFailsClosedForAGitHubRunWithoutItsOrigin(t *testing.T) {
 	defer cancel()
 	project := projectAt(checkout, workerTestID)
 	var unverified baseVerificationError
-	err := prepareWorktree(ctx, root, project, workerTestID, "zenchron/agent-run/"+workerTestID, "main", "github.com/acme/other")
+	err := prepareWorktree(ctx, root, project, workerTestID, "zenchron/agent-run/"+workerTestID, "main", "", "github.com/acme/other")
 	if !errors.As(err, &unverified) || !strings.Contains(err.Error(), "origin is not github.com/acme/other") {
 		t.Fatalf("origin of another repository: error = %v", err)
 	}
 	runGit(t, checkout, "remote", "remove", "origin")
-	err = prepareWorktree(ctx, root, project, workerTestID, "zenchron/agent-run/"+workerTestID, "main", "github.com/acme/platform")
+	err = prepareWorktree(ctx, root, project, workerTestID, "zenchron/agent-run/"+workerTestID, "main", "", "github.com/acme/platform")
 	if !errors.As(err, &unverified) || !strings.Contains(err.Error(), "origin is not configured") {
 		t.Fatalf("missing origin for a GitHub run: error = %v", err)
 	}
@@ -105,6 +105,31 @@ func TestPrepareWorktreeStartsFromTheVerifiedCommit(t *testing.T) {
 	worktree := filepath.Join(root, projectAt(checkout, workerTestID).ID, workerTestID)
 	if got, want := runGit(t, worktree, "rev-parse", "HEAD"), runGit(t, checkout, "rev-parse", "origin/main"); got != want {
 		t.Fatalf("run started at %s, want the verified origin commit %s", got, want)
+	}
+}
+
+func TestPrepareWorktreeStartsAtThePinnedGraphBaseEvenAfterOriginAdvances(t *testing.T) {
+	dir, checkout, _ := staleBaseFixture(t)
+	pinned := strings.TrimSpace(runGit(t, checkout, "rev-parse", "main"))
+	root := filepath.Join(dir, "worktrees")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	project := projectAt(checkout, workerTestID)
+	// origin is ahead of the checkout, which would refuse an unpinned run; the pinned base is used as is.
+	if err := prepareWorktree(ctx, root, project, workerTestID, "zenchron/agent-run/"+workerTestID, "main", pinned,
+		"github.com/acme/platform"); err != nil {
+		t.Fatalf("pinned run: error = %v", err)
+	}
+	worktree := filepath.Join(root, project.ID, workerTestID)
+	if got := strings.TrimSpace(runGit(t, worktree, "rev-parse", "HEAD")); got != pinned {
+		t.Fatalf("pinned run started at %s, want %s", got, pinned)
+	}
+	var unverified baseVerificationError
+	missing := strings.Repeat("e", 40)
+	other := "ffffffffffffffffffffffffffffffff"
+	err := prepareWorktree(ctx, root, project, other, "zenchron/agent-run/"+other, "main", missing, "")
+	if !errors.As(err, &unverified) || !strings.Contains(err.Error(), "pinned graph base") {
+		t.Fatalf("missing pinned base: error = %v", err)
 	}
 }
 

@@ -110,14 +110,16 @@ type workGraph struct {
 	PlanRevision   int    `json:"plan_revision"`
 	PlanHash       string `json:"plan_hash"`
 	// Revision counts every persisted change to the graph.
-	Revision        int            `json:"revision"`
-	Status          string         `json:"status"`
-	ProjectID       string         `json:"project_id"`
-	ProjectName     string         `json:"project_name"`
-	Repository      string         `json:"repository,omitempty"`
-	WorkerID        string         `json:"worker_id"`
-	WorkerName      string         `json:"worker_name"`
-	BaseBranch      string         `json:"base_branch"`
+	Revision    int    `json:"revision"`
+	Status      string `json:"status"`
+	ProjectID   string `json:"project_id"`
+	ProjectName string `json:"project_name"`
+	Repository  string `json:"repository,omitempty"`
+	WorkerID    string `json:"worker_id"`
+	WorkerName  string `json:"worker_name"`
+	BaseBranch  string `json:"base_branch"`
+	// BaseCommit is the verified base the first root run started from; every later run on BaseBranch starts there.
+	BaseCommit      string         `json:"base_commit,omitempty"`
 	WorkflowID      string         `json:"workflow_id,omitempty"`
 	WorkflowVersion int            `json:"workflow_version,omitempty"`
 	WorkflowMode    string         `json:"workflow_mode,omitempty"`

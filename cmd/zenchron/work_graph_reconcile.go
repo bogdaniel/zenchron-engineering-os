@@ -408,6 +408,9 @@ func (store *workGraphStore) newUnitRun(graph *workGraph, unit *workUnit, runs m
 			item.BaseBranch = previous.Branch
 		}
 	}
+	if item.BaseBranch == graph.BaseBranch {
+		item.StartCommit = graph.BaseCommit
+	}
 	item.AgentID, item.AgentName, item.Provider, item.Profile = profile.ID, profile.Name, profile.Provider, &profile
 	return item, ""
 }

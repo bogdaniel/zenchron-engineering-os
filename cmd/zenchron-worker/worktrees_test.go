@@ -32,14 +32,14 @@ func TestPrepareWorktreeCreatesIsolatedBranchAndReusesItAfterCleanup(t *testing.
 	root := filepath.Join(t.TempDir(), "worker-checkouts")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", ""); err != nil {
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", "", ""); err != nil {
 		t.Fatalf("prepareWorktree() error = %v", err)
 	}
 	worktree := filepath.Join(root, project.ID, workerTestID)
 	if current := strings.TrimSpace(runGit(t, worktree, "branch", "--show-current")); current != branch {
 		t.Fatalf("worktree branch = %q, want %q", current, branch)
 	}
-	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", ""); err != nil {
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", "", ""); err != nil {
 		t.Fatalf("repeated prepareWorktree() error = %v, want idempotent success", err)
 	}
 	if branch := strings.TrimSpace(runGit(t, repository, "branch", "--show-current")); branch != "main" {
@@ -53,7 +53,7 @@ func TestPrepareWorktreeCreatesIsolatedBranchAndReusesItAfterCleanup(t *testing.
 		t.Fatalf("cleanupWorktrees() = removed %v, kept %v, error %v", removed, kept, err)
 	}
 	runGit(t, repository, "show-ref", "--verify", "refs/heads/"+branch)
-	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", ""); err != nil {
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", "", ""); err != nil {
 		t.Fatalf("prepareWorktree() after cleanup error = %v", err)
 	}
 	if current := strings.TrimSpace(runGit(t, worktree, "branch", "--show-current")); current != branch {
@@ -79,7 +79,7 @@ func TestPrepareWorktreeRecoversAuthorizedDetachedCheckout(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "worker-checkouts")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", ""); err != nil {
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	worktree := filepath.Join(root, project.ID, workerTestID)
@@ -91,7 +91,7 @@ func TestPrepareWorktreeRecoversAuthorizedDetachedCheckout(t *testing.T) {
 	candidate := strings.TrimSpace(runGit(t, worktree, "rev-parse", "HEAD"))
 	runGit(t, worktree, "checkout", "--detach", candidate)
 
-	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", ""); err != nil {
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", "", ""); err != nil {
 		t.Fatalf("prepareWorktree() did not recover detached authorized candidate: %v", err)
 	}
 	if current := strings.TrimSpace(runGit(t, worktree, "branch", "--show-current")); current != branch {
@@ -101,7 +101,7 @@ func TestPrepareWorktreeRecoversAuthorizedDetachedCheckout(t *testing.T) {
 		t.Fatalf("recovery changed candidate from %q to %q", candidate, current)
 	}
 	runGit(t, worktree, "checkout", "--detach", "main")
-	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", ""); err == nil {
+	if err := prepareWorktree(ctx, root, project, workerTestID, branch, "main", "", ""); err == nil {
 		t.Fatal("prepareWorktree() accepted a detached checkout that differs from its run branch")
 	}
 }
@@ -160,7 +160,7 @@ func TestPrepareWorktreeRejectsInvalidBranchWithoutChangingRepository(t *testing
 	}
 	runGit(t, repository, "init", "-b", "main")
 	project := projectAt(repository, workerTestID)
-	err := prepareWorktree(context.Background(), filepath.Join(t.TempDir(), "worktrees"), project, workerTestID, "../../outside", "main", "")
+	err := prepareWorktree(context.Background(), filepath.Join(t.TempDir(), "worktrees"), project, workerTestID, "../../outside", "main", "", "")
 	if err == nil {
 		t.Fatal("prepareWorktree() accepted a traversal branch name")
 	}
@@ -203,7 +203,7 @@ func TestCleanupRejectsAStaleOwnerDescriptorAfterReattach(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := prepareWorktree(context.Background(), root, project, agentRunTestID, "zenchron/agent-run/"+agentRunTestID, "main", ""); err != nil {
+	if err := prepareWorktree(context.Background(), root, project, agentRunTestID, "zenchron/agent-run/"+agentRunTestID, "main", "", ""); err != nil {
 		_ = lifecycleLock.Close()
 		t.Fatalf("reattach clean worktree: %v", err)
 	}

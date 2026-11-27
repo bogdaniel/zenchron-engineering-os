@@ -64,14 +64,16 @@ type agentRun struct {
 	IssueURL                  string                     `json:"issue_url,omitempty"`
 	IssueContext              string                     `json:"issue_context,omitempty"`
 	BaseCommit                string                     `json:"base_commit,omitempty"`
-	Provider                  string                     `json:"provider,omitempty"`
-	ProviderVersion           string                     `json:"provider_version,omitempty"`
-	TerminationReason         string                     `json:"termination_reason,omitempty"`
-	Verification              string                     `json:"verification,omitempty"`
-	Publication               string                     `json:"publication,omitempty"`
-	Usage                     *workerapi.Usage           `json:"usage,omitempty"`
-	AttemptLog                []agentRunAttempt          `json:"attempt_log,omitempty"`
-	ImportedReviewID          int64                      `json:"imported_review_id,omitempty"`
+	// StartCommit is the WorkGraph's pinned base this run must start from; empty starts from BaseBranch.
+	StartCommit       string            `json:"start_commit,omitempty"`
+	Provider          string            `json:"provider,omitempty"`
+	ProviderVersion   string            `json:"provider_version,omitempty"`
+	TerminationReason string            `json:"termination_reason,omitempty"`
+	Verification      string            `json:"verification,omitempty"`
+	Publication       string            `json:"publication,omitempty"`
+	Usage             *workerapi.Usage  `json:"usage,omitempty"`
+	AttemptLog        []agentRunAttempt `json:"attempt_log,omitempty"`
+	ImportedReviewID  int64             `json:"imported_review_id,omitempty"`
 	// CreatedBy is the GitHub login that started the run under an access policy.
 	CreatedBy string `json:"created_by,omitempty"`
 	// Checks and GitHubReviews are what GitHub webhooks reported for the published commit and pull request.
@@ -240,7 +242,7 @@ func validStoredAgentRun(item agentRun) bool {
 		(item.Attempts <= maxAgentRunAttempts || item.PullRequestURL != "" && item.publicationAuthorized(item.CommitSHA)) &&
 		!item.CreatedAt.IsZero() && !item.UpdatedAt.IsZero() &&
 		item.Profile != nil && validStoredAgentProfile(*item.Profile) && validAgentRunComments(item.ReviewComments) &&
-		validCommitSHA(item.BaseCommit) && (item.Repository == "" || validGitRemote(item.Repository)) &&
+		validCommitSHA(item.BaseCommit) && validCommitSHA(item.StartCommit) && (item.Repository == "" || validGitRemote(item.Repository)) &&
 		item.IssueNumber >= 0 && len(item.IssueContext) <= maxIssueContextSize && len(item.IssueTitle) <= 300 &&
 		workerapi.ValidTerminationReason(item.TerminationReason) && workerapi.ValidVerification(item.Verification) &&
 		len(item.AttemptLog) <= maxAgentRunAttempts+1 && validPublication(item.Publication) &&
@@ -465,8 +467,8 @@ func (store *agentRunStore) claim(w http.ResponseWriter, r *http.Request) {
 	profile := selected.Profile
 	writeJSON(w, http.StatusOK, workerapi.AgentRunCommand{
 		ID: selected.ID, ProjectID: selected.ProjectID, Branch: selected.Branch, BaseBranch: selected.BaseBranch,
-		Repository: selected.Repository,
-		Prompt:     agentRunPrompt(selected) + store.graphs.runContext(selected), Attempts: selected.Attempts,
+		Repository: selected.Repository, StartCommit: selected.StartCommit,
+		Prompt: agentRunPrompt(selected) + store.graphs.runContext(selected), Attempts: selected.Attempts,
 		PublishPullRequest: selected.PublishOnly, Merge: selected.Merge,
 		PublishCommit: store.publicationCommit(selected),
 		PublishOnly:   selected.PublishOnly,

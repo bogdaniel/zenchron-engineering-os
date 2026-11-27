@@ -61,6 +61,11 @@ sequenceDiagram
   moved. A run whose command names a GitHub repository fails closed when `origin` is missing or is another
   repository; a checkout without `origin` that no repository requires is not checked. A run that starts from
   another run's branch inherits that parent's base without rechecking it.
+- **Pinned graph base.** A WorkGraph records the verified base its first successful root run started from
+  (`base_commit`). Every later run on the graph's base branch, including integration, receives that commit as
+  `start_commit` and starts from exactly it, without re-comparing with origin, even if origin has advanced since.
+  The worker refuses when the pinned commit is missing from the checkout. A root run that reports a different base
+  (origin moved between two parallel root runs) fails its unit with the pinned and reported commits.
 - **Leases and fencing.** There is one implementation, the agent-run store: claim, three-minute lease renewed by
   progress reports, attempt number echoed by the result, expiry, attempt limit, and cancellation. See
   [Agent run queue](agent-run-queue.md).

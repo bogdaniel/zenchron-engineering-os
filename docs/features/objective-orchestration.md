@@ -49,6 +49,9 @@ flowchart LR
 
 ### Plans
 
+- **One base per graph.** The graph pins `base_commit` from its first successful root run, which the worker verified
+  equals origin's default branch. Later root runs and integration start from that commit (see
+  [Isolated worktrees](isolated-worktrees.md)), and a root run from another base fails its unit.
 - `POST /api/v1/objectives/{id}/plans` records a new revision. The body names an online `project_id`, an optional
   `workflow_id`, and either a `plan` or a `planner_agent_id`. A planner must be an active Codex or Claude Code profile
   without `code.write`; it runs as an ordinary read-only run and its typed result is the proposal.

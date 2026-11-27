@@ -206,7 +206,7 @@ func (runner *agentRunner) attempt(
 		return failed(result, workerapi.TerminationWorkerError, "Could not lock the run worktree lifecycle.")
 	}
 	runner.checkout.Lock()
-	err = prepareWorktree(ctx, root, project, command.ID, command.Branch, command.BaseBranch, command.Repository)
+	err = prepareWorktree(ctx, root, project, command.ID, command.Branch, command.BaseBranch, command.StartCommit, command.Repository)
 	runner.checkout.Unlock()
 	if cancelled, _ := reporter.state(); cancelled && err != nil {
 		if closeErr := lifecycleLock.Close(); closeErr != nil {
@@ -268,7 +268,9 @@ func (runner *agentRunner) attempt(
 	if owner.tookOver {
 		reporter.emit("status", "Stopped processes left in the worktree by an earlier attempt.")
 	}
-	if base, err := gitOutput(ctx, "-C", worktree, "merge-base", command.BaseBranch, "HEAD"); err == nil {
+	if command.StartCommit != "" {
+		result.BaseCommit = command.StartCommit
+	} else if base, err := gitOutput(ctx, "-C", worktree, "merge-base", command.BaseBranch, "HEAD"); err == nil {
 		result.BaseCommit = strings.TrimSpace(base)
 	}
 	reporter.emit("status", fmt.Sprintf("Isolated worktree ready on %s from %s", command.Branch, command.BaseBranch))
